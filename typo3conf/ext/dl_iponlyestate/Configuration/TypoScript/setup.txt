@@ -1,0 +1,226 @@
+
+plugin.tx_dliponlyestate_cp {
+	view {
+		templateRootPaths.0 = {$plugin.tx_dliponlyestate_cp.view.templateRootPath}
+		partialRootPaths.0 = {$plugin.tx_dliponlyestate_cp.view.partialRootPath}
+		layoutRootPaths.0 = {$plugin.tx_dliponlyestate_cp.view.layoutRootPath}
+	}
+	persistence {
+		storagePid = {$plugin.tx_dliponlyestate_cp.persistence.storagePid}
+	}
+}
+
+plugin.tx_dliponlyestate_estate {
+	view {
+		templateRootPaths.0 = {$plugin.tx_dliponlyestate_estate.view.templateRootPath}
+		partialRootPaths.0 = {$plugin.tx_dliponlyestate_estate.view.partialRootPath}
+		layoutRootPaths.0 = {$plugin.tx_dliponlyestate_estate.view.layoutRootPath}
+	}
+	persistence {
+		storagePid = {$plugin.tx_dliponlyestate_estate.persistence.storagePid}
+	}
+}
+
+plugin.tx_dliponlyestate_ajaxrequest {
+	view {
+		templateRootPaths.0 = {$plugin.tx_dliponlyestate_ajaxrequest.view.templateRootPath}
+		partialRootPaths.0 = {$plugin.tx_dliponlyestate_ajaxrequest.view.partialRootPath}
+		layoutRootPaths.0 = {$plugin.tx_dliponlyestate_ajaxrequest.view.layoutRootPath}
+	}
+	persistence {
+		storagePid = {$plugin.tx_dliponlyestate_ajaxrequest.persistence.storagePid}
+	}
+}
+
+plugin.tx_dliponlyestate_reportsearch {
+	view {
+		templateRootPaths.0 = {$plugin.tx_dliponlyestate_reportsearch.view.templateRootPath}
+		partialRootPaths.0 = {$plugin.tx_dliponlyestate_reportsearch.view.partialRootPath}
+		layoutRootPaths.0 = {$plugin.tx_dliponlyestate_reportsearch.view.layoutRootPath}
+	}
+	persistence {
+		storagePid = {$plugin.tx_dliponlyestate_reportsearch.persistence.storagePid}
+	}
+}
+
+plugin.tx_dliponlyestate_reportlist {
+	view {
+		templateRootPaths.0 = {$plugin.tx_dliponlyestate_reportlist.view.templateRootPath}
+		partialRootPaths.0 = {$plugin.tx_dliponlyestate_reportlist.view.partialRootPath}
+		layoutRootPaths.0 = {$plugin.tx_dliponlyestate_reportlist.view.layoutRootPath}
+	}
+	persistence {
+		storagePid = {$plugin.tx_dliponlyestate_reportlist.persistence.storagePid}
+	}
+}
+
+plugin.tx_dliponlyestate_pdf {
+	view {
+		templateRootPaths.0 = {$plugin.tx_dliponlyestate_pdf.view.templateRootPath}
+		partialRootPaths.0 = {$plugin.tx_dliponlyestate_pdf.view.partialRootPath}
+		layoutRootPaths.0 = {$plugin.tx_dliponlyestate_pdf.view.layoutRootPath}
+	}
+	persistence {
+		storagePid = {$plugin.tx_dliponlyestate_pdf.persistence.storagePid}
+	}
+}
+
+plugin.tx_dliponlyestate._CSS_DEFAULT_STYLE (
+	textarea.f3-form-error {
+		background-color:#FF9F9F;
+		border: 1px #FF0000 solid;
+	}
+
+	input.f3-form-error {
+		background-color:#FF9F9F;
+		border: 1px #FF0000 solid;
+	}
+
+	.tx-dl-iponlyestate table {
+		border-collapse:separate;
+		border-spacing:10px;
+	}
+
+	.tx-dl-iponlyestate table th {
+		font-weight:bold;
+	}
+
+	.tx-dl-iponlyestate table td {
+		vertical-align:top;
+	}
+
+	.typo3-messages .message-error {
+		color:red;
+	}
+
+	.typo3-messages .message-ok {
+		color:green;
+	}
+
+)
+
+## EXTENSION BUILDER DEFAULTS END TOKEN - Everything BEFORE this line is overwritten with the defaults of the extension builder
+plugin.tx_dliponlyestate_cp {
+	persistence {
+		storagePid = {$plugin.tx_dliponlyestate.persistence.storagePid}
+		recursive = 99
+	}	
+}
+plugin.tx_dliponlyestate_estate {
+	persistence {
+		storagePid = {$plugin.tx_dliponlyestate.persistence.storagePid}
+		recursive = 99
+	}	
+}
+plugin.tx_dliponlyestate_ajaxrequest {
+	persistence {
+		storagePid = {$plugin.tx_dliponlyestate.persistence.storagePid}
+		recursive = 99
+	}	
+}
+plugin.tx_dliponlyestate {
+	persistence {
+		storagePid = {$plugin.tx_dliponlyestate.persistence.storagePid}
+		estateId = {$plugin.tx_dliponlyestate.persistence.estateId}
+		reportPid = {$plugin.tx_dliponlyestate.persistence.reportPid}
+		recursive = 99
+	}
+}
+plugin.tx_dliponlyestate_reportsearch {
+	persistence {
+		storagePid = {$plugin.tx_dliponlyestate.persistence.storagePid}
+		recursive = 99
+	}
+}
+
+plugin.tx_dliponlyestate_reportlist {
+	persistence {
+		storagePid = {$plugin.tx_dliponlyestate.persistence.storagePid}
+		recursive = 99
+	}
+}
+
+plugin.tx_dliponlyestate_statistics {
+	persistence {
+		storagePid = {$plugin.tx_dliponlyestate.persistence.storagePid}
+		recursive = 99
+	}
+}
+
+plugin.tx_dliponlyestate_pdf {
+	persistence {
+		completePdfPid = {$plugin.tx_dliponlyestate_pdf.persistence.completePdfPid}
+		criticalPdfPid = {$plugin.tx_dliponlyestate_pdf.persistence.criticalPdfPid}
+		remarksPdfPid = {$plugin.tx_dliponlyestate_pdf.persistence.remarksPdfPid}
+		purchasePdfPid = {$plugin.tx_dliponlyestate_pdf.persistence.purchasePdfPid}
+		oldRemarksPdfPid = {$plugin.tx_dliponlyestate_pdf.persistence.oldRemarksPdfPid}
+		storagePid = {$plugin.tx_dliponlyestate.persistence.storagePid}
+		recursive = 99
+	}
+}
+
+#plugin.tx_dliponlyestate_ajaxrequest.persistence.storagePid = {$plugin.tx_dliponlyestate_cp.persistence.storagePid}
+#plugin.tx_dliponlyestate_ajaxrequest.persistence.recursive = 99
+page.includeJSFooter.isotope = EXT:dl_iponlyestate/Resources/Public/Js/isotope.pkgd.min.js
+page.includeJSFooter.vajer = EXT:dl_iponlyestate/Resources/Public/Js/vajer.js
+page.includeJSFooter.output = EXT:dl_iponlyestate/Resources/Public/Js/output.js
+page.includeCSS.vajer2 = EXT:dl_iponlyestate/Resources/Public/Css/vajer.css
+page.includeJSFooter.js_jqueryui = EXT:dl_iponlyestate/Resources/Public/Js/jquery-ui.min.js
+page.includeJSFooter.sticky = EXT:dl_iponlyestate/Resources/Public/Js/jquery.sticky.js
+page.includeCSS.css_jqueryui = EXT:dl_iponlyestate/Resources/Public/Css/jquery-ui.min.css
+page.includeJSFooter.fakewaffle = EXT:dl_iponlyestate/Resources/Public/Js/responsive-tabs.js
+page.includeJSFooter.jQueryRotate = EXT:dl_iponlyestate/Resources/Public/Js/jQueryRotate.js
+
+
+#/var/www/iponly/typo3conf/ext/dl_iponlyestate/Resources/Public/Js
+DanLAjaxPrototype = PAGE
+DanLAjaxPrototype {
+	typeNum = 777888
+	config {
+    	disableAllHeaderCode = 1
+    	xhtml_cleaning = 0
+    	admPanel = 0
+    	debug = 0
+    	no_cache = 1
+    	additionalHeaders = Content-type:application/json
+  	}
+  	10 = USER_INT
+	10 {
+		userFunc = TYPO3\CMS\Extbase\Core\Bootstrap->run
+		extensionName = DlIponlyestate		
+		pluginName = Ajaxrequest
+		vendorName = DanLundgren
+		controller = AjaxRequest
+		action = getJson
+		switchableControllerActions {
+			AjaxRequest {
+            	1 = getJson
+			}
+		}
+	}
+}
+config.tx_extbase {
+	persistence {
+		# Enable this if you need the reference index to be updated
+		# updateReferenceIndex = 1
+		classes {
+			DanLundgren\DlIponlyestate\Domain\Model\FileReference {
+				mapping {
+					tableName = sys_file_reference
+					columns {
+						uid_local.mapOnProperty = originalFileIdentifier
+					}
+				}
+			}
+		}
+	}
+	objects {
+		TYPO3\CMS\Extbase\Domain\Model\FileReference.className = DanLundgren\DlIponlyestate\Domain\Model\FileReference
+	}
+}
+
+page = PAGE
+page.11 = USER_INT
+page.11 {
+  userFunc = DanLundgren\DlIponlyestate\Utility\LogintUtility->isLoggedIn
+}

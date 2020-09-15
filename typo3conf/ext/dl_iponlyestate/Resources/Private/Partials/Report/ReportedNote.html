@@ -1,0 +1,183 @@
+<f:form action="show" enctype="multipart/form-data">
+    <div class="noteContainer" data-pid="{pid}" data-notestate="{note.state}" data-estateuid="{reportWithVersion.estate.uid}" data-questionuid="{question.uid}" data-nodetypeuid="{controlPoint.nodeType.uid}" data-cpuid="{controlPoint.uid}" data-reportuid="{reportWithVersion.uid}" data-measureuid="{reportedMeasurement.uid}" data-noteuid="{note.uid}" data-notever="{note.version}">
+      <input type="hidden" name="note" value="1" data-version="-1" />      
+      <div class="card">
+        <div>
+          <f:if condition="{question.measurementValues}">
+            <f:then>
+              <div class="state-buttons">
+                <button data-mandatory="1" type="button" class="btn btn-success btn-ipaction btn-measure btn-text-slide" data-type="5" aria-pressed="false">{question.measurementValues.name} ({question.measurementValues.unit})</button>
+                <button type="button" class="btn btn-success btn-ipaction enable-buttons" data-type="5" aria-pressed="false">Ändra</button>
+              </div>
+            </f:then>
+            <f:else>
+              <div class="state-buttons">
+                <f:if condition="{note.remarkType}==1">
+                    <f:then>
+                        <button data-post="0" type="button" class="btn btn-success btn-ipaction save-note-ok pre-active disabled" data-type="1" aria-pressed="true">OK</button>
+                    </f:then>
+                    <f:else>
+                        <button data-post="0" type="button" class="btn btn-success btn-ipaction save-note-ok disabled" data-type="1" aria-pressed="false">OK</button>
+                    </f:else>                    
+                </f:if>
+                <f:if condition="{controlPoint.showCriticalButton}=='TRUE'">
+                  <f:then>
+                    <f:if condition="{note.remarkType}==2">
+                        <f:then>
+                            <button data-mandatory="1" type="button" class="btn btn-danger btn-ipaction btn-text-slide pre-active disabled" data-type="2" aria-pressed="true">Krit.</button>
+                        </f:then>
+                        <f:else>
+                            <button data-mandatory="1" type="button" class="btn btn-danger btn-ipaction btn-text-slide disabled" data-type="2" aria-pressed="false">Krit.</button>
+                        </f:else>                    
+                    </f:if>
+                  </f:then>
+                </f:if>
+                <f:if condition="{controlPoint.showRemarkButton}=='TRUE'">
+                  <f:then>
+                    <f:if condition="{note.remarkType}==3">
+                        <f:then>
+                            <button data-mandatory="1" type="button" class="btn btn-warning btn-ipaction btn-text-slide pre-active disabled" data-type="3" aria-pressed="true">Anm.</button>
+                        </f:then>
+                        <f:else>
+                            <button data-mandatory="1" type="button" class="btn btn-warning btn-ipaction btn-text-slide disabled" data-type="3" aria-pressed="false">Anm.</button>
+                        </f:else>                    
+                    </f:if>                    
+                  </f:then>  
+                </f:if>
+                <f:if condition="{controlPoint.showPurchaseInfoButton}=='TRUE'">
+                  <f:then>
+                    <f:if condition="{note.remarkType}==4">
+                        <f:then>
+                            <button data-mandatory="1" type="button" class="btn btn-secondary btn-ipaction btn-text-slide pre-active disabled" data-type="4" aria-pressed="true">Inköp</button>
+                        </f:then>
+                        <f:else>
+                            <button data-mandatory="1" type="button" class="btn btn-secondary btn-ipaction btn-text-slide disabled" data-type="4" aria-pressed="false">Ink/Med</button>
+                        </f:else>                    
+                    </f:if>
+                  </f:then>  
+                </f:if>
+                <f:if condition="{note.remarkType}==5">
+                    <f:then>
+                        <div class="add-photo-btn btn btn-info btn-ipaction" data-type="5" aria-pressed="true">
+                          <span class="glyphicon glyphicon-camera" aria-hidden="true"></span>
+                          <input type="file" class="upload-btn btn btn-text-slide pre-active" name="tx_dliponlyestate_cp[image]" />
+                        </div>
+                        <div class="add-photo-btn btn btn-info btn-ipaction">
+                          <span class="glyphicon glyphicon-camera" aria-hidden="true"></span>
+                          <input type="file" class="upload-btn btn btn-text-slide" name="tx_dliponlyestate_cp[image2]" />
+                        </div>
+                        <div class="add-photo-btn btn btn-info btn-ipaction">
+                          <span class="glyphicon glyphicon-camera" aria-hidden="true"></span>
+                          <input type="file" class="upload-btn btn btn-text-slide" name="tx_dliponlyestate_cp[image3]" />
+                        </div>
+                        <div class="add-photo-btn btn btn-info btn-ipaction">
+                          <span class="glyphicon glyphicon-camera" aria-hidden="true"></span>
+                          <input type="file" class="upload-btn btn btn-text-slide" name="tx_dliponlyestate_cp[image4]" />
+                        </div>
+                        <div class="add-photo-btn btn btn-info btn-ipaction">
+                          <span class="glyphicon glyphicon-camera" aria-hidden="true"></span>
+                          <input type="file" class="upload-btn btn btn-text-slide" name="tx_dliponlyestate_cp[image5]" />
+                        </div>  
+                        <f:form.hidden name="pid" value="{pid}" />
+                        <f:form.hidden name="notestate" value="5" />
+                        <f:form.hidden name="estateuid" value="{reportWithVersion.estate.uid}" />
+                        <f:form.hidden name="questionuid" value="{question.uid}" />
+                        <f:form.hidden name="nodetypeuid" value="{controlPoint.nodeType.uid}" />
+                        <f:form.hidden name="cpuid" value="{controlPoint.uid}" />
+                        <f:form.hidden name="reportuid" value="{reportWithVersion.uid}" />
+                        <f:form.hidden name="measureuid" value="-1" />
+                        <f:form.hidden name="noteuid" value="{note.uid}" />
+                        <f:form.hidden name="notever" value="{note.version}" />
+                        <f:form.hidden name="scrollToId" value="-1" />                        
+                    </f:then>
+                    <f:else>
+                        <f:comment>
+                        <button type="button" class="btn btn-secondary btn-ipaction btn-text-slide disabled" data-type="5" aria-pressed="false">Ink/Med</button>
+                        </f:comment>
+                        <button class="add-photo-btn btn btn-info btn-ipaction" data-type="5" aria-pressed="false">
+                          <span class="glyphicon glyphicon-camera" aria-hidden="true"></span>
+                          <input type="file" class="upload-btn btn btn-text-slide" name="tx_dliponlyestate_cp[image]" />
+                        </button>
+                        <button class="add-photo-btn btn btn-info btn-ipaction" data-type="5" aria-pressed="false">
+                          <span class="glyphicon glyphicon-camera" aria-hidden="true"></span>
+                          <input type="file" class="upload-btn btn btn-text-slide" name="tx_dliponlyestate_cp[image2]" />
+                        </button>
+                        <button class="add-photo-btn btn btn-info btn-ipaction" data-type="5" aria-pressed="false">
+                          <span class="glyphicon glyphicon-camera" aria-hidden="true"></span>
+                          <input type="file" class="upload-btn btn btn-text-slide" name="tx_dliponlyestate_cp[image3]" />
+                        </button>
+                        <button class="add-photo-btn btn btn-info btn-ipaction" data-type="5" aria-pressed="false">
+                          <span class="glyphicon glyphicon-camera" aria-hidden="true"></span>
+                          <input type="file" class="upload-btn btn btn-text-slide" name="tx_dliponlyestate_cp[image4]" />
+                        </button>
+                        <button class="add-photo-btn btn btn-info btn-ipaction" data-type="5" aria-pressed="false">
+                          <span class="glyphicon glyphicon-camera" aria-hidden="true"></span>
+                          <input type="file" class="upload-btn btn btn-text-slide" name="tx_dliponlyestate_cp[image4]" />
+                        </button>                        
+                        <f:form.hidden name="pid" value="{pid}" />
+                        <f:form.hidden name="notestate" value="{note.remarkType}" />
+                        <f:form.hidden name="estateuid" value="{reportWithVersion.estate.uid}" />
+                        <f:form.hidden name="questionuid" value="{question.uid}" />
+                        <f:form.hidden name="nodetypeuid" value="{controlPoint.nodeType.uid}" />
+                        <f:form.hidden name="cpuid" value="{controlPoint.uid}" />
+                        <f:form.hidden name="reportuid" value="{reportWithVersion.uid}" />
+                        <f:form.hidden name="measureuid" value="-1" />
+                        <f:form.hidden name="noteuid" value="{note.uid}" />
+                        <f:form.hidden name="notever" value="{note.version}" />
+                    </f:else>                    
+                </f:if>
+                <button type="button" class="btn btn-success btn-ipaction enable-buttons" data-type="1" aria-pressed="false">Ändra</button>                  
+                  <f:if condition="{uploadStatus}=='Bilden är uppladdad'">
+                    <f:then>
+                        <div class="alert alert-info uploadStatus">Bild <span class="imgName"></span> uppladdad</div>
+                    </f:then>                  
+                    <f:else>
+                        <div class="alert alert-info uploadStatus hidden">Bild <span class="imgName"></span> vald</div>
+                    </f:else>                    
+                </f:if>  
+              </div>
+            </f:else>
+          </f:if>
+        </div>
+        <div class="card-header" role="tab">
+          <h5 class="mb-0">
+            <h3>          
+              <f:if condition="{question.measurementValues}">
+                <f:then>
+                  <textarea disabled class="input-note" data-measurement-unit="{question.measurementValues.unit}" data-measurement-name="{question.measurementValues.name}" id="input_{question.uid}_NEW" type="text" value="{reportedMeasurement.value}">{reportedMeasurement.value}</textarea>
+                  <span class="save-btn hidden">
+                    <button type="button" class="btn btn-success save-measure-value">Spara</button>
+                  </span>
+                </f:then>            
+                <f:else>
+                  <textarea disabled class="input-note" id="input_{question.uid}_NEW" name="tx_dliponlyestate_cp[input-note]" value="{note.comment}">{note.comment}</textarea>
+                  <span class="save-btn hidden">
+                    <button type="button" class="btn btn-success save-note save-note-btn">Spara</button>
+                  </span>
+                </f:else>
+              </f:if>
+            </h3>
+          </h5>
+        </div>
+      </div>
+    </div>
+</f:form>
+<f:comment>
+<f:for each="{report.reportedMeasurement}" as="reportedMeasurement">
+    <div class="posted-note-container">
+        <div class="alert alert-success input-disabled-note" role="alert">
+            <div class="label-bold">
+                {reportedMeasurement.question.header}
+                <span class="label-ok">Mätvärde: 
+                    <div class="comment">{reportedMeasurement.value} {reportedMeasurement.name} ({reportedMeasurement.unit})</div>
+                </span>
+                <div class="date"><f:format.date format="Y-m-d - H:i:s">{reportedMeasurement.date}</f:format.date></div>
+                <div>Kontroll utförd av  {reportedMeasurement.executiveTechnician}</div>
+                <div>ID: {reportedMeasurement.uid}</div>
+            </div>
+        </div>
+    </div>
+    <div class="clear-both"></div>
+</f:for>					
+</f:comment>
+

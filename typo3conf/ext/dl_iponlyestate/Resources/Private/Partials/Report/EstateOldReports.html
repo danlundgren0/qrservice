@@ -1,0 +1,85 @@
+{namespace v=FluidTYPO3\Vhs\ViewHelpers}
+<f:comment>
+<f:if condition="{report.newOrNotCheckedAtAll}">
+	<v:variable.set name="reportColor" value="noChecksDone" />
+	<v:variable.set name="dataColor" value="1" />
+</f:if>
+<f:if condition="{report.partlyCheckedAndOk}">
+	<v:variable.set name="reportColor" value="remarksExists" />
+	<v:variable.set name="dataColor" value="2" />
+</f:if>	
+</f:comment>
+<f:if condition="{report.newOrNotCheckedAtAll}">
+	<v:variable.set name="reportColor" value="noChecksDone" />
+	<v:variable.set name="dataColor" value="a" />
+</f:if>
+<f:if condition="{report.partlyCheckedAndOk}">
+	<v:variable.set name="reportColor" value="remarksExists" />
+	<v:variable.set name="dataColor" value="b" />
+</f:if>	
+<f:if condition="{report.noOfScannedNotesAndMeas}=={report.noOfTotalNotesAndMeas}">
+	<v:variable.set name="reportColor" value="allCpIsOk" />
+	<v:variable.set name="dataColor" value="c" />
+</f:if>
+<f:if condition="{report.totalNoOfCriticalRemarks}>0">
+	<v:variable.set name="criticalColor" value="criticalColor" />	
+</f:if>
+<f:if condition="{report.totalNoOfRemarks}>0">
+	<v:variable.set name="remarkColor" value="remarkColor" />	
+</f:if>
+<f:if condition="{report.totalNoOfPurchases}>0">
+	<v:variable.set name="purchaseColor" value="purchaseColor" />	
+</f:if>
+<f:if condition="{report.totalNoOfCompletedNotes}>0">
+	<v:variable.set name="completedNotesColor" value="completedNotesColor" />	
+</f:if>	
+<div class="old-reports headerIt.index-{headerIt.index} headerIt.isLast-{headerIt.isLast}" data-reportstatus="{v:variable.get(name: 'reportColor')}" data-report="{report.reportUid}"  data-estate="{estate.estateUid}">
+	<div class="col-md-1 handle"></div>
+	<div class="type_old col-md-1">{report.nodeTypeName}</div>
+	<div class="name_old col-md-1">{estate.estateName}</div>
+	<div class="report_old col-md-1">
+		<a data-report="{report.reportUid}" data-estate="{estate.estateUid}" data-method="getCompleteReport" class="show-more estate-link" data-toggle="modal" data-target="#genericModalReport">{report.dateString}<br>{report.versionWithLabel}
+		</a>
+	</div>
+	<div class="resptech_old col-md-1">{report.respTechnicianName}</div>
+	<div class="critical_old col-md-1">
+		<a data-report="{report.reportUid}" data-estate="{estate.estateUid}" data-method="getCriticalReport" class="show-more estate-link" data-toggle="modal" data-target="#criticalModalReport">
+    		<div class="square {v:variable.get(name: 'criticalColor')}">
+    			{report.noOfCriticalRemarks}
+    		</div>
+		</a>
+	</div>
+	<div class="remark_old col-md-1">
+		<a data-report="{report.reportUid}" data-estate="{estate.estateUid}" data-method="getRemarkReport" class="show-more estate-link" data-toggle="modal" data-target="#remarkModalReport">
+    		<div class="square  {v:variable.get(name: 'remarkColor')}">
+    			{report.noOfRemarks}
+    		</div>
+		</a>
+	</div>
+	<div class="preremark_old col-md-1">
+		<a data-report="{report.reportUid}" data-estate="{estate.estateUid}" data-method="getAllCompletedRemarksReport" class="show-more estate-link" data-toggle="modal" data-target="#getAllCompletedRemarksReport">
+			<div class="square {v:variable.get(name: 'completedNotesColor')}">
+				{report.noOfCompletedNotes}
+			</div>
+		</a>
+	</div>
+	<div class="exetech_old col-md-1">{report.execTechnicianName}</div>
+	<div class="purchase_old col-md-1">
+		<a data-report="{report.reportUid}" data-estate="{estate.estateUid}" data-method="getPurchaseReport" class="show-more estate-link" data-toggle="modal" data-target="#purchaseModalReport">
+    		<div class="square {v:variable.get(name: 'purchaseColor')}">
+    			{report.noOfPurchases}
+    		</div>
+		</a>
+	</div>
+	<div class="admin-note col-md-1">
+		<f:if condition="{report.hasAdminNote}">			
+			<f:then>
+				<f:if condition="{report.adminNoteIsChecked}">
+					<f:then><span class="glyphicon glyphicon-ok" aria-hidden="true"></span></f:then>
+					<f:else><span class="glyphicon glyphicon-remove" aria-hidden="true"></span></f:else>
+				</f:if>
+			</f:then>
+		</f:if>		
+	</div>
+	<div class="vacant2_old col-md-1"></div>
+</div>

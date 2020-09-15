@@ -1,0 +1,92 @@
+{namespace v=FluidTYPO3\Vhs\ViewHelpers}
+<f:if condition="{report.newOrNotCheckedAtAll}">
+	<v:variable.set name="reportColor" value="noChecksDone" />
+	<v:variable.set name="dataColor" value="a" />
+</f:if>
+<f:if condition="{report.partlyCheckedAndOk}">
+	<v:variable.set name="reportColor" value="remarksExists" />
+	<v:variable.set name="dataColor" value="b" />
+</f:if>	
+<f:if condition="{report.allCheckedAndOk}">
+	<v:variable.set name="reportColor" value="allCpIsOk" />
+	<v:variable.set name="dataColor" value="c" />
+</f:if>
+<f:comment>
+<f:if condition="{report.noOfScannedNotesAndMeas}=={report.noOfTotalNotesAndMeas}">
+	<v:variable.set name="reportColor" value="allCpIsOk" />
+	<v:variable.set name="dataColor" value="c" />
+</f:if>
+</f:comment>
+<div class="latest-report" data-reportstatus="{v:variable.get(name: 'reportColor')}" data-report="{report.reportUid}"  data-estate="{estate.estateUid}">
+	<div class="col-md-1 handle" data-colour="{v:variable.get(name: 'dataColor')}">
+		<a role="button" data-toggle="collapse" data-parent="#accordion" href="#report-{estate.estateUid}-1-history" aria-expanded="true" aria-controls="report-{estate.estateUid}-1-history">
+			<span class="glyphicon glyphicon-play" aria-hidden="true"></span>
+		</a>
+	</div>
+	<f:if condition="{report.totalNoOfCriticalRemarks}>0">
+		<v:variable.set name="criticalColor" value="criticalColor" />	
+	</f:if>
+	<f:if condition="{report.totalNoOfRemarks}>0">
+		<v:variable.set name="remarkColor" value="remarkColor" />	
+	</f:if>
+	<f:if condition="{report.totalNoOfPurchases}>0">
+		<v:variable.set name="purchaseColor" value="purchaseColor" />	
+	</f:if>
+	<f:if condition="{report.totalNoOfCompletedNotes}>0">
+		<v:variable.set name="completedNotesColor" value="completedNotesColor" />	
+	</f:if>
+	<div class="type col-md-1"><f:format.case mode="capital">{estate.nodeTypeName}</f:format.case></div>
+	<div class="name col-md-1">
+		<f:if condition="{estate.pageLink}">
+			<f:then>
+	    		<f:link.page pageUid="{estate.pageLink}" class="estate-link" target="_blank"><f:format.case mode="capital">{estate.estateName}</f:format.case></f:link.page>	
+			</f:then>
+			<f:else><span class=""><f:format.case mode="capital">{estate.estateName}</f:format.case></span></f:else>
+		</f:if>
+	</div>
+	<div class="report col-md-1">
+		<a data-sortversion="{report.dateVersion}" data-report="{report.reportUid}" data-estate="{estate.estateUid}" data-method="getCompleteReport" class="show-more estate-link" data-toggle="modal" data-target="#genericModalReport">{report.dateString}<br>{report.versionWithLabel}
+		</a>
+	</div>
+	<div class="resptech col-md-1"><f:format.case mode="capital">{report.respTechnicianName}</f:format.case></div>
+	<div class="critical col-md-1">
+		<a data-report="{report.reportUid}" data-estate="{estate.estateUid}" data-method="getCriticalReport" class="show-more estate-link" data-toggle="modal" data-target="#criticalModalReport">
+    		<div class="square {v:variable.get(name: 'criticalColor')}">
+    			{report.noOfCriticalRemarks}
+    		</div>
+		</a>
+	</div>
+	<div class="remark col-md-1">
+		<a data-report="{report.reportUid}" data-estate="{estate.estateUid}" data-method="getRemarkReport" class="show-more estate-link" data-toggle="modal" data-target="#remarkModalReport">
+    		<div class="square  {v:variable.get(name: 'remarkColor')}">
+    			{report.noOfRemarks}
+    		</div>
+		</a>
+	</div>
+	<div class="preremark col-md-1">
+		<a data-report="{report.reportUid}" data-estate="{estate.estateUid}" data-method="getAllCompletedRemarksReport" class="show-more estate-link" data-toggle="modal" data-target="#getAllCompletedRemarksReport">
+			<div class="square {v:variable.get(name: 'completedNotesColor')}">
+				{report.noOfCompletedNotes}
+			</div>
+		</a>
+	</div>
+	<div class="exetech col-md-1"><f:format.case mode="capital">{report.execTechnicianName}</f:format.case></div>
+	<div class="purchase col-md-1">
+		<a data-report="{report.reportUid}" data-estate="{estate.estateUid}" data-method="getPurchaseReport" class="show-more estate-link" data-toggle="modal" data-target="#purchaseModalReport">
+    		<div class="square {v:variable.get(name: 'purchaseColor')}">
+    			{report.noOfPurchases}
+    		</div>
+		</a>
+	</div>
+	<div class="admin-note col-md-1">
+		<f:if condition="{report.hasAdminNote}">			
+			<f:then>
+				<f:if condition="{report.adminNoteIsChecked}">
+					<f:then><span class="glyphicon glyphicon-ok" aria-hidden="true"></span></f:then>
+					<f:else><span class="glyphicon glyphicon-remove" aria-hidden="true"></span></f:else>
+				</f:if>
+			</f:then>
+		</f:if>		
+	</div>
+	<div class="vacant2 col-md-1"></div>
+</div>

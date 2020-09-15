@@ -1,0 +1,100 @@
+
+<f:layout name="Default" />
+
+This Template is responsible for creating a table of domain objects.
+
+If you modify this template, do not forget to change the overwrite settings
+in /Configuration/ExtensionBuilder/settings.yaml:
+  Resources:
+    Private:
+      Templates:
+        List.html: keep
+
+Otherwise your changes will be overwritten the next time you save the extension in the extension builder
+
+<f:section name="main">
+
+<f:flashMessages />
+
+<f:form enctype="multipart/form-data">
+<div class="col-md-12 search-box">
+    <div class="row search-container">
+    	<div class="col-md-6">
+    		<div class="col-md-2 lbl">Period</div>
+    		<div class="col-md-5">    			
+				 <div>
+				   <f:form.textfield id="fromDate" value="{arguments.fromDate}" name="fromDate" placeholder="Från" class="search-date js_search-date form-control" />
+				   <label for="fromDate">
+				     <span class="glyphicon glyphicon-calendar"></span>
+				   </label>
+				 </div>
+    		</div>
+    		<div class="col-md-5">
+				 <div>
+				   <f:form.textfield id="endDate" value="{arguments.endDate}" name="endDate" placeholder="Till" class="search-date js_search-date form-control" />
+				   <label for="endDate">
+				     <span class="glyphicon glyphicon-calendar"></span>
+				   </label>
+				 </div>
+    		</div>
+    		<div class="col-md-2 lbl">Ort</div>
+    		<div class="col-md-10"><f:form.select value="{arguments.cities}" name="cities" options="{cities}" optionValueField="uid" optionLabelField="name" class="form-control" /></div>
+    		<div class="col-md-2 lbl">Typ</div>
+    		<div class="col-md-10"><f:form.select value="{arguments.nodeTypes}" name="nodeTypes" options="{nodeTypes}" optionValueField="uid" optionLabelField="name" class="form-control" /></div>
+    		<div class="col-md-2 lbl">Tekniker</div>
+    		<div class="col-md-10"><f:form.select value="{arguments.technicians}" name="technicians" options="{technicians}" optionValueField="uid" optionLabelField="name" class="form-control" /></div>
+      	</div>
+    	<div class="col-md-6">
+            <f:comment>            
+                <div class="col-md-2 lbl">Fastighet</div>
+			    <div class="col-md-10"><f:form.select value="{arguments.estates}" name="estates" options="{estates}" optionValueField="uid" optionLabelField="name" class="form-control" /></div>
+            </f:comment>
+    		<div class="col-md-2 lbl">Noteringar</div>
+    		<div class="col-md-10"><f:form.select value="{arguments.notes}" name="notes" options="{notes}" optionValueField="uid" optionLabelField="comment" class="form-control" /></div>
+            <div class="col-md-2 lbl">Områden</div>
+            <div class="col-md-10"><f:form.select value="{arguments.areas}" name="areas" options="{areas}" optionValueField="uid" optionLabelField="title" class="form-control" /></div>
+    		<div class="col-md-2 lbl">Sök</div>
+			<div class="col-md-8"><f:form.textfield value="{arguments.freeSearch}" name="freeSearch" class="form-control" /></div>
+    		<div class="col-md-2"><f:form.submit class="btn btn-secondary search-trigger" value="Sök" /></div>
+    		<div class="col-md-2 lbl">Exportera</div>
+    		<div class="col-md-5">
+                <f:link.action 
+                    action="list" 
+                    additionalParams="{tx_dliponlyestate_reportsearch: 
+                        '{
+                            xls: 1,
+                            fromDate: arguments.fromDate,
+                            endDate: arguments.endDate,
+                            cities: arguments.cities,
+                            nodeTypes: arguments.nodeTypes,
+                            technicians: arguments.technicians,
+                            notes: arguments.notes,
+                            freeSearch: arguments.freeSearch
+                        }'
+                    }"
+                    target="_blank"
+                    class="btn btn-secondary btn-ipaction btn-text-slide btn-export"
+                >Exportera Excel</f:link.action>
+                <f:comment>
+                <f:link.action action="excel" 
+                    additionalParams="{tx_dliponlyestate_reportsearch: 
+                        '{
+                            fromDate: arguments.fromDate,
+                            endDate: arguments.endDate,
+                            cities: arguments.cities,
+                            nodeTypes: arguments.nodeTypes,
+                            technicians: arguments.technicians,
+                            notes: arguments.notes,
+                            freeSearch: arguments.freeSearch
+                        }'
+                    }"
+                    target="_blank">action link</f:link.action>                
+    			<button type="button" class="btn btn-secondary btn-ipaction btn-text-slide" data-type="4" aria-pressed="false">Exportera Excel</button>
+                </f:comment>
+    		</div>
+      	</div>
+	</div>
+</div>
+</f:form>
+
+</f:section>

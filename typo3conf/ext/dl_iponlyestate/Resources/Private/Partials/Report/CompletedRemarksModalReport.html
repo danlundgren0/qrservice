@@ -1,0 +1,223 @@
+<div class="modal fade report-modal" id="CompletedRemarksModalReport" tabindex="-1" role="dialog" aria-labelledby="CompletedRemarksModalReport">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <f:link.page pageUid="{oldRemarksPdfPid}" additionalAttributes="{type: 'button', aria-pressed: 'false', role:'button'}" class="btn btn-primary" target="_blank" additionalParams="{estate: report.estateUid, report: report.reportUid}" style="float:right;margin-right: 20px;">
+            Exportera PDF
+        </f:link.page>
+        <h4 class="modal-title" id="myModalLabel">
+    		<f:if condition="{report.pageLink}">
+    			<f:then>
+		    		<f:link.page pageUid="{report.pageLink}" class="estate-link" target="_blank">
+		    			Fastighet {report.estateName} <span class="glyphicon glyphicon-link" aria-hidden="true"></span>
+		    		</f:link.page>
+                    <span class="ext-header"> - Tidigare anmärkningar</span>
+    			</f:then>
+    			<f:else>
+    				Fastighet {report.estateName} <span class="ext-header"> - Tidigare anmärkningar</span>
+    			</f:else>
+    		</f:if>        	 
+        </h4>        
+      </div>
+      <div class="modal-body">
+    		<div class="jumbotron">
+    			<h2>Rapport påbörjad {report.startDate} - Rapport inskickad {report.endDate}</h2>
+        		<div class="col-md-4">Version: {report.reportVersion} </div>
+        		<div class="col-md-4">Datum: {report.reportDate}</div>
+        		<div class="col-md-4">Nod: {report.nodeTypeName}</div>
+
+        		<div class="col-md-4">Ansvarig tekniker: {report.respTechnicianName} </div>
+        		<div class="col-md-4">Utförande tekniker: {report.execTechnicianName}</div>
+        		<div class="col-md-4">Rapport id: {report.reportUid}</div>
+        		
+
+        		<div class="col-md-4">Kritiska anm: {report.noOfCriticalRemarks} </div>
+        		<div class="col-md-4">Anmärkningar: {report.noOfRemarks}</div>
+        		<div class="col-md-4">Inköp/Med.: {report.noOfPurchases}</div>
+
+        		<div class="col-md-4">Ok: {report.getNoOfOk} </div>
+        		<div class="col-md-4">Tidigare anmärkningar: {report.noOfPostedNotes}</div>
+        		<div class="col-md-4">Ej åtgärdade punkter: {report.noOfOngoingNotes}</div>
+
+        		<div class="col-md-4">Rapporterade mätvärden: {report.noOfPostedMeasure} </div>
+        		<div class="col-md-4">Rapporterade Punkter: {report.noOfQuestionsReported}</div>
+        		<div class="col-md-4">Ej Rapporterade Punkter: {report.noOfQuestionsLeft}</div>
+        		<div style="clear:both;"></div>
+    		</div>
+            <f:if condition="{report.hasAdminNote}">
+                <div class="cp-container">
+                    <h2>Admin note</h2>             
+                    <f:format.html>{report.adminNote}</f:format.html>
+                    <f:if condition="{report.adminNoteIsChecked}">
+                        <f:then>
+                            <div class="jumbotron">
+                                <div class="col-md-6">                                  
+                                    <h2 class="not-reported">Kontrollerad</h2>
+                                </div>
+                                <div class="col-md-6"></div>
+                                <div style="clear:both;"></div> 
+                            </div>  
+                        </f:then>
+                        <f:else>
+                            <div class="jumbotron not-checked">
+                                <div class="col-md-6">                                  
+                                    <h2 class="not-reported">Ej kontrollerad</h2>
+                                </div>
+                                <div class="col-md-6"></div>
+                                <div style="clear:both;"></div> 
+                            </div>                          
+                        </f:else>
+                    </f:if>
+                </div>              
+            </f:if>
+        	<f:for each="{report.controlPoints}" as="cp">
+	        	<f:for each="{cp.questions}" as="q">		        		
+        			<f:if condition="{q.type}=='measure'">
+        				<f:then>
+        				</f:then>
+        				<f:else>
+        					<f:if condition="{q.type}=='note'">
+        						<f:then>
+                                    <f:for each="{q.notes}" as="n">
+                                        <f:if condition="{n.noteIsComplete}">
+                                            <f:if condition="{n.remarkType}=='2'">
+                                                <div class="cp-container">
+                                                    <div class="jumbotron {n.status}-nocolor">                                                        
+                                                        <h2>Kontroll-punkt: {cp.cpName}</h2>
+                                                        <h3>Del-punkt: {q.questionName}</h3>
+                                                        <div class="note-date desc">Beskrivning: <f:format.html>{q.questionDesc}</f:format.html></div>
+                                                        <div class="note-date">Datum: {n.date}</div>
+                                                        <div class="note-date">Tekniker: {n.exeTech}</div>
+                                                        <div class="col-md-6" style="color:red">
+                                                            Kommentar: {n.comment}
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <f:if condition="{n.image}">
+                                                                <div class="item-img">
+                                                                    <img src="{n.image}" class="img-responsive" />
+                                                                </div>                              
+                                                            </f:if>
+                                                            <f:if condition="{n.image2}">
+                                                                <div class="item-img">
+                                                                    <img src="{n.image2}" class="img-responsive" />
+                                                                </div>                              
+                                                            </f:if>
+                                                            <f:if condition="{n.image3}">
+                                                                <div class="item-img">
+                                                                    <img src="{n.image3}" class="img-responsive" />
+                                                                </div>                              
+                                                            </f:if>
+                                                            <f:if condition="{n.image4">
+                                                                <div class="item-img">
+                                                                    <img src="{n.image4}" class="img-responsive" />
+                                                                </div>                              
+                                                            </f:if>
+                                                            <f:if condition="{n.image5}">
+                                                                <div class="item-img">
+                                                                    <img src="{n.image5}" class="img-responsive" />
+                                                                </div>                              
+                                                            </f:if>
+                                                        </div>
+                                                        <div style="clear:both;"></div> 
+                                                    </div>
+                                                </div>
+                                            </f:if>
+                							<f:if condition="{n.remarkType}=='3'">
+        	        							<div class="cp-container">
+        											<div class="jumbotron {n.status}-nocolor">
+        							        			<h2>Kontroll-punkt: {cp.cpName}</h2>
+        							        			<h3>Del-punkt: {q.questionName}</h3>
+                                                        <div class="note-date desc">Beskrivning: <f:format.html>{q.questionDesc}</f:format.html></div>
+                                                        <div class="note-date">Datum: {n.date}</div>
+                                                        <div class="note-date">Tekniker: {n.exeTech}</div>
+        				        						<div class="col-md-6" style="color:#F0AD4E">
+        				        							Kommentar: {n.comment}
+        				        						</div>
+        								        		<div class="col-md-6">
+        								        			<f:if condition="{n.image}">
+        											            <div class="item-img">
+        											                <img src="{n.image}" class="img-responsive" />
+        											            </div>		        				
+        								        			</f:if>
+                                                            <f:if condition="{n.image2}">
+                                                                <div class="item-img">
+                                                                    <img src="{n.image2}" class="img-responsive" />
+                                                                </div>                              
+                                                            </f:if>
+                                                            <f:if condition="{n.image3}">
+                                                                <div class="item-img">
+                                                                    <img src="{n.image3}" class="img-responsive" />
+                                                                </div>                              
+                                                            </f:if>
+                                                            <f:if condition="{n.image4">
+                                                                <div class="item-img">
+                                                                    <img src="{n.image4}" class="img-responsive" />
+                                                                </div>                              
+                                                            </f:if>
+                                                            <f:if condition="{n.image5}">
+                                                                <div class="item-img">
+                                                                    <img src="{n.image5}" class="img-responsive" />
+                                                                </div>                              
+                                                            </f:if>
+        								        		</div>
+        								        		<div style="clear:both;"></div>	
+        								        	</div>
+        								        </div>
+                							</f:if>
+                                            <f:if condition="{n.remarkType}=='4'">
+                                                <div class="cp-container">
+                                                    <div class="jumbotron {n.status}-nocolor">
+                                                        <h2>Kontroll-punkt: {cp.cpName}</h2>
+                                                        <h3>Del-punkt: {q.questionName}</h3> 
+                                                        <div class="note-date desc">Beskrivning: <f:format.html>{q.questionDesc}</f:format.html></div>
+                                                        <div class="note-date">Datum: {n.date}</div>
+                                                        <div class="note-date">Tekniker: {n.exeTech}</div>
+                                                        <div class="col-md-6" style="color:#000000">
+                                                            Kommentar: {n.comment}
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <f:if condition="{n.image}">
+                                                                <div class="item-img">
+                                                                    <img src="{n.image}" class="img-responsive" />
+                                                                </div>                              
+                                                            </f:if>
+                                                            <f:if condition="{n.image2}">
+                                                                <div class="item-img">
+                                                                    <img src="{n.image2}" class="img-responsive" />
+                                                                </div>                              
+                                                            </f:if>
+                                                            <f:if condition="{n.image3}">
+                                                                <div class="item-img">
+                                                                    <img src="{n.image3}" class="img-responsive" />
+                                                                </div>                              
+                                                            </f:if>
+                                                            <f:if condition="{n.image4">
+                                                                <div class="item-img">
+                                                                    <img src="{n.image4}" class="img-responsive" />
+                                                                </div>                              
+                                                            </f:if>
+                                                            <f:if condition="{n.image5}">
+                                                                <div class="item-img">
+                                                                    <img src="{n.image5}" class="img-responsive" />
+                                                                </div>                              
+                                                            </f:if>
+                                                        </div>
+                                                        <div style="clear:both;"></div> 
+                                                    </div>
+                                                </div>
+                                            </f:if>
+                                        </f:if>
+                                    </f:for>
+        						</f:then>
+        						<f:else>
+        						</f:else>
+        					</f:if>
+        				</f:else>
+        			</f:if>		        			
+	        	</f:for>	        	
+        	</f:for>
+        </div>
+    </div>
+  </div>
+</div>

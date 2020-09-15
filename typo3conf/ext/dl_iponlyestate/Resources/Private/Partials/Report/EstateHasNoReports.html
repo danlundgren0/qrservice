@@ -1,0 +1,53 @@
+{namespace v=FluidTYPO3\Vhs\ViewHelpers}
+	<f:if condition="{report.newOrNotCheckedAtAll}">
+		<v:variable.set name="reportColor" value="noChecksDone" />
+		<v:variable.set name="dataColor" value="a" />
+	</f:if>
+	<f:if condition="{report.partlyCheckedAndOk}">
+		<v:variable.set name="reportColor" value="remarksExists" />
+		<v:variable.set name="dataColor" value="b" />
+	</f:if>	
+	<f:if condition="{report.noOfScannedNotesAndMeas}=={report.noOfTotalNotesAndMeas}">
+		<v:variable.set name="reportColor" value="allCpIsOk" />
+		<v:variable.set name="dataColor" value="c" />
+	</f:if>
+	<f:if condition="{report.noOfCriticalRemarks}>0">
+		<v:variable.set name="criticalColor" value="criticalColor" />	
+	</f:if>
+	<f:if condition="{report.noOfRemarks}>0">
+		<v:variable.set name="remarkColor" value="remarkColor" />	
+	</f:if>
+	<div class="latest-report noChecksDone" data-reportstatus="noChecksDone" data-report="{report.reportUid}"  data-estate="{estate.estateUid}">
+    	<div class="col-md-1 handle" data-colour="{v:variable.get(name: 'dataColor')}"></div>
+    	<div class="col-md-1 type"><f:format.case mode="capital">{estate.nodeTypeName}</f:format.case></div>
+    	<div class="col-md-1 name">
+    		<f:if condition="{estate.pageLink}">
+    			<f:then>
+		    		<f:link.page pageUid="{estate.pageLink}" class="estate-link name" target="_blank"><f:format.case mode="capital">{estate.estateName}</f:format.case></f:link.page>						    				
+    			</f:then>
+    			<f:else><span class=""><f:format.case mode="capital">{estate.estateName}</f:format.case></span></f:else>
+    		</f:if>
+    	</div>
+    	<div class="col-md-1 report">Ingen rapport</div>
+    	<div class="col-md-1 resptech"><f:format.case mode="capital">{estate.respTechnicianName}</f:format.case></div>
+		<div class="col-md-1 critical">
+			<a data-report="{report.reportUid}" data-estate="{estate.estateUid}" data-method="getCriticalReport" class="show-more estate-link" data-toggle="modal" data-target="#criticalModalReport">
+	    		<div class="square {v:variable.get(name: 'criticalColor')}">0</div>
+			</a>
+		</div>
+		<div class="col-md-1 remark">
+			<a data-report="{report.reportUid}" data-estate="{estate.estateUid}" data-method="getRemarkReport" class="show-more estate-link" data-toggle="modal" data-target="#remarkModalReport">
+	    		<div class="square  {v:variable.get(name: 'remarkColor')}">0</div>
+			</a>
+		</div>
+		<div class="col-md-1 preremark"><div class="square">0</div></div>
+		<div class="col-md-1 exetech"></div>
+		<div class="col-md-1 purchase">
+			<a data-report="{report.reportUid}" data-estate="{estate.estateUid}" data-method="getPurchaseReport" class="show-more estate-link" data-toggle="modal" data-target="#purchaseModalReport">
+	    		<div class="square">0</div>
+			</a>
+		</div>
+		<div class="col-md-1 admin-note"></div>
+		<div class="col-md-1 vacant2"></div>
+	</div>
+

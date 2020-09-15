@@ -1,0 +1,49 @@
+
+<f:layout name="Default" />
+
+This Template is responsible for creating a table of domain objects.
+
+If you modify this template, do not forget to change the overwrite settings
+in /Configuration/ExtensionBuilder/settings.yaml:
+  Resources:
+    Private:
+      Templates:
+        List.html: keep
+
+Otherwise your changes will be overwritten the next time you save the extension in the extension builder
+
+<f:section name="main">
+
+
+<f:flashMessages />
+  <f:if condition="{isValid}==0">
+    <div class="alert alert-danger" role="alert">
+      {ErrMess}
+    </div>
+  </f:if>
+
+  <div class="col-md-12 estate-container">
+    <div class="row">
+      <f:comment>
+        <div class="alert alert-danger" role="alert">Här ska visa saved state meddelanden</div>
+      </f:comment>
+      <div class="col-md-6">
+        <h1>{estate.name}</h1>        
+        <span>{estate.adress}</span>
+        <span>{estate.city}</span>
+        <div><f:format.html>{estate.estateDescription}</f:format.html></div>
+			</div>
+      <div class="col-md-6">
+				<img src="{estate.image.originalResource.publicUrl}" class="img-responsive" />
+			</div>
+		</div>
+	</div>
+
+
+<f:comment>
+	<f:for each="{controlPoints}" as="controlPoint">
+		<div>Name - Responsible Technician Group</div>
+		<div>{controlPoint.name} - {controlPoint.responsibleTechnician}</div>
+	</f:for>
+</f:comment>
+</f:section>

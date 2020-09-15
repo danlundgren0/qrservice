@@ -1,0 +1,75 @@
+
+plugin.tx_dlqrcodesgenerator_qrcodesgenerator {
+	view {
+		templateRootPaths.0 = {$plugin.tx_dlqrcodesgenerator_qrcodesgenerator.view.templateRootPath}
+		partialRootPaths.0 = {$plugin.tx_dlqrcodesgenerator_qrcodesgenerator.view.partialRootPath}
+		layoutRootPaths.0 = {$plugin.tx_dlqrcodesgenerator_qrcodesgenerator.view.layoutRootPath}
+	}
+	persistence {
+		storagePid = {$plugin.tx_dlqrcodesgenerator_qrcodesgenerator.persistence.storagePid}
+	}
+}
+
+plugin.tx_dlqrcodesgenerator._CSS_DEFAULT_STYLE (
+	textarea.f3-form-error {
+		background-color:#FF9F9F;
+		border: 1px #FF0000 solid;
+	}
+
+	input.f3-form-error {
+		background-color:#FF9F9F;
+		border: 1px #FF0000 solid;
+	}
+
+	.tx-dl-qrcodesgenerator table {
+		border-collapse:separate;
+		border-spacing:10px;
+	}
+
+	.tx-dl-qrcodesgenerator table th {
+		font-weight:bold;
+	}
+
+	.tx-dl-qrcodesgenerator table td {
+		vertical-align:top;
+	}
+
+	.typo3-messages .message-error {
+		color:red;
+	}
+
+	.typo3-messages .message-ok {
+		color:green;
+	}
+
+)
+
+## EXTENSION BUILDER DEFAULTS END TOKEN - Everything BEFORE this line is overwritten with the defaults of the extension builder
+page.includeJSFooter.qrcode = EXT:dl_qrcodesgenerator/Resources/Public/Js/qrcode.js
+page.includeJSFooter.makeCode = EXT:dl_qrcodesgenerator/Resources/Public/Js/makeCode.js
+
+
+#page.includeJS.QRious = EXT:dl_qrcodesgenerator/Resources/Public/Js/QRious.js
+
+qrcodeRender = PAGE
+qrcodeRender {
+  10 = USER
+  10 {
+    userFunc = TYPO3\CMS\Extbase\Core\Bootstrap->run
+    extensionName = DlQrcodesgenerator
+    pluginName = Qrcodesgenerator
+    #extensionName = NzNazartravel
+    #pluginName = Bookingmytrip
+    vendorName = DanLundgren
+    switchableControllerActions.QRcodesGenerator.1 = list
+    #switchableControllerActions.Booking.1 = resebevis
+  }
+  typeNum = 532532
+  config {
+    #disableAllHeaderCode = 1
+    #xhtml_cleaning = 0
+    admPanel = 0
+    #debug = 1
+    no_cache = 1
+  }
+}

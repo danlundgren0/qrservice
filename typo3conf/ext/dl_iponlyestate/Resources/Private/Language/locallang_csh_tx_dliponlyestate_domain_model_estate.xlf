@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<xliff version="1.0">
+	<file source-language="en" datatype="plaintext" original="messages" date="2020-04-22T18:17:37Z" product-name="dl_iponlyestate">
+		<header/>
+		<body>
+			<trans-unit id="name.description">
+				<source>name</source>
+			</trans-unit>
+			<trans-unit id="estate_description.description">
+				<source>estateDescription</source>
+			</trans-unit>
+			<trans-unit id="admin_note.description">
+				<source>adminNote</source>
+			</trans-unit>
+			<trans-unit id="enable_admin_note.description">
+				<source>enableAdminNote</source>
+			</trans-unit>
+			<trans-unit id="page_link.description">
+				<source>pageLink</source>
+			</trans-unit>
+			<trans-unit id="adress.description">
+				<source>adress</source>
+			</trans-unit>
+			<trans-unit id="image.description">
+				<source>image</source>
+			</trans-unit>
+			<trans-unit id="postal_code.description">
+				<source>postalCode</source>
+			</trans-unit>
+			<trans-unit id="city.description">
+				<source>city</source>
+			</trans-unit>
+			<trans-unit id="width.description">
+				<source>width</source>
+			</trans-unit>
+			<trans-unit id="length.description">
+				<source>length</source>
+			</trans-unit>
+			<trans-unit id="door_position.description">
+				<source>doorPosition</source>
+			</trans-unit>
+			<trans-unit id="latitude.description">
+				<source>latitude</source>
+			</trans-unit>
+			<trans-unit id="longitude.description">
+				<source>longitude</source>
+			</trans-unit>
+			<trans-unit id="responsible_technician.description">
+				<source>responsibleTechnician</source>
+			</trans-unit>
+			<trans-unit id="control_points.description">
+				<source>controlPoints</source>
+			</trans-unit>
+			<trans-unit id="node_type.description">
+				<source>nodeType</source>
+			</trans-unit>
+			<trans-unit id="technician.description">
+				<source>technician</source>
+			</trans-unit>
+		</body>
+	</file>
+</xliff>
