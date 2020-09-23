@@ -1,0 +1,150 @@
+// --- frame_class ---
+//
+.frame-jumbotron {
+  @extend .jumbotron;
+}
+.frame-well {
+  @extend .well;
+  @extend .well-sm;
+}
+.frame-alert-info {
+  @extend .alert;
+  @extend .alert-info;
+}
+.frame-alert-success {
+  @extend .alert;
+  @extend .alert-success;
+}
+.frame-alert-warning {
+  @extend .alert;
+  @extend .alert-warning;
+}
+.frame-alert-danger {
+  @extend .alert;
+  @extend .alert-danger;
+}
+
+// --- layouts for textpic, textmedia, images ---
+//
+.img-layout-1 {
+  @extend .img-responsive;
+}
+.img-layout-2 {
+  @extend .img-rounded;
+}
+.img-layout-3 {
+  @extend .img-responsive;
+  @extend .img-rounded;
+}
+.img-layout-4 {
+  @extend .img-circle;
+}
+.img-layout-5 {
+  @extend .img-responsive;
+  @extend .img-circle;
+}
+.img-layout-6 {
+  @extend .img-thumbnail;
+}
+.img-layout-7 {
+  @extend .img-responsive;
+  @extend .img-thumbnail;
+}
+
+.ce-gallery {
+  .ce-row {
+    @include make-row;
+    @media screen and (max-width: $screen-sm-max) {
+      figure.image {
+        margin-bottom: 30px;
+      }
+      .col-sm-12 figure.image,
+      .col-sm-6:last-child figure.image,
+      .col-sm-4:last-child figure.image,
+      .col-sm-3:last-child figure.image,
+      .col-sm-2:last-child figure.image,
+      .col-sm-1:last-child figure.image {
+        margin-bottom: 0;
+      }
+    }
+  }
+}
+
+// --- tables ---
+//
+// all content tables
+.ce-table-wrap {
+  @extend .table-responsive;
+}
+.ce-table {
+  @extend .table;
+}
+// default layout
+.ce-table-0 {
+
+}
+// layout 1 - x
+.ce-table-1 {
+  @extend .table-striped;
+}
+.ce-table-2 {
+  @extend .table-bordered;
+}
+.ce-table-3 {
+  @extend .table-hover;
+}
+.ce-table-4 {
+  @extend .table-condensed;
+}
+.ce-table-5 {
+  @extend .table-striped;
+  @extend .table-hover;
+  @extend .table-condensed;
+}
+.ce-table-6 {
+  @extend .table-bordered;
+  @extend .table-hover;
+}
+
+// --- menus ---
+//
+.ce-menu {
+  // menu type: pages and subpages
+  &.ce-menu-p,
+  &.ce-menu-sp {
+  }
+
+  // layout 1 - x
+  &.ce-menu-layout-1 {
+    @extend .nav;
+    @extend .nav-pills;
+  }
+  &.ce-menu-layout-2 {
+    @extend .nav;
+    @extend .nav-pills;
+    @extend .nav-stacked;
+  }
+  &.ce-menu-layout-3 {
+    @extend .dropdown-menu;
+  }
+  &.ce-menu-layout-4 {
+    @extend .dropdown-menu;
+  }
+}
+
+// --- divs ---
+//
+.ce-div {
+
+  &.ce-div-1 {
+    border-top: 1px dashed #666;
+  }
+
+  &.ce-div-2 {
+    border-top: 1px dotted #999;
+  }
+
+  &.ce-div-3 {
+    border-top: 2px solid #e8e8e8;
+  }
+}

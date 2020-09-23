@@ -8,6 +8,7 @@ namespace FluidTYPO3\Vhs\Utility;
  * LICENSE.md file that was distributed with this source code.
  */
 
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 
 /**
@@ -25,10 +26,18 @@ class CoreUtility
      */
     public static function getLanguageFlagIconPath()
     {
-        if (version_compare(self::getCurrentCoreVersion(), 9.0, '<')) {
+        if (version_compare(static::getCurrentCoreVersion(), 9.0, '<')) {
             return ExtensionManagementUtility::extPath('core') . 'Resources/Public/Icons/Flags/PNG/';
         }
         return ExtensionManagementUtility::extPath('core') . 'Resources/Public/Icons/Flags/';
+    }
+
+    public static function getSitePath(): string
+    {
+        if (defined('PATH_site')) {
+            return constant('PATH_site');
+        }
+        return Environment::getPublicPath();
     }
 
     /**

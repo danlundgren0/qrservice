@@ -1,0 +1,109 @@
+/** -----------------------------------------
+ * Core config setup
+ */
+config {
+    doctype = html5
+
+    disablePrefixComment = 1
+    # option: external
+    removeDefaultJS = 1
+    inlineStyle2TempFile = 1
+
+    absRefPrefix = /
+    tx_realurl_enable = 1
+    spamProtectEmailAddresses = ascii
+
+    sys_language_uid = 0
+    language = {$plugin.tx_bsdist.website.lang.localeShort}
+    locale_all = {$plugin.tx_bsdist.website.lang.locale}
+    htmlTag_langKey < config.language
+
+    admPanel = 0
+}
+
+
+/** -----------------------------------------
+ * Core page setup
+ */
+page = PAGE
+page {
+    typeNum = 0
+
+    10 = FLUIDTEMPLATE
+    10 {
+        templateRootPaths.10 = {$plugin.tx_bsdist.theme.baseDir}/tmpl/backend_layout
+        layoutRootPaths.10 = {$plugin.tx_bsdist.theme.baseDir}/tmpl/backend_layout/Layouts
+        partialRootPaths.10 = {$plugin.tx_bsdist.theme.baseDir}/tmpl/backend_layout/Partials
+
+        file.cObject = CASE
+        file.cObject {
+            key.data = levelfield:-1, backend_layout_next_level, slide
+            key.override.field = backend_layout
+            default = TEXT
+            default.value = {$plugin.tx_bsdist.theme.baseDir}/tmpl/backend_layout/tmpl_main.html
+        }
+        variables {
+            content < styles.content.get
+        }
+    }
+
+    meta {
+        X-UA-Compatible = IE=edge,chrome=1
+        X-UA-Compatible.httpEquivalent = 1
+        viewport = width=device-width, initial-scale=1.0
+        description = TEXT
+        description.data = field:description // field:abstract // levelfield :-1, description, slide // levelfield :-1, abstract, slide
+    }
+
+    includeCSS {
+		bootstrap = {$plugin.tx_bsdist.theme.bootstrapCssFile}
+		lightbox = {$plugin.tx_bsdist.theme.lightboxCssFile}
+	}
+
+    includeJSLibs {
+		jquery = {$plugin.tx_bsdist.theme.jQueryJsFile}
+	}
+    includeJSFooterlibs {
+		bootstrap = {$plugin.tx_bsdist.theme.bootstrapJsFile}
+		lightbox = {$plugin.tx_bsdist.theme.lightboxJsFile}
+	}
+
+}
+
+
+/** -----------------------------------------
+ * RTE parsing settings
+ */
+lib.parseFunc_RTE {
+    nonTypoTagStdWrap.encapsLines {
+        # remove class 'bodytext' from p-tags
+        addAttributes.P.class >
+        encapsTagList := addToList(ul,ol)
+    }
+
+    # still required/ok?
+    externalBlocks {
+        table {
+            # Allow more classes than only 'contenttable'
+            stdWrap.HTMLparser.tags.table.fixAttrib.class.list >
+            # Default table tag class
+            stdWrap.HTMLparser.tags.table.fixAttrib.class.default = table
+        }
+    }
+}
+
+/** -----------------------------------------
+* Fluid Content Rendering
+*/
+lib.contentElement {
+    # additional template paths
+    templateRootPaths.20 = EXT:bsdist/Resources/Private/fluid_styled_content/Templates/
+    layoutRootPaths.20 = EXT:bsdist/Resources/Private/fluid_styled_content/Layouts/
+    partialRootPaths.20 = EXT:bsdist/Resources/Private/fluid_styled_content/Partials/
+}
+lib.fluidContent {
+    # additional template paths
+    templateRootPaths.20 = EXT:bsdist/Resources/Private/fluid_styled_content/Templates/
+    layoutRootPaths.20 = EXT:bsdist/Resources/Private/fluid_styled_content/Layouts/
+    partialRootPaths.20 = EXT:bsdist/Resources/Private/fluid_styled_content/Partials/
+}

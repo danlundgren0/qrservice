@@ -16,7 +16,7 @@ config {
 */
 plugin.tx_indexedsearch {
   # html template for form, results, rules...
-  templateFile = {$plugin.tx_bootstrapcore.theme.baseDir}/tmpl/indexed_search/indexed_search.html
+  templateFile = fileadmin/bsdist/theme/tmpl/indexed_search/indexed_search.html
 
   # search config
   search {

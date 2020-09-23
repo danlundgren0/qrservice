@@ -1,8 +1,8 @@
-// (overwritten) bootstrap variables
-@import "../../lib/bootstrap/scss/bootstrap/variables";
-//@import "includes/variables";
+// custom or orig bootstrap
+//@import "bootstrap";
+@import "bootstrap-custom";
 
 // site layout & content
 @import "includes/layout";
 @import "includes/content";
-
+@import "includes/content-elements";

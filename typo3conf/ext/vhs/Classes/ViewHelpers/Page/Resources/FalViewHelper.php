@@ -10,6 +10,8 @@ namespace FluidTYPO3\Vhs\ViewHelpers\Page\Resources;
 
 use FluidTYPO3\Vhs\Traits\SlideViewHelperTrait;
 use FluidTYPO3\Vhs\ViewHelpers\Resource\Record\FalViewHelper as ResourcesFalViewHelper;
+use TYPO3\CMS\Core\Context\Context;
+use TYPO3\CMS\Core\Context\LanguageAspect;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Frontend\Page\PageRepository;
 
@@ -44,13 +46,13 @@ class FalViewHelper extends ResourcesFalViewHelper
     {
         parent::initializeArguments();
 
-        $this->overrideArgument('table', 'string', 'The table to lookup records.', false, self::DEFAULT_TABLE);
+        $this->overrideArgument('table', 'string', 'The table to lookup records.', false, static::DEFAULT_TABLE);
         $this->overrideArgument(
             'field',
             'string',
             'The field of the table associated to resources.',
             false,
-            self::DEFAULT_FIELD
+            static::DEFAULT_FIELD
         );
         $this->registerSlideArguments();
     }
@@ -119,7 +121,13 @@ class FalViewHelper extends ResourcesFalViewHelper
      */
     protected function getCurrentLanguageUid()
     {
-        return (integer) $GLOBALS['TSFE']->sys_language_uid;
+        if (class_exists(LanguageAspect::class)) {
+            $languageUid = GeneralUtility::makeInstance(Context::class)->getAspect('language')->getId();
+        } else {
+            $languageUid = $GLOBALS['TSFE']->sys_language_uid;
+        }
+
+        return (integer) $languageUid;
     }
 
     /**

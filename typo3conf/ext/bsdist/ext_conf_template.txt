@@ -1,0 +1,12 @@
+
+# cat=basic; type=boolean; label=Enable the field to show/hide a content element based on screen sizes.:See responsive utilities on getbootstrap.com.
+enableResponsiveVisibilityField = 1
+
+# cat=basic; type=string; label=Comma separated list of content element types where the show/hide field is shown.:This distribution provides a fluid_styled_content template which uses the wrap viewhelper only for the CType textmedia.
+showResponsiveVisibilityFieldInCTypes = text,textpic,image,textmedia,tmenu,table
+
+# cat=basic; type=boolean; label=Add a custom ckeditor config: See fileadmin/bsdist/theme/typoscript/pagets/tsconfig.ts for setting the editor preset to custom.
+addCustomCKEditorConfig = 0
+
+# cat=basic; type=string; label=Path to the custom ckeditor config file.
+customCKEditorConfigPath = fileadmin/bsdist/theme/typoscript/pagets/custom.yaml

@@ -1,0 +1,54 @@
+imports:
+- { resource: "EXT:rte_ckeditor/Configuration/RTE/Processing.yaml" }
+- { resource: "EXT:rte_ckeditor/Configuration/RTE/Editor/Base.yaml" }
+- { resource: "EXT:rte_ckeditor/Configuration/RTE/Editor/Plugins.yaml" }
+
+editor:
+  config:
+    contentsCss: ["EXT:rte_ckeditor/Resources/Public/Css/contents.css", "/fileadmin/bsdist/theme/css/rte/content.css"]
+    width: "750px"
+    resize_enabled: true
+    resize_dir: 'both'
+    resize_maxWidth: 850
+    resize_minWidth: 400
+    uiColor: "#F8F8F8"
+
+    format_tags: "p;h2;h3"
+
+    stylesSet:
+    # block level styles
+    - { name: "text-left", element: ['h2', 'h3', 'p', 'td', 'th'], attributes: { 'class': 'text-left' }}
+    - { name: "text-center", element: ['h2', 'h3', 'p', 'td', 'th'], attributes: { 'class': 'text-center' }}
+
+    # List styles
+    - { name: 'UL Stil', element: 'ul', attributes: { 'class': 'ul-rte' } }
+
+    extraPlugins:
+    - justify
+    - specialchar
+    - showblocks
+
+    justifyClasses:
+    - text-left
+    - text-center
+
+    removePlugins:
+    - image
+    - wsc
+    - scayt
+    - table
+    - tabletools
+    - quicktable
+
+    removeButtons:
+      - Anchor
+      - Underline
+      - Strike
+      - Scayt
+      - JustifyBlock
+      - JustifyRight
+      - Table
+      - HorizontalRule
+      - Outdent
+      - Indent
+      - Blockquote

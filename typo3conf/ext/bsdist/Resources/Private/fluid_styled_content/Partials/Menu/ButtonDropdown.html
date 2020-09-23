@@ -1,0 +1,8 @@
+<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers" data-namespace-typo3-fluid="true">
+<div class="btn-group">
+    <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" id="cmenu{data.uid}" aria-haspopup="true" aria-expanded="false">
+        {data.accessibility_title} <span class="caret"></span>
+    </button>
+    <f:render partial="Menu/List" arguments="{_all}" />
+</div>
+</html>

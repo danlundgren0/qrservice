@@ -1,9 +1,10 @@
 <?php
 return [
     'BE' => [
-        'debug' => false,
+        'debug' => true,
         'explicitADmode' => 'explicitAllow',
         'installToolPassword' => '$P$CVw.zyPN.aHREOuuSpvl9pK6oJqDPO/',
+        'lockSSL' => true,
         'loginSecurityLevel' => 'rsa',
         'versionNumberInFilename' => '0',
     ],
@@ -30,7 +31,7 @@ return [
             'gridelements' => 'a:2:{s:20:"additionalStylesheet";s:0:"";s:19:"nestingInListModule";s:1:"0";}',
             'ke_search' => 'a:11:{s:20:"multiplyValueToTitle";s:1:"1";s:16:"searchWordLength";s:1:"4";s:16:"enablePartSearch";s:1:"1";s:17:"enableExplicitAnd";s:1:"0";s:18:"finishNotification";s:1:"0";s:21:"notificationRecipient";s:0:"";s:18:"notificationSender";s:19:"no_reply@domain.com";s:19:"notificationSubject";s:32:"[KE_SEARCH INDEXER NOTIFICATION]";s:13:"pathPdftotext";s:9:"/usr/bin/";s:11:"pathPdfinfo";s:9:"/usr/bin/";s:10:"pathCatdoc";s:9:"/usr/bin/";}',
             'pdfviewhelpers' => 'a:0:{}',
-            'realurl' => 'a:6:{s:10:"configFile";s:26:"typo3conf/realurl_conf.php";s:14:"enableAutoConf";s:1:"1";s:14:"autoConfFormat";s:1:"0";s:12:"enableDevLog";s:1:"0";s:10:"moduleIcon";s:1:"0";s:19:"enableChashUrlDebug";s:1:"0";}',
+            'realurl' => 'a:7:{s:10:"configFile";s:26:"typo3conf/realurl_conf.php";s:14:"enableAutoConf";s:1:"1";s:14:"autoConfFormat";s:1:"0";s:17:"segTitleFieldList";s:0:"";s:12:"enableDevLog";s:1:"0";s:10:"moduleIcon";s:1:"0";s:19:"enableChashUrlDebug";s:1:"0";}',
             'rsaauth' => 'a:1:{s:18:"temporaryDirectory";s:0:"";}',
             'saltedpasswords' => 'a:2:{s:3:"BE.";a:4:{s:21:"saltedPWHashingMethod";s:41:"TYPO3\\CMS\\Saltedpasswords\\Salt\\PhpassSalt";s:11:"forceSalted";i:0;s:15:"onlyAuthService";i:0;s:12:"updatePasswd";i:1;}s:3:"FE.";a:5:{s:7:"enabled";i:1;s:21:"saltedPWHashingMethod";s:41:"TYPO3\\CMS\\Saltedpasswords\\Salt\\PhpassSalt";s:11:"forceSalted";i:0;s:15:"onlyAuthService";i:0;s:12:"updatePasswd";i:1;}}',
             'vhs' => 'a:0:{}',
@@ -42,7 +43,7 @@ return [
         ],
     ],
     'FE' => [
-        'debug' => false,
+        'debug' => true,
         'loginSecurityLevel' => 'rsa',
     ],
     'GFX' => [
@@ -79,15 +80,15 @@ return [
                 ],
             ],
         ],
-        'devIPmask' => '',
-        'displayErrors' => 0,
-        'enableDeprecationLog' => false,
+        'devIPmask' => '*',
+        'displayErrors' => 1,
+        'enableDeprecationLog' => 'file',
         'encryptionKey' => 'abbd72cf16ead6bc99ce5903d5c466adb3d704ee34f4acc8e950618f014e15c5eee86c78ddb63d03253a0198071e97e9',
-        'exceptionalErrors' => 20480,
+        'exceptionalErrors' => 28674,
         'isInitialDatabaseImportDone' => true,
         'isInitialInstallationInProgress' => false,
         'sitename' => 'IP-Only',
-        'sqlDebug' => 0,
-        'systemLogLevel' => 2,
+        'sqlDebug' => 1,
+        'systemLogLevel' => 0,
     ],
 ];

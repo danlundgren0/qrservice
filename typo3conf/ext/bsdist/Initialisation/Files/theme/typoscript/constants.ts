@@ -12,69 +12,44 @@
 * Site & theme default typo3 constants
 */
 
-content {
-	# default header type h2 instead of h1
-	defaultHeaderType = 2
+#content {
+	#defaultHeaderType = 2
 
 	# remove tt_address (if not used for direct_mail)
 	# direct mail does not require tt_address (in 4.0.0), but creates the table columns anyway
 	#shortcut.tables := removeFromList(tt_address)
-}
+#}
 styles.content {
-	imgtext {
+	textmedia {
 		maxW = 1140
-		#maxWInText = 555
 		maxWInText = 750
 		textMargin = 20
-		colSpace = 30
-		rowSpace = 30
-
-		# rendering-type for responsive images
-		#layoutKey = srcset
+		columnSpacing = 30
+		rowSpacing = 30
 
 		linkWrap {
-			width = 1200
-			newWindow = 1
+			width = 1000m
+			height = 600m
 			lightboxEnabled = 1
-			lightboxCssClass = prettyPhoto
-			lightboxRelAttribute = prettyPhoto[{field:uid}]
+			lightboxCssClass = lightbox
+			lightboxRelAttribute >
+			lightboxAttributes = data-featherlight="image"
 		}
-		borderThick = 1
-		borderSpace = 10
-	}
-
-	uploads {
-		filesizeBytesLabels = " | Kb| Mb| Gb"
-	}
-
-	media {
-		defaultVideoWidth = 370
-		defaultVideoHeight = 208
-
-		defaultAudioWidth = 370
-		defaultAudioHeight = 30
 	}
 }
 
 
 /* ----------------------------------------
-* Site & theme constants for bsdist and bootstrap_core
+* Site & theme constants
 */
-plugin.tx_bootstrapcore {
+plugin.tx_bsdist {
 	theme {
-		libDir = fileadmin/bsdist/lib
-		baseDir = fileadmin/bsdist/theme
-		# paths to bootstrap and jquery files
-		bootstrapCssFile = {$plugin.tx_bootstrapcore.theme.libDir}/bootstrap/css/bootstrap.min.css
-		bootstrapJsFile = {$plugin.tx_bootstrapcore.theme.libDir}/bootstrap/js/bootstrap.min.js
-		jQueryJsFile = {$plugin.tx_bootstrapcore.theme.libDir}/jquery/jquery.min.js
-
-		lightboxCssFile = {$plugin.tx_bootstrapcore.theme.libDir}/jquery-prettyPhoto/css/prettyPhoto.min.css
-		lightboxJsFile = {$plugin.tx_bootstrapcore.theme.libDir}/jquery-prettyPhoto/js/jquery.prettyPhoto.js
+		#baseDir = fileadmin/bsdist/theme
+		#jQueryJsFile = {$plugin.tx_bsdist.theme.baseDir}/js/lib/jquery.min.js
 	}
 
 	website {
-		# cat=tx_bootstrapcore.website/domain/010; type=string; label=Website domain: The domain without the protocol, e.g. www.example.com. Only used for direct_mail and news rss feed.
+		# cat=tx_bsdist.website/domain/010; type=string; label=Website domain: The domain without the protocol, e.g. www.example.com. Only used for direct_mail and news rss feed.
 		domain =
 
 		# change lang locale
@@ -82,17 +57,17 @@ plugin.tx_bootstrapcore {
 		#lang.localeShort = de
 
 		metaNav {
-			# cat=tx_bootstrapcore.website/layout/010; type=string; label=Meta navigation page id
-			pageId = 7
+			# cat=tx_bsdist.website/layout/010; type=string; label=Meta navigation page id
+			pageId = 5
 		}
 		footer {
-			# cat=tx_bootstrapcore.website/layout/010; type=string; label=Page id with footer content (for static footer content)
-			pageId = 6
-			# cat=tx_bootstrapcore.website/layout/011; type=string; label=Left footer colPos
+			# cat=tx_bsdist.website/layout/010; type=string; label=Page id with footer content (for static footer content)
+			pageId = 4
+			# cat=tx_bsdist.website/layout/011; type=string; label=Left footer colPos
 			leftColPos = 10
-			# cat=tx_bootstrapcore.website/layout/012; type=string; label=Center footer colPos
+			# cat=tx_bsdist.website/layout/012; type=string; label=Center footer colPos
 			centerColPos = 11
-			# cat=tx_bootstrapcore.website/layout/013; type=string; label=Right footer colPos
+			# cat=tx_bsdist.website/layout/013; type=string; label=Right footer colPos
 			rightColPos = 12
 		}
 	}
@@ -105,5 +80,3 @@ plugin.tx_bootstrapcore {
 #<INCLUDE_TYPOSCRIPT: source="FILE:fileadmin/bsdist/theme/typoscript/ext/indexed_search/constants.ts">
 # felogin
 #<INCLUDE_TYPOSCRIPT: source="FILE:fileadmin/bsdist/theme/typoscript/ext/felogin/constants.ts">
-# sr_freecap (for formhandler)
-#<INCLUDE_TYPOSCRIPT: source="FILE:fileadmin/bsdist/theme/typoscript/ext/sr_freecap/constants.ts">

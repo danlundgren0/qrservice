@@ -1,0 +1,19 @@
+<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers" data-namespace-typo3-fluid="true">
+<f:layout name="Default" />
+
+<f:section name="Main">
+	<f:if condition="{menu}">
+		<f:switch expression="{data.layout}">
+			<f:case value="3">
+				<f:render partial="Menu/Dropdown" arguments="{type: 'sp', menu: menu, data: data}" />
+			</f:case>
+			<f:case value="4">
+				<f:render partial="Menu/ButtonDropdown" arguments="{type: 'sp', menu: menu, data: data}" />
+			</f:case>
+			<f:case default="TRUE">
+				<f:render partial="Menu/List" arguments="{type: 'sp', menu: menu, data: data}" />
+			</f:case>
+		</f:switch>
+	</f:if>
+</f:section>
+</html>

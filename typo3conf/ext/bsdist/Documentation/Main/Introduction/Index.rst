@@ -4,7 +4,6 @@
 .. -*- coding: utf-8 -*- with BOM.
 
 .. include:: ../../Includes.txt
-.. _bootstrap_core: http://typo3.org/extensions/repository/view/bootstrap_core
 
 
 ============
@@ -17,8 +16,6 @@ What does it do?
 
 During the installation of the bsdist distribution
 
-- the extension `bootstrap_core`_ will be installed
-
 - a set of files are copied to *fileadmin/bsdist/*
 
 - and a basic resource and page tree is imported.
@@ -26,11 +23,6 @@ During the installation of the bsdist distribution
 
 Screenshots
 ===========
-Backend features provided by extension `bootstrap_core`_.
-
-.. figure:: ../Images/bootstrapcore_features.png
-   :align: left
-
 A package of files to start developing a new website.
 
 .. figure:: ../Images/bsdist_dirs.png

@@ -15,9 +15,7 @@ bsdist - Bootstrap Kickstart Package
 :Demo: http://demo.bsdist.ch
 :Keywords: forDevelopers, forAdmins, forEditors
 
-Copyright 2013-2014, Pascal Mayer <typo3@simple.ch>
-
-Copyright 2015, |author|
+Copyright 2013-2017, |author|
 
 This document is published under the Open Content License
 

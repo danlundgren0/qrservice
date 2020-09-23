@@ -1,3274 +1,793 @@
 /*!
- * Bootstrap v3.3.6 (http://getbootstrap.com)
- * Copyright 2011-2015 Twitter, Inc.
+ * Bootstrap v3.3.7 (http://getbootstrap.com)
+ * Copyright 2011-2016 Twitter, Inc.
  * Licensed under the MIT license
  */
-
-if (typeof jQuery === 'undefined') {
-  throw new Error('Bootstrap\'s JavaScript requires jQuery')
-}
-
-+function ($) {
-  'use strict';
-  var version = $.fn.jquery.split(' ')[0].split('.')
-  if ((version[0] < 2 && version[1] < 9) || (version[0] == 1 && version[1] == 9 && version[2] < 1) || (version[0] > 2)) {
-    throw new Error('Bootstrap\'s JavaScript requires jQuery version 1.9.1 or higher, but lower than version 3')
-  }
-}(jQuery);
-
-/* ========================================================================
- * Bootstrap: transition.js v3.3.6
- * http://getbootstrap.com/javascript/#transitions
- * ========================================================================
- * Copyright 2011-2015 Twitter, Inc.
- * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
- * ======================================================================== */
-
-
-+function ($) {
-  'use strict';
-
-  // CSS TRANSITION SUPPORT (Shoutout: http://www.modernizr.com/)
-  // ============================================================
-
-  function transitionEnd() {
-    var el = document.createElement('bootstrap')
-
-    var transEndEventNames = {
-      WebkitTransition : 'webkitTransitionEnd',
-      MozTransition    : 'transitionend',
-      OTransition      : 'oTransitionEnd otransitionend',
-      transition       : 'transitionend'
-    }
-
-    for (var name in transEndEventNames) {
-      if (el.style[name] !== undefined) {
-        return { end: transEndEventNames[name] }
-      }
-    }
-
-    return false // explicit for ie8 (  ._.)
-  }
-
-  // http://blog.alexmaccaw.com/css-transitions
-  $.fn.emulateTransitionEnd = function (duration) {
-    var called = false
-    var $el = this
-    $(this).one('bsTransitionEnd', function () { called = true })
-    var callback = function () { if (!called) $($el).trigger($.support.transition.end) }
-    setTimeout(callback, duration)
-    return this
-  }
-
-  $(function () {
-    $.support.transition = transitionEnd()
-
-    if (!$.support.transition) return
-
-    $.event.special.bsTransitionEnd = {
-      bindType: $.support.transition.end,
-      delegateType: $.support.transition.end,
-      handle: function (e) {
-        if ($(e.target).is(this)) return e.handleObj.handler.apply(this, arguments)
-      }
-    }
-  })
-
-}(jQuery);
-
-/* ========================================================================
- * Bootstrap: alert.js v3.3.6
- * http://getbootstrap.com/javascript/#alerts
- * ========================================================================
- * Copyright 2011-2015 Twitter, Inc.
- * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
- * ======================================================================== */
-
-
-+function ($) {
-  'use strict';
-
-  // ALERT CLASS DEFINITION
-  // ======================
-
-  var dismiss = '[data-dismiss="alert"]'
-  var Alert   = function (el) {
-    $(el).on('click', dismiss, this.close)
-  }
-
-  Alert.VERSION = '3.3.6'
-
-  Alert.TRANSITION_DURATION = 150
-
-  Alert.prototype.close = function (e) {
-    var $this    = $(this)
-    var selector = $this.attr('data-target')
-
-    if (!selector) {
-      selector = $this.attr('href')
-      selector = selector && selector.replace(/.*(?=#[^\s]*$)/, '') // strip for ie7
-    }
-
-    var $parent = $(selector)
-
-    if (e) e.preventDefault()
-
-    if (!$parent.length) {
-      $parent = $this.closest('.alert')
-    }
-
-    $parent.trigger(e = $.Event('close.bs.alert'))
-
-    if (e.isDefaultPrevented()) return
-
-    $parent.removeClass('in')
-
-    function removeElement() {
-      // detach from parent, fire event then clean up data
-      $parent.detach().trigger('closed.bs.alert').remove()
-    }
-
-    $.support.transition && $parent.hasClass('fade') ?
-      $parent
-        .one('bsTransitionEnd', removeElement)
-        .emulateTransitionEnd(Alert.TRANSITION_DURATION) :
-      removeElement()
-  }
-
-
-  // ALERT PLUGIN DEFINITION
-  // =======================
-
-  function Plugin(option) {
-    return this.each(function () {
-      var $this = $(this)
-      var data  = $this.data('bs.alert')
-
-      if (!data) $this.data('bs.alert', (data = new Alert(this)))
-      if (typeof option == 'string') data[option].call($this)
-    })
-  }
-
-  var old = $.fn.alert
-
-  $.fn.alert             = Plugin
-  $.fn.alert.Constructor = Alert
-
-
-  // ALERT NO CONFLICT
-  // =================
-
-  $.fn.alert.noConflict = function () {
-    $.fn.alert = old
-    return this
-  }
-
-
-  // ALERT DATA-API
-  // ==============
-
-  $(document).on('click.bs.alert.data-api', dismiss, Alert.prototype.close)
-
-}(jQuery);
-
-/* ========================================================================
- * Bootstrap: button.js v3.3.6
- * http://getbootstrap.com/javascript/#buttons
- * ========================================================================
- * Copyright 2011-2015 Twitter, Inc.
- * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
- * ======================================================================== */
-
-
-+function ($) {
-  'use strict';
-
-  // BUTTON PUBLIC CLASS DEFINITION
-  // ==============================
-
-  var Button = function (element, options) {
-    this.$element  = $(element)
-    this.options   = $.extend({}, Button.DEFAULTS, options)
-    this.isLoading = false
-  }
-
-  Button.VERSION  = '3.3.6'
-
-  Button.DEFAULTS = {
-    loadingText: 'loading...'
-  }
-
-  Button.prototype.setState = function (state) {
-    var d    = 'disabled'
-    var $el  = this.$element
-    var val  = $el.is('input') ? 'val' : 'html'
-    var data = $el.data()
-
-    state += 'Text'
-
-    if (data.resetText == null) $el.data('resetText', $el[val]())
-
-    // push to event loop to allow forms to submit
-    setTimeout($.proxy(function () {
-      $el[val](data[state] == null ? this.options[state] : data[state])
-
-      if (state == 'loadingText') {
-        this.isLoading = true
-        $el.addClass(d).attr(d, d)
-      } else if (this.isLoading) {
-        this.isLoading = false
-        $el.removeClass(d).removeAttr(d)
-      }
-    }, this), 0)
-  }
-
-  Button.prototype.toggle = function () {
-    var changed = true
-    var $parent = this.$element.closest('[data-toggle="buttons"]')
-
-    if ($parent.length) {
-      var $input = this.$element.find('input')
-      if ($input.prop('type') == 'radio') {
-        if ($input.prop('checked')) changed = false
-        $parent.find('.active').removeClass('active')
-        this.$element.addClass('active')
-      } else if ($input.prop('type') == 'checkbox') {
-        if (($input.prop('checked')) !== this.$element.hasClass('active')) changed = false
-        this.$element.toggleClass('active')
-      }
-      $input.prop('checked', this.$element.hasClass('active'))
-      if (changed) $input.trigger('change')
-    } else {
-      this.$element.attr('aria-pressed', !this.$element.hasClass('active'))
-      this.$element.toggleClass('active')
-    }
-  }
-
-
-  // BUTTON PLUGIN DEFINITION
-  // ========================
-
-  function Plugin(option) {
-    return this.each(function () {
-      var $this   = $(this)
-      var data    = $this.data('bs.button')
-      var options = typeof option == 'object' && option
-
-      if (!data) $this.data('bs.button', (data = new Button(this, options)))
-
-      if (option == 'toggle') data.toggle()
-      else if (option) data.setState(option)
-    })
-  }
-
-  var old = $.fn.button
-
-  $.fn.button             = Plugin
-  $.fn.button.Constructor = Button
-
-
-  // BUTTON NO CONFLICT
-  // ==================
-
-  $.fn.button.noConflict = function () {
-    $.fn.button = old
-    return this
-  }
-
-
-  // BUTTON DATA-API
-  // ===============
-
-  $(document)
-    .on('click.bs.button.data-api', '[data-toggle^="button"]', function (e) {
-      var $btn = $(e.target)
-      if (!$btn.hasClass('btn')) $btn = $btn.closest('.btn')
-      Plugin.call($btn, 'toggle')
-      if (!($(e.target).is('input[type="radio"]') || $(e.target).is('input[type="checkbox"]'))) e.preventDefault()
-    })
-    .on('focus.bs.button.data-api blur.bs.button.data-api', '[data-toggle^="button"]', function (e) {
-      $(e.target).closest('.btn').toggleClass('focus', /^focus(in)?$/.test(e.type))
-    })
-
-}(jQuery);
-
-/* ========================================================================
- * Bootstrap: carousel.js v3.3.6
- * http://getbootstrap.com/javascript/#carousel
- * ========================================================================
- * Copyright 2011-2015 Twitter, Inc.
- * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
- * ======================================================================== */
-
-
-+function ($) {
-  'use strict';
-
-  // CAROUSEL CLASS DEFINITION
-  // =========================
-
-  var Carousel = function (element, options) {
-    this.$element    = $(element)
-    this.$indicators = this.$element.find('.carousel-indicators')
-    this.options     = options
-    this.paused      = null
-    this.sliding     = null
-    this.interval    = null
-    this.$active     = null
-    this.$items      = null
-
-    this.options.keyboard && this.$element.on('keydown.bs.carousel', $.proxy(this.keydown, this))
-
-    this.options.pause == 'hover' && !('ontouchstart' in document.documentElement) && this.$element
-      .on('mouseenter.bs.carousel', $.proxy(this.pause, this))
-      .on('mouseleave.bs.carousel', $.proxy(this.cycle, this))
-  }
-
-  Carousel.VERSION  = '3.3.6'
-
-  Carousel.TRANSITION_DURATION = 600
-
-  Carousel.DEFAULTS = {
-    interval: 5000,
-    pause: 'hover',
-    wrap: true,
-    keyboard: true
-  }
-
-  Carousel.prototype.keydown = function (e) {
-    if (/input|textarea/i.test(e.target.tagName)) return
-    switch (e.which) {
-      case 37: this.prev(); break
-      case 39: this.next(); break
-      default: return
-    }
-
-    e.preventDefault()
-  }
-
-  Carousel.prototype.cycle = function (e) {
-    e || (this.paused = false)
-
-    this.interval && clearInterval(this.interval)
-
-    this.options.interval
-      && !this.paused
-      && (this.interval = setInterval($.proxy(this.next, this), this.options.interval))
-
-    return this
-  }
-
-  Carousel.prototype.getItemIndex = function (item) {
-    this.$items = item.parent().children('.item')
-    return this.$items.index(item || this.$active)
-  }
-
-  Carousel.prototype.getItemForDirection = function (direction, active) {
-    var activeIndex = this.getItemIndex(active)
-    var willWrap = (direction == 'prev' && activeIndex === 0)
-                || (direction == 'next' && activeIndex == (this.$items.length - 1))
-    if (willWrap && !this.options.wrap) return active
-    var delta = direction == 'prev' ? -1 : 1
-    var itemIndex = (activeIndex + delta) % this.$items.length
-    return this.$items.eq(itemIndex)
-  }
-
-  Carousel.prototype.to = function (pos) {
-    var that        = this
-    var activeIndex = this.getItemIndex(this.$active = this.$element.find('.item.active'))
-
-    if (pos > (this.$items.length - 1) || pos < 0) return
-
-    if (this.sliding)       return this.$element.one('slid.bs.carousel', function () { that.to(pos) }) // yes, "slid"
-    if (activeIndex == pos) return this.pause().cycle()
-
-    return this.slide(pos > activeIndex ? 'next' : 'prev', this.$items.eq(pos))
-  }
-
-  Carousel.prototype.pause = function (e) {
-    e || (this.paused = true)
-
-    if (this.$element.find('.next, .prev').length && $.support.transition) {
-      this.$element.trigger($.support.transition.end)
-      this.cycle(true)
-    }
-
-    this.interval = clearInterval(this.interval)
-
-    return this
-  }
-
-  Carousel.prototype.next = function () {
-    if (this.sliding) return
-    return this.slide('next')
-  }
-
-  Carousel.prototype.prev = function () {
-    if (this.sliding) return
-    return this.slide('prev')
-  }
-
-  Carousel.prototype.slide = function (type, next) {
-    var $active   = this.$element.find('.item.active')
-    var $next     = next || this.getItemForDirection(type, $active)
-    var isCycling = this.interval
-    var direction = type == 'next' ? 'left' : 'right'
-    var that      = this
-
-    if ($next.hasClass('active')) return (this.sliding = false)
-
-    var relatedTarget = $next[0]
-    var slideEvent = $.Event('slide.bs.carousel', {
-      relatedTarget: relatedTarget,
-      direction: direction
-    })
-    this.$element.trigger(slideEvent)
-    if (slideEvent.isDefaultPrevented()) return
-
-    this.sliding = true
-
-    isCycling && this.pause()
-
-    if (this.$indicators.length) {
-      this.$indicators.find('.active').removeClass('active')
-      var $nextIndicator = $(this.$indicators.children()[this.getItemIndex($next)])
-      $nextIndicator && $nextIndicator.addClass('active')
-    }
-
-    var slidEvent = $.Event('slid.bs.carousel', { relatedTarget: relatedTarget, direction: direction }) // yes, "slid"
-    if ($.support.transition && this.$element.hasClass('slide')) {
-      $next.addClass(type)
-      $next[0].offsetWidth // force reflow
-      $active.addClass(direction)
-      $next.addClass(direction)
-      $active
-        .one('bsTransitionEnd', function () {
-          $next.removeClass([type, direction].join(' ')).addClass('active')
-          $active.removeClass(['active', direction].join(' '))
-          that.sliding = false
-          setTimeout(function () {
-            that.$element.trigger(slidEvent)
-          }, 0)
-        })
-        .emulateTransitionEnd(Carousel.TRANSITION_DURATION)
-    } else {
-      $active.removeClass('active')
-      $next.addClass('active')
-      this.sliding = false
-      this.$element.trigger(slidEvent)
-    }
-
-    isCycling && this.cycle()
-
-    return this
-  }
-
-
-  // CAROUSEL PLUGIN DEFINITION
-  // ==========================
-
-  function Plugin(option) {
-    return this.each(function () {
-      var $this   = $(this)
-      var data    = $this.data('bs.carousel')
-      var options = $.extend({}, Carousel.DEFAULTS, $this.data(), typeof option == 'object' && option)
-      var action  = typeof option == 'string' ? option : options.slide
-
-      if (!data) $this.data('bs.carousel', (data = new Carousel(this, options)))
-      if (typeof option == 'number') data.to(option)
-      else if (action) data[action]()
-      else if (options.interval) data.pause().cycle()
-    })
-  }
-
-  var old = $.fn.carousel
-
-  $.fn.carousel             = Plugin
-  $.fn.carousel.Constructor = Carousel
-
-
-  // CAROUSEL NO CONFLICT
-  // ====================
-
-  $.fn.carousel.noConflict = function () {
-    $.fn.carousel = old
-    return this
-  }
-
-
-  // CAROUSEL DATA-API
-  // =================
-
-  var clickHandler = function (e) {
-    var href
-    var $this   = $(this)
-    var $target = $($this.attr('data-target') || (href = $this.attr('href')) && href.replace(/.*(?=#[^\s]+$)/, '')) // strip for ie7
-    if (!$target.hasClass('carousel')) return
-    var options = $.extend({}, $target.data(), $this.data())
-    var slideIndex = $this.attr('data-slide-to')
-    if (slideIndex) options.interval = false
-
-    Plugin.call($target, options)
-
-    if (slideIndex) {
-      $target.data('bs.carousel').to(slideIndex)
-    }
-
-    e.preventDefault()
-  }
-
-  $(document)
-    .on('click.bs.carousel.data-api', '[data-slide]', clickHandler)
-    .on('click.bs.carousel.data-api', '[data-slide-to]', clickHandler)
-
-  $(window).on('load', function () {
-    $('[data-ride="carousel"]').each(function () {
-      var $carousel = $(this)
-      Plugin.call($carousel, $carousel.data())
-    })
-  })
-
-}(jQuery);
-
-/* ========================================================================
- * Bootstrap: collapse.js v3.3.6
- * http://getbootstrap.com/javascript/#collapse
- * ========================================================================
- * Copyright 2011-2015 Twitter, Inc.
- * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
- * ======================================================================== */
-
-
-+function ($) {
-  'use strict';
-
-  // COLLAPSE PUBLIC CLASS DEFINITION
-  // ================================
-
-  var Collapse = function (element, options) {
-    this.$element      = $(element)
-    this.options       = $.extend({}, Collapse.DEFAULTS, options)
-    this.$trigger      = $('[data-toggle="collapse"][href="#' + element.id + '"],' +
-                           '[data-toggle="collapse"][data-target="#' + element.id + '"]')
-    this.transitioning = null
-
-    if (this.options.parent) {
-      this.$parent = this.getParent()
-    } else {
-      this.addAriaAndCollapsedClass(this.$element, this.$trigger)
-    }
-
-    if (this.options.toggle) this.toggle()
-  }
-
-  Collapse.VERSION  = '3.3.6'
-
-  Collapse.TRANSITION_DURATION = 350
-
-  Collapse.DEFAULTS = {
-    toggle: true
-  }
-
-  Collapse.prototype.dimension = function () {
-    var hasWidth = this.$element.hasClass('width')
-    return hasWidth ? 'width' : 'height'
-  }
-
-  Collapse.prototype.show = function () {
-    if (this.transitioning || this.$element.hasClass('in')) return
-
-    var activesData
-    var actives = this.$parent && this.$parent.children('.panel').children('.in, .collapsing')
-
-    if (actives && actives.length) {
-      activesData = actives.data('bs.collapse')
-      if (activesData && activesData.transitioning) return
-    }
-
-    var startEvent = $.Event('show.bs.collapse')
-    this.$element.trigger(startEvent)
-    if (startEvent.isDefaultPrevented()) return
-
-    if (actives && actives.length) {
-      Plugin.call(actives, 'hide')
-      activesData || actives.data('bs.collapse', null)
-    }
-
-    var dimension = this.dimension()
-
-    this.$element
-      .removeClass('collapse')
-      .addClass('collapsing')[dimension](0)
-      .attr('aria-expanded', true)
-
-    this.$trigger
-      .removeClass('collapsed')
-      .attr('aria-expanded', true)
-
-    this.transitioning = 1
-
-    var complete = function () {
-      this.$element
-        .removeClass('collapsing')
-        .addClass('collapse in')[dimension]('')
-      this.transitioning = 0
-      this.$element
-        .trigger('shown.bs.collapse')
-    }
-
-    if (!$.support.transition) return complete.call(this)
-
-    var scrollSize = $.camelCase(['scroll', dimension].join('-'))
-
-    this.$element
-      .one('bsTransitionEnd', $.proxy(complete, this))
-      .emulateTransitionEnd(Collapse.TRANSITION_DURATION)[dimension](this.$element[0][scrollSize])
-  }
-
-  Collapse.prototype.hide = function () {
-    if (this.transitioning || !this.$element.hasClass('in')) return
-
-    var startEvent = $.Event('hide.bs.collapse')
-    this.$element.trigger(startEvent)
-    if (startEvent.isDefaultPrevented()) return
-
-    var dimension = this.dimension()
-
-    this.$element[dimension](this.$element[dimension]())[0].offsetHeight
-
-    this.$element
-      .addClass('collapsing')
-      .removeClass('collapse in')
-      .attr('aria-expanded', false)
-
-    this.$trigger
-      .addClass('collapsed')
-      .attr('aria-expanded', false)
-
-    this.transitioning = 1
-
-    var complete = function () {
-      this.transitioning = 0
-      this.$element
-        .removeClass('collapsing')
-        .addClass('collapse')
-        .trigger('hidden.bs.collapse')
-    }
-
-    if (!$.support.transition) return complete.call(this)
-
-    this.$element
-      [dimension](0)
-      .one('bsTransitionEnd', $.proxy(complete, this))
-      .emulateTransitionEnd(Collapse.TRANSITION_DURATION)
-  }
-
-  Collapse.prototype.toggle = function () {
-    this[this.$element.hasClass('in') ? 'hide' : 'show']()
-  }
-
-  Collapse.prototype.getParent = function () {
-    return $(this.options.parent)
-      .find('[data-toggle="collapse"][data-parent="' + this.options.parent + '"]')
-      .each($.proxy(function (i, element) {
-        var $element = $(element)
-        this.addAriaAndCollapsedClass(getTargetFromTrigger($element), $element)
-      }, this))
-      .end()
-  }
-
-  Collapse.prototype.addAriaAndCollapsedClass = function ($element, $trigger) {
-    var isOpen = $element.hasClass('in')
-
-    $element.attr('aria-expanded', isOpen)
-    $trigger
-      .toggleClass('collapsed', !isOpen)
-      .attr('aria-expanded', isOpen)
-  }
-
-  function getTargetFromTrigger($trigger) {
-    var href
-    var target = $trigger.attr('data-target')
-      || (href = $trigger.attr('href')) && href.replace(/.*(?=#[^\s]+$)/, '') // strip for ie7
-
-    return $(target)
-  }
-
-
-  // COLLAPSE PLUGIN DEFINITION
-  // ==========================
-
-  function Plugin(option) {
-    return this.each(function () {
-      var $this   = $(this)
-      var data    = $this.data('bs.collapse')
-      var options = $.extend({}, Collapse.DEFAULTS, $this.data(), typeof option == 'object' && option)
-
-      if (!data && options.toggle && /show|hide/.test(option)) options.toggle = false
-      if (!data) $this.data('bs.collapse', (data = new Collapse(this, options)))
-      if (typeof option == 'string') data[option]()
-    })
-  }
-
-  var old = $.fn.collapse
-
-  $.fn.collapse             = Plugin
-  $.fn.collapse.Constructor = Collapse
-
-
-  // COLLAPSE NO CONFLICT
-  // ====================
-
-  $.fn.collapse.noConflict = function () {
-    $.fn.collapse = old
-    return this
-  }
-
-
-  // COLLAPSE DATA-API
-  // =================
-
-  $(document).on('click.bs.collapse.data-api', '[data-toggle="collapse"]', function (e) {
-    var $this   = $(this)
-
-    if (!$this.attr('data-target')) e.preventDefault()
-
-    var $target = getTargetFromTrigger($this)
-    var data    = $target.data('bs.collapse')
-    var option  = data ? 'toggle' : $this.data()
-
-    Plugin.call($target, option)
-  })
-
-}(jQuery);
-
-/* ========================================================================
- * Bootstrap: dropdown.js v3.3.6
- * http://getbootstrap.com/javascript/#dropdowns
- * ========================================================================
- * Copyright 2011-2015 Twitter, Inc.
- * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
- * ======================================================================== */
-
-
-+function ($) {
-  'use strict';
-
-  // DROPDOWN CLASS DEFINITION
-  // =========================
-
-  var backdrop = '.dropdown-backdrop'
-  var toggle   = '[data-toggle="dropdown"]'
-  var Dropdown = function (element) {
-    $(element).on('click.bs.dropdown', this.toggle)
-  }
-
-  Dropdown.VERSION = '3.3.6'
-
-  function getParent($this) {
-    var selector = $this.attr('data-target')
-
-    if (!selector) {
-      selector = $this.attr('href')
-      selector = selector && /#[A-Za-z]/.test(selector) && selector.replace(/.*(?=#[^\s]*$)/, '') // strip for ie7
-    }
-
-    var $parent = selector && $(selector)
-
-    return $parent && $parent.length ? $parent : $this.parent()
-  }
-
-  function clearMenus(e) {
-    if (e && e.which === 3) return
-    $(backdrop).remove()
-    $(toggle).each(function () {
-      var $this         = $(this)
-      var $parent       = getParent($this)
-      var relatedTarget = { relatedTarget: this }
-
-      if (!$parent.hasClass('open')) return
-
-      if (e && e.type == 'click' && /input|textarea/i.test(e.target.tagName) && $.contains($parent[0], e.target)) return
-
-      $parent.trigger(e = $.Event('hide.bs.dropdown', relatedTarget))
-
-      if (e.isDefaultPrevented()) return
-
-      $this.attr('aria-expanded', 'false')
-      $parent.removeClass('open').trigger($.Event('hidden.bs.dropdown', relatedTarget))
-    })
-  }
-
-  Dropdown.prototype.toggle = function (e) {
-    var $this = $(this)
-
-    if ($this.is('.disabled, :disabled')) return
-
-    var $parent  = getParent($this)
-    var isActive = $parent.hasClass('open')
-
-    clearMenus()
-
-    if (!isActive) {
-      if ('ontouchstart' in document.documentElement && !$parent.closest('.navbar-nav').length) {
-        // if mobile we use a backdrop because click events don't delegate
-        $(document.createElement('div'))
-          .addClass('dropdown-backdrop')
-          .insertAfter($(this))
-          .on('click', clearMenus)
-      }
-
-      var relatedTarget = { relatedTarget: this }
-      $parent.trigger(e = $.Event('show.bs.dropdown', relatedTarget))
-
-      if (e.isDefaultPrevented()) return
-
-      $this
-        .trigger('focus')
-        .attr('aria-expanded', 'true')
-
-      $parent
-        .toggleClass('open')
-        .trigger($.Event('shown.bs.dropdown', relatedTarget))
-    }
-
-    return false
-  }
-
-  Dropdown.prototype.keydown = function (e) {
-    if (!/(38|40|27|32)/.test(e.which) || /input|textarea/i.test(e.target.tagName)) return
-
-    var $this = $(this)
-
-    e.preventDefault()
-    e.stopPropagation()
-
-    if ($this.is('.disabled, :disabled')) return
-
-    var $parent  = getParent($this)
-    var isActive = $parent.hasClass('open')
-
-    if (!isActive && e.which != 27 || isActive && e.which == 27) {
-      if (e.which == 27) $parent.find(toggle).trigger('focus')
-      return $this.trigger('click')
-    }
-
-    var desc = ' li:not(.disabled):visible a'
-    var $items = $parent.find('.dropdown-menu' + desc)
-
-    if (!$items.length) return
-
-    var index = $items.index(e.target)
-
-    if (e.which == 38 && index > 0)                 index--         // up
-    if (e.which == 40 && index < $items.length - 1) index++         // down
-    if (!~index)                                    index = 0
-
-    $items.eq(index).trigger('focus')
-  }
-
-
-  // DROPDOWN PLUGIN DEFINITION
-  // ==========================
-
-  function Plugin(option) {
-    return this.each(function () {
-      var $this = $(this)
-      var data  = $this.data('bs.dropdown')
-
-      if (!data) $this.data('bs.dropdown', (data = new Dropdown(this)))
-      if (typeof option == 'string') data[option].call($this)
-    })
-  }
-
-  var old = $.fn.dropdown
-
-  $.fn.dropdown             = Plugin
-  $.fn.dropdown.Constructor = Dropdown
-
-
-  // DROPDOWN NO CONFLICT
-  // ====================
-
-  $.fn.dropdown.noConflict = function () {
-    $.fn.dropdown = old
-    return this
-  }
-
-
-  // APPLY TO STANDARD DROPDOWN ELEMENTS
-  // ===================================
-
-  $(document)
-    .on('click.bs.dropdown.data-api', clearMenus)
-    .on('click.bs.dropdown.data-api', '.dropdown form', function (e) { e.stopPropagation() })
-    .on('click.bs.dropdown.data-api', toggle, Dropdown.prototype.toggle)
-    .on('keydown.bs.dropdown.data-api', toggle, Dropdown.prototype.keydown)
-    .on('keydown.bs.dropdown.data-api', '.dropdown-menu', Dropdown.prototype.keydown)
-
-}(jQuery);
-
-/* ========================================================================
- * Bootstrap: modal.js v3.3.6
- * http://getbootstrap.com/javascript/#modals
- * ========================================================================
- * Copyright 2011-2015 Twitter, Inc.
- * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
- * ======================================================================== */
-
-
-+function ($) {
-  'use strict';
-
-  // MODAL CLASS DEFINITION
-  // ======================
-
-  var Modal = function (element, options) {
-    this.options             = options
-    this.$body               = $(document.body)
-    this.$element            = $(element)
-    this.$dialog             = this.$element.find('.modal-dialog')
-    this.$backdrop           = null
-    this.isShown             = null
-    this.originalBodyPad     = null
-    this.scrollbarWidth      = 0
-    this.ignoreBackdropClick = false
-
-    if (this.options.remote) {
-      this.$element
-        .find('.modal-content')
-        .load(this.options.remote, $.proxy(function () {
-          this.$element.trigger('loaded.bs.modal')
-        }, this))
-    }
-  }
-
-  Modal.VERSION  = '3.3.6'
-
-  Modal.TRANSITION_DURATION = 300
-  Modal.BACKDROP_TRANSITION_DURATION = 150
-
-  Modal.DEFAULTS = {
-    backdrop: true,
-    keyboard: true,
-    show: true
-  }
-
-  Modal.prototype.toggle = function (_relatedTarget) {
-    return this.isShown ? this.hide() : this.show(_relatedTarget)
-  }
-
-  Modal.prototype.show = function (_relatedTarget) {
-    var that = this
-    var e    = $.Event('show.bs.modal', { relatedTarget: _relatedTarget })
-
-    this.$element.trigger(e)
-
-    if (this.isShown || e.isDefaultPrevented()) return
-
-    this.isShown = true
-
-    this.checkScrollbar()
-    this.setScrollbar()
-    this.$body.addClass('modal-open')
-
-    this.escape()
-    this.resize()
-
-    this.$element.on('click.dismiss.bs.modal', '[data-dismiss="modal"]', $.proxy(this.hide, this))
-
-    this.$dialog.on('mousedown.dismiss.bs.modal', function () {
-      that.$element.one('mouseup.dismiss.bs.modal', function (e) {
-        if ($(e.target).is(that.$element)) that.ignoreBackdropClick = true
-      })
-    })
-
-    this.backdrop(function () {
-      var transition = $.support.transition && that.$element.hasClass('fade')
-
-      if (!that.$element.parent().length) {
-        that.$element.appendTo(that.$body) // don't move modals dom position
-      }
-
-      that.$element
-        .show()
-        .scrollTop(0)
-
-      that.adjustDialog()
-
-      if (transition) {
-        that.$element[0].offsetWidth // force reflow
-      }
-
-      that.$element.addClass('in')
-
-      that.enforceFocus()
-
-      var e = $.Event('shown.bs.modal', { relatedTarget: _relatedTarget })
-
-      transition ?
-        that.$dialog // wait for modal to slide in
-          .one('bsTransitionEnd', function () {
-            that.$element.trigger('focus').trigger(e)
-          })
-          .emulateTransitionEnd(Modal.TRANSITION_DURATION) :
-        that.$element.trigger('focus').trigger(e)
-    })
-  }
-
-  Modal.prototype.hide = function (e) {
-    if (e) e.preventDefault()
-
-    e = $.Event('hide.bs.modal')
-
-    this.$element.trigger(e)
-
-    if (!this.isShown || e.isDefaultPrevented()) return
-
-    this.isShown = false
-
-    this.escape()
-    this.resize()
-
-    $(document).off('focusin.bs.modal')
-
-    this.$element
-      .removeClass('in')
-      .off('click.dismiss.bs.modal')
-      .off('mouseup.dismiss.bs.modal')
-
-    this.$dialog.off('mousedown.dismiss.bs.modal')
-
-    $.support.transition && this.$element.hasClass('fade') ?
-      this.$element
-        .one('bsTransitionEnd', $.proxy(this.hideModal, this))
-        .emulateTransitionEnd(Modal.TRANSITION_DURATION) :
-      this.hideModal()
-  }
-
-  Modal.prototype.enforceFocus = function () {
-    $(document)
-      .off('focusin.bs.modal') // guard against infinite focus loop
-      .on('focusin.bs.modal', $.proxy(function (e) {
-        if (this.$element[0] !== e.target && !this.$element.has(e.target).length) {
-          this.$element.trigger('focus')
-        }
-      }, this))
-  }
-
-  Modal.prototype.escape = function () {
-    if (this.isShown && this.options.keyboard) {
-      this.$element.on('keydown.dismiss.bs.modal', $.proxy(function (e) {
-        e.which == 27 && this.hide()
-      }, this))
-    } else if (!this.isShown) {
-      this.$element.off('keydown.dismiss.bs.modal')
-    }
-  }
-
-  Modal.prototype.resize = function () {
-    if (this.isShown) {
-      $(window).on('resize.bs.modal', $.proxy(this.handleUpdate, this))
-    } else {
-      $(window).off('resize.bs.modal')
-    }
-  }
-
-  Modal.prototype.hideModal = function () {
-    var that = this
-    this.$element.hide()
-    this.backdrop(function () {
-      that.$body.removeClass('modal-open')
-      that.resetAdjustments()
-      that.resetScrollbar()
-      that.$element.trigger('hidden.bs.modal')
-    })
-  }
-
-  Modal.prototype.removeBackdrop = function () {
-    this.$backdrop && this.$backdrop.remove()
-    this.$backdrop = null
-  }
-
-  Modal.prototype.backdrop = function (callback) {
-    var that = this
-    var animate = this.$element.hasClass('fade') ? 'fade' : ''
-
-    if (this.isShown && this.options.backdrop) {
-      var doAnimate = $.support.transition && animate
-
-      this.$backdrop = $(document.createElement('div'))
-        .addClass('modal-backdrop ' + animate)
-        .appendTo(this.$body)
-
-      this.$element.on('click.dismiss.bs.modal', $.proxy(function (e) {
-        if (this.ignoreBackdropClick) {
-          this.ignoreBackdropClick = false
-          return
-        }
-        if (e.target !== e.currentTarget) return
-        this.options.backdrop == 'static'
-          ? this.$element[0].focus()
-          : this.hide()
-      }, this))
-
-      if (doAnimate) this.$backdrop[0].offsetWidth // force reflow
-
-      this.$backdrop.addClass('in')
-
-      if (!callback) return
-
-      doAnimate ?
-        this.$backdrop
-          .one('bsTransitionEnd', callback)
-          .emulateTransitionEnd(Modal.BACKDROP_TRANSITION_DURATION) :
-        callback()
-
-    } else if (!this.isShown && this.$backdrop) {
-      this.$backdrop.removeClass('in')
-
-      var callbackRemove = function () {
-        that.removeBackdrop()
-        callback && callback()
-      }
-      $.support.transition && this.$element.hasClass('fade') ?
-        this.$backdrop
-          .one('bsTransitionEnd', callbackRemove)
-          .emulateTransitionEnd(Modal.BACKDROP_TRANSITION_DURATION) :
-        callbackRemove()
-
-    } else if (callback) {
-      callback()
-    }
-  }
-
-  // these following methods are used to handle overflowing modals
-
-  Modal.prototype.handleUpdate = function () {
-    this.adjustDialog()
-  }
-
-  Modal.prototype.adjustDialog = function () {
-    var modalIsOverflowing = this.$element[0].scrollHeight > document.documentElement.clientHeight
-
-    this.$element.css({
-      paddingLeft:  !this.bodyIsOverflowing && modalIsOverflowing ? this.scrollbarWidth : '',
-      paddingRight: this.bodyIsOverflowing && !modalIsOverflowing ? this.scrollbarWidth : ''
-    })
-  }
-
-  Modal.prototype.resetAdjustments = function () {
-    this.$element.css({
-      paddingLeft: '',
-      paddingRight: ''
-    })
-  }
-
-  Modal.prototype.checkScrollbar = function () {
-    var fullWindowWidth = window.innerWidth
-    if (!fullWindowWidth) { // workaround for missing window.innerWidth in IE8
-      var documentElementRect = document.documentElement.getBoundingClientRect()
-      fullWindowWidth = documentElementRect.right - Math.abs(documentElementRect.left)
-    }
-    this.bodyIsOverflowing = document.body.clientWidth < fullWindowWidth
-    this.scrollbarWidth = this.measureScrollbar()
-  }
-
-  Modal.prototype.setScrollbar = function () {
-    var bodyPad = parseInt((this.$body.css('padding-right') || 0), 10)
-    this.originalBodyPad = document.body.style.paddingRight || ''
-    if (this.bodyIsOverflowing) this.$body.css('padding-right', bodyPad + this.scrollbarWidth)
-  }
-
-  Modal.prototype.resetScrollbar = function () {
-    this.$body.css('padding-right', this.originalBodyPad)
-  }
-
-  Modal.prototype.measureScrollbar = function () { // thx walsh
-    var scrollDiv = document.createElement('div')
-    scrollDiv.className = 'modal-scrollbar-measure'
-    this.$body.append(scrollDiv)
-    var scrollbarWidth = scrollDiv.offsetWidth - scrollDiv.clientWidth
-    this.$body[0].removeChild(scrollDiv)
-    return scrollbarWidth
-  }
-
-
-  // MODAL PLUGIN DEFINITION
-  // =======================
-
-  function Plugin(option, _relatedTarget) {
-    return this.each(function () {
-      var $this   = $(this)
-      var data    = $this.data('bs.modal')
-      var options = $.extend({}, Modal.DEFAULTS, $this.data(), typeof option == 'object' && option)
-
-      if (!data) $this.data('bs.modal', (data = new Modal(this, options)))
-      if (typeof option == 'string') data[option](_relatedTarget)
-      else if (options.show) data.show(_relatedTarget)
-    })
-  }
-
-  var old = $.fn.modal
-
-  $.fn.modal             = Plugin
-  $.fn.modal.Constructor = Modal
-
-
-  // MODAL NO CONFLICT
-  // =================
-
-  $.fn.modal.noConflict = function () {
-    $.fn.modal = old
-    return this
-  }
-
-
-  // MODAL DATA-API
-  // ==============
-
-  $(document).on('click.bs.modal.data-api', '[data-toggle="modal"]', function (e) {
-    var $this   = $(this)
-    var href    = $this.attr('href')
-    var $target = $($this.attr('data-target') || (href && href.replace(/.*(?=#[^\s]+$)/, ''))) // strip for ie7
-    var option  = $target.data('bs.modal') ? 'toggle' : $.extend({ remote: !/#/.test(href) && href }, $target.data(), $this.data())
-
-    if ($this.is('a')) e.preventDefault()
-
-    $target.one('show.bs.modal', function (showEvent) {
-      if (showEvent.isDefaultPrevented()) return // only register focus restorer if modal will actually get shown
-      $target.one('hidden.bs.modal', function () {
-        $this.is(':visible') && $this.trigger('focus')
-      })
-    })
-    Plugin.call($target, option, this)
-  })
-
-}(jQuery);
-
-/* ========================================================================
- * Bootstrap: tooltip.js v3.3.6
- * http://getbootstrap.com/javascript/#tooltip
- * Inspired by the original jQuery.tipsy by Jason Frame
- * ========================================================================
- * Copyright 2011-2015 Twitter, Inc.
- * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
- * ======================================================================== */
-
-
-+function ($) {
-  'use strict';
-
-  // TOOLTIP PUBLIC CLASS DEFINITION
-  // ===============================
-
-  var Tooltip = function (element, options) {
-    this.type       = null
-    this.options    = null
-    this.enabled    = null
-    this.timeout    = null
-    this.hoverState = null
-    this.$element   = null
-    this.inState    = null
-
-    this.init('tooltip', element, options)
-  }
-
-  Tooltip.VERSION  = '3.3.6'
-
-  Tooltip.TRANSITION_DURATION = 150
-
-  Tooltip.DEFAULTS = {
-    animation: true,
-    placement: 'top',
-    selector: false,
-    template: '<div class="tooltip" role="tooltip"><div class="tooltip-arrow"></div><div class="tooltip-inner"></div></div>',
-    trigger: 'hover focus',
-    title: '',
-    delay: 0,
-    html: false,
-    container: false,
-    viewport: {
-      selector: 'body',
-      padding: 0
-    }
-  }
-
-  Tooltip.prototype.init = function (type, element, options) {
-    this.enabled   = true
-    this.type      = type
-    this.$element  = $(element)
-    this.options   = this.getOptions(options)
-    this.$viewport = this.options.viewport && $($.isFunction(this.options.viewport) ? this.options.viewport.call(this, this.$element) : (this.options.viewport.selector || this.options.viewport))
-    this.inState   = { click: false, hover: false, focus: false }
-
-    if (this.$element[0] instanceof document.constructor && !this.options.selector) {
-      throw new Error('`selector` option must be specified when initializing ' + this.type + ' on the window.document object!')
-    }
-
-    var triggers = this.options.trigger.split(' ')
-
-    for (var i = triggers.length; i--;) {
-      var trigger = triggers[i]
-
-      if (trigger == 'click') {
-        this.$element.on('click.' + this.type, this.options.selector, $.proxy(this.toggle, this))
-      } else if (trigger != 'manual') {
-        var eventIn  = trigger == 'hover' ? 'mouseenter' : 'focusin'
-        var eventOut = trigger == 'hover' ? 'mouseleave' : 'focusout'
-
-        this.$element.on(eventIn  + '.' + this.type, this.options.selector, $.proxy(this.enter, this))
-        this.$element.on(eventOut + '.' + this.type, this.options.selector, $.proxy(this.leave, this))
-      }
-    }
-
-    this.options.selector ?
-      (this._options = $.extend({}, this.options, { trigger: 'manual', selector: '' })) :
-      this.fixTitle()
-  }
-
-  Tooltip.prototype.getDefaults = function () {
-    return Tooltip.DEFAULTS
-  }
-
-  Tooltip.prototype.getOptions = function (options) {
-    options = $.extend({}, this.getDefaults(), this.$element.data(), options)
-
-    if (options.delay && typeof options.delay == 'number') {
-      options.delay = {
-        show: options.delay,
-        hide: options.delay
-      }
-    }
-
-    return options
-  }
-
-  Tooltip.prototype.getDelegateOptions = function () {
-    var options  = {}
-    var defaults = this.getDefaults()
-
-    this._options && $.each(this._options, function (key, value) {
-      if (defaults[key] != value) options[key] = value
-    })
-
-    return options
-  }
-
-  Tooltip.prototype.enter = function (obj) {
-    var self = obj instanceof this.constructor ?
-      obj : $(obj.currentTarget).data('bs.' + this.type)
-
-    if (!self) {
-      self = new this.constructor(obj.currentTarget, this.getDelegateOptions())
-      $(obj.currentTarget).data('bs.' + this.type, self)
-    }
-
-    if (obj instanceof $.Event) {
-      self.inState[obj.type == 'focusin' ? 'focus' : 'hover'] = true
-    }
-
-    if (self.tip().hasClass('in') || self.hoverState == 'in') {
-      self.hoverState = 'in'
-      return
-    }
-
-    clearTimeout(self.timeout)
-
-    self.hoverState = 'in'
-
-    if (!self.options.delay || !self.options.delay.show) return self.show()
-
-    self.timeout = setTimeout(function () {
-      if (self.hoverState == 'in') self.show()
-    }, self.options.delay.show)
-  }
-
-  Tooltip.prototype.isInStateTrue = function () {
-    for (var key in this.inState) {
-      if (this.inState[key]) return true
-    }
-
-    return false
-  }
-
-  Tooltip.prototype.leave = function (obj) {
-    var self = obj instanceof this.constructor ?
-      obj : $(obj.currentTarget).data('bs.' + this.type)
-
-    if (!self) {
-      self = new this.constructor(obj.currentTarget, this.getDelegateOptions())
-      $(obj.currentTarget).data('bs.' + this.type, self)
-    }
-
-    if (obj instanceof $.Event) {
-      self.inState[obj.type == 'focusout' ? 'focus' : 'hover'] = false
-    }
-
-    if (self.isInStateTrue()) return
-
-    clearTimeout(self.timeout)
-
-    self.hoverState = 'out'
-
-    if (!self.options.delay || !self.options.delay.hide) return self.hide()
-
-    self.timeout = setTimeout(function () {
-      if (self.hoverState == 'out') self.hide()
-    }, self.options.delay.hide)
-  }
-
-  Tooltip.prototype.show = function () {
-    var e = $.Event('show.bs.' + this.type)
-
-    if (this.hasContent() && this.enabled) {
-      this.$element.trigger(e)
-
-      var inDom = $.contains(this.$element[0].ownerDocument.documentElement, this.$element[0])
-      if (e.isDefaultPrevented() || !inDom) return
-      var that = this
-
-      var $tip = this.tip()
-
-      var tipId = this.getUID(this.type)
-
-      this.setContent()
-      $tip.attr('id', tipId)
-      this.$element.attr('aria-describedby', tipId)
-
-      if (this.options.animation) $tip.addClass('fade')
-
-      var placement = typeof this.options.placement == 'function' ?
-        this.options.placement.call(this, $tip[0], this.$element[0]) :
-        this.options.placement
-
-      var autoToken = /\s?auto?\s?/i
-      var autoPlace = autoToken.test(placement)
-      if (autoPlace) placement = placement.replace(autoToken, '') || 'top'
-
-      $tip
-        .detach()
-        .css({ top: 0, left: 0, display: 'block' })
-        .addClass(placement)
-        .data('bs.' + this.type, this)
-
-      this.options.container ? $tip.appendTo(this.options.container) : $tip.insertAfter(this.$element)
-      this.$element.trigger('inserted.bs.' + this.type)
-
-      var pos          = this.getPosition()
-      var actualWidth  = $tip[0].offsetWidth
-      var actualHeight = $tip[0].offsetHeight
-
-      if (autoPlace) {
-        var orgPlacement = placement
-        var viewportDim = this.getPosition(this.$viewport)
-
-        placement = placement == 'bottom' && pos.bottom + actualHeight > viewportDim.bottom ? 'top'    :
-                    placement == 'top'    && pos.top    - actualHeight < viewportDim.top    ? 'bottom' :
-                    placement == 'right'  && pos.right  + actualWidth  > viewportDim.width  ? 'left'   :
-                    placement == 'left'   && pos.left   - actualWidth  < viewportDim.left   ? 'right'  :
-                    placement
-
-        $tip
-          .removeClass(orgPlacement)
-          .addClass(placement)
-      }
-
-      var calculatedOffset = this.getCalculatedOffset(placement, pos, actualWidth, actualHeight)
-
-      this.applyPlacement(calculatedOffset, placement)
-
-      var complete = function () {
-        var prevHoverState = that.hoverState
-        that.$element.trigger('shown.bs.' + that.type)
-        that.hoverState = null
-
-        if (prevHoverState == 'out') that.leave(that)
-      }
-
-      $.support.transition && this.$tip.hasClass('fade') ?
-        $tip
-          .one('bsTransitionEnd', complete)
-          .emulateTransitionEnd(Tooltip.TRANSITION_DURATION) :
-        complete()
-    }
-  }
-
-  Tooltip.prototype.applyPlacement = function (offset, placement) {
-    var $tip   = this.tip()
-    var width  = $tip[0].offsetWidth
-    var height = $tip[0].offsetHeight
-
-    // manually read margins because getBoundingClientRect includes difference
-    var marginTop = parseInt($tip.css('margin-top'), 10)
-    var marginLeft = parseInt($tip.css('margin-left'), 10)
-
-    // we must check for NaN for ie 8/9
-    if (isNaN(marginTop))  marginTop  = 0
-    if (isNaN(marginLeft)) marginLeft = 0
-
-    offset.top  += marginTop
-    offset.left += marginLeft
-
-    // $.fn.offset doesn't round pixel values
-    // so we use setOffset directly with our own function B-0
-    $.offset.setOffset($tip[0], $.extend({
-      using: function (props) {
-        $tip.css({
-          top: Math.round(props.top),
-          left: Math.round(props.left)
-        })
-      }
-    }, offset), 0)
-
-    $tip.addClass('in')
-
-    // check to see if placing tip in new offset caused the tip to resize itself
-    var actualWidth  = $tip[0].offsetWidth
-    var actualHeight = $tip[0].offsetHeight
-
-    if (placement == 'top' && actualHeight != height) {
-      offset.top = offset.top + height - actualHeight
-    }
-
-    var delta = this.getViewportAdjustedDelta(placement, offset, actualWidth, actualHeight)
-
-    if (delta.left) offset.left += delta.left
-    else offset.top += delta.top
-
-    var isVertical          = /top|bottom/.test(placement)
-    var arrowDelta          = isVertical ? delta.left * 2 - width + actualWidth : delta.top * 2 - height + actualHeight
-    var arrowOffsetPosition = isVertical ? 'offsetWidth' : 'offsetHeight'
-
-    $tip.offset(offset)
-    this.replaceArrow(arrowDelta, $tip[0][arrowOffsetPosition], isVertical)
-  }
-
-  Tooltip.prototype.replaceArrow = function (delta, dimension, isVertical) {
-    this.arrow()
-      .css(isVertical ? 'left' : 'top', 50 * (1 - delta / dimension) + '%')
-      .css(isVertical ? 'top' : 'left', '')
-  }
-
-  Tooltip.prototype.setContent = function () {
-    var $tip  = this.tip()
-    var title = this.getTitle()
-
-    $tip.find('.tooltip-inner')[this.options.html ? 'html' : 'text'](title)
-    $tip.removeClass('fade in top bottom left right')
-  }
-
-  Tooltip.prototype.hide = function (callback) {
-    var that = this
-    var $tip = $(this.$tip)
-    var e    = $.Event('hide.bs.' + this.type)
-
-    function complete() {
-      if (that.hoverState != 'in') $tip.detach()
-      that.$element
-        .removeAttr('aria-describedby')
-        .trigger('hidden.bs.' + that.type)
-      callback && callback()
-    }
-
-    this.$element.trigger(e)
-
-    if (e.isDefaultPrevented()) return
-
-    $tip.removeClass('in')
-
-    $.support.transition && $tip.hasClass('fade') ?
-      $tip
-        .one('bsTransitionEnd', complete)
-        .emulateTransitionEnd(Tooltip.TRANSITION_DURATION) :
-      complete()
-
-    this.hoverState = null
-
-    return this
-  }
-
-  Tooltip.prototype.fixTitle = function () {
-    var $e = this.$element
-    if ($e.attr('title') || typeof $e.attr('data-original-title') != 'string') {
-      $e.attr('data-original-title', $e.attr('title') || '').attr('title', '')
-    }
-  }
-
-  Tooltip.prototype.hasContent = function () {
-    return this.getTitle()
-  }
-
-  Tooltip.prototype.getPosition = function ($element) {
-    $element   = $element || this.$element
-
-    var el     = $element[0]
-    var isBody = el.tagName == 'BODY'
-
-    var elRect    = el.getBoundingClientRect()
-    if (elRect.width == null) {
-      // width and height are missing in IE8, so compute them manually; see https://github.com/twbs/bootstrap/issues/14093
-      elRect = $.extend({}, elRect, { width: elRect.right - elRect.left, height: elRect.bottom - elRect.top })
-    }
-    var elOffset  = isBody ? { top: 0, left: 0 } : $element.offset()
-    var scroll    = { scroll: isBody ? document.documentElement.scrollTop || document.body.scrollTop : $element.scrollTop() }
-    var outerDims = isBody ? { width: $(window).width(), height: $(window).height() } : null
-
-    return $.extend({}, elRect, scroll, outerDims, elOffset)
-  }
-
-  Tooltip.prototype.getCalculatedOffset = function (placement, pos, actualWidth, actualHeight) {
-    return placement == 'bottom' ? { top: pos.top + pos.height,   left: pos.left + pos.width / 2 - actualWidth / 2 } :
-           placement == 'top'    ? { top: pos.top - actualHeight, left: pos.left + pos.width / 2 - actualWidth / 2 } :
-           placement == 'left'   ? { top: pos.top + pos.height / 2 - actualHeight / 2, left: pos.left - actualWidth } :
-        /* placement == 'right' */ { top: pos.top + pos.height / 2 - actualHeight / 2, left: pos.left + pos.width }
-
-  }
-
-  Tooltip.prototype.getViewportAdjustedDelta = function (placement, pos, actualWidth, actualHeight) {
-    var delta = { top: 0, left: 0 }
-    if (!this.$viewport) return delta
-
-    var viewportPadding = this.options.viewport && this.options.viewport.padding || 0
-    var viewportDimensions = this.getPosition(this.$viewport)
-
-    if (/right|left/.test(placement)) {
-      var topEdgeOffset    = pos.top - viewportPadding - viewportDimensions.scroll
-      var bottomEdgeOffset = pos.top + viewportPadding - viewportDimensions.scroll + actualHeight
-      if (topEdgeOffset < viewportDimensions.top) { // top overflow
-        delta.top = viewportDimensions.top - topEdgeOffset
-      } else if (bottomEdgeOffset > viewportDimensions.top + viewportDimensions.height) { // bottom overflow
-        delta.top = viewportDimensions.top + viewportDimensions.height - bottomEdgeOffset
-      }
-    } else {
-      var leftEdgeOffset  = pos.left - viewportPadding
-      var rightEdgeOffset = pos.left + viewportPadding + actualWidth
-      if (leftEdgeOffset < viewportDimensions.left) { // left overflow
-        delta.left = viewportDimensions.left - leftEdgeOffset
-      } else if (rightEdgeOffset > viewportDimensions.right) { // right overflow
-        delta.left = viewportDimensions.left + viewportDimensions.width - rightEdgeOffset
-      }
-    }
-
-    return delta
-  }
-
-  Tooltip.prototype.getTitle = function () {
-    var title
-    var $e = this.$element
-    var o  = this.options
-
-    title = $e.attr('data-original-title')
-      || (typeof o.title == 'function' ? o.title.call($e[0]) :  o.title)
-
-    return title
-  }
-
-  Tooltip.prototype.getUID = function (prefix) {
-    do prefix += ~~(Math.random() * 1000000)
-    while (document.getElementById(prefix))
-    return prefix
-  }
-
-  Tooltip.prototype.tip = function () {
-    if (!this.$tip) {
-      this.$tip = $(this.options.template)
-      if (this.$tip.length != 1) {
-        throw new Error(this.type + ' `template` option must consist of exactly 1 top-level element!')
-      }
-    }
-    return this.$tip
-  }
-
-  Tooltip.prototype.arrow = function () {
-    return (this.$arrow = this.$arrow || this.tip().find('.tooltip-arrow'))
-  }
-
-  Tooltip.prototype.enable = function () {
-    this.enabled = true
-  }
-
-  Tooltip.prototype.disable = function () {
-    this.enabled = false
-  }
-
-  Tooltip.prototype.toggleEnabled = function () {
-    this.enabled = !this.enabled
-  }
-
-  Tooltip.prototype.toggle = function (e) {
-    var self = this
-    if (e) {
-      self = $(e.currentTarget).data('bs.' + this.type)
-      if (!self) {
-        self = new this.constructor(e.currentTarget, this.getDelegateOptions())
-        $(e.currentTarget).data('bs.' + this.type, self)
-      }
-    }
-
-    if (e) {
-      self.inState.click = !self.inState.click
-      if (self.isInStateTrue()) self.enter(self)
-      else self.leave(self)
-    } else {
-      self.tip().hasClass('in') ? self.leave(self) : self.enter(self)
-    }
-  }
-
-  Tooltip.prototype.destroy = function () {
-    var that = this
-    clearTimeout(this.timeout)
-    this.hide(function () {
-      that.$element.off('.' + that.type).removeData('bs.' + that.type)
-      if (that.$tip) {
-        that.$tip.detach()
-      }
-      that.$tip = null
-      that.$arrow = null
-      that.$viewport = null
-    })
-  }
-
-
-  // TOOLTIP PLUGIN DEFINITION
-  // =========================
-
-  function Plugin(option) {
-    return this.each(function () {
-      var $this   = $(this)
-      var data    = $this.data('bs.tooltip')
-      var options = typeof option == 'object' && option
-
-      if (!data && /destroy|hide/.test(option)) return
-      if (!data) $this.data('bs.tooltip', (data = new Tooltip(this, options)))
-      if (typeof option == 'string') data[option]()
-    })
-  }
-
-  var old = $.fn.tooltip
-
-  $.fn.tooltip             = Plugin
-  $.fn.tooltip.Constructor = Tooltip
-
-
-  // TOOLTIP NO CONFLICT
-  // ===================
-
-  $.fn.tooltip.noConflict = function () {
-    $.fn.tooltip = old
-    return this
-  }
-
-}(jQuery);
-
-/* ========================================================================
- * Bootstrap: popover.js v3.3.6
- * http://getbootstrap.com/javascript/#popovers
- * ========================================================================
- * Copyright 2011-2015 Twitter, Inc.
- * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
- * ======================================================================== */
-
-
-+function ($) {
-  'use strict';
-
-  // POPOVER PUBLIC CLASS DEFINITION
-  // ===============================
-
-  var Popover = function (element, options) {
-    this.init('popover', element, options)
-  }
-
-  if (!$.fn.tooltip) throw new Error('Popover requires tooltip.js')
-
-  Popover.VERSION  = '3.3.6'
-
-  Popover.DEFAULTS = $.extend({}, $.fn.tooltip.Constructor.DEFAULTS, {
-    placement: 'right',
-    trigger: 'click',
-    content: '',
-    template: '<div class="popover" role="tooltip"><div class="arrow"></div><h3 class="popover-title"></h3><div class="popover-content"></div></div>'
-  })
-
-
-  // NOTE: POPOVER EXTENDS tooltip.js
-  // ================================
-
-  Popover.prototype = $.extend({}, $.fn.tooltip.Constructor.prototype)
-
-  Popover.prototype.constructor = Popover
-
-  Popover.prototype.getDefaults = function () {
-    return Popover.DEFAULTS
-  }
-
-  Popover.prototype.setContent = function () {
-    var $tip    = this.tip()
-    var title   = this.getTitle()
-    var content = this.getContent()
-
-    $tip.find('.popover-title')[this.options.html ? 'html' : 'text'](title)
-    $tip.find('.popover-content').children().detach().end()[ // we use append for html objects to maintain js events
-      this.options.html ? (typeof content == 'string' ? 'html' : 'append') : 'text'
-    ](content)
-
-    $tip.removeClass('fade top bottom left right in')
-
-    // IE8 doesn't accept hiding via the `:empty` pseudo selector, we have to do
-    // this manually by checking the contents.
-    if (!$tip.find('.popover-title').html()) $tip.find('.popover-title').hide()
-  }
-
-  Popover.prototype.hasContent = function () {
-    return this.getTitle() || this.getContent()
-  }
-
-  Popover.prototype.getContent = function () {
-    var $e = this.$element
-    var o  = this.options
-
-    return $e.attr('data-content')
-      || (typeof o.content == 'function' ?
-            o.content.call($e[0]) :
-            o.content)
-  }
-
-  Popover.prototype.arrow = function () {
-    return (this.$arrow = this.$arrow || this.tip().find('.arrow'))
-  }
-
-
-  // POPOVER PLUGIN DEFINITION
-  // =========================
-
-  function Plugin(option) {
-    return this.each(function () {
-      var $this   = $(this)
-      var data    = $this.data('bs.popover')
-      var options = typeof option == 'object' && option
-
-      if (!data && /destroy|hide/.test(option)) return
-      if (!data) $this.data('bs.popover', (data = new Popover(this, options)))
-      if (typeof option == 'string') data[option]()
-    })
-  }
-
-  var old = $.fn.popover
-
-  $.fn.popover             = Plugin
-  $.fn.popover.Constructor = Popover
-
-
-  // POPOVER NO CONFLICT
-  // ===================
-
-  $.fn.popover.noConflict = function () {
-    $.fn.popover = old
-    return this
-  }
-
-}(jQuery);
-
-/* ========================================================================
- * Bootstrap: scrollspy.js v3.3.6
- * http://getbootstrap.com/javascript/#scrollspy
- * ========================================================================
- * Copyright 2011-2015 Twitter, Inc.
- * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
- * ======================================================================== */
-
-
-+function ($) {
-  'use strict';
-
-  // SCROLLSPY CLASS DEFINITION
-  // ==========================
-
-  function ScrollSpy(element, options) {
-    this.$body          = $(document.body)
-    this.$scrollElement = $(element).is(document.body) ? $(window) : $(element)
-    this.options        = $.extend({}, ScrollSpy.DEFAULTS, options)
-    this.selector       = (this.options.target || '') + ' .nav li > a'
-    this.offsets        = []
-    this.targets        = []
-    this.activeTarget   = null
-    this.scrollHeight   = 0
-
-    this.$scrollElement.on('scroll.bs.scrollspy', $.proxy(this.process, this))
-    this.refresh()
-    this.process()
-  }
-
-  ScrollSpy.VERSION  = '3.3.6'
-
-  ScrollSpy.DEFAULTS = {
-    offset: 10
-  }
-
-  ScrollSpy.prototype.getScrollHeight = function () {
-    return this.$scrollElement[0].scrollHeight || Math.max(this.$body[0].scrollHeight, document.documentElement.scrollHeight)
-  }
-
-  ScrollSpy.prototype.refresh = function () {
-    var that          = this
-    var offsetMethod  = 'offset'
-    var offsetBase    = 0
-
-    this.offsets      = []
-    this.targets      = []
-    this.scrollHeight = this.getScrollHeight()
-
-    if (!$.isWindow(this.$scrollElement[0])) {
-      offsetMethod = 'position'
-      offsetBase   = this.$scrollElement.scrollTop()
-    }
-
-    this.$body
-      .find(this.selector)
-      .map(function () {
-        var $el   = $(this)
-        var href  = $el.data('target') || $el.attr('href')
-        var $href = /^#./.test(href) && $(href)
-
-        return ($href
-          && $href.length
-          && $href.is(':visible')
-          && [[$href[offsetMethod]().top + offsetBase, href]]) || null
-      })
-      .sort(function (a, b) { return a[0] - b[0] })
-      .each(function () {
-        that.offsets.push(this[0])
-        that.targets.push(this[1])
-      })
-  }
-
-  ScrollSpy.prototype.process = function () {
-    var scrollTop    = this.$scrollElement.scrollTop() + this.options.offset
-    var scrollHeight = this.getScrollHeight()
-    var maxScroll    = this.options.offset + scrollHeight - this.$scrollElement.height()
-    var offsets      = this.offsets
-    var targets      = this.targets
-    var activeTarget = this.activeTarget
-    var i
-
-    if (this.scrollHeight != scrollHeight) {
-      this.refresh()
-    }
-
-    if (scrollTop >= maxScroll) {
-      return activeTarget != (i = targets[targets.length - 1]) && this.activate(i)
-    }
-
-    if (activeTarget && scrollTop < offsets[0]) {
-      this.activeTarget = null
-      return this.clear()
-    }
-
-    for (i = offsets.length; i--;) {
-      activeTarget != targets[i]
-        && scrollTop >= offsets[i]
-        && (offsets[i + 1] === undefined || scrollTop < offsets[i + 1])
-        && this.activate(targets[i])
-    }
-  }
-
-  ScrollSpy.prototype.activate = function (target) {
-    this.activeTarget = target
-
-    this.clear()
-
-    var selector = this.selector +
-      '[data-target="' + target + '"],' +
-      this.selector + '[href="' + target + '"]'
-
-    var active = $(selector)
-      .parents('li')
-      .addClass('active')
-
-    if (active.parent('.dropdown-menu').length) {
-      active = active
-        .closest('li.dropdown')
-        .addClass('active')
-    }
-
-    active.trigger('activate.bs.scrollspy')
-  }
-
-  ScrollSpy.prototype.clear = function () {
-    $(this.selector)
-      .parentsUntil(this.options.target, '.active')
-      .removeClass('active')
-  }
-
-
-  // SCROLLSPY PLUGIN DEFINITION
-  // ===========================
-
-  function Plugin(option) {
-    return this.each(function () {
-      var $this   = $(this)
-      var data    = $this.data('bs.scrollspy')
-      var options = typeof option == 'object' && option
-
-      if (!data) $this.data('bs.scrollspy', (data = new ScrollSpy(this, options)))
-      if (typeof option == 'string') data[option]()
-    })
-  }
-
-  var old = $.fn.scrollspy
-
-  $.fn.scrollspy             = Plugin
-  $.fn.scrollspy.Constructor = ScrollSpy
-
-
-  // SCROLLSPY NO CONFLICT
-  // =====================
-
-  $.fn.scrollspy.noConflict = function () {
-    $.fn.scrollspy = old
-    return this
-  }
-
-
-  // SCROLLSPY DATA-API
-  // ==================
-
-  $(window).on('load.bs.scrollspy.data-api', function () {
-    $('[data-spy="scroll"]').each(function () {
-      var $spy = $(this)
-      Plugin.call($spy, $spy.data())
-    })
-  })
-
-}(jQuery);
-
-/* ========================================================================
- * Bootstrap: tab.js v3.3.6
- * http://getbootstrap.com/javascript/#tabs
- * ========================================================================
- * Copyright 2011-2015 Twitter, Inc.
- * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
- * ======================================================================== */
-
-
-+function ($) {
-  'use strict';
-
-  // TAB CLASS DEFINITION
-  // ====================
-
-  var Tab = function (element) {
-    // jscs:disable requireDollarBeforejQueryAssignment
-    this.element = $(element)
-    // jscs:enable requireDollarBeforejQueryAssignment
-  }
-
-  Tab.VERSION = '3.3.6'
-
-  Tab.TRANSITION_DURATION = 150
-
-  Tab.prototype.show = function () {
-    var $this    = this.element
-    var $ul      = $this.closest('ul:not(.dropdown-menu)')
-    var selector = $this.data('target')
-
-    if (!selector) {
-      selector = $this.attr('href')
-      selector = selector && selector.replace(/.*(?=#[^\s]*$)/, '') // strip for ie7
-    }
-
-    if ($this.parent('li').hasClass('active')) return
-
-    var $previous = $ul.find('.active:last a')
-    var hideEvent = $.Event('hide.bs.tab', {
-      relatedTarget: $this[0]
-    })
-    var showEvent = $.Event('show.bs.tab', {
-      relatedTarget: $previous[0]
-    })
-
-    $previous.trigger(hideEvent)
-    $this.trigger(showEvent)
-
-    if (showEvent.isDefaultPrevented() || hideEvent.isDefaultPrevented()) return
-
-    var $target = $(selector)
-
-    this.activate($this.closest('li'), $ul)
-    this.activate($target, $target.parent(), function () {
-      $previous.trigger({
-        type: 'hidden.bs.tab',
-        relatedTarget: $this[0]
-      })
-      $this.trigger({
-        type: 'shown.bs.tab',
-        relatedTarget: $previous[0]
-      })
-    })
-  }
-
-  Tab.prototype.activate = function (element, container, callback) {
-    var $active    = container.find('> .active')
-    var transition = callback
-      && $.support.transition
-      && ($active.length && $active.hasClass('fade') || !!container.find('> .fade').length)
-
-    function next() {
-      $active
-        .removeClass('active')
-        .find('> .dropdown-menu > .active')
-          .removeClass('active')
-        .end()
-        .find('[data-toggle="tab"]')
-          .attr('aria-expanded', false)
-
-      element
-        .addClass('active')
-        .find('[data-toggle="tab"]')
-          .attr('aria-expanded', true)
-
-      if (transition) {
-        element[0].offsetWidth // reflow for transition
-        element.addClass('in')
-      } else {
-        element.removeClass('fade')
-      }
-
-      if (element.parent('.dropdown-menu').length) {
-        element
-          .closest('li.dropdown')
-            .addClass('active')
-          .end()
-          .find('[data-toggle="tab"]')
-            .attr('aria-expanded', true)
-      }
-
-      callback && callback()
-    }
-
-    $active.length && transition ?
-      $active
-        .one('bsTransitionEnd', next)
-        .emulateTransitionEnd(Tab.TRANSITION_DURATION) :
-      next()
-
-    $active.removeClass('in')
-  }
-
-
-  // TAB PLUGIN DEFINITION
-  // =====================
-
-  function Plugin(option) {
-    return this.each(function () {
-      var $this = $(this)
-      var data  = $this.data('bs.tab')
-
-      if (!data) $this.data('bs.tab', (data = new Tab(this)))
-      if (typeof option == 'string') data[option]()
-    })
-  }
-
-  var old = $.fn.tab
-
-  $.fn.tab             = Plugin
-  $.fn.tab.Constructor = Tab
-
-
-  // TAB NO CONFLICT
-  // ===============
-
-  $.fn.tab.noConflict = function () {
-    $.fn.tab = old
-    return this
-  }
-
-
-  // TAB DATA-API
-  // ============
-
-  var clickHandler = function (e) {
-    e.preventDefault()
-    Plugin.call($(this), 'show')
-  }
-
-  $(document)
-    .on('click.bs.tab.data-api', '[data-toggle="tab"]', clickHandler)
-    .on('click.bs.tab.data-api', '[data-toggle="pill"]', clickHandler)
-
-}(jQuery);
-
-/* ========================================================================
- * Bootstrap: affix.js v3.3.6
- * http://getbootstrap.com/javascript/#affix
- * ========================================================================
- * Copyright 2011-2015 Twitter, Inc.
- * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
- * ======================================================================== */
-
-
-+function ($) {
-  'use strict';
-
-  // AFFIX CLASS DEFINITION
-  // ======================
-
-  var Affix = function (element, options) {
-    this.options = $.extend({}, Affix.DEFAULTS, options)
-
-    this.$target = $(this.options.target)
-      .on('scroll.bs.affix.data-api', $.proxy(this.checkPosition, this))
-      .on('click.bs.affix.data-api',  $.proxy(this.checkPositionWithEventLoop, this))
-
-    this.$element     = $(element)
-    this.affixed      = null
-    this.unpin        = null
-    this.pinnedOffset = null
-
-    this.checkPosition()
-  }
-
-  Affix.VERSION  = '3.3.6'
-
-  Affix.RESET    = 'affix affix-top affix-bottom'
-
-  Affix.DEFAULTS = {
-    offset: 0,
-    target: window
-  }
-
-  Affix.prototype.getState = function (scrollHeight, height, offsetTop, offsetBottom) {
-    var scrollTop    = this.$target.scrollTop()
-    var position     = this.$element.offset()
-    var targetHeight = this.$target.height()
-
-    if (offsetTop != null && this.affixed == 'top') return scrollTop < offsetTop ? 'top' : false
-
-    if (this.affixed == 'bottom') {
-      if (offsetTop != null) return (scrollTop + this.unpin <= position.top) ? false : 'bottom'
-      return (scrollTop + targetHeight <= scrollHeight - offsetBottom) ? false : 'bottom'
-    }
-
-    var initializing   = this.affixed == null
-    var colliderTop    = initializing ? scrollTop : position.top
-    var colliderHeight = initializing ? targetHeight : height
-
-    if (offsetTop != null && scrollTop <= offsetTop) return 'top'
-    if (offsetBottom != null && (colliderTop + colliderHeight >= scrollHeight - offsetBottom)) return 'bottom'
-
-    return false
-  }
-
-  Affix.prototype.getPinnedOffset = function () {
-    if (this.pinnedOffset) return this.pinnedOffset
-    this.$element.removeClass(Affix.RESET).addClass('affix')
-    var scrollTop = this.$target.scrollTop()
-    var position  = this.$element.offset()
-    return (this.pinnedOffset = position.top - scrollTop)
-  }
-
-  Affix.prototype.checkPositionWithEventLoop = function () {
-    setTimeout($.proxy(this.checkPosition, this), 1)
-  }
-
-  Affix.prototype.checkPosition = function () {
-    if (!this.$element.is(':visible')) return
-
-    var height       = this.$element.height()
-    var offset       = this.options.offset
-    var offsetTop    = offset.top
-    var offsetBottom = offset.bottom
-    var scrollHeight = Math.max($(document).height(), $(document.body).height())
-
-    if (typeof offset != 'object')         offsetBottom = offsetTop = offset
-    if (typeof offsetTop == 'function')    offsetTop    = offset.top(this.$element)
-    if (typeof offsetBottom == 'function') offsetBottom = offset.bottom(this.$element)
-
-    var affix = this.getState(scrollHeight, height, offsetTop, offsetBottom)
-
-    if (this.affixed != affix) {
-      if (this.unpin != null) this.$element.css('top', '')
-
-      var affixType = 'affix' + (affix ? '-' + affix : '')
-      var e         = $.Event(affixType + '.bs.affix')
-
-      this.$element.trigger(e)
-
-      if (e.isDefaultPrevented()) return
-
-      this.affixed = affix
-      this.unpin = affix == 'bottom' ? this.getPinnedOffset() : null
-
-      this.$element
-        .removeClass(Affix.RESET)
-        .addClass(affixType)
-        .trigger(affixType.replace('affix', 'affixed') + '.bs.affix')
-    }
-
-    if (affix == 'bottom') {
-      this.$element.offset({
-        top: scrollHeight - height - offsetBottom
-      })
-    }
-  }
-
-
-  // AFFIX PLUGIN DEFINITION
-  // =======================
-
-  function Plugin(option) {
-    return this.each(function () {
-      var $this   = $(this)
-      var data    = $this.data('bs.affix')
-      var options = typeof option == 'object' && option
-
-      if (!data) $this.data('bs.affix', (data = new Affix(this, options)))
-      if (typeof option == 'string') data[option]()
-    })
-  }
-
-  var old = $.fn.affix
-
-  $.fn.affix             = Plugin
-  $.fn.affix.Constructor = Affix
-
-
-  // AFFIX NO CONFLICT
-  // =================
-
-  $.fn.affix.noConflict = function () {
-    $.fn.affix = old
-    return this
-  }
-
-
-  // AFFIX DATA-API
-  // ==============
-
-  $(window).on('load', function () {
-    $('[data-spy="affix"]').each(function () {
-      var $spy = $(this)
-      var data = $spy.data()
-
-      data.offset = data.offset || {}
-
-      if (data.offsetBottom != null) data.offset.bottom = data.offsetBottom
-      if (data.offsetTop    != null) data.offset.top    = data.offsetTop
-
-      Plugin.call($spy, data)
-    })
-  })
-
-}(jQuery);
-;/* ------------------------------------------------------------------------
-	Class: prettyPhoto
-	Use: Lightbox clone for jQuery
-	Author: Stephane Caron (http://www.no-margin-for-errors.com)
-	Version: 3.1.6
-------------------------------------------------------------------------- */
+if("undefined"==typeof jQuery)throw new Error("Bootstrap's JavaScript requires jQuery");+function(a){"use strict";var b=a.fn.jquery.split(" ")[0].split(".");if(b[0]<2&&b[1]<9||1==b[0]&&9==b[1]&&b[2]<1||b[0]>3)throw new Error("Bootstrap's JavaScript requires jQuery version 1.9.1 or higher, but lower than version 4")}(jQuery),+function(a){"use strict";function b(){var a=document.createElement("bootstrap"),b={WebkitTransition:"webkitTransitionEnd",MozTransition:"transitionend",OTransition:"oTransitionEnd otransitionend",transition:"transitionend"};for(var c in b)if(void 0!==a.style[c])return{end:b[c]};return!1}a.fn.emulateTransitionEnd=function(b){var c=!1,d=this;a(this).one("bsTransitionEnd",function(){c=!0});var e=function(){c||a(d).trigger(a.support.transition.end)};return setTimeout(e,b),this},a(function(){a.support.transition=b(),a.support.transition&&(a.event.special.bsTransitionEnd={bindType:a.support.transition.end,delegateType:a.support.transition.end,handle:function(b){if(a(b.target).is(this))return b.handleObj.handler.apply(this,arguments)}})})}(jQuery),+function(a){"use strict";function b(b){return this.each(function(){var c=a(this),e=c.data("bs.alert");e||c.data("bs.alert",e=new d(this)),"string"==typeof b&&e[b].call(c)})}var c='[data-dismiss="alert"]',d=function(b){a(b).on("click",c,this.close)};d.VERSION="3.3.7",d.TRANSITION_DURATION=150,d.prototype.close=function(b){function c(){g.detach().trigger("closed.bs.alert").remove()}var e=a(this),f=e.attr("data-target");f||(f=e.attr("href"),f=f&&f.replace(/.*(?=#[^\s]*$)/,""));var g=a("#"===f?[]:f);b&&b.preventDefault(),g.length||(g=e.closest(".alert")),g.trigger(b=a.Event("close.bs.alert")),b.isDefaultPrevented()||(g.removeClass("in"),a.support.transition&&g.hasClass("fade")?g.one("bsTransitionEnd",c).emulateTransitionEnd(d.TRANSITION_DURATION):c())};var e=a.fn.alert;a.fn.alert=b,a.fn.alert.Constructor=d,a.fn.alert.noConflict=function(){return a.fn.alert=e,this},a(document).on("click.bs.alert.data-api",c,d.prototype.close)}(jQuery),+function(a){"use strict";function b(b){return this.each(function(){var d=a(this),e=d.data("bs.button"),f="object"==typeof b&&b;e||d.data("bs.button",e=new c(this,f)),"toggle"==b?e.toggle():b&&e.setState(b)})}var c=function(b,d){this.$element=a(b),this.options=a.extend({},c.DEFAULTS,d),this.isLoading=!1};c.VERSION="3.3.7",c.DEFAULTS={loadingText:"loading..."},c.prototype.setState=function(b){var c="disabled",d=this.$element,e=d.is("input")?"val":"html",f=d.data();b+="Text",null==f.resetText&&d.data("resetText",d[e]()),setTimeout(a.proxy(function(){d[e](null==f[b]?this.options[b]:f[b]),"loadingText"==b?(this.isLoading=!0,d.addClass(c).attr(c,c).prop(c,!0)):this.isLoading&&(this.isLoading=!1,d.removeClass(c).removeAttr(c).prop(c,!1))},this),0)},c.prototype.toggle=function(){var a=!0,b=this.$element.closest('[data-toggle="buttons"]');if(b.length){var c=this.$element.find("input");"radio"==c.prop("type")?(c.prop("checked")&&(a=!1),b.find(".active").removeClass("active"),this.$element.addClass("active")):"checkbox"==c.prop("type")&&(c.prop("checked")!==this.$element.hasClass("active")&&(a=!1),this.$element.toggleClass("active")),c.prop("checked",this.$element.hasClass("active")),a&&c.trigger("change")}else this.$element.attr("aria-pressed",!this.$element.hasClass("active")),this.$element.toggleClass("active")};var d=a.fn.button;a.fn.button=b,a.fn.button.Constructor=c,a.fn.button.noConflict=function(){return a.fn.button=d,this},a(document).on("click.bs.button.data-api",'[data-toggle^="button"]',function(c){var d=a(c.target).closest(".btn");b.call(d,"toggle"),a(c.target).is('input[type="radio"], input[type="checkbox"]')||(c.preventDefault(),d.is("input,button")?d.trigger("focus"):d.find("input:visible,button:visible").first().trigger("focus"))}).on("focus.bs.button.data-api blur.bs.button.data-api",'[data-toggle^="button"]',function(b){a(b.target).closest(".btn").toggleClass("focus",/^focus(in)?$/.test(b.type))})}(jQuery),+function(a){"use strict";function b(b){return this.each(function(){var d=a(this),e=d.data("bs.carousel"),f=a.extend({},c.DEFAULTS,d.data(),"object"==typeof b&&b),g="string"==typeof b?b:f.slide;e||d.data("bs.carousel",e=new c(this,f)),"number"==typeof b?e.to(b):g?e[g]():f.interval&&e.pause().cycle()})}var c=function(b,c){this.$element=a(b),this.$indicators=this.$element.find(".carousel-indicators"),this.options=c,this.paused=null,this.sliding=null,this.interval=null,this.$active=null,this.$items=null,this.options.keyboard&&this.$element.on("keydown.bs.carousel",a.proxy(this.keydown,this)),"hover"==this.options.pause&&!("ontouchstart"in document.documentElement)&&this.$element.on("mouseenter.bs.carousel",a.proxy(this.pause,this)).on("mouseleave.bs.carousel",a.proxy(this.cycle,this))};c.VERSION="3.3.7",c.TRANSITION_DURATION=600,c.DEFAULTS={interval:5e3,pause:"hover",wrap:!0,keyboard:!0},c.prototype.keydown=function(a){if(!/input|textarea/i.test(a.target.tagName)){switch(a.which){case 37:this.prev();break;case 39:this.next();break;default:return}a.preventDefault()}},c.prototype.cycle=function(b){return b||(this.paused=!1),this.interval&&clearInterval(this.interval),this.options.interval&&!this.paused&&(this.interval=setInterval(a.proxy(this.next,this),this.options.interval)),this},c.prototype.getItemIndex=function(a){return this.$items=a.parent().children(".item"),this.$items.index(a||this.$active)},c.prototype.getItemForDirection=function(a,b){var c=this.getItemIndex(b),d="prev"==a&&0===c||"next"==a&&c==this.$items.length-1;if(d&&!this.options.wrap)return b;var e="prev"==a?-1:1,f=(c+e)%this.$items.length;return this.$items.eq(f)},c.prototype.to=function(a){var b=this,c=this.getItemIndex(this.$active=this.$element.find(".item.active"));if(!(a>this.$items.length-1||a<0))return this.sliding?this.$element.one("slid.bs.carousel",function(){b.to(a)}):c==a?this.pause().cycle():this.slide(a>c?"next":"prev",this.$items.eq(a))},c.prototype.pause=function(b){return b||(this.paused=!0),this.$element.find(".next, .prev").length&&a.support.transition&&(this.$element.trigger(a.support.transition.end),this.cycle(!0)),this.interval=clearInterval(this.interval),this},c.prototype.next=function(){if(!this.sliding)return this.slide("next")},c.prototype.prev=function(){if(!this.sliding)return this.slide("prev")},c.prototype.slide=function(b,d){var e=this.$element.find(".item.active"),f=d||this.getItemForDirection(b,e),g=this.interval,h="next"==b?"left":"right",i=this;if(f.hasClass("active"))return this.sliding=!1;var j=f[0],k=a.Event("slide.bs.carousel",{relatedTarget:j,direction:h});if(this.$element.trigger(k),!k.isDefaultPrevented()){if(this.sliding=!0,g&&this.pause(),this.$indicators.length){this.$indicators.find(".active").removeClass("active");var l=a(this.$indicators.children()[this.getItemIndex(f)]);l&&l.addClass("active")}var m=a.Event("slid.bs.carousel",{relatedTarget:j,direction:h});return a.support.transition&&this.$element.hasClass("slide")?(f.addClass(b),f[0].offsetWidth,e.addClass(h),f.addClass(h),e.one("bsTransitionEnd",function(){f.removeClass([b,h].join(" ")).addClass("active"),e.removeClass(["active",h].join(" ")),i.sliding=!1,setTimeout(function(){i.$element.trigger(m)},0)}).emulateTransitionEnd(c.TRANSITION_DURATION)):(e.removeClass("active"),f.addClass("active"),this.sliding=!1,this.$element.trigger(m)),g&&this.cycle(),this}};var d=a.fn.carousel;a.fn.carousel=b,a.fn.carousel.Constructor=c,a.fn.carousel.noConflict=function(){return a.fn.carousel=d,this};var e=function(c){var d,e=a(this),f=a(e.attr("data-target")||(d=e.attr("href"))&&d.replace(/.*(?=#[^\s]+$)/,""));if(f.hasClass("carousel")){var g=a.extend({},f.data(),e.data()),h=e.attr("data-slide-to");h&&(g.interval=!1),b.call(f,g),h&&f.data("bs.carousel").to(h),c.preventDefault()}};a(document).on("click.bs.carousel.data-api","[data-slide]",e).on("click.bs.carousel.data-api","[data-slide-to]",e),a(window).on("load",function(){a('[data-ride="carousel"]').each(function(){var c=a(this);b.call(c,c.data())})})}(jQuery),+function(a){"use strict";function b(b){var c,d=b.attr("data-target")||(c=b.attr("href"))&&c.replace(/.*(?=#[^\s]+$)/,"");return a(d)}function c(b){return this.each(function(){var c=a(this),e=c.data("bs.collapse"),f=a.extend({},d.DEFAULTS,c.data(),"object"==typeof b&&b);!e&&f.toggle&&/show|hide/.test(b)&&(f.toggle=!1),e||c.data("bs.collapse",e=new d(this,f)),"string"==typeof b&&e[b]()})}var d=function(b,c){this.$element=a(b),this.options=a.extend({},d.DEFAULTS,c),this.$trigger=a('[data-toggle="collapse"][href="#'+b.id+'"],[data-toggle="collapse"][data-target="#'+b.id+'"]'),this.transitioning=null,this.options.parent?this.$parent=this.getParent():this.addAriaAndCollapsedClass(this.$element,this.$trigger),this.options.toggle&&this.toggle()};d.VERSION="3.3.7",d.TRANSITION_DURATION=350,d.DEFAULTS={toggle:!0},d.prototype.dimension=function(){var a=this.$element.hasClass("width");return a?"width":"height"},d.prototype.show=function(){if(!this.transitioning&&!this.$element.hasClass("in")){var b,e=this.$parent&&this.$parent.children(".panel").children(".in, .collapsing");if(!(e&&e.length&&(b=e.data("bs.collapse"),b&&b.transitioning))){var f=a.Event("show.bs.collapse");if(this.$element.trigger(f),!f.isDefaultPrevented()){e&&e.length&&(c.call(e,"hide"),b||e.data("bs.collapse",null));var g=this.dimension();this.$element.removeClass("collapse").addClass("collapsing")[g](0).attr("aria-expanded",!0),this.$trigger.removeClass("collapsed").attr("aria-expanded",!0),this.transitioning=1;var h=function(){this.$element.removeClass("collapsing").addClass("collapse in")[g](""),this.transitioning=0,this.$element.trigger("shown.bs.collapse")};if(!a.support.transition)return h.call(this);var i=a.camelCase(["scroll",g].join("-"));this.$element.one("bsTransitionEnd",a.proxy(h,this)).emulateTransitionEnd(d.TRANSITION_DURATION)[g](this.$element[0][i])}}}},d.prototype.hide=function(){if(!this.transitioning&&this.$element.hasClass("in")){var b=a.Event("hide.bs.collapse");if(this.$element.trigger(b),!b.isDefaultPrevented()){var c=this.dimension();this.$element[c](this.$element[c]())[0].offsetHeight,this.$element.addClass("collapsing").removeClass("collapse in").attr("aria-expanded",!1),this.$trigger.addClass("collapsed").attr("aria-expanded",!1),this.transitioning=1;var e=function(){this.transitioning=0,this.$element.removeClass("collapsing").addClass("collapse").trigger("hidden.bs.collapse")};return a.support.transition?void this.$element[c](0).one("bsTransitionEnd",a.proxy(e,this)).emulateTransitionEnd(d.TRANSITION_DURATION):e.call(this)}}},d.prototype.toggle=function(){this[this.$element.hasClass("in")?"hide":"show"]()},d.prototype.getParent=function(){return a(this.options.parent).find('[data-toggle="collapse"][data-parent="'+this.options.parent+'"]').each(a.proxy(function(c,d){var e=a(d);this.addAriaAndCollapsedClass(b(e),e)},this)).end()},d.prototype.addAriaAndCollapsedClass=function(a,b){var c=a.hasClass("in");a.attr("aria-expanded",c),b.toggleClass("collapsed",!c).attr("aria-expanded",c)};var e=a.fn.collapse;a.fn.collapse=c,a.fn.collapse.Constructor=d,a.fn.collapse.noConflict=function(){return a.fn.collapse=e,this},a(document).on("click.bs.collapse.data-api",'[data-toggle="collapse"]',function(d){var e=a(this);e.attr("data-target")||d.preventDefault();var f=b(e),g=f.data("bs.collapse"),h=g?"toggle":e.data();c.call(f,h)})}(jQuery),+function(a){"use strict";function b(b){var c=b.attr("data-target");c||(c=b.attr("href"),c=c&&/#[A-Za-z]/.test(c)&&c.replace(/.*(?=#[^\s]*$)/,""));var d=c&&a(c);return d&&d.length?d:b.parent()}function c(c){c&&3===c.which||(a(e).remove(),a(f).each(function(){var d=a(this),e=b(d),f={relatedTarget:this};e.hasClass("open")&&(c&&"click"==c.type&&/input|textarea/i.test(c.target.tagName)&&a.contains(e[0],c.target)||(e.trigger(c=a.Event("hide.bs.dropdown",f)),c.isDefaultPrevented()||(d.attr("aria-expanded","false"),e.removeClass("open").trigger(a.Event("hidden.bs.dropdown",f)))))}))}function d(b){return this.each(function(){var c=a(this),d=c.data("bs.dropdown");d||c.data("bs.dropdown",d=new g(this)),"string"==typeof b&&d[b].call(c)})}var e=".dropdown-backdrop",f='[data-toggle="dropdown"]',g=function(b){a(b).on("click.bs.dropdown",this.toggle)};g.VERSION="3.3.7",g.prototype.toggle=function(d){var e=a(this);if(!e.is(".disabled, :disabled")){var f=b(e),g=f.hasClass("open");if(c(),!g){"ontouchstart"in document.documentElement&&!f.closest(".navbar-nav").length&&a(document.createElement("div")).addClass("dropdown-backdrop").insertAfter(a(this)).on("click",c);var h={relatedTarget:this};if(f.trigger(d=a.Event("show.bs.dropdown",h)),d.isDefaultPrevented())return;e.trigger("focus").attr("aria-expanded","true"),f.toggleClass("open").trigger(a.Event("shown.bs.dropdown",h))}return!1}},g.prototype.keydown=function(c){if(/(38|40|27|32)/.test(c.which)&&!/input|textarea/i.test(c.target.tagName)){var d=a(this);if(c.preventDefault(),c.stopPropagation(),!d.is(".disabled, :disabled")){var e=b(d),g=e.hasClass("open");if(!g&&27!=c.which||g&&27==c.which)return 27==c.which&&e.find(f).trigger("focus"),d.trigger("click");var h=" li:not(.disabled):visible a",i=e.find(".dropdown-menu"+h);if(i.length){var j=i.index(c.target);38==c.which&&j>0&&j--,40==c.which&&j<i.length-1&&j++,~j||(j=0),i.eq(j).trigger("focus")}}}};var h=a.fn.dropdown;a.fn.dropdown=d,a.fn.dropdown.Constructor=g,a.fn.dropdown.noConflict=function(){return a.fn.dropdown=h,this},a(document).on("click.bs.dropdown.data-api",c).on("click.bs.dropdown.data-api",".dropdown form",function(a){a.stopPropagation()}).on("click.bs.dropdown.data-api",f,g.prototype.toggle).on("keydown.bs.dropdown.data-api",f,g.prototype.keydown).on("keydown.bs.dropdown.data-api",".dropdown-menu",g.prototype.keydown)}(jQuery),+function(a){"use strict";function b(b,d){return this.each(function(){var e=a(this),f=e.data("bs.modal"),g=a.extend({},c.DEFAULTS,e.data(),"object"==typeof b&&b);f||e.data("bs.modal",f=new c(this,g)),"string"==typeof b?f[b](d):g.show&&f.show(d)})}var c=function(b,c){this.options=c,this.$body=a(document.body),this.$element=a(b),this.$dialog=this.$element.find(".modal-dialog"),this.$backdrop=null,this.isShown=null,this.originalBodyPad=null,this.scrollbarWidth=0,this.ignoreBackdropClick=!1,this.options.remote&&this.$element.find(".modal-content").load(this.options.remote,a.proxy(function(){this.$element.trigger("loaded.bs.modal")},this))};c.VERSION="3.3.7",c.TRANSITION_DURATION=300,c.BACKDROP_TRANSITION_DURATION=150,c.DEFAULTS={backdrop:!0,keyboard:!0,show:!0},c.prototype.toggle=function(a){return this.isShown?this.hide():this.show(a)},c.prototype.show=function(b){var d=this,e=a.Event("show.bs.modal",{relatedTarget:b});this.$element.trigger(e),this.isShown||e.isDefaultPrevented()||(this.isShown=!0,this.checkScrollbar(),this.setScrollbar(),this.$body.addClass("modal-open"),this.escape(),this.resize(),this.$element.on("click.dismiss.bs.modal",'[data-dismiss="modal"]',a.proxy(this.hide,this)),this.$dialog.on("mousedown.dismiss.bs.modal",function(){d.$element.one("mouseup.dismiss.bs.modal",function(b){a(b.target).is(d.$element)&&(d.ignoreBackdropClick=!0)})}),this.backdrop(function(){var e=a.support.transition&&d.$element.hasClass("fade");d.$element.parent().length||d.$element.appendTo(d.$body),d.$element.show().scrollTop(0),d.adjustDialog(),e&&d.$element[0].offsetWidth,d.$element.addClass("in"),d.enforceFocus();var f=a.Event("shown.bs.modal",{relatedTarget:b});e?d.$dialog.one("bsTransitionEnd",function(){d.$element.trigger("focus").trigger(f)}).emulateTransitionEnd(c.TRANSITION_DURATION):d.$element.trigger("focus").trigger(f)}))},c.prototype.hide=function(b){b&&b.preventDefault(),b=a.Event("hide.bs.modal"),this.$element.trigger(b),this.isShown&&!b.isDefaultPrevented()&&(this.isShown=!1,this.escape(),this.resize(),a(document).off("focusin.bs.modal"),this.$element.removeClass("in").off("click.dismiss.bs.modal").off("mouseup.dismiss.bs.modal"),this.$dialog.off("mousedown.dismiss.bs.modal"),a.support.transition&&this.$element.hasClass("fade")?this.$element.one("bsTransitionEnd",a.proxy(this.hideModal,this)).emulateTransitionEnd(c.TRANSITION_DURATION):this.hideModal())},c.prototype.enforceFocus=function(){a(document).off("focusin.bs.modal").on("focusin.bs.modal",a.proxy(function(a){document===a.target||this.$element[0]===a.target||this.$element.has(a.target).length||this.$element.trigger("focus")},this))},c.prototype.escape=function(){this.isShown&&this.options.keyboard?this.$element.on("keydown.dismiss.bs.modal",a.proxy(function(a){27==a.which&&this.hide()},this)):this.isShown||this.$element.off("keydown.dismiss.bs.modal")},c.prototype.resize=function(){this.isShown?a(window).on("resize.bs.modal",a.proxy(this.handleUpdate,this)):a(window).off("resize.bs.modal")},c.prototype.hideModal=function(){var a=this;this.$element.hide(),this.backdrop(function(){a.$body.removeClass("modal-open"),a.resetAdjustments(),a.resetScrollbar(),a.$element.trigger("hidden.bs.modal")})},c.prototype.removeBackdrop=function(){this.$backdrop&&this.$backdrop.remove(),this.$backdrop=null},c.prototype.backdrop=function(b){var d=this,e=this.$element.hasClass("fade")?"fade":"";if(this.isShown&&this.options.backdrop){var f=a.support.transition&&e;if(this.$backdrop=a(document.createElement("div")).addClass("modal-backdrop "+e).appendTo(this.$body),this.$element.on("click.dismiss.bs.modal",a.proxy(function(a){return this.ignoreBackdropClick?void(this.ignoreBackdropClick=!1):void(a.target===a.currentTarget&&("static"==this.options.backdrop?this.$element[0].focus():this.hide()))},this)),f&&this.$backdrop[0].offsetWidth,this.$backdrop.addClass("in"),!b)return;f?this.$backdrop.one("bsTransitionEnd",b).emulateTransitionEnd(c.BACKDROP_TRANSITION_DURATION):b()}else if(!this.isShown&&this.$backdrop){this.$backdrop.removeClass("in");var g=function(){d.removeBackdrop(),b&&b()};a.support.transition&&this.$element.hasClass("fade")?this.$backdrop.one("bsTransitionEnd",g).emulateTransitionEnd(c.BACKDROP_TRANSITION_DURATION):g()}else b&&b()},c.prototype.handleUpdate=function(){this.adjustDialog()},c.prototype.adjustDialog=function(){var a=this.$element[0].scrollHeight>document.documentElement.clientHeight;this.$element.css({paddingLeft:!this.bodyIsOverflowing&&a?this.scrollbarWidth:"",paddingRight:this.bodyIsOverflowing&&!a?this.scrollbarWidth:""})},c.prototype.resetAdjustments=function(){this.$element.css({paddingLeft:"",paddingRight:""})},c.prototype.checkScrollbar=function(){var a=window.innerWidth;if(!a){var b=document.documentElement.getBoundingClientRect();a=b.right-Math.abs(b.left)}this.bodyIsOverflowing=document.body.clientWidth<a,this.scrollbarWidth=this.measureScrollbar()},c.prototype.setScrollbar=function(){var a=parseInt(this.$body.css("padding-right")||0,10);this.originalBodyPad=document.body.style.paddingRight||"",this.bodyIsOverflowing&&this.$body.css("padding-right",a+this.scrollbarWidth)},c.prototype.resetScrollbar=function(){this.$body.css("padding-right",this.originalBodyPad)},c.prototype.measureScrollbar=function(){var a=document.createElement("div");a.className="modal-scrollbar-measure",this.$body.append(a);var b=a.offsetWidth-a.clientWidth;return this.$body[0].removeChild(a),b};var d=a.fn.modal;a.fn.modal=b,a.fn.modal.Constructor=c,a.fn.modal.noConflict=function(){return a.fn.modal=d,this},a(document).on("click.bs.modal.data-api",'[data-toggle="modal"]',function(c){var d=a(this),e=d.attr("href"),f=a(d.attr("data-target")||e&&e.replace(/.*(?=#[^\s]+$)/,"")),g=f.data("bs.modal")?"toggle":a.extend({remote:!/#/.test(e)&&e},f.data(),d.data());d.is("a")&&c.preventDefault(),f.one("show.bs.modal",function(a){a.isDefaultPrevented()||f.one("hidden.bs.modal",function(){d.is(":visible")&&d.trigger("focus")})}),b.call(f,g,this)})}(jQuery),+function(a){"use strict";function b(b){return this.each(function(){var d=a(this),e=d.data("bs.tooltip"),f="object"==typeof b&&b;!e&&/destroy|hide/.test(b)||(e||d.data("bs.tooltip",e=new c(this,f)),"string"==typeof b&&e[b]())})}var c=function(a,b){this.type=null,this.options=null,this.enabled=null,this.timeout=null,this.hoverState=null,this.$element=null,this.inState=null,this.init("tooltip",a,b)};c.VERSION="3.3.7",c.TRANSITION_DURATION=150,c.DEFAULTS={animation:!0,placement:"top",selector:!1,template:'<div class="tooltip" role="tooltip"><div class="tooltip-arrow"></div><div class="tooltip-inner"></div></div>',trigger:"hover focus",title:"",delay:0,html:!1,container:!1,viewport:{selector:"body",padding:0}},c.prototype.init=function(b,c,d){if(this.enabled=!0,this.type=b,this.$element=a(c),this.options=this.getOptions(d),this.$viewport=this.options.viewport&&a(a.isFunction(this.options.viewport)?this.options.viewport.call(this,this.$element):this.options.viewport.selector||this.options.viewport),this.inState={click:!1,hover:!1,focus:!1},this.$element[0]instanceof document.constructor&&!this.options.selector)throw new Error("`selector` option must be specified when initializing "+this.type+" on the window.document object!");for(var e=this.options.trigger.split(" "),f=e.length;f--;){var g=e[f];if("click"==g)this.$element.on("click."+this.type,this.options.selector,a.proxy(this.toggle,this));else if("manual"!=g){var h="hover"==g?"mouseenter":"focusin",i="hover"==g?"mouseleave":"focusout";this.$element.on(h+"."+this.type,this.options.selector,a.proxy(this.enter,this)),this.$element.on(i+"."+this.type,this.options.selector,a.proxy(this.leave,this))}}this.options.selector?this._options=a.extend({},this.options,{trigger:"manual",selector:""}):this.fixTitle()},c.prototype.getDefaults=function(){return c.DEFAULTS},c.prototype.getOptions=function(b){return b=a.extend({},this.getDefaults(),this.$element.data(),b),b.delay&&"number"==typeof b.delay&&(b.delay={show:b.delay,hide:b.delay}),b},c.prototype.getDelegateOptions=function(){var b={},c=this.getDefaults();return this._options&&a.each(this._options,function(a,d){c[a]!=d&&(b[a]=d)}),b},c.prototype.enter=function(b){var c=b instanceof this.constructor?b:a(b.currentTarget).data("bs."+this.type);return c||(c=new this.constructor(b.currentTarget,this.getDelegateOptions()),a(b.currentTarget).data("bs."+this.type,c)),b instanceof a.Event&&(c.inState["focusin"==b.type?"focus":"hover"]=!0),c.tip().hasClass("in")||"in"==c.hoverState?void(c.hoverState="in"):(clearTimeout(c.timeout),c.hoverState="in",c.options.delay&&c.options.delay.show?void(c.timeout=setTimeout(function(){"in"==c.hoverState&&c.show()},c.options.delay.show)):c.show())},c.prototype.isInStateTrue=function(){for(var a in this.inState)if(this.inState[a])return!0;return!1},c.prototype.leave=function(b){var c=b instanceof this.constructor?b:a(b.currentTarget).data("bs."+this.type);if(c||(c=new this.constructor(b.currentTarget,this.getDelegateOptions()),a(b.currentTarget).data("bs."+this.type,c)),b instanceof a.Event&&(c.inState["focusout"==b.type?"focus":"hover"]=!1),!c.isInStateTrue())return clearTimeout(c.timeout),c.hoverState="out",c.options.delay&&c.options.delay.hide?void(c.timeout=setTimeout(function(){"out"==c.hoverState&&c.hide()},c.options.delay.hide)):c.hide()},c.prototype.show=function(){var b=a.Event("show.bs."+this.type);if(this.hasContent()&&this.enabled){this.$element.trigger(b);var d=a.contains(this.$element[0].ownerDocument.documentElement,this.$element[0]);if(b.isDefaultPrevented()||!d)return;var e=this,f=this.tip(),g=this.getUID(this.type);this.setContent(),f.attr("id",g),this.$element.attr("aria-describedby",g),this.options.animation&&f.addClass("fade");var h="function"==typeof this.options.placement?this.options.placement.call(this,f[0],this.$element[0]):this.options.placement,i=/\s?auto?\s?/i,j=i.test(h);j&&(h=h.replace(i,"")||"top"),f.detach().css({top:0,left:0,display:"block"}).addClass(h).data("bs."+this.type,this),this.options.container?f.appendTo(this.options.container):f.insertAfter(this.$element),this.$element.trigger("inserted.bs."+this.type);var k=this.getPosition(),l=f[0].offsetWidth,m=f[0].offsetHeight;if(j){var n=h,o=this.getPosition(this.$viewport);h="bottom"==h&&k.bottom+m>o.bottom?"top":"top"==h&&k.top-m<o.top?"bottom":"right"==h&&k.right+l>o.width?"left":"left"==h&&k.left-l<o.left?"right":h,f.removeClass(n).addClass(h)}var p=this.getCalculatedOffset(h,k,l,m);this.applyPlacement(p,h);var q=function(){var a=e.hoverState;e.$element.trigger("shown.bs."+e.type),e.hoverState=null,"out"==a&&e.leave(e)};a.support.transition&&this.$tip.hasClass("fade")?f.one("bsTransitionEnd",q).emulateTransitionEnd(c.TRANSITION_DURATION):q()}},c.prototype.applyPlacement=function(b,c){var d=this.tip(),e=d[0].offsetWidth,f=d[0].offsetHeight,g=parseInt(d.css("margin-top"),10),h=parseInt(d.css("margin-left"),10);isNaN(g)&&(g=0),isNaN(h)&&(h=0),b.top+=g,b.left+=h,a.offset.setOffset(d[0],a.extend({using:function(a){d.css({top:Math.round(a.top),left:Math.round(a.left)})}},b),0),d.addClass("in");var i=d[0].offsetWidth,j=d[0].offsetHeight;"top"==c&&j!=f&&(b.top=b.top+f-j);var k=this.getViewportAdjustedDelta(c,b,i,j);k.left?b.left+=k.left:b.top+=k.top;var l=/top|bottom/.test(c),m=l?2*k.left-e+i:2*k.top-f+j,n=l?"offsetWidth":"offsetHeight";d.offset(b),this.replaceArrow(m,d[0][n],l)},c.prototype.replaceArrow=function(a,b,c){this.arrow().css(c?"left":"top",50*(1-a/b)+"%").css(c?"top":"left","")},c.prototype.setContent=function(){var a=this.tip(),b=this.getTitle();a.find(".tooltip-inner")[this.options.html?"html":"text"](b),a.removeClass("fade in top bottom left right")},c.prototype.hide=function(b){function d(){"in"!=e.hoverState&&f.detach(),e.$element&&e.$element.removeAttr("aria-describedby").trigger("hidden.bs."+e.type),b&&b()}var e=this,f=a(this.$tip),g=a.Event("hide.bs."+this.type);if(this.$element.trigger(g),!g.isDefaultPrevented())return f.removeClass("in"),a.support.transition&&f.hasClass("fade")?f.one("bsTransitionEnd",d).emulateTransitionEnd(c.TRANSITION_DURATION):d(),this.hoverState=null,this},c.prototype.fixTitle=function(){var a=this.$element;(a.attr("title")||"string"!=typeof a.attr("data-original-title"))&&a.attr("data-original-title",a.attr("title")||"").attr("title","")},c.prototype.hasContent=function(){return this.getTitle()},c.prototype.getPosition=function(b){b=b||this.$element;var c=b[0],d="BODY"==c.tagName,e=c.getBoundingClientRect();null==e.width&&(e=a.extend({},e,{width:e.right-e.left,height:e.bottom-e.top}));var f=window.SVGElement&&c instanceof window.SVGElement,g=d?{top:0,left:0}:f?null:b.offset(),h={scroll:d?document.documentElement.scrollTop||document.body.scrollTop:b.scrollTop()},i=d?{width:a(window).width(),height:a(window).height()}:null;return a.extend({},e,h,i,g)},c.prototype.getCalculatedOffset=function(a,b,c,d){return"bottom"==a?{top:b.top+b.height,left:b.left+b.width/2-c/2}:"top"==a?{top:b.top-d,left:b.left+b.width/2-c/2}:"left"==a?{top:b.top+b.height/2-d/2,left:b.left-c}:{top:b.top+b.height/2-d/2,left:b.left+b.width}},c.prototype.getViewportAdjustedDelta=function(a,b,c,d){var e={top:0,left:0};if(!this.$viewport)return e;var f=this.options.viewport&&this.options.viewport.padding||0,g=this.getPosition(this.$viewport);if(/right|left/.test(a)){var h=b.top-f-g.scroll,i=b.top+f-g.scroll+d;h<g.top?e.top=g.top-h:i>g.top+g.height&&(e.top=g.top+g.height-i)}else{var j=b.left-f,k=b.left+f+c;j<g.left?e.left=g.left-j:k>g.right&&(e.left=g.left+g.width-k)}return e},c.prototype.getTitle=function(){var a,b=this.$element,c=this.options;return a=b.attr("data-original-title")||("function"==typeof c.title?c.title.call(b[0]):c.title)},c.prototype.getUID=function(a){do a+=~~(1e6*Math.random());while(document.getElementById(a));return a},c.prototype.tip=function(){if(!this.$tip&&(this.$tip=a(this.options.template),1!=this.$tip.length))throw new Error(this.type+" `template` option must consist of exactly 1 top-level element!");return this.$tip},c.prototype.arrow=function(){return this.$arrow=this.$arrow||this.tip().find(".tooltip-arrow")},c.prototype.enable=function(){this.enabled=!0},c.prototype.disable=function(){this.enabled=!1},c.prototype.toggleEnabled=function(){this.enabled=!this.enabled},c.prototype.toggle=function(b){var c=this;b&&(c=a(b.currentTarget).data("bs."+this.type),c||(c=new this.constructor(b.currentTarget,this.getDelegateOptions()),a(b.currentTarget).data("bs."+this.type,c))),b?(c.inState.click=!c.inState.click,c.isInStateTrue()?c.enter(c):c.leave(c)):c.tip().hasClass("in")?c.leave(c):c.enter(c)},c.prototype.destroy=function(){var a=this;clearTimeout(this.timeout),this.hide(function(){a.$element.off("."+a.type).removeData("bs."+a.type),a.$tip&&a.$tip.detach(),a.$tip=null,a.$arrow=null,a.$viewport=null,a.$element=null})};var d=a.fn.tooltip;a.fn.tooltip=b,a.fn.tooltip.Constructor=c,a.fn.tooltip.noConflict=function(){return a.fn.tooltip=d,this}}(jQuery),+function(a){"use strict";function b(b){return this.each(function(){var d=a(this),e=d.data("bs.popover"),f="object"==typeof b&&b;!e&&/destroy|hide/.test(b)||(e||d.data("bs.popover",e=new c(this,f)),"string"==typeof b&&e[b]())})}var c=function(a,b){this.init("popover",a,b)};if(!a.fn.tooltip)throw new Error("Popover requires tooltip.js");c.VERSION="3.3.7",c.DEFAULTS=a.extend({},a.fn.tooltip.Constructor.DEFAULTS,{placement:"right",trigger:"click",content:"",template:'<div class="popover" role="tooltip"><div class="arrow"></div><h3 class="popover-title"></h3><div class="popover-content"></div></div>'}),c.prototype=a.extend({},a.fn.tooltip.Constructor.prototype),c.prototype.constructor=c,c.prototype.getDefaults=function(){return c.DEFAULTS},c.prototype.setContent=function(){var a=this.tip(),b=this.getTitle(),c=this.getContent();a.find(".popover-title")[this.options.html?"html":"text"](b),a.find(".popover-content").children().detach().end()[this.options.html?"string"==typeof c?"html":"append":"text"](c),a.removeClass("fade top bottom left right in"),a.find(".popover-title").html()||a.find(".popover-title").hide()},c.prototype.hasContent=function(){return this.getTitle()||this.getContent()},c.prototype.getContent=function(){var a=this.$element,b=this.options;return a.attr("data-content")||("function"==typeof b.content?b.content.call(a[0]):b.content)},c.prototype.arrow=function(){return this.$arrow=this.$arrow||this.tip().find(".arrow")};var d=a.fn.popover;a.fn.popover=b,a.fn.popover.Constructor=c,a.fn.popover.noConflict=function(){return a.fn.popover=d,this}}(jQuery),+function(a){"use strict";function b(c,d){this.$body=a(document.body),this.$scrollElement=a(a(c).is(document.body)?window:c),this.options=a.extend({},b.DEFAULTS,d),this.selector=(this.options.target||"")+" .nav li > a",this.offsets=[],this.targets=[],this.activeTarget=null,this.scrollHeight=0,this.$scrollElement.on("scroll.bs.scrollspy",a.proxy(this.process,this)),this.refresh(),this.process()}function c(c){return this.each(function(){var d=a(this),e=d.data("bs.scrollspy"),f="object"==typeof c&&c;e||d.data("bs.scrollspy",e=new b(this,f)),"string"==typeof c&&e[c]()})}b.VERSION="3.3.7",b.DEFAULTS={offset:10},b.prototype.getScrollHeight=function(){return this.$scrollElement[0].scrollHeight||Math.max(this.$body[0].scrollHeight,document.documentElement.scrollHeight)},b.prototype.refresh=function(){var b=this,c="offset",d=0;this.offsets=[],this.targets=[],this.scrollHeight=this.getScrollHeight(),a.isWindow(this.$scrollElement[0])||(c="position",d=this.$scrollElement.scrollTop()),this.$body.find(this.selector).map(function(){var b=a(this),e=b.data("target")||b.attr("href"),f=/^#./.test(e)&&a(e);return f&&f.length&&f.is(":visible")&&[[f[c]().top+d,e]]||null}).sort(function(a,b){return a[0]-b[0]}).each(function(){b.offsets.push(this[0]),b.targets.push(this[1])})},b.prototype.process=function(){var a,b=this.$scrollElement.scrollTop()+this.options.offset,c=this.getScrollHeight(),d=this.options.offset+c-this.$scrollElement.height(),e=this.offsets,f=this.targets,g=this.activeTarget;if(this.scrollHeight!=c&&this.refresh(),b>=d)return g!=(a=f[f.length-1])&&this.activate(a);if(g&&b<e[0])return this.activeTarget=null,this.clear();for(a=e.length;a--;)g!=f[a]&&b>=e[a]&&(void 0===e[a+1]||b<e[a+1])&&this.activate(f[a])},b.prototype.activate=function(b){
+this.activeTarget=b,this.clear();var c=this.selector+'[data-target="'+b+'"],'+this.selector+'[href="'+b+'"]',d=a(c).parents("li").addClass("active");d.parent(".dropdown-menu").length&&(d=d.closest("li.dropdown").addClass("active")),d.trigger("activate.bs.scrollspy")},b.prototype.clear=function(){a(this.selector).parentsUntil(this.options.target,".active").removeClass("active")};var d=a.fn.scrollspy;a.fn.scrollspy=c,a.fn.scrollspy.Constructor=b,a.fn.scrollspy.noConflict=function(){return a.fn.scrollspy=d,this},a(window).on("load.bs.scrollspy.data-api",function(){a('[data-spy="scroll"]').each(function(){var b=a(this);c.call(b,b.data())})})}(jQuery),+function(a){"use strict";function b(b){return this.each(function(){var d=a(this),e=d.data("bs.tab");e||d.data("bs.tab",e=new c(this)),"string"==typeof b&&e[b]()})}var c=function(b){this.element=a(b)};c.VERSION="3.3.7",c.TRANSITION_DURATION=150,c.prototype.show=function(){var b=this.element,c=b.closest("ul:not(.dropdown-menu)"),d=b.data("target");if(d||(d=b.attr("href"),d=d&&d.replace(/.*(?=#[^\s]*$)/,"")),!b.parent("li").hasClass("active")){var e=c.find(".active:last a"),f=a.Event("hide.bs.tab",{relatedTarget:b[0]}),g=a.Event("show.bs.tab",{relatedTarget:e[0]});if(e.trigger(f),b.trigger(g),!g.isDefaultPrevented()&&!f.isDefaultPrevented()){var h=a(d);this.activate(b.closest("li"),c),this.activate(h,h.parent(),function(){e.trigger({type:"hidden.bs.tab",relatedTarget:b[0]}),b.trigger({type:"shown.bs.tab",relatedTarget:e[0]})})}}},c.prototype.activate=function(b,d,e){function f(){g.removeClass("active").find("> .dropdown-menu > .active").removeClass("active").end().find('[data-toggle="tab"]').attr("aria-expanded",!1),b.addClass("active").find('[data-toggle="tab"]').attr("aria-expanded",!0),h?(b[0].offsetWidth,b.addClass("in")):b.removeClass("fade"),b.parent(".dropdown-menu").length&&b.closest("li.dropdown").addClass("active").end().find('[data-toggle="tab"]').attr("aria-expanded",!0),e&&e()}var g=d.find("> .active"),h=e&&a.support.transition&&(g.length&&g.hasClass("fade")||!!d.find("> .fade").length);g.length&&h?g.one("bsTransitionEnd",f).emulateTransitionEnd(c.TRANSITION_DURATION):f(),g.removeClass("in")};var d=a.fn.tab;a.fn.tab=b,a.fn.tab.Constructor=c,a.fn.tab.noConflict=function(){return a.fn.tab=d,this};var e=function(c){c.preventDefault(),b.call(a(this),"show")};a(document).on("click.bs.tab.data-api",'[data-toggle="tab"]',e).on("click.bs.tab.data-api",'[data-toggle="pill"]',e)}(jQuery),+function(a){"use strict";function b(b){return this.each(function(){var d=a(this),e=d.data("bs.affix"),f="object"==typeof b&&b;e||d.data("bs.affix",e=new c(this,f)),"string"==typeof b&&e[b]()})}var c=function(b,d){this.options=a.extend({},c.DEFAULTS,d),this.$target=a(this.options.target).on("scroll.bs.affix.data-api",a.proxy(this.checkPosition,this)).on("click.bs.affix.data-api",a.proxy(this.checkPositionWithEventLoop,this)),this.$element=a(b),this.affixed=null,this.unpin=null,this.pinnedOffset=null,this.checkPosition()};c.VERSION="3.3.7",c.RESET="affix affix-top affix-bottom",c.DEFAULTS={offset:0,target:window},c.prototype.getState=function(a,b,c,d){var e=this.$target.scrollTop(),f=this.$element.offset(),g=this.$target.height();if(null!=c&&"top"==this.affixed)return e<c&&"top";if("bottom"==this.affixed)return null!=c?!(e+this.unpin<=f.top)&&"bottom":!(e+g<=a-d)&&"bottom";var h=null==this.affixed,i=h?e:f.top,j=h?g:b;return null!=c&&e<=c?"top":null!=d&&i+j>=a-d&&"bottom"},c.prototype.getPinnedOffset=function(){if(this.pinnedOffset)return this.pinnedOffset;this.$element.removeClass(c.RESET).addClass("affix");var a=this.$target.scrollTop(),b=this.$element.offset();return this.pinnedOffset=b.top-a},c.prototype.checkPositionWithEventLoop=function(){setTimeout(a.proxy(this.checkPosition,this),1)},c.prototype.checkPosition=function(){if(this.$element.is(":visible")){var b=this.$element.height(),d=this.options.offset,e=d.top,f=d.bottom,g=Math.max(a(document).height(),a(document.body).height());"object"!=typeof d&&(f=e=d),"function"==typeof e&&(e=d.top(this.$element)),"function"==typeof f&&(f=d.bottom(this.$element));var h=this.getState(g,b,e,f);if(this.affixed!=h){null!=this.unpin&&this.$element.css("top","");var i="affix"+(h?"-"+h:""),j=a.Event(i+".bs.affix");if(this.$element.trigger(j),j.isDefaultPrevented())return;this.affixed=h,this.unpin="bottom"==h?this.getPinnedOffset():null,this.$element.removeClass(c.RESET).addClass(i).trigger(i.replace("affix","affixed")+".bs.affix")}"bottom"==h&&this.$element.offset({top:g-b-f})}};var d=a.fn.affix;a.fn.affix=b,a.fn.affix.Constructor=c,a.fn.affix.noConflict=function(){return a.fn.affix=d,this},a(window).on("load",function(){a('[data-spy="affix"]').each(function(){var c=a(this),d=c.data();d.offset=d.offset||{},null!=d.offsetBottom&&(d.offset.bottom=d.offsetBottom),null!=d.offsetTop&&(d.offset.top=d.offsetTop),b.call(c,d)})})}(jQuery);;/**
+ * Featherlight - ultra slim jQuery lightbox
+ * Version 1.7.2 - http://noelboss.github.io/featherlight/
+ *
+ * Copyright 2017, Noël Raoul Bossart (http://www.noelboss.com)
+ * MIT Licensed.
+**/
 (function($) {
-	$.prettyPhoto = {version: '3.1.6'};
-	
-	$.fn.prettyPhoto = function(pp_settings) {
-		pp_settings = jQuery.extend({
-			hook: 'rel', /* the attribute tag to use for prettyPhoto hooks. default: 'rel'. For HTML5, use "data-rel" or similar. */
-			animation_speed: 'fast', /* fast/slow/normal */
-			ajaxcallback: function() {},
-			slideshow: 5000, /* false OR interval time in ms */
-			autoplay_slideshow: false, /* true/false */
-			opacity: 0.80, /* Value between 0 and 1 */
-			show_title: true, /* true/false */
-			allow_resize: true, /* Resize the photos bigger than viewport. true/false */
-			allow_expand: true, /* Allow the user to expand a resized image. true/false */
-			default_width: 500,
-			default_height: 344,
-			counter_separator_label: '/', /* The separator for the gallery counter 1 "of" 2 */
-			theme: 'pp_default', /* light_rounded / dark_rounded / light_square / dark_square / facebook */
-			horizontal_padding: 20, /* The padding on each side of the picture */
-			hideflash: false, /* Hides all the flash object on a page, set to TRUE if flash appears over prettyPhoto */
-			wmode: 'opaque', /* Set the flash wmode attribute */
-			autoplay: true, /* Automatically start videos: True/False */
-			modal: false, /* If set to true, only the close button will close the window */
-			deeplinking: true, /* Allow prettyPhoto to update the url to enable deeplinking. */
-			overlay_gallery: true, /* If set to true, a gallery will overlay the fullscreen image on mouse over */
-			overlay_gallery_max: 30, /* Maximum number of pictures in the overlay gallery */
-			keyboard_shortcuts: true, /* Set to false if you open forms inside prettyPhoto */
-			changepicturecallback: function(){}, /* Called everytime an item is shown/changed */
-			callback: function(){}, /* Called when prettyPhoto is closed */
-			ie6_fallback: true,
-			markup: '<div class="pp_pic_holder"> \
-						<div class="ppt">&nbsp;</div> \
-						<div class="pp_top"> \
-							<div class="pp_left"></div> \
-							<div class="pp_middle"></div> \
-							<div class="pp_right"></div> \
-						</div> \
-						<div class="pp_content_container"> \
-							<div class="pp_left"> \
-							<div class="pp_right"> \
-								<div class="pp_content"> \
-									<div class="pp_loaderIcon"></div> \
-									<div class="pp_fade"> \
-										<a href="#" class="pp_expand" title="Expand the image">Expand</a> \
-										<div class="pp_hoverContainer"> \
-											<a class="pp_next" href="#">next</a> \
-											<a class="pp_previous" href="#">previous</a> \
-										</div> \
-										<div id="pp_full_res"></div> \
-										<div class="pp_details"> \
-											<div class="pp_nav"> \
-												<a href="#" class="pp_arrow_previous">Previous</a> \
-												<p class="currentTextHolder">0/0</p> \
-												<a href="#" class="pp_arrow_next">Next</a> \
-											</div> \
-											<p class="pp_description"></p> \
-											<div class="pp_social">{pp_social}</div> \
-											<a class="pp_close" href="#">Close</a> \
-										</div> \
-									</div> \
-								</div> \
-							</div> \
-							</div> \
-						</div> \
-						<div class="pp_bottom"> \
-							<div class="pp_left"></div> \
-							<div class="pp_middle"></div> \
-							<div class="pp_right"></div> \
-						</div> \
-					</div> \
-					<div class="pp_overlay"></div>',
-			gallery_markup: '<div class="pp_gallery"> \
-								<a href="#" class="pp_arrow_previous">Previous</a> \
-								<div> \
-									<ul> \
-										{gallery} \
-									</ul> \
-								</div> \
-								<a href="#" class="pp_arrow_next">Next</a> \
-							</div>',
-			image_markup: '<img id="fullResImage" src="{path}" />',
-			flash_markup: '<object classid="clsid:D27CDB6E-AE6D-11cf-96B8-444553540000" width="{width}" height="{height}"><param name="wmode" value="{wmode}" /><param name="allowfullscreen" value="true" /><param name="allowscriptaccess" value="always" /><param name="movie" value="{path}" /><embed src="{path}" type="application/x-shockwave-flash" allowfullscreen="true" allowscriptaccess="always" width="{width}" height="{height}" wmode="{wmode}"></embed></object>',
-			quicktime_markup: '<object classid="clsid:02BF25D5-8C17-4B23-BC80-D3488ABDDC6B" codebase="http://www.apple.com/qtactivex/qtplugin.cab" height="{height}" width="{width}"><param name="src" value="{path}"><param name="autoplay" value="{autoplay}"><param name="type" value="video/quicktime"><embed src="{path}" height="{height}" width="{width}" autoplay="{autoplay}" type="video/quicktime" pluginspage="http://www.apple.com/quicktime/download/"></embed></object>',
-			iframe_markup: '<iframe src ="{path}" width="{width}" height="{height}" frameborder="no"></iframe>',
-			inline_markup: '<div class="pp_inline">{content}</div>',
-			custom_markup: '',
-			social_tools: '<div class="twitter"><a href="http://twitter.com/share" class="twitter-share-button" data-count="none">Tweet</a><script type="text/javascript" src="http://platform.twitter.com/widgets.js"></script></div><div class="facebook"><iframe src="//www.facebook.com/plugins/like.php?locale=en_US&href={location_href}&amp;layout=button_count&amp;show_faces=true&amp;width=500&amp;action=like&amp;font&amp;colorscheme=light&amp;height=23" scrolling="no" frameborder="0" style="border:none; overflow:hidden; width:500px; height:23px;" allowTransparency="true"></iframe></div>' /* html or false to disable */
-		}, pp_settings);
-		
-		// Global variables accessible only by prettyPhoto
-		var matchedObjects = this, percentBased = false, pp_dimensions, pp_open,
-		
-		// prettyPhoto container specific
-		pp_contentHeight, pp_contentWidth, pp_containerHeight, pp_containerWidth,
-		
-		// Window size
-		windowHeight = $(window).height(), windowWidth = $(window).width(),
+	"use strict";
 
-		// Global elements
-		pp_slideshow;
-		
-		doresize = true, scroll_pos = _get_scroll();
-	
-		// Window/Keyboard events
-		$(window).unbind('resize.prettyphoto').bind('resize.prettyphoto',function(){ _center_overlay(); _resize_overlay(); });
-		
-		if(pp_settings.keyboard_shortcuts) {
-			$(document).unbind('keydown.prettyphoto').bind('keydown.prettyphoto',function(e){
-				if(typeof $pp_pic_holder != 'undefined'){
-					if($pp_pic_holder.is(':visible')){
-						switch(e.keyCode){
-							case 37:
-								$.prettyPhoto.changePage('previous');
-								e.preventDefault();
-								break;
-							case 39:
-								$.prettyPhoto.changePage('next');
-								e.preventDefault();
-								break;
-							case 27:
-								if(!settings.modal)
-								$.prettyPhoto.close();
-								e.preventDefault();
-								break;
-						};
-						// return false;
-					};
-				};
-			});
-		};
-		
-		/**
-		* Initialize prettyPhoto.
-		*/
-		$.prettyPhoto.initialize = function() {
-			
-			settings = pp_settings;
-			
-			if(settings.theme == 'pp_default') settings.horizontal_padding = 16;
-			
-			// Find out if the picture is part of a set
-			theRel = $(this).attr(settings.hook);
-			galleryRegExp = /\[(?:.*)\]/;
-			isSet = (galleryRegExp.exec(theRel)) ? true : false;
-			
-			// Put the SRCs, TITLEs, ALTs into an array.
-			pp_images = (isSet) ? jQuery.map(matchedObjects, function(n, i){ if($(n).attr(settings.hook).indexOf(theRel) != -1) return $(n).attr('href'); }) : $.makeArray($(this).attr('href'));
-			pp_titles = (isSet) ? jQuery.map(matchedObjects, function(n, i){ if($(n).attr(settings.hook).indexOf(theRel) != -1) return ($(n).find('img').attr('alt')) ? $(n).find('img').attr('alt') : ""; }) : $.makeArray($(this).find('img').attr('alt'));
-			pp_descriptions = (isSet) ? jQuery.map(matchedObjects, function(n, i){ if($(n).attr(settings.hook).indexOf(theRel) != -1) return ($(n).attr('title')) ? $(n).attr('title') : ""; }) : $.makeArray($(this).attr('title'));
-			
-			if(pp_images.length > settings.overlay_gallery_max) settings.overlay_gallery = false;
-			
-			set_position = jQuery.inArray($(this).attr('href'), pp_images); // Define where in the array the clicked item is positionned
-			rel_index = (isSet) ? set_position : $("a["+settings.hook+"^='"+theRel+"']").index($(this));
-			
-			_build_overlay(this); // Build the overlay {this} being the caller
-			
-			if(settings.allow_resize)
-				$(window).bind('scroll.prettyphoto',function(){ _center_overlay(); });
-			
-			
-			$.prettyPhoto.open();
-			
-			return false;
+	if('undefined' === typeof $) {
+		if('console' in window){ window.console.info('Too much lightness, Featherlight needs jQuery.'); }
+		return;
+	}
+
+	/* Featherlight is exported as $.featherlight.
+	   It is a function used to open a featherlight lightbox.
+
+	   [tech]
+	   Featherlight uses prototype inheritance.
+	   Each opened lightbox will have a corresponding object.
+	   That object may have some attributes that override the
+	   prototype's.
+	   Extensions created with Featherlight.extend will have their
+	   own prototype that inherits from Featherlight's prototype,
+	   thus attributes can be overriden either at the object level,
+	   or at the extension level.
+	   To create callbacks that chain themselves instead of overriding,
+	   use chainCallbacks.
+	   For those familiar with CoffeeScript, this correspond to
+	   Featherlight being a class and the Gallery being a class
+	   extending Featherlight.
+	   The chainCallbacks is used since we don't have access to
+	   CoffeeScript's `super`.
+	*/
+
+	function Featherlight($content, config) {
+		if(this instanceof Featherlight) {  /* called with new */
+			this.id = Featherlight.id++;
+			this.setup($content, config);
+			this.chainCallbacks(Featherlight._callbackChain);
+		} else {
+			var fl = new Featherlight($content, config);
+			fl.open();
+			return fl;
 		}
+	}
 
-
-		/**
-		* Opens the prettyPhoto modal box.
-		* @param image {String,Array} Full path to the image to be open, can also be an array containing full images paths.
-		* @param title {String,Array} The title to be displayed with the picture, can also be an array containing all the titles.
-		* @param description {String,Array} The description to be displayed with the picture, can also be an array containing all the descriptions.
-		*/
-		$.prettyPhoto.open = function(event) {
-			if(typeof settings == "undefined"){ // Means it's an API call, need to manually get the settings and set the variables
-				settings = pp_settings;
-				pp_images = $.makeArray(arguments[0]);
-				pp_titles = (arguments[1]) ? $.makeArray(arguments[1]) : $.makeArray("");
-				pp_descriptions = (arguments[2]) ? $.makeArray(arguments[2]) : $.makeArray("");
-				isSet = (pp_images.length > 1) ? true : false;
-				set_position = (arguments[3])? arguments[3]: 0;
-				_build_overlay(event.target); // Build the overlay {this} being the caller
-			}
-			
-			if(settings.hideflash) $('object,embed,iframe[src*=youtube],iframe[src*=vimeo]').css('visibility','hidden'); // Hide the flash
-
-			_checkPosition($(pp_images).size()); // Hide the next/previous links if on first or last images.
-		
-			$('.pp_loaderIcon').show();
-		
-			if(settings.deeplinking)
-				setHashtag();
-		
-			// Rebuild Facebook Like Button with updated href
-			if(settings.social_tools){
-				facebook_like_link = settings.social_tools.replace('{location_href}', encodeURIComponent(location.href)); 
-				$pp_pic_holder.find('.pp_social').html(facebook_like_link);
-			}
-			
-			// Fade the content in
-			if($ppt.is(':hidden')) $ppt.css('opacity',0).show();
-			$pp_overlay.show().fadeTo(settings.animation_speed,settings.opacity);
-
-			// Display the current position
-			$pp_pic_holder.find('.currentTextHolder').text((set_position+1) + settings.counter_separator_label + $(pp_images).size());
-
-			// Set the description
-			if(typeof pp_descriptions[set_position] != 'undefined' && pp_descriptions[set_position] != ""){
-				$pp_pic_holder.find('.pp_description').show().html(unescape(pp_descriptions[set_position]));
-			}else{
-				$pp_pic_holder.find('.pp_description').hide();
-			}
-			
-			// Get the dimensions
-			movie_width = ( parseFloat(getParam('width',pp_images[set_position])) ) ? getParam('width',pp_images[set_position]) : settings.default_width.toString();
-			movie_height = ( parseFloat(getParam('height',pp_images[set_position])) ) ? getParam('height',pp_images[set_position]) : settings.default_height.toString();
-			
-			// If the size is % based, calculate according to window dimensions
-			percentBased=false;
-			if(movie_height.indexOf('%') != -1) { movie_height = parseFloat(($(window).height() * parseFloat(movie_height) / 100) - 150); percentBased = true; }
-			if(movie_width.indexOf('%') != -1) { movie_width = parseFloat(($(window).width() * parseFloat(movie_width) / 100) - 150); percentBased = true; }
-			
-			// Fade the holder
-			$pp_pic_holder.fadeIn(function(){
-				// Set the title
-				(settings.show_title && pp_titles[set_position] != "" && typeof pp_titles[set_position] != "undefined") ? $ppt.html(unescape(pp_titles[set_position])) : $ppt.html('&nbsp;');
-				
-				imgPreloader = "";
-				skipInjection = false;
-				
-				// Inject the proper content
-				switch(_getFileType(pp_images[set_position])){
-					case 'image':
-						imgPreloader = new Image();
-
-						// Preload the neighbour images
-						nextImage = new Image();
-						if(isSet && set_position < $(pp_images).size() -1) nextImage.src = pp_images[set_position + 1];
-						prevImage = new Image();
-						if(isSet && pp_images[set_position - 1]) prevImage.src = pp_images[set_position - 1];
-
-						$pp_pic_holder.find('#pp_full_res')[0].innerHTML = settings.image_markup.replace(/{path}/g,pp_images[set_position]);
-
-						imgPreloader.onload = function(){
-							// Fit item to viewport
-							pp_dimensions = _fitToViewport(imgPreloader.width,imgPreloader.height);
-
-							_showContent();
-						};
-
-						imgPreloader.onerror = function(){
-							alert('Image cannot be loaded. Make sure the path is correct and image exist.');
-							$.prettyPhoto.close();
-						};
-					
-						imgPreloader.src = pp_images[set_position];
-					break;
-				
-					case 'youtube':
-						pp_dimensions = _fitToViewport(movie_width,movie_height); // Fit item to viewport
-						
-						// Regular youtube link
-						movie_id = getParam('v',pp_images[set_position]);
-						
-						// youtu.be link
-						if(movie_id == ""){
-							movie_id = pp_images[set_position].split('youtu.be/');
-							movie_id = movie_id[1];
-							if(movie_id.indexOf('?') > 0)
-								movie_id = movie_id.substr(0,movie_id.indexOf('?')); // Strip anything after the ?
-
-							if(movie_id.indexOf('&') > 0)
-								movie_id = movie_id.substr(0,movie_id.indexOf('&')); // Strip anything after the &
-						}
-
-						movie = 'http://www.youtube.com/embed/'+movie_id;
-						(getParam('rel',pp_images[set_position])) ? movie+="?rel="+getParam('rel',pp_images[set_position]) : movie+="?rel=1";
-							
-						if(settings.autoplay) movie += "&autoplay=1";
-					
-						toInject = settings.iframe_markup.replace(/{width}/g,pp_dimensions['width']).replace(/{height}/g,pp_dimensions['height']).replace(/{wmode}/g,settings.wmode).replace(/{path}/g,movie);
-					break;
-				
-					case 'vimeo':
-						pp_dimensions = _fitToViewport(movie_width,movie_height); // Fit item to viewport
-					
-						movie_id = pp_images[set_position];
-						var regExp = /http(s?):\/\/(www\.)?vimeo.com\/(\d+)/;
-						var match = movie_id.match(regExp);
-						
-						movie = 'http://player.vimeo.com/video/'+ match[3] +'?title=0&amp;byline=0&amp;portrait=0';
-						if(settings.autoplay) movie += "&autoplay=1;";
-				
-						vimeo_width = pp_dimensions['width'] + '/embed/?moog_width='+ pp_dimensions['width'];
-				
-						toInject = settings.iframe_markup.replace(/{width}/g,vimeo_width).replace(/{height}/g,pp_dimensions['height']).replace(/{path}/g,movie);
-					break;
-				
-					case 'quicktime':
-						pp_dimensions = _fitToViewport(movie_width,movie_height); // Fit item to viewport
-						pp_dimensions['height']+=15; pp_dimensions['contentHeight']+=15; pp_dimensions['containerHeight']+=15; // Add space for the control bar
-				
-						toInject = settings.quicktime_markup.replace(/{width}/g,pp_dimensions['width']).replace(/{height}/g,pp_dimensions['height']).replace(/{wmode}/g,settings.wmode).replace(/{path}/g,pp_images[set_position]).replace(/{autoplay}/g,settings.autoplay);
-					break;
-				
-					case 'flash':
-						pp_dimensions = _fitToViewport(movie_width,movie_height); // Fit item to viewport
-					
-						flash_vars = pp_images[set_position];
-						flash_vars = flash_vars.substring(pp_images[set_position].indexOf('flashvars') + 10,pp_images[set_position].length);
-
-						filename = pp_images[set_position];
-						filename = filename.substring(0,filename.indexOf('?'));
-					
-						toInject =  settings.flash_markup.replace(/{width}/g,pp_dimensions['width']).replace(/{height}/g,pp_dimensions['height']).replace(/{wmode}/g,settings.wmode).replace(/{path}/g,filename+'?'+flash_vars);
-					break;
-				
-					case 'iframe':
-						pp_dimensions = _fitToViewport(movie_width,movie_height); // Fit item to viewport
-				
-						frame_url = pp_images[set_position];
-						frame_url = frame_url.substr(0,frame_url.indexOf('iframe')-1);
-
-						toInject = settings.iframe_markup.replace(/{width}/g,pp_dimensions['width']).replace(/{height}/g,pp_dimensions['height']).replace(/{path}/g,frame_url);
-					break;
-					
-					case 'ajax':
-						doresize = false; // Make sure the dimensions are not resized.
-						pp_dimensions = _fitToViewport(movie_width,movie_height);
-						doresize = true; // Reset the dimensions
-					
-						skipInjection = true;
-						$.get(pp_images[set_position],function(responseHTML){
-							toInject = settings.inline_markup.replace(/{content}/g,responseHTML);
-							$pp_pic_holder.find('#pp_full_res')[0].innerHTML = toInject;
-							_showContent();
-						});
-						
-					break;
-					
-					case 'custom':
-						pp_dimensions = _fitToViewport(movie_width,movie_height); // Fit item to viewport
-					
-						toInject = settings.custom_markup;
-					break;
-				
-					case 'inline':
-						// to get the item height clone it, apply default width, wrap it in the prettyPhoto containers , then delete
-						myClone = $(pp_images[set_position]).clone().append('<br clear="all" />').css({'width':settings.default_width}).wrapInner('<div id="pp_full_res"><div class="pp_inline"></div></div>').appendTo($('body')).show();
-						doresize = false; // Make sure the dimensions are not resized.
-						pp_dimensions = _fitToViewport($(myClone).width(),$(myClone).height());
-						doresize = true; // Reset the dimensions
-						$(myClone).remove();
-						toInject = settings.inline_markup.replace(/{content}/g,$(pp_images[set_position]).html());
-					break;
-				};
-
-				if(!imgPreloader && !skipInjection){
-					$pp_pic_holder.find('#pp_full_res')[0].innerHTML = toInject;
-				
-					// Show content
-					_showContent();
-				};
-			});
-
-			return false;
+	var opened = [],
+		pruneOpened = function(remove) {
+			opened = $.grep(opened, function(fl) {
+				return fl !== remove && fl.$instance.closest('body').length > 0;
+			} );
+			return opened;
 		};
 
-	
-		/**
-		* Change page in the prettyPhoto modal box
-		* @param direction {String} Direction of the paging, previous or next.
-		*/
-		$.prettyPhoto.changePage = function(direction){
-			currentGalleryPage = 0;
-			
-			if(direction == 'previous') {
-				set_position--;
-				if (set_position < 0) set_position = $(pp_images).size()-1;
-			}else if(direction == 'next'){
-				set_position++;
-				if(set_position > $(pp_images).size()-1) set_position = 0;
-			}else{
-				set_position=direction;
-			};
-			
-			rel_index = set_position;
-
-			if(!doresize) doresize = true; // Allow the resizing of the images
-			if(settings.allow_expand) {
-				$('.pp_contract').removeClass('pp_contract').addClass('pp_expand');
+	// Removes keys of `set` from `obj` and returns the removed key/values.
+	function slice(obj, set) {
+		var r = {};
+		for (var key in obj) {
+			if (key in set) {
+				r[key] = obj[key];
+				delete obj[key];
 			}
-
-			_hideContent(function(){ $.prettyPhoto.open(); });
-		};
-
-
-		/**
-		* Change gallery page in the prettyPhoto modal box
-		* @param direction {String} Direction of the paging, previous or next.
-		*/
-		$.prettyPhoto.changeGalleryPage = function(direction){
-			if(direction=='next'){
-				currentGalleryPage ++;
-
-				if(currentGalleryPage > totalPage) currentGalleryPage = 0;
-			}else if(direction=='previous'){
-				currentGalleryPage --;
-
-				if(currentGalleryPage < 0) currentGalleryPage = totalPage;
-			}else{
-				currentGalleryPage = direction;
-			};
-			
-			slide_speed = (direction == 'next' || direction == 'previous') ? settings.animation_speed : 0;
-
-			slide_to = currentGalleryPage * (itemsPerPage * itemWidth);
-
-			$pp_gallery.find('ul').animate({left:-slide_to},slide_speed);
-		};
-
-
-		/**
-		* Start the slideshow...
-		*/
-		$.prettyPhoto.startSlideshow = function(){
-			if(typeof pp_slideshow == 'undefined'){
-				$pp_pic_holder.find('.pp_play').unbind('click').removeClass('pp_play').addClass('pp_pause').click(function(){
-					$.prettyPhoto.stopSlideshow();
-					return false;
-				});
-				pp_slideshow = setInterval($.prettyPhoto.startSlideshow,settings.slideshow);
-			}else{
-				$.prettyPhoto.changePage('next');	
-			};
 		}
+		return r;
+	}
 
+	// NOTE: List of available [iframe attributes](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe).
+	var iFrameAttributeSet = {
+		allowfullscreen: 1, frameborder: 1, height: 1, longdesc: 1, marginheight: 1, marginwidth: 1,
+		name: 1, referrerpolicy: 1, scrolling: 1, sandbox: 1, src: 1, srcdoc: 1, width: 1
+	};
 
-		/**
-		* Stop the slideshow...
-		*/
-		$.prettyPhoto.stopSlideshow = function(){
-			$pp_pic_holder.find('.pp_pause').unbind('click').removeClass('pp_pause').addClass('pp_play').click(function(){
-				$.prettyPhoto.startSlideshow();
-				return false;
-			});
-			clearInterval(pp_slideshow);
-			pp_slideshow=undefined;
+	// Converts camelCased attributes to dasherized versions for given prefix:
+	//   parseAttrs({hello: 1, hellFrozeOver: 2}, 'hell') => {froze-over: 2}
+	function parseAttrs(obj, prefix) {
+		var attrs = {},
+			regex = new RegExp('^' + prefix + '([A-Z])(.*)');
+		for (var key in obj) {
+			var match = key.match(regex);
+			if (match) {
+				var dasherized = (match[1] + match[2].replace(/([A-Z])/g, '-$1')).toLowerCase();
+				attrs[dasherized] = obj[key];
+			}
 		}
+		return attrs;
+	}
 
+	/* document wide key handler */
+	var eventMap = { keyup: 'onKeyUp', resize: 'onResize' };
 
-		/**
-		* Closes prettyPhoto.
-		*/
-		$.prettyPhoto.close = function(){
-			if($pp_overlay.is(":animated")) return;
-			
-			$.prettyPhoto.stopSlideshow();
-			
-			$pp_pic_holder.stop().find('object,embed').css('visibility','hidden');
-			
-			$('div.pp_pic_holder,div.ppt,.pp_fade').fadeOut(settings.animation_speed,function(){ $(this).remove(); });
-			
-			$pp_overlay.fadeOut(settings.animation_speed, function(){
-				
-				if(settings.hideflash) $('object,embed,iframe[src*=youtube],iframe[src*=vimeo]').css('visibility','visible'); // Show the flash
-				
-				$(this).remove(); // No more need for the prettyPhoto markup
-				
-				$(window).unbind('scroll.prettyphoto');
-				
-				clearHashtag();
-				
-				settings.callback();
-				
-				doresize = true;
-				
-				pp_open = false;
-				
-				delete settings;
-			});
+	var globalEventHandler = function(event) {
+		$.each(Featherlight.opened().reverse(), function() {
+			if (!event.isDefaultPrevented()) {
+				if (false === this[eventMap[event.type]](event)) {
+					event.preventDefault(); event.stopPropagation(); return false;
+			  }
+			}
+		});
+	};
+
+	var toggleGlobalEvents = function(set) {
+			if(set !== Featherlight._globalHandlerInstalled) {
+				Featherlight._globalHandlerInstalled = set;
+				var events = $.map(eventMap, function(_, name) { return name+'.'+Featherlight.prototype.namespace; } ).join(' ');
+				$(window)[set ? 'on' : 'off'](events, globalEventHandler);
+			}
 		};
-	
-		/**
-		* Set the proper sizes on the containers and animate the content in.
-		*/
-		function _showContent(){
-			$('.pp_loaderIcon').hide();
 
-			// Calculate the opened top position of the pic holder
-			projectedTop = scroll_pos['scrollTop'] + ((windowHeight/2) - (pp_dimensions['containerHeight']/2));
-			if(projectedTop < 0) projectedTop = 0;
+	Featherlight.prototype = {
+		constructor: Featherlight,
+		/*** defaults ***/
+		/* extend featherlight with defaults and methods */
+		namespace:      'featherlight',        /* Name of the events and css class prefix */
+		targetAttr:     'data-featherlight',   /* Attribute of the triggered element that contains the selector to the lightbox content */
+		variant:        null,                  /* Class that will be added to change look of the lightbox */
+		resetCss:       false,                 /* Reset all css */
+		background:     null,                  /* Custom DOM for the background, wrapper and the closebutton */
+		openTrigger:    'click',               /* Event that triggers the lightbox */
+		closeTrigger:   'click',               /* Event that triggers the closing of the lightbox */
+		filter:         null,                  /* Selector to filter events. Think $(...).on('click', filter, eventHandler) */
+		root:           'body',                /* Where to append featherlights */
+		openSpeed:      250,                   /* Duration of opening animation */
+		closeSpeed:     250,                   /* Duration of closing animation */
+		closeOnClick:   'background',          /* Close lightbox on click ('background', 'anywhere' or false) */
+		closeOnEsc:     true,                  /* Close lightbox when pressing esc */
+		closeIcon:      '&#10005;',            /* Close icon */
+		loading:        '',                    /* Content to show while initial content is loading */
+		persist:        false,                 /* If set, the content will persist and will be shown again when opened again. 'shared' is a special value when binding multiple elements for them to share the same content */
+		otherClose:     null,                  /* Selector for alternate close buttons (e.g. "a.close") */
+		beforeOpen:     $.noop,                /* Called before open. can return false to prevent opening of lightbox. Gets event as parameter, this contains all data */
+		beforeContent:  $.noop,                /* Called when content is loaded. Gets event as parameter, this contains all data */
+		beforeClose:    $.noop,                /* Called before close. can return false to prevent opening of lightbox. Gets event as parameter, this contains all data */
+		afterOpen:      $.noop,                /* Called after open. Gets event as parameter, this contains all data */
+		afterContent:   $.noop,                /* Called after content is ready and has been set. Gets event as parameter, this contains all data */
+		afterClose:     $.noop,                /* Called after close. Gets event as parameter, this contains all data */
+		onKeyUp:        $.noop,                /* Called on key up for the frontmost featherlight */
+		onResize:       $.noop,                /* Called after new content and when a window is resized */
+		type:           null,                  /* Specify type of lightbox. If unset, it will check for the targetAttrs value. */
+		contentFilters: ['jquery', 'image', 'html', 'ajax', 'iframe', 'text'], /* List of content filters to use to determine the content */
 
-			$ppt.fadeTo(settings.animation_speed,1);
+		/*** methods ***/
+		/* setup iterates over a single instance of featherlight and prepares the background and binds the events */
+		setup: function(target, config){
+			/* all arguments are optional */
+			if (typeof target === 'object' && target instanceof $ === false && !config) {
+				config = target;
+				target = undefined;
+			}
 
-			// Resize the content holder
-			$pp_pic_holder.find('.pp_content')
-				.animate({
-					height:pp_dimensions['contentHeight'],
-					width:pp_dimensions['contentWidth']
-				},settings.animation_speed);
-			
-			// Resize picture the holder
-			$pp_pic_holder.animate({
-				'top': projectedTop,
-				'left': ((windowWidth/2) - (pp_dimensions['containerWidth']/2) < 0) ? 0 : (windowWidth/2) - (pp_dimensions['containerWidth']/2),
-				width:pp_dimensions['containerWidth']
-			},settings.animation_speed,function(){
-				$pp_pic_holder.find('.pp_hoverContainer,#fullResImage').height(pp_dimensions['height']).width(pp_dimensions['width']);
+			var self = $.extend(this, config, {target: target}),
+				css = !self.resetCss ? self.namespace : self.namespace+'-reset', /* by adding -reset to the classname, we reset all the default css */
+				$background = $(self.background || [
+					'<div class="'+css+'-loading '+css+'">',
+						'<div class="'+css+'-content">',
+							'<button class="'+css+'-close-icon '+ self.namespace + '-close" aria-label="Close">',
+								self.closeIcon,
+							'</button>',
+							'<div class="'+self.namespace+'-inner">' + self.loading + '</div>',
+						'</div>',
+					'</div>'].join('')),
+				closeButtonSelector = '.'+self.namespace+'-close' + (self.otherClose ? ',' + self.otherClose : '');
 
-				$pp_pic_holder.find('.pp_fade').fadeIn(settings.animation_speed); // Fade the new content
+			self.$instance = $background.clone().addClass(self.variant); /* clone DOM for the background, wrapper and the close button */
 
-				// Show the nav
-				if(isSet && _getFileType(pp_images[set_position])=="image") { $pp_pic_holder.find('.pp_hoverContainer').show(); }else{ $pp_pic_holder.find('.pp_hoverContainer').hide(); }
-			
-				if(settings.allow_expand) {
-					if(pp_dimensions['resized']){ // Fade the resizing link if the image is resized
-						$('a.pp_expand,a.pp_contract').show();
-					}else{
-						$('a.pp_expand').hide();
+			/* close when click on background/anywhere/null or closebox */
+			self.$instance.on(self.closeTrigger+'.'+self.namespace, function(event) {
+				var $target = $(event.target);
+				if( ('background' === self.closeOnClick  && $target.is('.'+self.namespace))
+					|| 'anywhere' === self.closeOnClick
+					|| $target.closest(closeButtonSelector).length ){
+					self.close(event);
+					event.preventDefault();
+				}
+			});
+
+			return this;
+		},
+
+		/* this method prepares the content and converts it into a jQuery object or a promise */
+		getContent: function(){
+			if(this.persist !== false && this.$content) {
+				return this.$content;
+			}
+			var self = this,
+				filters = this.constructor.contentFilters,
+				readTargetAttr = function(name){ return self.$currentTarget && self.$currentTarget.attr(name); },
+				targetValue = readTargetAttr(self.targetAttr),
+				data = self.target || targetValue || '';
+
+			/* Find which filter applies */
+			var filter = filters[self.type]; /* check explicit type like {type: 'image'} */
+
+			/* check explicit type like data-featherlight="image" */
+			if(!filter && data in filters) {
+				filter = filters[data];
+				data = self.target && targetValue;
+			}
+			data = data || readTargetAttr('href') || '';
+
+			/* check explicity type & content like {image: 'photo.jpg'} */
+			if(!filter) {
+				for(var filterName in filters) {
+					if(self[filterName]) {
+						filter = filters[filterName];
+						data = self[filterName];
 					}
 				}
-				
-				if(settings.autoplay_slideshow && !pp_slideshow && !pp_open) $.prettyPhoto.startSlideshow();
-				
-				settings.changepicturecallback(); // Callback!
-				
-				pp_open = true;
-			});
-			
-			_insert_gallery();
-			pp_settings.ajaxcallback();
-		};
-		
-		/**
-		* Hide the content...DUH!
-		*/
-		function _hideContent(callback){
-			// Fade out the current picture
-			$pp_pic_holder.find('#pp_full_res object,#pp_full_res embed').css('visibility','hidden');
-			$pp_pic_holder.find('.pp_fade').fadeOut(settings.animation_speed,function(){
-				$('.pp_loaderIcon').show();
-				
-				callback();
-			});
-		};
-	
-		/**
-		* Check the item position in the gallery array, hide or show the navigation links
-		* @param setCount {integer} The total number of items in the set
-		*/
-		function _checkPosition(setCount){
-			(setCount > 1) ? $('.pp_nav').show() : $('.pp_nav').hide(); // Hide the bottom nav if it's not a set.
-		};
-	
-		/**
-		* Resize the item dimensions if it's bigger than the viewport
-		* @param width {integer} Width of the item to be opened
-		* @param height {integer} Height of the item to be opened
-		* @return An array containin the "fitted" dimensions
-		*/
-		function _fitToViewport(width,height){
-			resized = false;
+			}
 
-			_getDimensions(width,height);
-			
-			// Define them in case there's no resize needed
-			imageWidth = width, imageHeight = height;
-
-			if( ((pp_containerWidth > windowWidth) || (pp_containerHeight > windowHeight)) && doresize && settings.allow_resize && !percentBased) {
-				resized = true, fitting = false;
-			
-				while (!fitting){
-					if((pp_containerWidth > windowWidth)){
-						imageWidth = (windowWidth - 200);
-						imageHeight = (height/width) * imageWidth;
-					}else if((pp_containerHeight > windowHeight)){
-						imageHeight = (windowHeight - 200);
-						imageWidth = (width/height) * imageHeight;
-					}else{
-						fitting = true;
-					};
-
-					pp_containerHeight = imageHeight, pp_containerWidth = imageWidth;
-				};
-			
-
-				
-				if((pp_containerWidth > windowWidth) || (pp_containerHeight > windowHeight)){
-					_fitToViewport(pp_containerWidth,pp_containerHeight)
-				};
-				
-				_getDimensions(imageWidth,imageHeight);
-			};
-			
-			return {
-				width:Math.floor(imageWidth),
-				height:Math.floor(imageHeight),
-				containerHeight:Math.floor(pp_containerHeight),
-				containerWidth:Math.floor(pp_containerWidth) + (settings.horizontal_padding * 2),
-				contentHeight:Math.floor(pp_contentHeight),
-				contentWidth:Math.floor(pp_contentWidth),
-				resized:resized
-			};
-		};
-		
-		/**
-		* Get the containers dimensions according to the item size
-		* @param width {integer} Width of the item to be opened
-		* @param height {integer} Height of the item to be opened
-		*/
-		function _getDimensions(width,height){
-			width = parseFloat(width);
-			height = parseFloat(height);
-			
-			// Get the details height, to do so, I need to clone it since it's invisible
-			$pp_details = $pp_pic_holder.find('.pp_details');
-			$pp_details.width(width);
-			detailsHeight = parseFloat($pp_details.css('marginTop')) + parseFloat($pp_details.css('marginBottom'));
-			
-			$pp_details = $pp_details.clone().addClass(settings.theme).width(width).appendTo($('body')).css({
-				'position':'absolute',
-				'top':-10000
-			});
-			detailsHeight += $pp_details.height();
-			detailsHeight = (detailsHeight <= 34) ? 36 : detailsHeight; // Min-height for the details
-			$pp_details.remove();
-			
-			// Get the titles height, to do so, I need to clone it since it's invisible
-			$pp_title = $pp_pic_holder.find('.ppt');
-			$pp_title.width(width);
-			titleHeight = parseFloat($pp_title.css('marginTop')) + parseFloat($pp_title.css('marginBottom'));
-			$pp_title = $pp_title.clone().appendTo($('body')).css({
-				'position':'absolute',
-				'top':-10000
-			});
-			titleHeight += $pp_title.height();
-			$pp_title.remove();
-			
-			// Get the container size, to resize the holder to the right dimensions
-			pp_contentHeight = height + detailsHeight;
-			pp_contentWidth = width;
-			pp_containerHeight = pp_contentHeight + titleHeight + $pp_pic_holder.find('.pp_top').height() + $pp_pic_holder.find('.pp_bottom').height();
-			pp_containerWidth = width;
-		}
-	
-		function _getFileType(itemSrc){
-			if (itemSrc.match(/youtube\.com\/watch/i) || itemSrc.match(/youtu\.be/i)) {
-				return 'youtube';
-			}else if (itemSrc.match(/vimeo\.com/i)) {
-				return 'vimeo';
-			}else if(itemSrc.match(/\b.mov\b/i)){ 
-				return 'quicktime';
-			}else if(itemSrc.match(/\b.swf\b/i)){
-				return 'flash';
-			}else if(itemSrc.match(/\biframe=true\b/i)){
-				return 'iframe';
-			}else if(itemSrc.match(/\bajax=true\b/i)){
-				return 'ajax';
-			}else if(itemSrc.match(/\bcustom=true\b/i)){
-				return 'custom';
-			}else if(itemSrc.substr(0,1) == '#'){
-				return 'inline';
-			}else{
-				return 'image';
-			};
-		};
-	
-		function _center_overlay(){
-			if(doresize && typeof $pp_pic_holder != 'undefined') {
-				scroll_pos = _get_scroll();
-				contentHeight = $pp_pic_holder.height(), contentwidth = $pp_pic_holder.width();
-
-				projectedTop = (windowHeight/2) + scroll_pos['scrollTop'] - (contentHeight/2);
-				if(projectedTop < 0) projectedTop = 0;
-				
-				if(contentHeight > windowHeight)
-					return;
-
-				$pp_pic_holder.css({
-					'top': projectedTop,
-					'left': (windowWidth/2) + scroll_pos['scrollLeft'] - (contentwidth/2)
+			/* otherwise it's implicit, run checks */
+			if(!filter) {
+				var target = data;
+				data = null;
+				$.each(self.contentFilters, function() {
+					filter = filters[this];
+					if(filter.test)  {
+						data = filter.test(target);
+					}
+					if(!data && filter.regex && target.match && target.match(filter.regex)) {
+						data = target;
+					}
+					return !data;
 				});
-			};
-		};
-	
-		function _get_scroll(){
-			if (self.pageYOffset) {
-				return {scrollTop:self.pageYOffset,scrollLeft:self.pageXOffset};
-			} else if (document.documentElement && document.documentElement.scrollTop) { // Explorer 6 Strict
-				return {scrollTop:document.documentElement.scrollTop,scrollLeft:document.documentElement.scrollLeft};
-			} else if (document.body) {// all other Explorers
-				return {scrollTop:document.body.scrollTop,scrollLeft:document.body.scrollLeft};
-			};
-		};
-	
-		function _resize_overlay() {
-			windowHeight = $(window).height(), windowWidth = $(window).width();
-			
-			if(typeof $pp_overlay != "undefined") $pp_overlay.height($(document).height()).width(windowWidth);
-		};
-	
-		function _insert_gallery(){
-			if(isSet && settings.overlay_gallery && _getFileType(pp_images[set_position])=="image") {
-				itemWidth = 52+5; // 52 beign the thumb width, 5 being the right margin.
-				navWidth = (settings.theme == "facebook" || settings.theme == "pp_default") ? 50 : 30; // Define the arrow width depending on the theme
-				
-				itemsPerPage = Math.floor((pp_dimensions['containerWidth'] - 100 - navWidth) / itemWidth);
-				itemsPerPage = (itemsPerPage < pp_images.length) ? itemsPerPage : pp_images.length;
-				totalPage = Math.ceil(pp_images.length / itemsPerPage) - 1;
+				if(!data) {
+					if('console' in window){ window.console.error('Featherlight: no content filter found ' + (target ? ' for "' + target + '"' : ' (no target specified)')); }
+					return false;
+				}
+			}
+			/* Process it */
+			return filter.process.call(self, data);
+		},
 
-				// Hide the nav in the case there's no need for links
-				if(totalPage == 0){
-					navWidth = 0; // No nav means no width!
-					$pp_gallery.find('.pp_arrow_next,.pp_arrow_previous').hide();
-				}else{
-					$pp_gallery.find('.pp_arrow_next,.pp_arrow_previous').show();
-				};
+		/* sets the content of $instance to $content */
+		setContent: function($content){
+			var self = this;
+			/* we need a special class for the iframe */
+			if($content.is('iframe')) {
+				self.$instance.addClass(self.namespace+'-iframe');
+			}
 
-				galleryWidth = itemsPerPage * itemWidth;
-				fullGalleryWidth = pp_images.length * itemWidth;
-				
-				// Set the proper width to the gallery items
-				$pp_gallery
-					.css('margin-left',-((galleryWidth/2) + (navWidth/2)))
-					.find('div:first').width(galleryWidth+5)
-					.find('ul').width(fullGalleryWidth)
-					.find('li.selected').removeClass('selected');
-				
-				goToPage = (Math.floor(set_position/itemsPerPage) < totalPage) ? Math.floor(set_position/itemsPerPage) : totalPage;
+			self.$instance.removeClass(self.namespace+'-loading');
 
-				$.prettyPhoto.changeGalleryPage(goToPage);
-				
-				$pp_gallery_li.filter(':eq('+set_position+')').addClass('selected');
-			}else{
-				$pp_pic_holder.find('.pp_content').unbind('mouseenter mouseleave');
-				// $pp_gallery.hide();
+			/* replace content by appending to existing one before it is removed
+			   this insures that featherlight-inner remain at the same relative
+				 position to any other items added to featherlight-content */
+			self.$instance.find('.'+self.namespace+'-inner')
+				.not($content)                /* excluded new content, important if persisted */
+				.slice(1).remove().end()      /* In the unexpected event where there are many inner elements, remove all but the first one */
+				.replaceWith($.contains(self.$instance[0], $content[0]) ? '' : $content);
+
+			self.$content = $content.addClass(self.namespace+'-inner');
+
+			return self;
+		},
+
+		/* opens the lightbox. "this" contains $instance with the lightbox, and with the config.
+			Returns a promise that is resolved after is successfully opened. */
+		open: function(event){
+			var self = this;
+			self.$instance.hide().appendTo(self.root);
+			if((!event || !event.isDefaultPrevented())
+				&& self.beforeOpen(event) !== false) {
+
+				if(event){
+					event.preventDefault();
+				}
+				var $content = self.getContent();
+
+				if($content) {
+					opened.push(self);
+
+					toggleGlobalEvents(true);
+
+					self.$instance.fadeIn(self.openSpeed);
+					self.beforeContent(event);
+
+					/* Set content and show */
+					return $.when($content)
+						.always(function($content){
+							self.setContent($content);
+							self.afterContent(event);
+						})
+						.then(self.$instance.promise())
+						/* Call afterOpen after fadeIn is done */
+						.done(function(){ self.afterOpen(event); });
+				}
+			}
+			self.$instance.detach();
+			return $.Deferred().reject().promise();
+		},
+
+		/* closes the lightbox. "this" contains $instance with the lightbox, and with the config
+			returns a promise, resolved after the lightbox is successfully closed. */
+		close: function(event){
+			var self = this,
+				deferred = $.Deferred();
+
+			if(self.beforeClose(event) === false) {
+				deferred.reject();
+			} else {
+
+				if (0 === pruneOpened(self).length) {
+					toggleGlobalEvents(false);
+				}
+
+				self.$instance.fadeOut(self.closeSpeed,function(){
+					self.$instance.detach();
+					self.afterClose(event);
+					deferred.resolve();
+				});
+			}
+			return deferred.promise();
+		},
+
+		/* resizes the content so it fits in visible area and keeps the same aspect ratio.
+				Does nothing if either the width or the height is not specified.
+				Called automatically on window resize.
+				Override if you want different behavior. */
+		resize: function(w, h) {
+			if (w && h) {
+				/* Reset apparent image size first so container grows */
+				this.$content.css('width', '').css('height', '');
+				/* Calculate the worst ratio so that dimensions fit */
+				 /* Note: -1 to avoid rounding errors */
+				var ratio = Math.max(
+					w  / (parseInt(this.$content.parent().css('width'),10)-1),
+					h / (parseInt(this.$content.parent().css('height'),10)-1));
+				/* Resize content */
+				if (ratio > 1) {
+					ratio = h / Math.floor(h / ratio); /* Round ratio down so height calc works */
+					this.$content.css('width', '' + w / ratio + 'px').css('height', '' + h / ratio + 'px');
+				}
+			}
+		},
+
+		/* Utility function to chain callbacks
+		   [Warning: guru-level]
+		   Used be extensions that want to let users specify callbacks but
+		   also need themselves to use the callbacks.
+		   The argument 'chain' has callback names as keys and function(super, event)
+		   as values. That function is meant to call `super` at some point.
+		*/
+		chainCallbacks: function(chain) {
+			for (var name in chain) {
+				this[name] = $.proxy(chain[name], this, $.proxy(this[name], this));
 			}
 		}
-	
-		function _build_overlay(caller){
-			// Inject Social Tool markup into General markup
-			if(settings.social_tools)
-				facebook_like_link = settings.social_tools.replace('{location_href}', encodeURIComponent(location.href)); 
+	};
 
-			settings.markup = settings.markup.replace('{pp_social}',''); 
-			
-			$('body').append(settings.markup); // Inject the markup
-			
-			$pp_pic_holder = $('.pp_pic_holder') , $ppt = $('.ppt'), $pp_overlay = $('div.pp_overlay'); // Set my global selectors
-			
-			// Inject the inline gallery!
-			if(isSet && settings.overlay_gallery) {
-				currentGalleryPage = 0;
-				toInject = "";
-				for (var i=0; i < pp_images.length; i++) {
-					if(!pp_images[i].match(/\b(jpg|jpeg|png|gif)\b/gi)){
-						classname = 'default';
-						img_src = '';
-					}else{
-						classname = '';
-						img_src = pp_images[i];
+	$.extend(Featherlight, {
+		id: 0,                                    /* Used to id single featherlight instances */
+		autoBind:       '[data-featherlight]',    /* Will automatically bind elements matching this selector. Clear or set before onReady */
+		defaults:       Featherlight.prototype,   /* You can access and override all defaults using $.featherlight.defaults, which is just a synonym for $.featherlight.prototype */
+		/* Contains the logic to determine content */
+		contentFilters: {
+			jquery: {
+				regex: /^[#.]\w/,         /* Anything that starts with a class name or identifiers */
+				test: function(elem)    { return elem instanceof $ && elem; },
+				process: function(elem) { return this.persist !== false ? $(elem) : $(elem).clone(true); }
+			},
+			image: {
+				regex: /\.(png|jpg|jpeg|gif|tiff|bmp|svg)(\?\S*)?$/i,
+				process: function(url)  {
+					var self = this,
+						deferred = $.Deferred(),
+						img = new Image(),
+						$img = $('<img src="'+url+'" alt="" class="'+self.namespace+'-image" />');
+					img.onload  = function() {
+						/* Store naturalWidth & height for IE8 */
+						$img.naturalWidth = img.width; $img.naturalHeight = img.height;
+						deferred.resolve( $img );
+					};
+					img.onerror = function() { deferred.reject($img); };
+					img.src = url;
+					return deferred.promise();
+				}
+			},
+			html: {
+				regex: /^\s*<[\w!][^<]*>/, /* Anything that starts with some kind of valid tag */
+				process: function(html) { return $(html); }
+			},
+			ajax: {
+				regex: /./,            /* At this point, any content is assumed to be an URL */
+				process: function(url)  {
+					var self = this,
+						deferred = $.Deferred();
+					/* we are using load so one can specify a target with: url.html #targetelement */
+					var $container = $('<div></div>').load(url, function(response, status){
+						if ( status !== "error" ) {
+							deferred.resolve($container.contents());
+						}
+						deferred.fail();
+					});
+					return deferred.promise();
+				}
+			},
+			iframe: {
+				process: function(url) {
+					var deferred = new $.Deferred();
+					var $content = $('<iframe/>');
+					var css = parseAttrs(this, 'iframe');
+					var attrs = slice(css, iFrameAttributeSet);
+					$content.hide()
+						.attr('src', url)
+						.attr(attrs)
+						.css(css)
+						.on('load', function() { deferred.resolve($content.show()); })
+						// We can't move an <iframe> and avoid reloading it,
+						// so let's put it in place ourselves right now:
+						.appendTo(this.$instance.find('.' + this.namespace + '-content'));
+					return deferred.promise();
+				}
+			},
+			text: {
+				process: function(text) { return $('<div>', {text: text}); }
+			}
+		},
+
+		functionAttributes: ['beforeOpen', 'afterOpen', 'beforeContent', 'afterContent', 'beforeClose', 'afterClose'],
+
+		/*** class methods ***/
+		/* read element's attributes starting with data-featherlight- */
+		readElementConfig: function(element, namespace) {
+			var Klass = this,
+				regexp = new RegExp('^data-' + namespace + '-(.*)'),
+				config = {};
+			if (element && element.attributes) {
+				$.each(element.attributes, function(){
+					var match = this.name.match(regexp);
+					if (match) {
+						var val = this.value,
+							name = $.camelCase(match[1]);
+						if ($.inArray(name, Klass.functionAttributes) >= 0) {  /* jshint -W054 */
+							val = new Function(val);                           /* jshint +W054 */
+						} else {
+							try { val = JSON.parse(val); }
+							catch(e) {}
+						}
+						config[name] = val;
 					}
-					toInject += "<li class='"+classname+"'><a href='#'><img src='" + img_src + "' width='50' alt='' /></a></li>";
-				};
-				
-				toInject = settings.gallery_markup.replace(/{gallery}/g,toInject);
-				
-				$pp_pic_holder.find('#pp_full_res').after(toInject);
-				
-				$pp_gallery = $('.pp_pic_holder .pp_gallery'), $pp_gallery_li = $pp_gallery.find('li'); // Set the gallery selectors
-				
-				$pp_gallery.find('.pp_arrow_next').click(function(){
-					$.prettyPhoto.changeGalleryPage('next');
-					$.prettyPhoto.stopSlideshow();
-					return false;
 				});
-				
-				$pp_gallery.find('.pp_arrow_previous').click(function(){
-					$.prettyPhoto.changeGalleryPage('previous');
-					$.prettyPhoto.stopSlideshow();
-					return false;
+			}
+			return config;
+		},
+
+		/* Used to create a Featherlight extension
+		   [Warning: guru-level]
+		   Creates the extension's prototype that in turn
+		   inherits Featherlight's prototype.
+		   Could be used to extend an extension too...
+		   This is pretty high level wizardy, it comes pretty much straight
+		   from CoffeeScript and won't teach you anything about Featherlight
+		   as it's not really specific to this library.
+		   My suggestion: move along and keep your sanity.
+		*/
+		extend: function(child, defaults) {
+			/* Setup class hierarchy, adapted from CoffeeScript */
+			var Ctor = function(){ this.constructor = child; };
+			Ctor.prototype = this.prototype;
+			child.prototype = new Ctor();
+			child.__super__ = this.prototype;
+			/* Copy class methods & attributes */
+			$.extend(child, this, defaults);
+			child.defaults = child.prototype;
+			return child;
+		},
+
+		attach: function($source, $content, config) {
+			var Klass = this;
+			if (typeof $content === 'object' && $content instanceof $ === false && !config) {
+				config = $content;
+				$content = undefined;
+			}
+			/* make a copy */
+			config = $.extend({}, config);
+
+			/* Only for openTrigger and namespace... */
+			var namespace = config.namespace || Klass.defaults.namespace,
+				tempConfig = $.extend({}, Klass.defaults, Klass.readElementConfig($source[0], namespace), config),
+				sharedPersist;
+			var handler = function(event) {
+				/* ... since we might as well compute the config on the actual target */
+				var elemConfig = $.extend(
+					{$source: $source, $currentTarget: $(this)},
+					Klass.readElementConfig($source[0], tempConfig.namespace),
+					Klass.readElementConfig(this, tempConfig.namespace),
+					config);
+				var fl = sharedPersist || $(this).data('featherlight-persisted') || new Klass($content, elemConfig);
+				if(fl.persist === 'shared') {
+					sharedPersist = fl;
+				} else if(fl.persist !== false) {
+					$(this).data('featherlight-persisted', fl);
+				}
+				if (elemConfig.$currentTarget.blur) {
+					elemConfig.$currentTarget.blur(); // Otherwise 'enter' key might trigger the dialog again
+				}
+				fl.open(event);
+			};
+
+			$source.on(tempConfig.openTrigger+'.'+tempConfig.namespace, tempConfig.filter, handler);
+
+			return handler;
+		},
+
+		current: function() {
+			var all = this.opened();
+			return all[all.length - 1] || null;
+		},
+
+		opened: function() {
+			var klass = this;
+			pruneOpened();
+			return $.grep(opened, function(fl) { return fl instanceof klass; } );
+		},
+
+		close: function(event) {
+			var cur = this.current();
+			if(cur) { return cur.close(event); }
+		},
+
+		/* Does the auto binding on startup.
+		   Meant only to be used by Featherlight and its extensions
+		*/
+		_onReady: function() {
+			var Klass = this;
+			if(Klass.autoBind){
+				/* Bind existing elements */
+				$(Klass.autoBind).each(function(){
+					Klass.attach($(this));
 				});
-				
-				$pp_pic_holder.find('.pp_content').hover(
-					function(){
-						$pp_pic_holder.find('.pp_gallery:not(.disabled)').fadeIn();
-					},
-					function(){
-						$pp_pic_holder.find('.pp_gallery:not(.disabled)').fadeOut();
+				/* If a click propagates to the document level, then we have an item that was added later on */
+				$(document).on('click', Klass.autoBind, function(evt) {
+					if (evt.isDefaultPrevented()) {
+						return;
+					}
+					/* Bind featherlight */
+					var handler = Klass.attach($(evt.currentTarget));
+					/* Dispatch event directly */
+					handler(evt);
+				});
+			}
+		},
+
+		/* Featherlight uses the onKeyUp callback to intercept the escape key.
+		   Private to Featherlight.
+		*/
+		_callbackChain: {
+			onKeyUp: function(_super, event){
+				if(27 === event.keyCode) {
+					if (this.closeOnEsc) {
+						$.featherlight.close(event);
+					}
+					return false;
+				} else {
+					return _super(event);
+				}
+			},
+
+			beforeOpen: function(_super, event) {
+				// Remember focus:
+				this._previouslyActive = document.activeElement;
+
+				// Disable tabbing:
+				// See http://stackoverflow.com/questions/1599660/which-html-elements-can-receive-focus
+				this._$previouslyTabbable = $("a, input, select, textarea, iframe, button, iframe, [contentEditable=true]")
+					.not('[tabindex]')
+					.not(this.$instance.find('button'));
+
+				this._$previouslyWithTabIndex = $('[tabindex]').not('[tabindex="-1"]');
+				this._previousWithTabIndices = this._$previouslyWithTabIndex.map(function(_i, elem) {
+					return $(elem).attr('tabindex');
+				});
+
+				this._$previouslyWithTabIndex.add(this._$previouslyTabbable).attr('tabindex', -1);
+
+				if (document.activeElement.blur) {
+					document.activeElement.blur();
+				}
+				return _super(event);
+			},
+
+			afterClose: function(_super, event) {
+				var r = _super(event);
+				var self = this;
+				this._$previouslyTabbable.removeAttr('tabindex');
+				this._$previouslyWithTabIndex.each(function(i, elem) {
+					$(elem).attr('tabindex', self._previousWithTabIndices[i]);
+				});
+				this._previouslyActive.focus();
+				return r;
+			},
+
+			onResize: function(_super, event){
+				this.resize(this.$content.naturalWidth, this.$content.naturalHeight);
+				return _super(event);
+			},
+
+			afterContent: function(_super, event){
+				var r = _super(event);
+				this.$instance.find('[autofocus]:not([disabled])').focus();
+				this.onResize(event);
+				return r;
+			}
+		}
+	});
+
+	$.featherlight = Featherlight;
+
+	/* bind jQuery elements to trigger featherlight */
+	$.fn.featherlight = function($content, config) {
+		Featherlight.attach(this, $content, config);
+		return this;
+	};
+
+	/* bind featherlight on ready if config autoBind is set */
+	$(document).ready(function(){ Featherlight._onReady(); });
+}(jQuery));
+;/**
+ * Featherlight Gallery – an extension for the ultra slim jQuery lightbox
+ * Version 1.7.2 - http://noelboss.github.io/featherlight/
+ *
+ * Copyright 2017, Noël Raoul Bossart (http://www.noelboss.com)
+ * MIT Licensed.
+**/
+(function($) {
+	"use strict";
+
+	var warn = function(m) {
+		if(window.console && window.console.warn) {
+			window.console.warn('FeatherlightGallery: ' + m);
+		}
+	};
+
+	if('undefined' === typeof $) {
+		return warn('Too much lightness, Featherlight needs jQuery.');
+	} else if(!$.featherlight) {
+		return warn('Load the featherlight plugin before the gallery plugin');
+	}
+
+	var isTouchAware = ('ontouchstart' in window) || window.DocumentTouch && document instanceof DocumentTouch,
+		jQueryConstructor = $.event && $.event.special.swipeleft && $,
+		hammerConstructor = window.Hammer && function($el){
+			var mc = new window.Hammer.Manager($el[0]);
+			mc.add(new window.Hammer.Swipe());
+			return mc;
+		},
+		swipeAwareConstructor = isTouchAware && (jQueryConstructor || hammerConstructor);
+	if(isTouchAware && !swipeAwareConstructor) {
+		warn('No compatible swipe library detected; one must be included before featherlightGallery for swipe motions to navigate the galleries.');
+	}
+
+	var callbackChain = {
+			afterClose: function(_super, event) {
+					var self = this;
+					self.$instance.off('next.'+self.namespace+' previous.'+self.namespace);
+					if (self._swiper) {
+						self._swiper
+							.off('swipeleft', self._swipeleft) /* See http://stackoverflow.com/questions/17367198/hammer-js-cant-remove-event-listener */
+							.off('swiperight', self._swiperight);
+						self._swiper = null;
+					}
+					return _super(event);
+			},
+			beforeOpen: function(_super, event){
+					var self = this;
+
+					self.$instance.on('next.'+self.namespace+' previous.'+self.namespace, function(event){
+						var offset = event.type === 'next' ? +1 : -1;
+						self.navigateTo(self.currentNavigation() + offset);
 					});
 
-				itemWidth = 52+5; // 52 beign the thumb width, 5 being the right margin.
-				$pp_gallery_li.each(function(i){
-					$(this)
-						.find('a')
-						.click(function(){
-							$.prettyPhoto.changePage(i);
-							$.prettyPhoto.stopSlideshow();
-							return false;
-						});
-				});
-			};
-			
-			
-			// Inject the play/pause if it's a slideshow
-			if(settings.slideshow){
-				$pp_pic_holder.find('.pp_nav').prepend('<a href="#" class="pp_play">Play</a>')
-				$pp_pic_holder.find('.pp_nav .pp_play').click(function(){
-					$.prettyPhoto.startSlideshow();
+					if (swipeAwareConstructor) {
+						self._swiper = swipeAwareConstructor(self.$instance)
+							.on('swipeleft', self._swipeleft = function()  { self.$instance.trigger('next'); })
+							.on('swiperight', self._swiperight = function() { self.$instance.trigger('previous'); });
+
+						self.$instance
+							.addClass(this.namespace+'-swipe-aware', swipeAwareConstructor);
+					}
+
+					self.$instance.find('.'+self.namespace+'-content')
+						.append(self.createNavigation('previous'))
+						.append(self.createNavigation('next'));
+
+					return _super(event);
+			},
+			beforeContent: function(_super, event) {
+				var index = this.currentNavigation();
+				var len = this.slides().length;
+				this.$instance
+					.toggleClass(this.namespace+'-first-slide', index === 0)
+					.toggleClass(this.namespace+'-last-slide', index === len - 1);
+				return _super(event);
+			},
+			onKeyUp: function(_super, event){
+				var dir = {
+					37: 'previous', /* Left arrow */
+					39: 'next'			/* Rigth arrow */
+				}[event.keyCode];
+				if(dir) {
+					this.$instance.trigger(dir);
 					return false;
-				});
+				} else {
+					return _super(event);
+				}
 			}
-			
-			$pp_pic_holder.attr('class','pp_pic_holder ' + settings.theme); // Set the proper theme
-			
-			$pp_overlay
-				.css({
-					'opacity':0,
-					'height':$(document).height(),
-					'width':$(window).width()
-					})
-				.bind('click',function(){
-					if(!settings.modal) $.prettyPhoto.close();
-				});
-
-			$('a.pp_close').bind('click',function(){ $.prettyPhoto.close(); return false; });
-
-
-			if(settings.allow_expand) {
-				$('a.pp_expand').bind('click',function(e){
-					// Expand the image
-					if($(this).hasClass('pp_expand')){
-						$(this).removeClass('pp_expand').addClass('pp_contract');
-						doresize = false;
-					}else{
-						$(this).removeClass('pp_contract').addClass('pp_expand');
-						doresize = true;
-					};
-				
-					_hideContent(function(){ $.prettyPhoto.open(); });
-			
-					return false;
-				});
-			}
-		
-			$pp_pic_holder.find('.pp_previous, .pp_nav .pp_arrow_previous').bind('click',function(){
-				$.prettyPhoto.changePage('previous');
-				$.prettyPhoto.stopSlideshow();
-				return false;
-			});
-		
-			$pp_pic_holder.find('.pp_next, .pp_nav .pp_arrow_next').bind('click',function(){
-				$.prettyPhoto.changePage('next');
-				$.prettyPhoto.stopSlideshow();
-				return false;
-			});
-			
-			_center_overlay(); // Center it
 		};
 
-		if(!pp_alreadyInitialized && getHashtag()){
-			pp_alreadyInitialized = true;
-			
-			// Grab the rel index to trigger the click on the correct element
-			hashIndex = getHashtag();
-			hashRel = hashIndex;
-			hashIndex = hashIndex.substring(hashIndex.indexOf('/')+1,hashIndex.length-1);
-			hashRel = hashRel.substring(0,hashRel.indexOf('/'));
-
-			// Little timeout to make sure all the prettyPhoto initialize scripts has been run.
-			// Useful in the event the page contain several init scripts.
-			setTimeout(function(){ $("a["+pp_settings.hook+"^='"+hashRel+"']:eq("+hashIndex+")").trigger('click'); },50);
+	function FeatherlightGallery($source, config) {
+		if(this instanceof FeatherlightGallery) {  /* called with new */
+			$.featherlight.apply(this, arguments);
+			this.chainCallbacks(callbackChain);
+		} else {
+			var flg = new FeatherlightGallery($.extend({$source: $source, $currentTarget: $source.first()}, config));
+			flg.open();
+			return flg;
 		}
-		
-		return this.unbind('click.prettyphoto').bind('click.prettyphoto',$.prettyPhoto.initialize); // Return the jQuery object for chaining. The unbind method is used to avoid click conflict when the plugin is called more than once
-	};
-	
-	function getHashtag(){
-		var url = location.href;
-		hashtag = (url.indexOf('#prettyPhoto') !== -1) ? decodeURI(url.substring(url.indexOf('#prettyPhoto')+1,url.length)) : false;
-		if(hashtag){  hashtag = hashtag.replace(/<|>/g,''); }
-		return hashtag;
-	};
-	
-	function setHashtag(){
-		if(typeof theRel == 'undefined') return; // theRel is set on normal calls, it's impossible to deeplink using the API
-		location.hash = theRel + '/'+rel_index+'/';
-	};
-	
-	function clearHashtag(){
-		if ( location.href.indexOf('#prettyPhoto') !== -1 ) location.hash = "prettyPhoto";
 	}
-	
-	function getParam(name,url){
-	  name = name.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
-	  var regexS = "[\\?&]"+name+"=([^&#]*)";
-	  var regex = new RegExp( regexS );
-	  var results = regex.exec( url );
-	  return ( results == null ) ? "" : results[1];
-	}
-	
-})(jQuery);
 
-var pp_alreadyInitialized = false; // Used for the deep linking to make sure not to call the same function several times.
+	$.featherlight.extend(FeatherlightGallery, {
+		autoBind: '[data-featherlight-gallery]'
+	});
+
+	$.extend(FeatherlightGallery.prototype, {
+		/** Additional settings for Gallery **/
+		previousIcon: '&#9664;',     /* Code that is used as previous icon */
+		nextIcon: '&#9654;',         /* Code that is used as next icon */
+		galleryFadeIn: 100,          /* fadeIn speed when image is loaded */
+		galleryFadeOut: 300,         /* fadeOut speed before image is loaded */
+
+		slides: function() {
+			if (this.filter) {
+				return this.$source.find(this.filter);
+			}
+			return this.$source;
+		},
+
+		images: function() {
+			warn('images is deprecated, please use slides instead');
+			return this.slides();
+		},
+
+		currentNavigation: function() {
+			return this.slides().index(this.$currentTarget);
+		},
+
+		navigateTo: function(index) {
+			var self = this,
+				source = self.slides(),
+				len = source.length,
+				$inner = self.$instance.find('.' + self.namespace + '-inner');
+			index = ((index % len) + len) % len; /* pin index to [0, len[ */
+
+			self.$currentTarget = source.eq(index);
+			self.beforeContent();
+			return $.when(
+				self.getContent(),
+				$inner.fadeTo(self.galleryFadeOut,0.2)
+			).always(function($newContent) {
+					self.setContent($newContent);
+					self.afterContent();
+					$newContent.fadeTo(self.galleryFadeIn,1);
+			});
+		},
+
+		createNavigation: function(target) {
+			var self = this;
+			return $('<span title="'+target+'" class="'+this.namespace+'-'+target+'"><span>'+this[target+'Icon']+'</span></span>').click(function(){
+				$(this).trigger(target+'.'+self.namespace);
+			});
+		}
+	});
+
+	$.featherlightGallery = FeatherlightGallery;
+
+	/* extend jQuery with selector featherlight method $(elm).featherlight(config, elm); */
+	$.fn.featherlightGallery = function(config) {
+		FeatherlightGallery.attach(this, config);
+		return this;
+	};
+
+	/* bind featherlight on ready if config autoBind is set */
+	$(document).ready(function(){ FeatherlightGallery._onReady(); });
+
+}(jQuery));

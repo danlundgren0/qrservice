@@ -44,19 +44,18 @@ It is only a basic setup. The CSS and Javascript files are not merged and meta r
 				robots   = noindex,nofollow
 			}
 			includeCSS {
-				bootstrap = {$plugin.tx_bootstrapcore.theme.bootstrapCssFile}
-				bootstrap_core = {$plugin.tx_bootstrapcore.theme.contentCssFile}
-				lightbox = {$plugin.tx_bootstrapcore.theme.lightboxCssFile}
+				bootstrap = {$plugin.tx_bsdist.theme.bootstrapCssFile}
+				lightbox = {$plugin.tx_bsdist.theme.lightboxCssFile}
 				# css/styles.css (created by grunt scss task if scss/styles.scss is used)
-				custom = {$plugin.tx_bootstrapcore.theme.baseDir}/css/styles.css
+				custom = {$plugin.tx_bsdist.theme.baseDir}/css/styles.css
 			}
 			includeJSFooterlibs {
-				bootstrap = {$plugin.tx_bootstrapcore.theme.bootstrapJsFile}
-				lightbox = {$plugin.tx_bootstrapcore.theme.lightboxJsFile}
+				bootstrap = {$plugin.tx_bsdist.theme.bootstrapJsFile}
+				lightbox = {$plugin.tx_bsdist.theme.lightboxJsFile}
 				# js/includes/custom.js
-				custom = {$plugin.tx_bootstrapcore.theme.baseDir}/js/includes/custom.js
+				custom = {$plugin.tx_bsdist.theme.baseDir}/js/includes/custom.js
 				# or _includes.js (created by grunt concat task)
-				#custom = {$plugin.tx_bootstrapcore.theme.baseDir}/js/_includes.js
+				#custom = {$plugin.tx_bsdist.theme.baseDir}/js/_includes.js
 			}
 		}
 	[global]

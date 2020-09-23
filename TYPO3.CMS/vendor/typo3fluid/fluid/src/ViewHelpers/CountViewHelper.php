@@ -64,6 +64,9 @@ class CountViewHelper extends AbstractViewHelper
      */
     public static function renderStatic(array $arguments, \Closure $renderChildrenClosure, RenderingContextInterface $renderingContext)
     {
-        return count($renderChildrenClosure());
+        if(is_array($renderChildrenClosure())) {
+            return count($renderChildrenClosure());    
+        }
+        return;
     }
 }

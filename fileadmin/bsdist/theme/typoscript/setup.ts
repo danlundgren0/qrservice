@@ -20,19 +20,19 @@ page {
   typeNum = 0
   10 = FLUIDTEMPLATE
   10 {
-    layoutRootPath = {$plugin.tx_bootstrapcore.theme.baseDir}/tmpl/backend_layout/Layouts/
-    partialRootPath = {$plugin.tx_bootstrapcore.theme.baseDir}/tmpl/backend_layout/Partials/
+    layoutRootPath = fileadmin/bsdist/theme/tmpl/backend_layout/Layouts/
+    partialRootPath = fileadmin/bsdist/theme/tmpl/backend_layout/Partials/
 
     file.cObject = CASE
     file.cObject {
       key.data = levelfield:-1, backend_layout_next_level, slide
       key.override.field = backend_layout
       default = TEXT
-      default.value = {$plugin.tx_bootstrapcore.theme.baseDir}/tmpl/backend_layout/tmpl_default.html
+      default.value = fileadmin/bsdist/theme/tmpl/backend_layout/tmpl_default.html
       2 = TEXT
-      2.value       = {$plugin.tx_bootstrapcore.theme.baseDir}/tmpl/backend_layout/tmpl_home.html
+      2.value       = fileadmin/bsdist/theme/tmpl/backend_layout/tmpl_home.html
       3 = TEXT
-      3.value       = {$plugin.tx_bootstrapcore.theme.baseDir}/tmpl/backend_layout/tmpl_empty.html
+      3.value       = fileadmin/bsdist/theme/tmpl/backend_layout/tmpl_empty.html
     }
 
     variables {
@@ -53,19 +53,22 @@ page {
     bootstrap >
     bootstrap_core >
     lightbox >
-    custom = {$plugin.tx_bootstrapcore.theme.baseDir}/css/all.min.css
-    danlundgren = {$plugin.tx_bootstrapcore.theme.baseDir}/css/danlundgren.css
-    danlundgren2 = {$plugin.tx_bootstrapcore.theme.baseDir}/css/Bergwalltmpl.css
+    custom = fileadmin/bsdist/theme/css/all.min.css
+    danlundgren = fileadmin/bsdist/theme/css/danlundgren.css
+    danlundgren2 = fileadmin/bsdist/theme/css/Bergwalltmpl.css
   }
   includeJSlibs {
-    jquery = {$plugin.tx_bootstrapcore.theme.jQueryJsFile}
+    //jquery = {$plugin.tx_bootstrapcore.theme.jQueryJsFile}
+    //jQueryJsFile = fileadmin/bsdist/lib/jquery/jquery.min.js
+
   }
   includeJSFooterlibs {
     # see condition applicationContext below for development settings
     # Grunt merged single js (Production Context)
     bootstrap >
     lightbox >
-    custom = {$plugin.tx_bootstrapcore.theme.baseDir}/js/scripts.min.js
+    jQueryJsFile = fileadmin/bsdist/lib/jquery/jquery.min.js
+    custom = fileadmin/bsdist/theme/js/scripts.min.js
   }
 
 }
@@ -159,7 +162,7 @@ temp.backlink {
 #  logo.wrap = <div class="logo">|</div>
 #  logo {
 #    10 = TEXT
-#    #10.value = <img src="{$plugin.tx_bootstrapcore.theme.baseDir}/img/logo.png" class="logo img-responsive" />
+#    #10.value = <img src="fileadmin/bsdist/theme/img/logo.png" class="logo img-responsive" />
 #    10.value = <img src="http://www.ip-only.se/app/themes/iponly/assets/images//header/header_ip_only_logo.svg" class="logo img-responsive" />
 #    10.typolink.parameter.data = leveluid : -2
 #    #10.typolink.parameter = 1
@@ -171,7 +174,7 @@ temp.backlink {
 #  logo.wrap = <div class="logo">|</div>
 #  logo {
 #    10 = TEXT
-#    #10.value = <img src="{$plugin.tx_bootstrapcore.theme.baseDir}/img/logo.png" class="logo img-responsive" />
+#    #10.value = <img src="fileadmin/bsdist/theme/img/logo.png" class="logo img-responsive" />
 #    10.value = <img src="http://www.ip-only.se/app/themes/iponly/assets/images//header/header_ip_only_logo.svg" class="logo img-responsive" />
 #    #10.typolink.parameter = 1
 #  }
@@ -255,15 +258,15 @@ lib {
       bootstrap_core = {$plugin.tx_bootstrapcore.theme.contentCssFile}
       lightbox = {$plugin.tx_bootstrapcore.theme.lightboxCssFile}
       # css/styles.css (created by grunt scss task if scss/styles.scss is used)
-      custom = {$plugin.tx_bootstrapcore.theme.baseDir}/css/styles.css
+      custom = fileadmin/bsdist/theme/css/styles.css
     }
     includeJSFooterlibs {
       bootstrap = {$plugin.tx_bootstrapcore.theme.bootstrapJsFile}
       lightbox = {$plugin.tx_bootstrapcore.theme.lightboxJsFile}
       # js/includes/custom.js
-      custom = {$plugin.tx_bootstrapcore.theme.baseDir}/js/includes/custom.js
+      custom = fileadmin/bsdist/theme/js/includes/custom.js
       # or _includes.js (created by grunt concat task)
-      #custom = {$plugin.tx_bootstrapcore.theme.baseDir}/js/_includes.js
+      #custom = fileadmin/bsdist/theme/js/_includes.js
     }
   }
 [global]

@@ -11,8 +11,10 @@ namespace FluidTYPO3\Vhs\ViewHelpers\Page;
 use FluidTYPO3\Vhs\Service\PageService;
 use FluidTYPO3\Vhs\Traits\PageRecordViewHelperTrait;
 use FluidTYPO3\Vhs\Traits\TemplateVariableViewHelperTrait;
+use TYPO3\CMS\Core\Context\Context;
+use TYPO3\CMS\Core\Context\LanguageAspect;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractTagBasedViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractTagBasedViewHelper;
 
 /**
  * ### Page: Link ViewHelper
@@ -198,7 +200,12 @@ class LinkViewHelper extends AbstractTagBasedViewHelper
         }
 
         // Do not render the link, if the page should be hidden
-        $currentLanguageUid = $GLOBALS['TSFE']->sys_language_uid;
+        if (class_exists(LanguageAspect::class)) {
+            $currentLanguageUid = GeneralUtility::makeInstance(Context::class)->getAspect('language')->getId();
+        } else {
+            $currentLanguageUid = $GLOBALS['TSFE']->sys_language_uid;
+        }
+
         $hidePage = $this->pageService->hidePageForLanguageUid($page, $currentLanguageUid);
         if (true === $hidePage) {
             return null;
@@ -241,6 +248,7 @@ class LinkViewHelper extends AbstractTagBasedViewHelper
             ->setCreateAbsoluteUri($this->arguments['absolute'])
             ->setAddQueryString($this->arguments['addQueryString'])
             ->setArgumentsToBeExcludedFromQueryString((array) $this->arguments['argumentsToBeExcludedFromQueryString'])
+            ->setLinkAccessRestrictedPages($showAccessProtected)
             ->build();
         $this->tag->addAttribute('href', $uri);
         $classes = trim($this->arguments['class'] . ' ' . $additionalCssClasses);

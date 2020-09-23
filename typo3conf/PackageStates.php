@@ -137,6 +137,9 @@ return [
         'realurl' => [
             'packagePath' => 'typo3conf/ext/realurl/',
         ],
+        'vhs' => [
+            'packagePath' => 'typo3conf/ext/vhs/',
+        ],
     ],
     'version' => 5,
 ];

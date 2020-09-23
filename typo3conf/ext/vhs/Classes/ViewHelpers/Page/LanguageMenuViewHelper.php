@@ -10,10 +10,12 @@ namespace FluidTYPO3\Vhs\ViewHelpers\Page;
 
 use FluidTYPO3\Vhs\Traits\ArrayConsumingViewHelperTrait;
 use FluidTYPO3\Vhs\Utility\CoreUtility;
+use TYPO3\CMS\Core\Context\Context;
+use TYPO3\CMS\Core\Context\LanguageAspect;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractTagBasedViewHelper;
 use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractTagBasedViewHelper;
 
 /**
  * ViewHelper for rendering TYPO3 menus in Fluid
@@ -125,9 +127,9 @@ class LanguageMenuViewHelper extends AbstractTagBasedViewHelper
         $this->tag->setTagName($this->tagName);
 
         $this->languageMenu = $this->parseLanguageMenu();
-        $this->templateVariableContainer->add($this->arguments['as'], $this->languageMenu);
+        $this->renderingContext->getVariableProvider()->add($this->arguments['as'], $this->languageMenu);
         $content = $this->renderChildren();
-        $this->templateVariableContainer->remove($this->arguments['as']);
+        $this->renderingContext->getVariableProvider()->remove($this->arguments['as']);
         if (0 === mb_strlen(trim($content))) {
             $content = $this->autoRender();
         }
@@ -282,7 +284,7 @@ class LanguageMenuViewHelper extends AbstractTagBasedViewHelper
         $limitLanguages = array_filter($limitLanguages);
 
         if (!empty($limitLanguages)) {
-            $sysLanguage = $GLOBALS['TSFE']->cObj->getRecords($from, ['selectFields' => $select, 'pidInList' => -1, 'uidInList' => implode(',', $limitLanguages)]);
+            $sysLanguage = $GLOBALS['TSFE']->cObj->getRecords($from, ['selectFields' => $select, 'pidInList' => 'root', 'uidInList' => implode(',', $limitLanguages)]);
         } else {
             $sysLanguage = $GLOBALS['TSFE']->cObj->getRecords($from, ['selectFields' => $select, 'pidInList' => 'root']);
         }
@@ -316,8 +318,14 @@ class LanguageMenuViewHelper extends AbstractTagBasedViewHelper
 
         $languageUids = $this->getSystemLanguageUids();
 
+        if (class_exists(LanguageAspect::class)) {
+            $languageUid = GeneralUtility::makeInstance(Context::class)->getAspect('language')->getId();
+        } else {
+            $languageUid = $GLOBALS['TSFE']->sys_language_uid;
+        }
+
         foreach ($languageMenu as $key => $value) {
-            $current = $GLOBALS['TSFE']->sys_language_uid === (integer) $key ? 1 : 0;
+            $current = $languageUid === (integer) $key ? 1 : 0;
             $inactive = in_array($key, $languageUids) || (integer) $key === $this->defaultLangUid ? 0 : 1;
             $url = $this->getLanguageUrl($key);
             if (true === empty($url)) {

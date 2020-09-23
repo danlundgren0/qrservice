@@ -28,11 +28,11 @@ page.10 {
     file.cObject {
             # newsletter
             5 = TEXT
-            5.value       = {$plugin.tx_bootstrapcore.theme.baseDir}/tmpl/backend_layout/tmpl_newsletter.html
+            5.value       = fileadmin/bsdist/theme/tmpl/backend_layout/tmpl_newsletter.html
 
             # empty
             6 = TEXT
-            6.value       = {$plugin.tx_bootstrapcore.theme.baseDir}/tmpl/backend_layout/tmpl_empty.html
+            6.value       = fileadmin/bsdist/theme/tmpl/backend_layout/tmpl_empty.html
     }
 
     variables {
@@ -201,7 +201,7 @@ plugin.tx_directmail_pi1 {
 #
 [globalVar = GP:type = 99]
   # plaintext template
-  tx_directmail_pi1.10.template.file = {$plugin.tx_bootstrapcore.theme.baseDir}/tmpl/direct_mail/direct_mail_plaintext.html
+  tx_directmail_pi1.10.template.file = fileadmin/bsdist/theme/tmpl/direct_mail/direct_mail_plaintext.html
 [end]
 
 

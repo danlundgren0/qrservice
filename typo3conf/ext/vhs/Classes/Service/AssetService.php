@@ -9,18 +9,18 @@ namespace FluidTYPO3\Vhs\Service;
  */
 
 use FluidTYPO3\Vhs\Asset;
+use FluidTYPO3\Vhs\Utility\CoreUtility;
 use FluidTYPO3\Vhs\ViewHelpers\Asset\AssetInterface;
 use TYPO3\CMS\Core\SingletonInterface;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
-use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
 use TYPO3\CMS\Extbase\Object\ObjectManager;
 use TYPO3\CMS\Extbase\Object\ObjectManagerInterface;
 use TYPO3\CMS\Extbase\SignalSlot\Dispatcher;
 use TYPO3\CMS\Extbase\Utility\DebuggerUtility;
-use TYPO3\CMS\Fluid\Core\ViewHelper\TagBuilder;
 use TYPO3\CMS\Fluid\View\StandaloneView;
+use TYPO3Fluid\Fluid\Core\ViewHelper\TagBuilder;
 
 /**
  * Asset Handling Service
@@ -299,7 +299,7 @@ class AssetService implements SingletonInterface
                                 );
                             } else {
                                 $integrity = $this->getFileIntegrity($path);
-                                $path = mb_substr($path, mb_strlen(PATH_site));
+                                $path = mb_substr($path, mb_strlen(CoreUtility::getSitePath()));
                                 $path = $this->prefixPath($path);
                                 array_push($chunks, $this->generateTagForAssetType($type, null, $path, $integrity, $assetSettings));
                             }

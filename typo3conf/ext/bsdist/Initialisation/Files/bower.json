@@ -1,14 +1,12 @@
 {
-  "name": "your-name",
+  "name": "project-name",
   "version": "1.0.0",
-  "description": "new TYPO3 website",
-  "authors": [ "Firstname Lastname <example@example.com>" ],
   "private": true,
   "dependencies": {
-    "jquery": "~2.2.3",
-    "bootstrap": "~3.3.6",
-    "bootstrap-sass-official": "~3.3.6",
-    "jquery-prettyPhoto": "~3.1.6"
+    "bootstrap-sass": "~3.3.7",
+    "font-awesome": "~4.7.0",
+    "jquery": "~3.2.1",
+    "featherlight": "~1.7.0"
   },
   "ignore": [
     "**/.*",

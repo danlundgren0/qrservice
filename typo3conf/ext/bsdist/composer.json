@@ -1,16 +1,20 @@
 {
   "name": "laxap/bsdist",
   "type": "typo3-cms-extension",
-  "version": "1.3.3",
-  "description": "An initial page tree will be imported and bootstrap_core will be installed. A collection of files for the website layout and extension configuration is included.",
-  "keywords": ["typo3", "TYPO3 CMS", "bootstrap", "bsdist", "distribution"],
+  "description": "Kickstart package to create a new TYPO3 website. Delivers a simple page tree for a new website based on the bootstrap framework. Ads bootstrap layout features to some of the content elements.",
   "homepage": "http://www.bsdist.ch",
-  "license": "GPL-2.0+",
-  "authors": [
-    {
-      "name": "Pascal Mayer",
-      "email": "typo3@bsdist.ch",
-      "role": "Developer"
+  "license": "GPL-2.0",
+  "keywords": ["typo3", "TYPO3 CMS", "bootstrap", "bsdist", "distribution"],
+  "support": {
+    "issues": "https://github.com/laxap/bsdist/issues"
+  },
+  "require": {
+    "php": ">=5.5.0",
+    "typo3/cms": "^8.7"
+  },
+  "autoload": {
+    "psr-4": {
+      "Laxap\\Bsdist\\": "Classes"
     }
-  ]
+  }
 }

@@ -45,7 +45,8 @@ lib.navbar {
             IFSUB = 1
             IFSUB < .NO
             IFSUB.wrapItemAndSub = <li class="dropdown">|</li>
-            IFSUB.ATagParams = class="dropdown-toggle" role="button" data-toggle="dropdown" data-target="#"
+            #IFSUB.ATagParams = class="dropdown-toggle" role="button" data-toggle="dropdown" data-target="#"
+            IFSUB.ATagParams = class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"
             #IFSUB.ATagParams = class="dropdown-toggle disabled" role="button" data-toggle="dropdown" data-target="#"
             IFSUB.ATagBeforeWrap = 1
             IFSUB.stdWrap.wrap = |<b class="caret"></b>
@@ -75,7 +76,7 @@ lib.navbar {
             ACT < .NO
             ACT.wrapItemAndSub = <li class="active">|</li>
 
-            IFUSB < .1.IFSUB
+            IFSUB < .1.IFSUB
             CURIFSUB < .1.CURIFSUB
             ACTIFSUB < .1.ACTIFSUB
 
@@ -192,7 +193,7 @@ lib.subnav {
             CUR < .ACT
             CUR.wrapItemAndSub = <li class="list-group-item active current">|</li>
 
-            IFUSB < .1.IFSUB
+            IFSUB < .1.IFSUB
             ACTIFSUB < .1.ACTIFSUB
             CURIFSUB < .1.CURIFSUB
 
@@ -217,7 +218,7 @@ lib.metanav = COA
 lib.metanav {
     20 = HMENU
     20.special = directory
-    20.special.value = {$plugin.tx_bootstrapcore.website.metaNav.pageId}
+    20.special.value = {$plugin.tx_bsdist.website.metaNav.pageId}
     20.wrap = |
     20 {
         entryLevel = 0

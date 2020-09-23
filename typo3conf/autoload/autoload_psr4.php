@@ -8,6 +8,7 @@ return array(
     'Bithost\\Pdfviewhelpers\\' => array($typo3InstallDir . 'typo3conf/ext/pdfviewhelpers/Classes'),
     'DmitryDulepov\\Realurl\\' => array($typo3InstallDir . 'typo3conf/ext/realurl/Classes'),
     'EBT\\ExtensionBuilder\\' => array($typo3InstallDir . 'typo3conf/ext/extension_builder/Classes'),
+    'FluidTYPO3\\Vhs\\' => array($typo3InstallDir . 'typo3conf/ext/vhs_5_2_0/Classes'),
     'GridElementsTeam\\Gridelements\\' => array($typo3InstallDir . 'typo3conf/ext/gridelements/Classes'),
     'PhpParser\\' => array($typo3InstallDir . 'typo3conf/ext/extension_builder/Resources/Private/PHP/PHP-Parser/lib/PhpParser'),
 );
