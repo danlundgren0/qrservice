@@ -218,8 +218,10 @@ class ReportUtility {
 	                                $reportsArr['controlPoints'][$cpIdentifier]['cpName'] = $meas->getControlPoint()->getHeader();
 	    							$reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['type'] = 'measure';
 	                                $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['questionName'] = $meas->getQuestion()->getHeader();
-                                    $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['questionDesc'] = $note->getQuestion()->getDescription();
-                                    $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['questionUid'] = $note->getQuestion()->getUid();
+                                    if($note && $note->getQuestion()) {
+                                        $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['questionDesc'] = $note->getQuestion()->getDescription();
+                                        $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['questionUid'] = $note->getQuestion()->getUid();
+                                    }                                                                        
 	                                $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['notes'][$noteIdentifier]['measName'] = $meas->getName();
 	                                $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['notes'][$noteIdentifier]['unit'] = $meas->getUnit();
 	                                $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['notes'][$noteIdentifier]['value'] = $meas->getValue();
@@ -310,7 +312,11 @@ class ReportUtility {
                 $qIsReported = false;
                 foreach($clickedReport->getNotes() as $note) {
                     $noteIdentifier = 'note_'.$note->getUid();
-                    if($note->getQuestion()->getUid() == $q->getUid()) {
+                    if($note && $note->getQuestion()) {
+                        $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['questionDesc'] = $note->getQuestion()->getDescription();
+                        $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['questionUid'] = $note->getQuestion()->getUid();
+                    }   
+                    if($note && $note->getQuestion() && $note->getQuestion()->getUid() == $q->getUid()) {
                         $qIsReported = true;
                         $noOfQuestionsReported += 1;
                         if($note->getIsComplete()) {
@@ -431,8 +437,10 @@ class ReportUtility {
                             $reportsArr['controlPoints'][$cpIdentifier]['cpName'] = $meas->getControlPoint()->getHeader();
                             $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['type'] = 'measure';
                             $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['questionName'] = $meas->getQuestion()->getHeader();
-                            $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['questionDesc'] = $note->getQuestion()->getDescription();
-                            $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['questionUid'] = $note->getQuestion()->getUid();
+                            if($note && $note->getQuestion()) {
+                                $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['questionDesc'] = $note->getQuestion()->getDescription();
+                                $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['questionUid'] = $note->getQuestion()->getUid();
+                            }
                             $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['notes'][$noteIdentifier]['measName'] = $meas->getName();
                             $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['notes'][$noteIdentifier]['unit'] = $meas->getUnit();
                             $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['notes'][$noteIdentifier]['value'] = $meas->getValue();
@@ -523,7 +531,7 @@ class ReportUtility {
                 $qIsReported = false;
                 foreach($clickedReport->getNotes() as $note) {
                     $noteIdentifier = 'note_'.$note->getUid();
-                    if($note->getQuestion()->getUid() == $q->getUid()) {
+                    if(is_array($note) && $note->getQuestion()->getUid() == $q->getUid()) {
                         $qIsReported = true;
                         $noOfQuestionsReported += 1;
                         if($note->getIsComplete()) {
@@ -629,7 +637,7 @@ class ReportUtility {
                 }
                 if(!$qIsReported) {
                     foreach($clickedReport->getReportedMeasurement() as $meas) {
-                        if(count($meas->getQuestion()) && $meas->getQuestion()->getUid() == $q->getUid()) {
+                        if(is_array($meas) && count($meas->getQuestion()) && $meas->getQuestion()->getUid() == $q->getUid()) {
                             $noteIdentifier = 'meas_'.$meas->getUid();
                             $noOfQuestionsReported += 1;
                             $noOfPostedMeasure += 1;

@@ -176,7 +176,7 @@ class ReportController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
             $latestReports = $this->reportRepository->searchReports($searchCriterias);
         } else {
             //if (!$arguments || count($arguments) == 1 && $arguments['xls'] == '1') {
-            if (count($arguments) == 1 && $arguments['xls'] == '1') {
+            if (is_array($arguments) && count($arguments) == 1 && $arguments['xls'] == '1') {
                 $searchCriterias = new \DanLundgren\DlIponlyestate\Domain\Model\SearchCriterias();
                 /*
                 $searchResults = $this->reportRepository->searchReports($searchCriterias);

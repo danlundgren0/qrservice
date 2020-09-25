@@ -42,10 +42,15 @@ class QRcodesGeneratorController extends \TYPO3\CMS\Extbase\Mvc\Controller\Actio
         //<script type="text/javascript" src="//www.shieldui.com/shared/components/latest/js/jquery-1.11.1.min.js"></script>        
         
         //$GLOBALS['TSFE']->getPageRenderer()->addJsFooterInlineCode('jquery', 'var tag = document.createElement(\'script\');tag.src = \'https://www.shieldui.com/shared/components/latest/js/jquery-1.11.1.min.js\';var firstScriptTag = document.getElementsByTagName(\'script\')[0];firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);');
-
+        $pageRenderer = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\CMS\Core\Page\PageRenderer');
+        $pageRenderer->addJsFooterFile('typo3conf/ext/dl_qrcodesgenerator/Resources/Public/Js/jquery-1.11.1.min.js');
+        $pageRenderer->addJsFooterFile('typo3conf/ext/dl_qrcodesgenerator/Resources/Public/Js/shieldui-all.min.js');
+        $pageRenderer->addJsFooterFile('typo3conf/ext/dl_qrcodesgenerator/Resources/Public/Js/dl_qrcodesgenerator.js');
+        /*
         $GLOBALS['TSFE']->getPageRenderer()->addJsFooterFile('typo3conf/ext/dl_qrcodesgenerator/Resources/Public/Js/jquery-1.11.1.min.js');
         $GLOBALS['TSFE']->getPageRenderer()->addJsFooterFile('typo3conf/ext/dl_qrcodesgenerator/Resources/Public/Js/shieldui-all.min.js');
         $GLOBALS['TSFE']->getPageRenderer()->addJsFooterFile('typo3conf/ext/dl_qrcodesgenerator/Resources/Public/Js/dl_qrcodesgenerator.js');
+        */
         //$GLOBALS['TSFE']->getPageRenderer()->addJsFooterInlineCode('YT', 'var tag = document.createElement(\'script\');tag.src = \'https://www.youtube.com/iframe_api\';var firstScriptTag = document.getElementsByTagName(\'script\')[0];firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);');
         $i=0;
         $parentPid = \TYPO3\CMS\Core\Utility\GeneralUtility::_GP('pid');

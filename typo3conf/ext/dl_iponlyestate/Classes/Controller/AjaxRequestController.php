@@ -178,13 +178,13 @@ class AjaxRequestController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCont
 			$completeReportArr = ReportUtility::getCompleteReport($clickedReport, $estate, $reports, TRUE);
 		}
 		if($completeReportArr) {
-			$layoutRootPath = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Layouts');
-			$partialRootPath = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Partials');
+			$layoutRootPath[] = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Layouts');
+			$partialRootPath[] = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Partials');
 			$templatePathAndFilename = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Partials/Report/GenericModalReport.html');
 			$extensionName = $this->request->getControllerExtensionName();
-			$ajaxRenderHtmlView = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager')->get('TYPO3\\CMS\\Fluid\\View\\StandaloneView');
-			$ajaxRenderHtmlView->setLayoutRootPath($layoutRootPath);
-			$ajaxRenderHtmlView->setPartialRootPath($partialRootPath);
+			$ajaxRenderHtmlView = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\CMS\Extbase\Object\ObjectManager')->get('TYPO3\CMS\Fluid\View\StandaloneView');
+			$ajaxRenderHtmlView->setLayoutRootPaths($layoutRootPath);
+			$ajaxRenderHtmlView->setPartialRootPaths($partialRootPath);
 			$ajaxRenderHtmlView->setTemplatePathAndFilename($templatePathAndFilename);
 			$ajaxRenderHtmlView->getRequest()->setControllerExtensionName($extensionName);
 			$ajaxRenderHtmlView->assign('report', $completeReportArr);
@@ -207,13 +207,13 @@ class AjaxRequestController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCont
 			$completeReportArr = ReportUtility::getAllReportsWithRemarks($clickedReport, $estate, $reports);
 		}
 		if($completeReportArr) {
-			$layoutRootPath = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Layouts');
-			$partialRootPath = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Partials');
+			$layoutRootPath[] = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Layouts');
+			$partialRootPath[] = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Partials');
 			$templatePathAndFilename = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Partials/Report/CriticalModalReport.html');
 			$extensionName = $this->request->getControllerExtensionName();
 			$ajaxRenderHtmlView = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager')->get('TYPO3\\CMS\\Fluid\\View\\StandaloneView');
-			$ajaxRenderHtmlView->setLayoutRootPath($layoutRootPath);
-			$ajaxRenderHtmlView->setPartialRootPath($partialRootPath);
+			$ajaxRenderHtmlView->setLayoutRootPaths($layoutRootPath);
+			$ajaxRenderHtmlView->setPartialRootPaths($partialRootPath);
 			$ajaxRenderHtmlView->setTemplatePathAndFilename($templatePathAndFilename);
 			$ajaxRenderHtmlView->getRequest()->setControllerExtensionName($extensionName);
 			$ajaxRenderHtmlView->assign('report', $completeReportArr);
@@ -236,13 +236,13 @@ class AjaxRequestController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCont
 			$completeReportArr = ReportUtility::getAllReportsWithRemarks($clickedReport, $estate, $reports);
 		}
 		if($completeReportArr) {
-			$layoutRootPath = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Layouts');
-			$partialRootPath = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Partials');
+			$layoutRootPath[] = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Layouts');
+			$partialRootPath[] = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Partials');
 			$templatePathAndFilename = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Partials/Report/RemarkModalReport.html');
 			$extensionName = $this->request->getControllerExtensionName();
 			$ajaxRenderHtmlView = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager')->get('TYPO3\\CMS\\Fluid\\View\\StandaloneView');
-			$ajaxRenderHtmlView->setLayoutRootPath($layoutRootPath);
-			$ajaxRenderHtmlView->setPartialRootPath($partialRootPath);
+			$ajaxRenderHtmlView->setLayoutRootPaths($layoutRootPath);
+			$ajaxRenderHtmlView->setPartialRootPaths($partialRootPath);
 			$ajaxRenderHtmlView->setTemplatePathAndFilename($templatePathAndFilename);
 			$ajaxRenderHtmlView->getRequest()->setControllerExtensionName($extensionName);
 			$ajaxRenderHtmlView->assign('report', $completeReportArr);
@@ -265,13 +265,13 @@ class AjaxRequestController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCont
 			$completeReportArr = ReportUtility::getAllReportsWithRemarks($clickedReport, $estate, $reports);
 		}
 		if($completeReportArr) {
-			$layoutRootPath = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Layouts');
-			$partialRootPath = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Partials');
+			$layoutRootPath[] = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Layouts');
+			$partialRootPath[] = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Partials');
 			$templatePathAndFilename = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Partials/Report/PurchaseModalReport.html');
 			$extensionName = $this->request->getControllerExtensionName();
 			$ajaxRenderHtmlView = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager')->get('TYPO3\\CMS\\Fluid\\View\\StandaloneView');
-			$ajaxRenderHtmlView->setLayoutRootPath($layoutRootPath);
-			$ajaxRenderHtmlView->setPartialRootPath($partialRootPath);
+			$ajaxRenderHtmlView->setLayoutRootPaths($layoutRootPath);
+			$ajaxRenderHtmlView->setPartialRootPaths($partialRootPath);
 			$ajaxRenderHtmlView->setTemplatePathAndFilename($templatePathAndFilename);
 			$ajaxRenderHtmlView->getRequest()->setControllerExtensionName($extensionName);
 			$ajaxRenderHtmlView->assign('report', $completeReportArr);
@@ -295,13 +295,13 @@ class AjaxRequestController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCont
 			//$completeReportArr = ReportUtility::getAllReportsWithRemarks($clickedReport, $estate);
 		}
 		if($completeReportArr) {
-			$layoutRootPath = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Layouts');
-			$partialRootPath = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Partials');
+			$layoutRootPath[] = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Layouts');
+			$partialRootPath[] = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Partials');
 			$templatePathAndFilename = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('EXT:dl_iponlyestate/Resources/Private/Partials/Report/CompletedRemarksModalReport.html');
 			$extensionName = $this->request->getControllerExtensionName();
 			$ajaxRenderHtmlView = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager')->get('TYPO3\\CMS\\Fluid\\View\\StandaloneView');
-			$ajaxRenderHtmlView->setLayoutRootPath($layoutRootPath);
-			$ajaxRenderHtmlView->setPartialRootPath($partialRootPath);
+			$ajaxRenderHtmlView->setLayoutRootPaths($layoutRootPath);
+			$ajaxRenderHtmlView->setPartialRootPaths($partialRootPath);
 			$ajaxRenderHtmlView->setTemplatePathAndFilename($templatePathAndFilename);
 			$ajaxRenderHtmlView->getRequest()->setControllerExtensionName($extensionName);
 			$ajaxRenderHtmlView->assign('report', $completeReportArr);
