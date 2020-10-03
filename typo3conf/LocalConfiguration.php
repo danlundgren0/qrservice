@@ -23,12 +23,12 @@ return [
     ],
     'EXT' => [
         'extConf' => [
-            'backend' => 'a:6:{s:9:"loginLogo";s:0:"";s:19:"loginHighlightColor";s:0:"";s:20:"loginBackgroundImage";s:0:"";s:13:"loginFootnote";s:0:"";s:11:"backendLogo";s:0:"";s:14:"backendFavicon";s:0:"";}',
-            'dl_iponlyestate' => 'a:3:{s:22:"responsibleTechnicians";s:1:"2";s:7:"ftpPass";s:0:"";s:7:"ftpUser";s:0:"";}',
-            'extension_builder' => 'a:3:{s:15:"enableRoundtrip";s:1:"1";s:15:"backupExtension";s:1:"1";s:9:"backupDir";s:35:"uploads/tx_extensionbuilder/backups";}',
+            'backend' => 'a:6:{s:14:"backendFavicon";s:0:"";s:11:"backendLogo";s:0:"";s:20:"loginBackgroundImage";s:0:"";s:13:"loginFootnote";s:0:"";s:19:"loginHighlightColor";s:0:"";s:9:"loginLogo";s:0:"";}',
+            'dl_iponlyestate' => 'a:3:{s:7:"ftpPass";s:0:"";s:7:"ftpUser";s:0:"";s:22:"responsibleTechnicians";s:1:"2";}',
+            'extension_builder' => 'a:3:{s:9:"backupDir";s:35:"uploads/tx_extensionbuilder/backups";s:15:"backupExtension";s:1:"1";s:15:"enableRoundtrip";s:1:"1";}',
             'extensionmanager' => 'a:2:{s:21:"automaticInstallation";s:1:"1";s:11:"offlineMode";s:1:"0";}',
-            'gridelements' => 'a:6:{s:20:"additionalStylesheet";s:0:"";s:19:"nestingInListModule";s:1:"0";s:26:"overlayShortcutTranslation";s:1:"0";s:19:"disableDragInWizard";s:1:"0";s:25:"disableCopyFromPageButton";s:1:"0";s:38:"disableAutomaticUnusedColumnCorrection";s:1:"0";}',
             'rsaauth' => 'a:1:{s:18:"temporaryDirectory";s:0:"";}',
+            'rtehtmlarea' => 'a:8:{s:21:"noSpellCheckLanguages";s:23:"ja,km,ko,lo,th,zh,b5,gb";s:15:"AspellDirectory";s:15:"/usr/bin/aspell";s:20:"defaultConfiguration";s:105:"Typical (Most commonly used features are enabled. Select this option if you are unsure which one to use.)";s:12:"enableImages";s:1:"0";s:20:"enableInlineElements";s:1:"0";s:19:"allowStyleAttribute";s:1:"1";s:24:"enableAccessibilityIcons";s:1:"0";s:16:"forceCommandMode";s:1:"0";}',
             'scheduler' => 'a:2:{s:11:"maxLifetime";s:4:"1440";s:15:"showSampleTasks";s:1:"1";}',
             'vhs' => 'a:1:{s:20:"disableAssetHandling";s:1:"0";}',
         ],
@@ -61,16 +61,18 @@ return [
             'automaticInstallation' => '1',
             'offlineMode' => '0',
         ],
-        'gridelements' => [
-            'additionalStylesheet' => '',
-            'disableAutomaticUnusedColumnCorrection' => '0',
-            'disableCopyFromPageButton' => '0',
-            'disableDragInWizard' => '0',
-            'nestingInListModule' => '0',
-            'overlayShortcutTranslation' => '0',
-        ],
         'rsaauth' => [
             'temporaryDirectory' => '',
+        ],
+        'rtehtmlarea' => [
+            'AspellDirectory' => '/usr/bin/aspell',
+            'allowStyleAttribute' => '1',
+            'defaultConfiguration' => 'Typical (Most commonly used features are enabled. Select this option if you are unsure which one to use.)',
+            'enableAccessibilityIcons' => '0',
+            'enableImages' => '0',
+            'enableInlineElements' => '0',
+            'forceCommandMode' => '0',
+            'noSpellCheckLanguages' => 'ja,km,ko,lo,th,zh,b5,gb',
         ],
         'scheduler' => [
             'maxLifetime' => '1440',

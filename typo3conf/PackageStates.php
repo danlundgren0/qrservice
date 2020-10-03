@@ -50,6 +50,12 @@ return [
         'reports' => [
             'packagePath' => 'typo3/sysext/reports/',
         ],
+        'setup' => [
+            'packagePath' => 'typo3/sysext/setup/',
+        ],
+        'rte_ckeditor' => [
+            'packagePath' => 'typo3/sysext/rte_ckeditor/',
+        ],
         'about' => [
             'packagePath' => 'typo3/sysext/about/',
         ],
@@ -74,9 +80,6 @@ return [
         'rsaauth' => [
             'packagePath' => 'typo3/sysext/rsaauth/',
         ],
-        'setup' => [
-            'packagePath' => 'typo3/sysext/setup/',
-        ],
         'sys_note' => [
             'packagePath' => 'typo3/sysext/sys_note/',
         ],
@@ -89,6 +92,9 @@ return [
         'viewpage' => [
             'packagePath' => 'typo3/sysext/viewpage/',
         ],
+        'rtehtmlarea' => [
+            'packagePath' => 'typo3conf/ext/rtehtmlarea/',
+        ],
         'dl_iponlyestate' => [
             'packagePath' => 'typo3conf/ext/dl_iponlyestate/',
         ],
@@ -97,9 +103,6 @@ return [
         ],
         'extension_builder' => [
             'packagePath' => 'typo3conf/ext/extension_builder/',
-        ],
-        'gridelements' => [
-            'packagePath' => 'typo3conf/ext/gridelements/',
         ],
         'pdfviewhelpers' => [
             'packagePath' => 'typo3conf/ext/pdfviewhelpers/',

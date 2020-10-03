@@ -9,5 +9,5 @@ return array(
     'DanLundgren\\DlQrcodesgenerator\\' => array($typo3InstallDir . 'typo3conf/ext/dl_qrcodesgenerator/Classes'),
     'EBT\\ExtensionBuilder\\' => array($typo3InstallDir . 'typo3conf/ext/extension_builder/Classes'),
     'FluidTYPO3\\Vhs\\' => array($typo3InstallDir . 'typo3conf/ext/vhs/Classes'),
-    'GridElementsTeam\\Gridelements\\' => array($typo3InstallDir . 'typo3conf/ext/gridelements/Classes'),
+    'TYPO3\\CMS\\Rtehtmlarea\\' => array($typo3InstallDir . 'typo3conf/ext/rtehtmlarea/Classes'),
 );

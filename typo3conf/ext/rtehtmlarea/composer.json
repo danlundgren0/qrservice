@@ -1,0 +1,26 @@
+{
+	"name": "friendsoftypo3/rtehtmlarea",
+	"type": "typo3-cms-extension",
+	"description": "Highly configurable RTE based on HtmlArea for TYPO3 v8.",
+	"homepage": "https://github.com/FriendsOfTYPO3/rtehtmlarea",
+	"license": ["GPL-2.0+"],
+	"require": {
+		"typo3/cms-core": "*"
+	},
+	"replace": {
+		"rtehtmlarea": "*"
+	},
+	"suggest": {
+		"typo3/cms-setup": "*"
+	},
+	"autoload": {
+		"psr-4": {
+			"TYPO3\\CMS\\Rtehtmlarea\\": "Classes/"
+		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"TYPO3\\CMS\\Rtehtmlarea\\Tests\\": "Tests/"
+		}
+	}
+}
