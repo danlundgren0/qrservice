@@ -14,72 +14,89 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Format;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Context\Context;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
-use TYPO3\CMS\Fluid\Core\ViewHelper\Exception;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Exception;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithContentArgumentAndRenderStatic;
 
 /**
- * Formats an object implementing \DateTimeInterface.
+ * Formats an object implementing :php:`\DateTimeInterface`.
  *
- * = Examples =
+ * Examples
+ * ========
  *
- * <code title="Defaults">
- * <f:format.date>{dateObject}</f:format.date>
- * </code>
- * <output>
- * 1980-12-13
- * (depending on the current date)
- * </output>
+ * Defaults
+ * --------
  *
- * <code title="Custom date format">
- * <f:format.date format="H:i">{dateObject}</f:format.date>
- * </code>
- * <output>
- * 01:23
- * (depending on the current time)
- * </output>
+ * ::
  *
- * <code title="Relative date with given time">
- * <f:format.date format="Y" base="{dateObject}">-1 year</f:format.date>
- * </code>
- * <output>
- * 2016
- * (assuming dateObject is in 2017)
- * </output>
+ *    <f:format.date>{dateObject}</f:format.date>
  *
- * <code title="strtotime string">
- * <f:format.date format="d.m.Y - H:i:s">+1 week 2 days 4 hours 2 seconds</f:format.date>
- * </code>
- * <output>
- * 13.12.1980 - 21:03:42
- * (depending on the current time, see http://www.php.net/manual/en/function.strtotime.php)
- * </output>
+ * ``1980-12-13``
+ * Depending on the current date.
  *
- * <code title="Localized dates using strftime date format">
- * <f:format.date format="%d. %B %Y">{dateObject}</f:format.date>
- * </code>
- * <output>
- * 13. Dezember 1980
- * (depending on the current date and defined locale. In the example you see the 1980-12-13 in a german locale)
- * </output>
+ * Custom date format
+ * ------------------
  *
- * <code title="Inline notation">
- * {f:format.date(date: dateObject)}
- * </code>
- * <output>
- * 1980-12-13
- * (depending on the value of {dateObject})
- * </output>
+ * ::
  *
- * <code title="Inline notation (2nd variant)">
- * {dateObject -> f:format.date()}
- * </code>
- * <output>
- * 1980-12-13
- * (depending on the value of {dateObject})
- * </output>
+ *    <f:format.date format="H:i">{dateObject}</f:format.date>
+ *
+ * ``01:23``
+ * Depending on the current time.
+ *
+ * Relative date with given time
+ * -----------------------------
+ *
+ * ::
+ *
+ *    <f:format.date format="Y" base="{dateObject}">-1 year</f:format.date>
+ *
+ * ``2016``
+ * Assuming dateObject is in 2017.
+ *
+ * strtotime string
+ * ----------------
+ *
+ * ::
+ *
+ *    <f:format.date format="d.m.Y - H:i:s">+1 week 2 days 4 hours 2 seconds</f:format.date>
+ *
+ * ``13.12.1980 - 21:03:42``
+ * Depending on the current time, see https://www.php.net/manual/function.strtotime.php.
+ *
+ * Localized dates using strftime date format
+ * ------------------------------------------
+ *
+ * ::
+ *
+ *    <f:format.date format="%d. %B %Y">{dateObject}</f:format.date>
+ *
+ * ``13. Dezember 1980``
+ * Depending on the current date and defined locale. In the example you see the 1980-12-13 in a german locale.
+ *
+ * Inline notation
+ * ---------------
+ *
+ * ::
+ *
+ *    {f:format.date(date: dateObject)}
+ *
+ * ``1980-12-13``
+ * Depending on the value of ``{dateObject}``.
+ *
+ * Inline notation (2nd variant)
+ * -----------------------------
+ *
+ * ::
+ *
+ *    {dateObject -> f:format.date()}
+ *
+ * ``1980-12-13``
+ * Depending on the value of ``{dateObject}``.
  */
 class DateViewHelper extends AbstractViewHelper
 {
@@ -97,7 +114,6 @@ class DateViewHelper extends AbstractViewHelper
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('date', 'mixed', 'Either an object implementing DateTimeInterface or a string that is accepted by DateTime constructor');
         $this->registerArgument('format', 'string', 'Format String which is taken to format the Date/Time', false, '');
         $this->registerArgument('base', 'mixed', 'A base time (an object implementing DateTimeInterface or a string) used if $date is a relative date specification. Defaults to current time.');
@@ -114,7 +130,7 @@ class DateViewHelper extends AbstractViewHelper
     public static function renderStatic(array $arguments, \Closure $renderChildrenClosure, RenderingContextInterface $renderingContext)
     {
         $format = $arguments['format'];
-        $base = $arguments['base'] === null ? time() : $arguments['base'];
+        $base = $arguments['base'] ?? GeneralUtility::makeInstance(Context::class)->getPropertyFromAspect('date', 'timestamp');
         if (is_string($base)) {
             $base = trim($base);
         }
@@ -149,8 +165,7 @@ class DateViewHelper extends AbstractViewHelper
 
         if (strpos($format, '%') !== false) {
             return strftime($format, $date->format('U'));
-        } else {
-            return $date->format($format);
         }
+        return $date->format($format);
     }
 }

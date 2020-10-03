@@ -16,10 +16,12 @@ namespace TYPO3\CMS\Extensionmanager\Domain\Repository;
 
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Database\Platform\PlatformInformation;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * A repository for extensions
+ * @internal This class is a specific domain repository implementation and is not part of the Public TYPO3 API.
  */
 class ExtensionRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 {
@@ -29,24 +31,11 @@ class ExtensionRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
     const TABLE_NAME = 'tx_extensionmanager_domain_model_extension';
 
     /**
-     * @var \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper
-     */
-    protected $dataMapper;
-
-    /**
-     * @param \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper $dataMapper
-     */
-    public function injectDataMapper(\TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper $dataMapper)
-    {
-        $this->dataMapper = $dataMapper;
-    }
-
-    /**
      * Do not include pid in queries
      */
     public function initializeObject()
     {
-        /** @var $defaultQuerySettings \TYPO3\CMS\Extbase\Persistence\Generic\QuerySettingsInterface */
+        /** @var \TYPO3\CMS\Extbase\Persistence\Generic\QuerySettingsInterface $defaultQuerySettings */
         $defaultQuerySettings = $this->objectManager->get(\TYPO3\CMS\Extbase\Persistence\Generic\QuerySettingsInterface::class);
         $defaultQuerySettings->setRespectStoragePage(false);
         $this->setDefaultQuerySettings($defaultQuerySettings);
@@ -148,13 +137,12 @@ class ExtensionRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
             ->getQueryBuilderForTable(self::TABLE_NAME);
 
-        $searchPlaceholder = $queryBuilder->createNamedParameter($searchString);
         $searchPlaceholderForLike = '%' . $queryBuilder->escapeLikeWildcards($searchString) . '%';
 
         $searchConstraints = [
             'extension_key' => $queryBuilder->expr()->eq(
                 'extension_key',
-                $queryBuilder->createNamedParameter($searchPlaceholder, \PDO::PARAM_STR)
+                $queryBuilder->createNamedParameter($searchString, \PDO::PARAM_STR)
             ),
             'extension_key_like' => $queryBuilder->expr()->like(
                 'extension_key',
@@ -195,7 +183,8 @@ class ExtensionRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             ->execute()
             ->fetchAll();
 
-        return $this->dataMapper->map(\TYPO3\CMS\Extensionmanager\Domain\Model\Extension::class, $result);
+        $dataMapper = $this->objectManager->get(\TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper::class);
+        return $dataMapper->map(\TYPO3\CMS\Extensionmanager\Domain\Model\Extension::class, $result);
     }
 
     /**
@@ -339,17 +328,24 @@ class ExtensionRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $uidsOfCurrentVersion = $this->fetchMaximalVersionsForAllExtensions($repositoryUid);
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
             ->getQueryBuilderForTable(self::TABLE_NAME);
+        $connection = GeneralUtility::makeInstance(ConnectionPool::class)
+            ->getConnectionForTable(self::TABLE_NAME);
+        $maxBindParameters = PlatformInformation::getMaxBindParameters(
+            $connection->getDatabasePlatform()
+        );
 
-        $queryBuilder
-            ->update(self::TABLE_NAME)
-            ->where(
-                $queryBuilder->expr()->in(
-                    'uid',
-                    $queryBuilder->createNamedParameter($uidsOfCurrentVersion, Connection::PARAM_INT_ARRAY)
+        foreach (array_chunk($uidsOfCurrentVersion, $maxBindParameters - 10) as $chunk) {
+            $queryBuilder
+                ->update(self::TABLE_NAME)
+                ->where(
+                    $queryBuilder->expr()->in(
+                        'uid',
+                        $queryBuilder->createNamedParameter($chunk, Connection::PARAM_INT_ARRAY)
+                    )
                 )
-            )
-            ->set('current_version', 1)
-            ->execute();
+                ->set('current_version', 1)
+                ->execute();
+        }
     }
 
     /**

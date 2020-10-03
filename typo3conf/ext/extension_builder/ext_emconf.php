@@ -3,7 +3,6 @@
 /***************************************************************
  * Extension Manager/Repository config file for ext "extension_builder".
  *
- *
  * Manual updates:
  * Only the data in the array - everything else is removed by next
  * writing. "version" and "dependencies" must not be touched!
@@ -18,10 +17,10 @@ $EM_CONF[$_EXTKEY] = [
     'state' => 'beta',
     'uploadfolder' => true,
     'createDirs' => 'uploads/tx_extensionbuilder/backups',
-    'version' => '8.10.4',
+    'version' => '9.10.3',
     'constraints' => [
         'depends' => [
-            'typo3' => '8.7.0-8.7.99'
+            'typo3' => '9.5.0-9.5.99'
         ],
         'conflicts' => [],
         'suggests' => []

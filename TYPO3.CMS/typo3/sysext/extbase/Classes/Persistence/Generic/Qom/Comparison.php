@@ -14,7 +14,6 @@ namespace TYPO3\CMS\Extbase\Persistence\Generic\Qom;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Persistence\QueryInterface;
 
 /**
@@ -59,6 +58,7 @@ use TYPO3\CMS\Extbase\Persistence\QueryInterface;
  * the character "_" (underscore) matches exactly one character, and
  * the string "\x" matches the character "x", and
  * all other characters match themselves.
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 class Comparison implements ComparisonInterface
 {
@@ -76,12 +76,6 @@ class Comparison implements ComparisonInterface
      * @var mixed
      */
     protected $operand2;
-
-    /**
-     * @var string
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    protected $parameterIdentifier;
 
     /**
      * Constructs this Comparison instance
@@ -135,26 +129,6 @@ class Comparison implements ComparisonInterface
     public function getOperand2()
     {
         return $this->operand2;
-    }
-
-    /**
-     * @param string $parameterIdentifier
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function setParameterIdentifier($parameterIdentifier)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $this->parameterIdentifier = $parameterIdentifier;
-    }
-
-    /**
-     * @return string
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function getParameterIdentifier()
-    {
-        GeneralUtility::logDeprecatedFunction();
-        return $this->parameterIdentifier;
     }
 
     /**

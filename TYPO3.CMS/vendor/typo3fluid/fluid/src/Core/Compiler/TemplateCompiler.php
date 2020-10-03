@@ -142,14 +142,18 @@ class TemplateCompiler
      */
     public function has($identifier)
     {
-        if (isset($this->syntaxTreeInstanceCache[$identifier])) {
+        $identifier = $this->sanitizeIdentifier($identifier);
+
+        if (isset($this->syntaxTreeInstanceCache[$identifier]) || class_exists($identifier, false)) {
             return true;
         }
         if (!$this->renderingContext->isCacheEnabled()) {
             return false;
         }
-        $identifier = $this->sanitizeIdentifier($identifier);
-        return !empty($identifier) && $this->renderingContext->getCache()->get($identifier);
+        if (!empty($identifier)) {
+            return (boolean) $this->renderingContext->getCache()->get($identifier);
+        }
+        return false;
     }
 
     /**
@@ -161,9 +165,16 @@ class TemplateCompiler
         $identifier = $this->sanitizeIdentifier($identifier);
 
         if (!isset($this->syntaxTreeInstanceCache[$identifier])) {
-            $this->renderingContext->getCache()->get($identifier);
-            $this->syntaxTreeInstanceCache[$identifier] = new $identifier();
+            if (!class_exists($identifier, false)) {
+                $this->renderingContext->getCache()->get($identifier);
+            }
+            if (!is_a($identifier, UncompilableTemplateInterface::class, true)) {
+                $this->syntaxTreeInstanceCache[$identifier] = new $identifier();
+            } else {
+                return new $identifier();
+            }
         }
+
 
         return $this->syntaxTreeInstanceCache[$identifier];
     }
@@ -181,22 +192,27 @@ class TemplateCompiler
     /**
      * @param string $identifier
      * @param ParsingState $parsingState
-     * @return void
+     * @return string|null
      */
     public function store($identifier, ParsingState $parsingState)
     {
         if ($this->isDisabled()) {
-            $cache = $this->renderingContext->getCache();
-            if ($cache) {
-                // Compiler is disabled but cache is enabled. Flush cache to make sure.
-                $cache->flush($identifier);
-            }
             $parsingState->setCompilable(false);
-            return;
+            return null;
+        }
+
+        $identifier = $this->sanitizeIdentifier($identifier);
+        $cache = $this->renderingContext->getCache();
+        if (!$parsingState->isCompilable()) {
+            $templateCode = '<?php' . PHP_EOL . 'class ' . $identifier .
+                ' extends \TYPO3Fluid\Fluid\Core\Compiler\AbstractCompiledTemplate' . PHP_EOL .
+                ' implements \TYPO3Fluid\Fluid\Core\Compiler\UncompilableTemplateInterface' . PHP_EOL .
+                '{' . PHP_EOL . '}';
+            $cache->set($identifier, $templateCode);
+            return $templateCode;
         }
 
         $this->currentlyProcessingState = $parsingState;
-        $identifier = $this->sanitizeIdentifier($identifier);
         $this->nodeConverter->setVariableCounter(0);
         $generatedRenderFunctions = $this->generateSectionCodeFromParsingState($parsingState);
 
@@ -214,7 +230,7 @@ class TemplateCompiler
 %s {
 
 public function getLayoutName(\TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface \$renderingContext) {
-\$self = \$this; 
+\$self = \$this;
 %s;
 }
 public function hasLayout() {
@@ -238,6 +254,7 @@ EOD;
             $generatedRenderFunctions
         );
         $this->renderingContext->getCache()->set($identifier, $templateCode);
+        return $templateCode;
     }
 
     /**
@@ -347,17 +364,9 @@ EOD;
         $arguments = $node->getArguments();
         $argument = $arguments[$argumentName];
         $closure = 'function() use ($renderingContext, $self) {' . chr(10);
-        if ($node->getArgumentDefinition($argumentName)->getType() === 'boolean') {
-            // We treat boolean nodes by compiling a closure to evaluate the stack of the boolean argument
-            $compiledIfArgumentStack = $this->nodeConverter->convert(new ArrayNode($argument->getStack()));
-            $closure .= $compiledIfArgumentStack['initialization'] . chr(10);
-            $closure .= sprintf(
-                'return \TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\BooleanNode::evaluateStack($renderingContext, %s);',
-                $compiledIfArgumentStack['execution']
-            ) . chr(10);
-        } else {
-            $closure .= sprintf('$argument = unserialize(\'%s\'); return $argument->evaluate($renderingContext);', serialize($argument)) . chr(10);
-        }
+        $compiled = $this->nodeConverter->convert($argument);
+        $closure .= $compiled['initialization'] . chr(10);
+        $closure .= 'return ' . $compiled['execution'] . ';' . chr(10);
         $closure .= '}';
         return $closure;
     }

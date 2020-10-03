@@ -14,15 +14,16 @@ namespace TYPO3\CMS\Reports\Task;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Mail\MailMessage;
 use TYPO3\CMS\Core\Registry;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 use TYPO3\CMS\Reports\Status;
 use TYPO3\CMS\Scheduler\Task\AbstractTask;
 
 /**
  * A task that should be run regularly to determine the system's status.
+ * @internal This class is a specific scheduler task implementation and is not considered part of the Public TYPO3 API.
  */
 class SystemStatusUpdateTask extends AbstractTask
 {
@@ -32,7 +33,7 @@ class SystemStatusUpdateTask extends AbstractTask
      *
      * @var string
      */
-    protected $notificationEmail = null;
+    protected $notificationEmail;
 
     /**
      * Checkbox for to send all types of notification, not only problems

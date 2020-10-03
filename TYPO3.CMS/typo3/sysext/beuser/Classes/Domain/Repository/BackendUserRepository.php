@@ -26,6 +26,7 @@ use TYPO3\CMS\Extbase\Persistence\QueryInterface;
 
 /**
  * Repository for \TYPO3\CMS\Beuser\Domain\Model\BackendUser
+ * @internal This class is a TYPO3 Backend implementation and is not considered part of the Public TYPO3 API.
  */
 class BackendUserRepository extends BackendUserGroupRepository
 {
@@ -63,7 +64,8 @@ class BackendUserRepository extends BackendUserGroupRepository
             $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('be_users');
             foreach (['userName', 'uid', 'realName'] as $field) {
                 $searchConstraints[] = $query->like(
-                    $field, '%' . $queryBuilder->escapeLikeWildcards($demand->getUserName()) . '%'
+                    $field,
+                    '%' . $queryBuilder->escapeLikeWildcards($demand->getUserName()) . '%'
                 );
             }
             $constraints[] = $query->logicalOr($searchConstraints);
@@ -96,12 +98,11 @@ class BackendUserRepository extends BackendUserGroupRepository
         // @TODO: Refactor for real n:m relations
         if ($demand->getBackendUserGroup()) {
             $constraints[] = $query->logicalOr([
-                $query->equals('usergroup', (int)$demand->getBackendUserGroup()->getUid()),
-                $query->like('usergroup', (int)$demand->getBackendUserGroup()->getUid() . ',%'),
-                $query->like('usergroup', '%,' . (int)$demand->getBackendUserGroup()->getUid()),
-                $query->like('usergroup', '%,' . (int)$demand->getBackendUserGroup()->getUid() . ',%')
+                $query->equals('usergroup', (int)$demand->getBackendUserGroup()),
+                $query->like('usergroup', (int)$demand->getBackendUserGroup() . ',%'),
+                $query->like('usergroup', '%,' . (int)$demand->getBackendUserGroup()),
+                $query->like('usergroup', '%,' . (int)$demand->getBackendUserGroup() . ',%')
             ]);
-            $query->contains('usergroup', $demand->getBackendUserGroup());
         }
         $query->matching($query->logicalAnd($constraints));
         /** @var QueryResult $result */

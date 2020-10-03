@@ -21,7 +21,7 @@ Grid Elements
           gridelements
 
 :Version:
-          8.3.0
+          9.0.0
 
 :Language:
           en
@@ -34,7 +34,7 @@ Grid Elements
           grid elements, backend, layout
 
 :Copyright:
-          Jo Hasenau, Cybercraft Media Manufactory
+          Jo Hasenau, Cybercraft GmbH
 
 :Author:
           The Grid Elements Team

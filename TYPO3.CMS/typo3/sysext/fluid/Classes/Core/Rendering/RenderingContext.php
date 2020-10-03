@@ -19,15 +19,12 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Object\ObjectManager;
 use TYPO3\CMS\Fluid\Core\Cache\FluidTemplateCache;
 use TYPO3\CMS\Fluid\Core\Parser\InterceptorInterface;
-use TYPO3\CMS\Fluid\Core\Variables\CmsVariableProvider;
 use TYPO3\CMS\Fluid\Core\ViewHelper\ViewHelperResolver;
 use TYPO3\CMS\Fluid\View\TemplatePaths;
 use TYPO3Fluid\Fluid\Core\Compiler\TemplateCompiler;
 use TYPO3Fluid\Fluid\Core\Parser\Configuration;
 use TYPO3Fluid\Fluid\Core\Parser\TemplateParser;
-use TYPO3Fluid\Fluid\Core\Parser\TemplateProcessor\EscapingModifierTemplateProcessor;
-use TYPO3Fluid\Fluid\Core\Parser\TemplateProcessor\NamespaceDetectionTemplateProcessor;
-use TYPO3Fluid\Fluid\Core\Parser\TemplateProcessor\PassthroughSourceModifierTemplateProcessor;
+use TYPO3Fluid\Fluid\Core\Variables\StandardVariableProvider;
 use TYPO3Fluid\Fluid\Core\ViewHelper\ViewHelperInvoker;
 use TYPO3Fluid\Fluid\Core\ViewHelper\ViewHelperVariableContainer;
 use TYPO3Fluid\Fluid\View\ViewInterface;
@@ -38,44 +35,11 @@ use TYPO3Fluid\Fluid\View\ViewInterface;
 class RenderingContext extends \TYPO3Fluid\Fluid\Core\Rendering\RenderingContext
 {
     /**
-     * Template Variable Container. Contains all variables available through object accessors in the template
-     *
-     * @var \TYPO3\CMS\Fluid\Core\ViewHelper\TemplateVariableContainer
-     */
-    protected $templateVariableContainer;
-
-    /**
-     * Object manager which is bubbled through. The ViewHelperNode cannot get an ObjectManager injected because
-     * the whole syntax tree should be cacheable
-     *
-     * @var \TYPO3\CMS\Extbase\Object\ObjectManagerInterface
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    protected $objectManager;
-
-    /**
      * Controller context being passed to the ViewHelper
      *
      * @var \TYPO3\CMS\Extbase\Mvc\Controller\ControllerContext
      */
     protected $controllerContext;
-
-    /**
-     * Use legacy behavior? Can be overridden using setLegacyMode().
-     *
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     * @var bool
-     */
-    protected $legacyMode = false;
-
-    /**
-     * @param \TYPO3\CMS\Extbase\Object\ObjectManagerInterface $objectManager
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function injectObjectManager(\TYPO3\CMS\Extbase\Object\ObjectManagerInterface $objectManager)
-    {
-        $this->objectManager = $objectManager;
-    }
 
     /**
      * @param \TYPO3Fluid\Fluid\Core\ViewHelper\ViewHelperVariableContainer $viewHelperVariableContainer
@@ -102,19 +66,14 @@ class RenderingContext extends \TYPO3Fluid\Fluid\Core\Rendering\RenderingContext
             $this->setTemplateCompiler(new TemplateCompiler());
             $this->setViewHelperInvoker(new ViewHelperInvoker());
             $this->setViewHelperVariableContainer(new ViewHelperVariableContainer());
-            $this->setTemplateProcessors(
-                [
-                    new EscapingModifierTemplateProcessor(),
-                    new PassthroughSourceModifierTemplateProcessor(),
-                    new NamespaceDetectionTemplateProcessor()
-                ]
-            );
+            $this->setVariableProvider(new StandardVariableProvider());
         }
 
         $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $this->setTemplateProcessors(array_map([$objectManager, 'get'], $GLOBALS['TYPO3_CONF_VARS']['SYS']['fluid']['preProcessors']));
+        $this->setExpressionNodeTypes($GLOBALS['TYPO3_CONF_VARS']['SYS']['fluid']['expressionNodeTypes']);
         $this->setTemplatePaths($objectManager->get(TemplatePaths::class));
         $this->setViewHelperResolver($objectManager->get(ViewHelperResolver::class));
-        $this->setVariableProvider($objectManager->get(CmsVariableProvider::class));
 
         /** @var FluidTemplateCache $cache */
         $cache = $objectManager->get(CacheManager::class)->getCache('fluid_template');
@@ -143,47 +102,6 @@ class RenderingContext extends \TYPO3Fluid\Fluid\Core\Rendering\RenderingContext
         }
 
         return $parserConfiguration;
-    }
-
-    /**
-     * Set legacy compatibility mode on/off by boolean.
-     * If set to FALSE, the ViewHelperResolver will only load a limited sub-set of ExpressionNodes,
-     * making Fluid behave like the legacy version of the CMS core extension.
-     *
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     * @param bool $legacyMode
-     */
-    public function setLegacyMode($legacyMode)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $this->legacyMode = $legacyMode;
-    }
-
-    /**
-     * Returns the object manager. Only the ViewHelperNode should do this.
-     *
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     * @return \TYPO3\CMS\Extbase\Object\ObjectManagerInterface
-     */
-    public function getObjectManager()
-    {
-        return $this->objectManager;
-    }
-
-    /**
-     * Get the template variable container (DEPRECATED; use getVariableProvider instead)
-     *
-     * @deprecated since TYPO3 CMS 8, will be removed in TYPO3 CMS 9 - use getVariableProvider instead
-     * @see getVariableProvider
-     * @return \TYPO3\CMS\Fluid\Core\ViewHelper\TemplateVariableContainer The Template Variable Container
-     */
-    public function getTemplateVariableContainer()
-    {
-        GeneralUtility::deprecationLog(
-            'getTemplateVariableContainer is deprecated since TYPO3 CMS 8, will be removed in TYPO3 CMS 9' .
-            ' - use getVariableProvider instead'
-        );
-        return $this->variableProvider;
     }
 
     /**

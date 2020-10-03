@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Renderer;
 
 /*
@@ -34,7 +34,6 @@ interface RendererInterface
      * Set the controller context which should be used
      *
      * @param ControllerContext $controllerContext
-     * @api
      */
     public function setControllerContext(ControllerContext $controllerContext);
 
@@ -43,19 +42,16 @@ interface RendererInterface
      * on each $renderable
      *
      * @return string the rendered $formRuntime
-     * @api
      */
     public function render(): string;
 
     /**
      * @param FormRuntime $formRuntime
-     * @api
      */
     public function setFormRuntime(FormRuntime $formRuntime);
 
     /**
      * @return FormRuntime
-     * @api
      */
     public function getFormRuntime(): FormRuntime;
 }

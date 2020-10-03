@@ -14,8 +14,8 @@ namespace TYPO3\CMS\Backend\Form\Container;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Render all tabs of a record that has tabs.
@@ -68,7 +68,7 @@ class TabsContainer extends AbstractContainer
         $tabCounter = 0;
         $tabElements = [];
         foreach ($tabsArray as $tabWithLabelAndElements) {
-            $tabCounter ++;
+            $tabCounter++;
             $elements = $tabWithLabelAndElements['elements'];
 
             // Merge elements of this tab into a single list again and hand over to
@@ -85,10 +85,12 @@ class TabsContainer extends AbstractContainer
             $options['renderType'] = 'paletteAndSingleContainer';
             $childArray = $this->nodeFactory->create($options)->render();
 
-            $tabElements[] = [
-                'label' => $tabWithLabelAndElements['label'],
-                'content' => $childArray['html'],
-            ];
+            if ($childArray['html'] !== '') {
+                $tabElements[] = [
+                    'label' => $tabWithLabelAndElements['label'],
+                    'content' => $childArray['html'],
+                ];
+            }
             $resultArray = $this->mergeChildReturnIntoExistingResult($resultArray, $childArray, false);
         }
 

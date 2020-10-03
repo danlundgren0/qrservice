@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Finishers\Exception;
 
 /*
@@ -19,8 +19,6 @@ use TYPO3\CMS\Form\Domain\Exception;
 
 /**
  * This exception is thrown in Form Finishers
- *
- * @api
  */
 class FinisherException extends Exception
 {

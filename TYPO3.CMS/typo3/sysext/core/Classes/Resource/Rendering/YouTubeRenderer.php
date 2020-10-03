@@ -87,7 +87,25 @@ class YouTubeRenderer implements FileRendererInterface
      * @param bool $usedPathsRelativeToCurrentScript See $file->getPublicUrl()
      * @return string
      */
-    public function render(FileInterface $file, $width, $height, array $options = null, $usedPathsRelativeToCurrentScript = false)
+    public function render(FileInterface $file, $width, $height, array $options = [], $usedPathsRelativeToCurrentScript = false)
+    {
+        $options = $this->collectOptions($options, $file);
+        $src = $this->createYouTubeUrl($options, $file);
+        $attributes = $this->collectIframeAttributes($width, $height, $options);
+
+        return sprintf(
+            '<iframe src="%s"%s></iframe>',
+            htmlspecialchars($src, ENT_QUOTES | ENT_HTML5),
+            empty($attributes) ? '' : ' ' . $this->implodeAttributes($attributes)
+        );
+    }
+
+    /**
+     * @param array $options
+     * @param FileInterface $file
+     * @return array
+     */
+    protected function collectOptions(array $options, FileInterface $file)
     {
         // Check for an autoplay option at the file reference itself, if not overridden yet.
         if (!isset($options['autoplay']) && $file instanceof FileReference) {
@@ -97,59 +115,123 @@ class YouTubeRenderer implements FileRendererInterface
             }
         }
 
+        $showPlayerControls = 1;
+        $options['controls'] = (int)!empty($options['controls'] ?? $showPlayerControls);
+
+        if (!isset($options['allow'])) {
+            $options['allow'] = 'fullscreen';
+            if (!empty($options['autoplay'])) {
+                $options['allow'] = 'autoplay; fullscreen';
+            }
+        }
+        return $options;
+    }
+
+    /**
+     * @param array $options
+     * @param FileInterface $file
+     * @return string
+     */
+    protected function createYouTubeUrl(array $options, FileInterface $file)
+    {
+        $videoId = $this->getVideoIdFromFile($file);
+
+        $urlParams = ['autohide=1'];
+        $urlParams[] = 'controls=' . $options['controls'];
+        if (!empty($options['autoplay'])) {
+            $urlParams[] = 'autoplay=1';
+        }
+        if (!empty($options['modestbranding'])) {
+            $urlParams[] = 'modestbranding=1';
+        }
+        if (!empty($options['loop'])) {
+            $urlParams[] = 'loop=1&playlist=' . rawurlencode($videoId);
+        }
+        if (isset($options['relatedVideos'])) {
+            $urlParams[] = 'rel=' . (int)(bool)$options['relatedVideos'];
+        }
+        if (!isset($options['enablejsapi']) || !empty($options['enablejsapi'])) {
+            $urlParams[] = 'enablejsapi=1&origin=' . rawurlencode(GeneralUtility::getIndpEnv('TYPO3_REQUEST_HOST'));
+        }
+
+        $youTubeUrl = sprintf(
+            'https://www.youtube%s.com/embed/%s?%s',
+            !isset($options['no-cookie']) || !empty($options['no-cookie']) ? '-nocookie' : '',
+            rawurlencode($videoId),
+            implode('&', $urlParams)
+        );
+
+        return $youTubeUrl;
+    }
+
+    /**
+     * @param FileInterface $file
+     * @return string
+     */
+    protected function getVideoIdFromFile(FileInterface $file)
+    {
         if ($file instanceof FileReference) {
             $orgFile = $file->getOriginalFile();
         } else {
             $orgFile = $file;
         }
 
-        $videoId = $this->getOnlineMediaHelper($file)->getOnlineMediaId($orgFile);
+        return $this->getOnlineMediaHelper($file)->getOnlineMediaId($orgFile);
+    }
 
-        $urlParams = ['autohide=1'];
-        if (!isset($options['controls']) || !empty($options['controls'])) {
-            $urlParams[] = 'controls=2';
-        }
-        if (!empty($options['autoplay'])) {
-            $urlParams[] = 'autoplay=1';
-        }
-        if (!empty($options['loop'])) {
-            $urlParams[] = 'loop=1&amp;playlist=' . $videoId;
-        }
-        if (isset($options['relatedVideos'])) {
-            $urlParams[] = 'rel=' . (int)(bool)$options['relatedVideos'];
-        }
-        if (!isset($options['enablejsapi']) || !empty($options['enablejsapi'])) {
-            $urlParams[] = 'enablejsapi=1&amp;origin=' . rawurlencode(GeneralUtility::getIndpEnv('TYPO3_REQUEST_HOST'));
-        }
-        $urlParams[] = 'showinfo=' . (int)!empty($options['showinfo']);
+    /**
+     * @param int|string $width
+     * @param int|string $height
+     * @param array $options
+     * @return array pairs of key/value; not yet html-escaped
+     */
+    protected function collectIframeAttributes($width, $height, array $options)
+    {
+        $attributes = [];
+        $attributes['allowfullscreen'] = true;
 
-        $src = sprintf(
-            'https://www.youtube%s.com/embed/%s?%s',
-            !empty($options['no-cookie']) ? '-nocookie' : '',
-            $videoId,
-            implode('&amp;', $urlParams)
-        );
-
-        $attributes = ['allowfullscreen'];
+        if (isset($options['additionalAttributes']) && is_array($options['additionalAttributes'])) {
+            $attributes = array_merge($attributes, $options['additionalAttributes']);
+        }
+        if (isset($options['data']) && is_array($options['data'])) {
+            array_walk($options['data'], function (&$value, $key) use (&$attributes) {
+                $attributes['data-' . $key] = $value;
+            });
+        }
         if ((int)$width > 0) {
-            $attributes[] = 'width="' . (int)$width . '"';
+            $attributes['width'] = (int)$width;
         }
         if ((int)$height > 0) {
-            $attributes[] = 'height="' . (int)$height . '"';
+            $attributes['height'] = (int)$height;
         }
-        if (is_object($GLOBALS['TSFE']) && $GLOBALS['TSFE']->config['config']['doctype'] !== 'html5') {
-            $attributes[] = 'frameborder="0"';
+        if (isset($GLOBALS['TSFE']) && is_object($GLOBALS['TSFE']) && (isset($GLOBALS['TSFE']->config['config']['doctype']) && $GLOBALS['TSFE']->config['config']['doctype'] !== 'html5')) {
+            $attributes['frameborder'] = 0;
         }
-        foreach (['class', 'dir', 'id', 'lang', 'style', 'title', 'accesskey', 'tabindex', 'onclick', 'poster', 'preload'] as $key) {
+        foreach (['class', 'dir', 'id', 'lang', 'style', 'title', 'accesskey', 'tabindex', 'onclick', 'poster', 'preload', 'allow'] as $key) {
             if (!empty($options[$key])) {
-                $attributes[] = $key . '="' . htmlspecialchars($options[$key]) . '"';
+                $attributes[$key] = $options[$key];
             }
         }
 
-        return sprintf(
-            '<iframe src="%s"%s></iframe>',
-            $src,
-            empty($attributes) ? '' : ' ' . implode(' ', $attributes)
-        );
+        return $attributes;
+    }
+
+    /**
+     * @internal
+     * @param array $attributes
+     * @return string
+     */
+    protected function implodeAttributes(array $attributes): string
+    {
+        $attributeList = [];
+        foreach ($attributes as $name => $value) {
+            $name = preg_replace('/[^\p{L}0-9_.-]/u', '', $name);
+            if ($value === true) {
+                $attributeList[] = $name;
+            } else {
+                $attributeList[] = $name . '="' . htmlspecialchars($value, ENT_QUOTES | ENT_HTML5) . '"';
+            }
+        }
+        return implode(' ', $attributeList);
     }
 }

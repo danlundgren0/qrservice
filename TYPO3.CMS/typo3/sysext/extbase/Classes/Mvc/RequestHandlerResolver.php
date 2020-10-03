@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Extbase\Mvc;
 
 /**
  * Analyzes the raw request and delivers a request handler which can handle it.
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 class RequestHandlerResolver
 {
@@ -23,11 +24,6 @@ class RequestHandlerResolver
      * @var \TYPO3\CMS\Extbase\Object\ObjectManagerInterface
      */
     protected $objectManager;
-
-    /**
-     * @var \TYPO3\CMS\Extbase\Reflection\ReflectionService
-     */
-    protected $reflectionService;
 
     /**
      * @var \TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface
@@ -40,14 +36,6 @@ class RequestHandlerResolver
     public function injectObjectManager(\TYPO3\CMS\Extbase\Object\ObjectManagerInterface $objectManager)
     {
         $this->objectManager = $objectManager;
-    }
-
-    /**
-     * @param \TYPO3\CMS\Extbase\Reflection\ReflectionService $reflectionService
-     */
-    public function injectReflectionService(\TYPO3\CMS\Extbase\Reflection\ReflectionService $reflectionService)
-    {
-        $this->reflectionService = $reflectionService;
     }
 
     /**

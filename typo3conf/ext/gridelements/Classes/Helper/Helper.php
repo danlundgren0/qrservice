@@ -66,7 +66,7 @@ class Helper implements SingletonInterface
      * @param string $selectFieldList
      * @return array
      */
-    public function getChildren($table = '', $uid = 0, $pid = 0, $sortingField = '', $sortRev = 0, $selectFieldList)
+    public function getChildren($table = '', $uid = 0, $pid = 0, $sortingField = '', $sortRev = 0, $selectFieldList = '')
     {
         $retVal = [];
 

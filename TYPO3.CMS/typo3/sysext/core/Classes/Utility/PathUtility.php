@@ -14,6 +14,8 @@ namespace TYPO3\CMS\Core\Utility;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Core\Environment;
+
 /**
  * Class with helper functions for file paths.
  */
@@ -24,11 +26,11 @@ class PathUtility
      * The allowed TYPO3 path is checked as well, thus it's not possible to go to upper levels.
      *
      * @param string $targetPath Absolute target path
-     * @return NULL|string
+     * @return string|null
      */
     public static function getRelativePathTo($targetPath)
     {
-        return self::getRelativePath(dirname(PATH_thisScript), $targetPath);
+        return self::getRelativePath(self::dirname(Environment::getCurrentScript()), $targetPath);
     }
 
     /**
@@ -40,9 +42,9 @@ class PathUtility
     public static function getAbsoluteWebPath($targetPath)
     {
         if (self::isAbsolutePath($targetPath)) {
-            if (strpos($targetPath, PATH_site) === 0) {
+            if (strpos($targetPath, Environment::getPublicPath()) === 0) {
                 $targetPath = self::stripPathSitePrefix($targetPath);
-                if (!(TYPO3_REQUESTTYPE & TYPO3_REQUESTTYPE_CLI)) {
+                if (!Environment::isCli()) {
                     $targetPath = GeneralUtility::getIndpEnv('TYPO3_SITE_PATH') . $targetPath;
                 }
             }
@@ -50,9 +52,9 @@ class PathUtility
             return $targetPath;
         } else {
             // Make an absolute path out of it
-            $targetPath = GeneralUtility::resolveBackPath(dirname(PATH_thisScript) . '/' . $targetPath);
+            $targetPath = GeneralUtility::resolveBackPath(self::dirname(Environment::getCurrentScript()) . '/' . $targetPath);
             $targetPath = self::stripPathSitePrefix($targetPath);
-            if (!(TYPO3_REQUESTTYPE & TYPO3_REQUESTTYPE_CLI)) {
+            if (!Environment::isCli()) {
                 $targetPath = GeneralUtility::getIndpEnv('TYPO3_SITE_PATH') . $targetPath;
             }
         }
@@ -65,7 +67,7 @@ class PathUtility
      *
      * @param string $sourcePath Absolute source path
      * @param string $targetPath Absolute target path
-     * @return NULL|string
+     * @return string|null
      */
     public static function getRelativePath($sourcePath, $targetPath)
     {
@@ -102,7 +104,7 @@ class PathUtility
      * = /var/www/domain.com/typo3/sysext/
      *
      * @param array $paths Paths to be processed
-     * @return NULL|string
+     * @return string|null
      */
     public static function getCommonPrefix(array $paths)
     {
@@ -220,7 +222,7 @@ class PathUtility
     public static function isAbsolutePath($path)
     {
         // On Windows also a path starting with a drive letter is absolute: X:/
-        if (static::isWindows() && (substr($path, 1, 2) === ':/' || substr($path, 1, 2) === ':\\')) {
+        if (Environment::isWindows() && (substr($path, 1, 2) === ':/' || substr($path, 1, 2) === ':\\')) {
             return true;
         }
         // Path starting with a / is always absolute, on every system
@@ -260,6 +262,36 @@ class PathUtility
         return $result;
     }
 
+    /**
+     * Returns parent directory's path
+     * Early during bootstrap there is no TYPO3_CONF_VARS yet so the setting for the system locale
+     * is also unavailable. The path of the parent directory is determined with a regular expression
+     * to avoid issues with locales.
+     *
+     * @param string $path
+     *
+     * @return string
+     */
+    public static function dirnameDuringBootstrap($path): string
+    {
+        return preg_replace('#(.*)(/|\\\\)([^\\\\/]+)$#', '$1', $path);
+    }
+
+    /**
+     * Returns filename part of a path
+     * Early during bootstrap there is no TYPO3_CONF_VARS yet so the setting for the system locale
+     * is also unavailable. The filename part is determined with a regular expression to avoid issues
+     * with locales.
+     *
+     * @param string $path
+     *
+     * @return string
+     */
+    public static function basenameDuringBootstrap($path): string
+    {
+        return preg_replace('#.*[/\\\\]([^\\\\/]+)$#', '$1', $path);
+    }
+
     /*********************
      *
      * Cleaning methods
@@ -285,7 +317,7 @@ class PathUtility
 
         $absolutePathPrefix = '';
         if (static::isAbsolutePath($path)) {
-            if (static::isWindows() && substr($path, 1, 2) === ':/') {
+            if (Environment::isWindows() && substr($path, 1, 2) === ':/') {
                 $absolutePathPrefix = substr($path, 0, 3);
                 $path = substr($path, 3);
             } else {
@@ -304,13 +336,13 @@ class PathUtility
                 $theDirPartsCount--;
             }
             // "." in path: remove element
-            if ($theDirParts[$partCount] === '.') {
+            if (($theDirParts[$partCount] ?? '') === '.') {
                 array_splice($theDirParts, $partCount, 1);
                 $partCount--;
                 $theDirPartsCount--;
             }
             // ".." in path:
-            if ($theDirParts[$partCount] === '..') {
+            if (($theDirParts[$partCount] ?? '') === '..') {
                 if ($partCount >= 1) {
                     // Rremove this and previous element
                     array_splice($theDirParts, $partCount - 1, 2);
@@ -330,7 +362,7 @@ class PathUtility
     }
 
     /**
-     * Strip first part of a path, equal to the length of PATH_site
+     * Strip first part of a path, equal to the length of public web path including trailing slash
      *
      * @param string $path
      * @return string
@@ -338,28 +370,6 @@ class PathUtility
      */
     public static function stripPathSitePrefix($path)
     {
-        static $pathSiteLength = null;
-
-        // calculate length when first needed
-        if (!isset($pathSiteLength)) {
-            $pathSiteLength = strlen(PATH_site);
-        }
-        return substr($path, $pathSiteLength);
-    }
-
-    /*********************
-     *
-     * Helper methods
-     *
-     *********************/
-
-    /**
-     * Wrapper method to be able to test windows path transformation on other systems
-     *
-     * @return bool
-     */
-    protected static function isWindows()
-    {
-        return TYPO3_OS === 'WIN';
+        return substr($path, strlen(Environment::getPublicPath() . '/'));
     }
 }

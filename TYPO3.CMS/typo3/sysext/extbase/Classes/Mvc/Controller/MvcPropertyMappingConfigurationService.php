@@ -14,6 +14,10 @@ namespace TYPO3\CMS\Extbase\Mvc\Controller;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Error\Http\BadRequestException;
+use TYPO3\CMS\Extbase\Security\Exception\InvalidArgumentForHashGenerationException;
+use TYPO3\CMS\Extbase\Security\Exception\InvalidHashException;
+
 /**
  * This is a Service which can generate a request hash and check whether the currently given arguments
  * fit to the request hash.
@@ -29,6 +33,8 @@ namespace TYPO3\CMS\Extbase\Mvc\Controller;
  * 2) Check that _all_ GET/POST parameters submitted occur inside the form field list of the request hash.
  *
  * Note: It is crucially important that a private key is computed into the hash value! This is done inside the HashService.
+ *
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 class MvcPropertyMappingConfigurationService implements \TYPO3\CMS\Core\SingletonInterface
 {
@@ -91,7 +97,7 @@ class MvcPropertyMappingConfigurationService implements \TYPO3\CMS\Core\Singleto
             }
         }
         if ($fieldNamePrefix !== '') {
-            $formFieldArray = (isset($formFieldArray[$fieldNamePrefix]) ? $formFieldArray[$fieldNamePrefix] : []);
+            $formFieldArray = ($formFieldArray[$fieldNamePrefix] ?? []);
         }
         return $this->serializeAndHashFormFieldArray($formFieldArray);
     }
@@ -115,6 +121,7 @@ class MvcPropertyMappingConfigurationService implements \TYPO3\CMS\Core\Singleto
      *
      * @param \TYPO3\CMS\Extbase\Mvc\Request $request
      * @param \TYPO3\CMS\Extbase\Mvc\Controller\Arguments $controllerArguments
+     * @throws BadRequestException
      */
     public function initializePropertyMappingConfigurationFromRequest(\TYPO3\CMS\Extbase\Mvc\Request $request, \TYPO3\CMS\Extbase\Mvc\Controller\Arguments $controllerArguments)
     {
@@ -123,8 +130,12 @@ class MvcPropertyMappingConfigurationService implements \TYPO3\CMS\Core\Singleto
             return;
         }
 
-        $serializedTrustedProperties = $this->hashService->validateAndStripHmac($trustedPropertiesToken);
-        $trustedProperties = unserialize($serializedTrustedProperties);
+        try {
+            $serializedTrustedProperties = $this->hashService->validateAndStripHmac($trustedPropertiesToken);
+        } catch (InvalidHashException | InvalidArgumentForHashGenerationException $e) {
+            throw new BadRequestException('The HMAC of the form could not be validated.', 1581862822);
+        }
+        $trustedProperties = unserialize($serializedTrustedProperties, ['allowed_classes' => false]);
         foreach ($trustedProperties as $propertyName => $propertyConfiguration) {
             if (!$controllerArguments->hasArgument($propertyName)) {
                 continue;

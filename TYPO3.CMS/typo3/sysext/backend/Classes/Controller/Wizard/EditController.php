@@ -1,4 +1,5 @@
 <?php
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Controller\Wizard;
 
 /*
@@ -16,30 +17,56 @@ namespace TYPO3\CMS\Backend\Controller\Wizard;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Compatibility\PublicPropertyDeprecationTrait;
+use TYPO3\CMS\Core\Configuration\FlexForm\FlexFormTools;
 use TYPO3\CMS\Core\Database\RelationHandler;
+use TYPO3\CMS\Core\Http\HtmlResponse;
+use TYPO3\CMS\Core\Http\RedirectResponse;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\HttpUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
 
 /**
  * Script Class for redirecting a backend user to the editing form when an "Edit wizard" link was clicked in FormEngine somewhere
+ * @internal This class is a specific Backend controller implementation and is not considered part of the Public TYPO3 API.
  */
 class EditController extends AbstractWizardController
 {
+    use PublicPropertyDeprecationTrait;
+
     /**
-     * Wizard parameters, coming from FormEngine linking to the wizard.
+     * Properties which have been moved to protected status from public
      *
      * @var array
      */
-    public $P;
+    protected $deprecatedPublicProperties = [
+        'P' => 'Using $P of class EditController from the outside is discouraged, as this variable is only used for internal storage.',
+        'doClose' => 'Using $doClose of class EditController from the outside is discouraged, as this variable is only used for internal storage.',
+    ];
+
+    /**
+     * Wizard parameters, coming from FormEngine linking to the wizard.
+     *
+     * Contains the following parts:
+     * - table
+     * - field
+     * - formName
+     * - hmac
+     * - fieldChangeFunc
+     * - fieldChangeFuncHash
+     * - currentValue
+     * - currentSelectedValues
+     *
+     * @var array
+     */
+    protected $P;
 
     /**
      * Boolean; if set, the window will be closed by JavaScript
      *
      * @var int
      */
-    public $doClose;
+    protected $doClose;
 
     /**
      * A little JavaScript to close the open window.
@@ -53,21 +80,26 @@ class EditController extends AbstractWizardController
      */
     public function __construct()
     {
-        parent::__construct();
-        $this->getLanguageService()->includeLLFile('EXT:lang/Resources/Private/Language/locallang_wizards.xlf');
-        $GLOBALS['SOBE'] = $this;
+        $this->getLanguageService()->includeLLFile('EXT:core/Resources/Private/Language/locallang_wizards.xlf');
 
-        $this->init();
+        // @deprecated since TYPO3 v9, will be moved out of __construct() in TYPO3 v10.0
+        $this->init($GLOBALS['TYPO3_REQUEST']);
     }
 
     /**
      * Initialization of the script
+     *
+     * @param ServerRequestInterface $request
      */
-    protected function init()
+    protected function init(ServerRequestInterface $request)
     {
-        $this->P = GeneralUtility::_GP('P');
+        $parsedBody = $request->getParsedBody();
+        $queryParams = $request->getQueryParams();
+
+        $this->P = $parsedBody['P'] ?? $queryParams['P'] ?? [];
+
         // Used for the return URL to FormEngine so that we can close the window.
-        $this->doClose = GeneralUtility::_GP('doClose');
+        $this->doClose = $parsedBody['doClose'] ?? $queryParams['doClose'] ?? 0;
     }
 
     /**
@@ -75,14 +107,12 @@ class EditController extends AbstractWizardController
      * As this controller goes only through the main() method, it is rather simple for now
      *
      * @param ServerRequestInterface $request
-     * @param ResponseInterface $response
      * @return ResponseInterface
      */
-    public function mainAction(ServerRequestInterface $request, ResponseInterface $response)
+    public function mainAction(ServerRequestInterface $request): ResponseInterface
     {
-        $content = $this->main();
-        $response->getBody()->write($content);
-        return $response;
+        $content = $this->processRequest($request);
+        return $content;
     }
 
     /**
@@ -90,38 +120,83 @@ class EditController extends AbstractWizardController
      * Makes a header-location redirect to an edit form IF POSSIBLE from the passed data - otherwise the window will
      * just close.
      *
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      * @return string
      */
     public function main()
     {
+        trigger_error('EditController->main() will be set to protected in TYPO3 v10.0. Do not call from other extension.', E_USER_DEPRECATED);
+        $request = $GLOBALS['TYPO3_REQUEST'];
+
+        $response = $this->processRequest($request);
+
+        if ($response instanceof RedirectResponse) {
+            HttpUtility::redirect($response->getHeaders()['location'][0]);
+        } else {
+            return $response->getBody()->getContents();
+        }
+    }
+
+    /**
+     * Process request function
+     * Makes a header-location redirect to an edit form IF POSSIBLE from the passed data - otherwise the window will
+     * just close.
+     *
+     * @param  ServerRequestInterface $request
+     * @return ResponseInterface
+     */
+    protected function processRequest(ServerRequestInterface $request): ResponseInterface
+    {
         if ($this->doClose) {
-            return $this->closeWindow;
+            return new HtmlResponse($this->closeWindow);
         }
         // Initialize:
         $table = $this->P['table'];
         $field = $this->P['field'];
-        $config = $GLOBALS['TCA'][$table]['columns'][$field]['config'];
-        $fTable = $config['foreign_table'];
 
+        if (empty($this->P['flexFormDataStructureIdentifier'])) {
+            // If there is not flex data structure identifier, field config is found in globals
+            $config = $GLOBALS['TCA'][$table]['columns'][$field]['config'];
+        } else {
+            // If there is a flex data structure identifier, parse that data structure and
+            // fetch config defined by given flex path
+            $flexFormTools = GeneralUtility::makeInstance(FlexFormTools::class);
+            $dataStructure = $flexFormTools->parseDataStructureByIdentifier($this->P['flexFormDataStructureIdentifier']);
+            $config = $flexFormTools->getArrayValueByPath($this->P['flexFormDataStructurePath'], $dataStructure);
+            if (!is_array($config)) {
+                throw new \RuntimeException(
+                    'Something went wrong finding flex path ' . $this->P['flexFormDataStructurePath']
+                    . ' in data structure identified by ' . $this->P['flexFormDataStructureIdentifier'],
+                    1537356346
+                );
+            }
+        }
+
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
         $urlParameters = [
-            'returnUrl' => BackendUtility::getModuleUrl('wizard_edit', ['doClose' => 1])
+            'returnUrl' => (string)$uriBuilder->buildUriFromRoute('wizard_edit', ['doClose' => 1])
         ];
 
         // Detecting the various allowed field type setups and acting accordingly.
         if (is_array($config)
             && $config['type'] === 'select'
             && !$config['MM']
-            && $config['maxitems'] <= 1 && MathUtility::canBeInterpretedAsInteger($this->P['currentValue'])
-            && $this->P['currentValue'] && $fTable
+            && $config['maxitems'] <= 1
+            && MathUtility::canBeInterpretedAsInteger($this->P['currentValue'])
+            && $this->P['currentValue']
+            && $config['foreign_table']
         ) {
             // SINGLE value
-            $urlParameters['edit[' . $fTable . '][' . $this->P['currentValue'] . ']'] = 'edit';
+            $urlParameters['edit[' . $config['foreign_table'] . '][' . $this->P['currentValue'] . ']'] = 'edit';
             // Redirect to FormEngine
-            $url = BackendUtility::getModuleUrl('record_edit', $urlParameters);
-            HttpUtility::redirect($url);
-        } elseif (is_array($config)
+            $url = (string)$uriBuilder->buildUriFromRoute('record_edit', $urlParameters);
+            return new RedirectResponse($url);
+        }
+
+        if (is_array($config)
             && $this->P['currentSelectedValues']
-            && ($config['type'] === 'select'
+            && (
+                $config['type'] === 'select'
                 && $config['foreign_table']
                 || $config['type'] === 'group'
                 && $config['internal_type'] === 'db'
@@ -132,7 +207,6 @@ class EditController extends AbstractWizardController
             $allowedTables = $config['type'] === 'group' ? $config['allowed'] : $config['foreign_table'];
             $prependName = 1;
             // Selecting selected values into an array:
-            /** @var RelationHandler $relationHandler */
             $relationHandler = GeneralUtility::makeInstance(RelationHandler::class);
             $relationHandler->start($this->P['currentSelectedValues'], $allowedTables);
             $value = $relationHandler->getValueArray($prependName);
@@ -142,10 +216,10 @@ class EditController extends AbstractWizardController
                 $urlParameters['edit[' . $recTableUidParts[0] . '][' . $recTableUidParts[1] . ']'] = 'edit';
             }
             // Redirect to FormEngine
-            $url = BackendUtility::getModuleUrl('record_edit', $urlParameters);
-            HttpUtility::redirect($url);
-        } else {
-            return $this->closeWindow;
+            $url = (string)$uriBuilder->buildUriFromRoute('record_edit', $urlParameters);
+
+            return new RedirectResponse($url);
         }
+        return new HtmlResponse($this->closeWindow);
     }
 }

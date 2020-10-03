@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Extbase\Mvc\Web;
 
 /**
  * A request handler which can handle web requests invoked by the frontend.
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 class FrontendRequestHandler extends AbstractRequestHandler
 {
@@ -61,7 +62,7 @@ class FrontendRequestHandler extends AbstractRequestHandler
     /**
      * Handles the web request. The response will automatically be sent to the client.
      *
-     * @return \TYPO3\CMS\Extbase\Mvc\ResponseInterface|NULL
+     * @return \TYPO3\CMS\Extbase\Mvc\ResponseInterface|null
      */
     public function handleRequest()
     {
@@ -86,7 +87,7 @@ class FrontendRequestHandler extends AbstractRequestHandler
             $this->cacheHashEnforcer->enforceForRequest($request, $pluginNamespace);
         }
 
-        /** @var $response \TYPO3\CMS\Extbase\Mvc\ResponseInterface */
+        /** @var \TYPO3\CMS\Extbase\Mvc\ResponseInterface $response */
         $response = $this->objectManager->get(\TYPO3\CMS\Extbase\Mvc\Web\Response::class);
         $this->dispatcher->dispatch($request, $response);
         return $response;

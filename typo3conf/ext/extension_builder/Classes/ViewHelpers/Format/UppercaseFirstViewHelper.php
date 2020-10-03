@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\ViewHelpers\Format;
 
 /*
@@ -14,7 +15,7 @@ namespace EBT\ExtensionBuilder\ViewHelpers\Format;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 
 /**
  * Wrapper for PHPs ucfirst function.
@@ -36,7 +37,6 @@ class UppercaseFirstViewHelper extends AbstractViewHelper
      * Uppercase first character
      *
      * @return string The altered string.
-     * @author Christopher Hlubek <hlubek@networkteam.com>
      */
     public function render()
     {

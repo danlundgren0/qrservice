@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Controller;
 
 /*
@@ -19,10 +20,14 @@ use EBT\ExtensionBuilder\Domain\Exception\ExtensionException;
 use EBT\ExtensionBuilder\Domain\Repository\ExtensionRepository;
 use EBT\ExtensionBuilder\Domain\Validator\ExtensionValidator;
 use EBT\ExtensionBuilder\Service\ExtensionSchemaBuilder;
+use EBT\ExtensionBuilder\Service\ExtensionService;
 use EBT\ExtensionBuilder\Service\FileGenerator;
 use EBT\ExtensionBuilder\Service\RoundTrip;
 use EBT\ExtensionBuilder\Utility\ExtensionInstallationStatus;
+use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\PathUtility;
 use TYPO3\CMS\Extbase\Mvc\Controller\ActionController;
 
 /**
@@ -52,6 +57,11 @@ class BuilderModuleController extends ActionController
      * @var \EBT\ExtensionBuilder\Service\ExtensionSchemaBuilder
      */
     protected $extensionSchemaBuilder = null;
+
+    /**
+     * @var ExtensionService
+     */
+    protected $extensionService;
 
     /**
      * @var \EBT\ExtensionBuilder\Domain\Validator\ExtensionValidator
@@ -88,8 +98,9 @@ class BuilderModuleController extends ActionController
      * @return void
      * @throws \TYPO3\CMS\Extbase\Configuration\Exception\InvalidConfigurationTypeException
      */
-    public function injectExtensionBuilderConfigurationManager(ExtensionBuilderConfigurationManager $configurationManager)
-    {
+    public function injectExtensionBuilderConfigurationManager(
+        ExtensionBuilderConfigurationManager $configurationManager
+    ) {
         $this->extensionBuilderConfigurationManager = $configurationManager;
         $this->extensionBuilderSettings = $this->extensionBuilderConfigurationManager->getSettings();
     }
@@ -110,6 +121,14 @@ class BuilderModuleController extends ActionController
     public function injectExtensionSchemaBuilder(ExtensionSchemaBuilder $extensionSchemaBuilder)
     {
         $this->extensionSchemaBuilder = $extensionSchemaBuilder;
+    }
+
+    /**
+     * @param ExtensionService $extensionService
+     */
+    public function injectExtensionService(ExtensionService $extensionService)
+    {
+        $this->extensionService = $extensionService;
     }
 
     /**
@@ -171,8 +190,11 @@ class BuilderModuleController extends ActionController
      */
     public function domainmodellingAction()
     {
+        $this->view->assign('extPath',
+            PathUtility::stripPathSitePrefix(ExtensionManagementUtility::extPath('extension_builder')));
         $this->view->assign('settings', $this->extensionBuilderConfigurationManager->getSettings());
         $this->view->assign('currentAction', $this->request->getControllerActionName());
+        $this->view->assign('storagePaths', $this->extensionService->resolveStoragePaths());
         $this->getBackendUserAuthentication()->pushModuleData('extensionbuilder', ['firstTime' => 0]);
     }
 
@@ -211,14 +233,13 @@ class BuilderModuleController extends ActionController
     /**
      * Generate the code files according to the transferred JSON configuration.
      *
-     * @throws \Exception
      * @return array (status => message)
+     * @throws \Exception
      */
     protected function rpcActionSave()
     {
         try {
             $extensionBuildConfiguration = $this->extensionBuilderConfigurationManager->getConfigurationFromModeler();
-            GeneralUtility::devLog('Modeler Configuration', 'extension_builder', 0, $extensionBuildConfiguration);
             $validationConfigurationResult = $this->extensionValidator->validateConfigurationFormat($extensionBuildConfiguration);
             if (!empty($validationConfigurationResult['warnings'])) {
                 $confirmationRequired = $this->handleValidationWarnings($validationConfigurationResult['warnings']);
@@ -257,10 +278,21 @@ class BuilderModuleController extends ActionController
         }
 
         $extensionDirectory = $extension->getExtensionDir();
+        $publicExtensionDirectory = Environment::getExtensionsPath() . '/' . $extension->getExtensionKey();
+        $usesComposerPath = $this->extensionService->isComposerStoragePath($extensionDirectory);
+        $extensionExistedBefore = is_dir($extensionDirectory);
 
-        if (!is_dir($extensionDirectory)) {
+        if (!$extensionExistedBefore) {
             GeneralUtility::mkdir($extensionDirectory);
-        } else {
+        }
+        if ($usesComposerPath && !is_link($publicExtensionDirectory)) {
+            symlink(
+                PathUtility::getRelativePath(dirname($publicExtensionDirectory), $extensionDirectory),
+                $publicExtensionDirectory
+            );
+        }
+
+        if ($extensionExistedBefore) {
             if ($this->extensionBuilderSettings['extConf']['backupExtension'] === '1') {
                 try {
                     RoundTrip::backupExtension($extension, $this->extensionBuilderSettings['extConf']['backupDir']);
@@ -273,7 +305,10 @@ class BuilderModuleController extends ActionController
                 if (empty($extensionSettings)) {
                     // no config file in an existing extension!
                     // this would result in a	 total overwrite so we create one and give a warning
-                    $this->extensionBuilderConfigurationManager->createInitialSettingsFile($extension, $this->extensionBuilderSettings['codeTemplateRootPaths']);
+                    $this->extensionBuilderConfigurationManager->createInitialSettingsFile(
+                        $extension,
+                        $this->extensionBuilderSettings['codeTemplateRootPaths']
+                    );
                     return ['warning' => "<span class='error'>Roundtrip is enabled but no configuration file was found.</span><br />This might happen if you use the extension builder the first time for this extension. <br />A settings file was generated in <br /><b>typo3conf/ext/" . $extension->getExtensionKey() . '/Configuration/ExtensionBuilder/settings.yaml.</b><br />Configure the overwrite settings, then save again.'];
                 }
                 try {
@@ -282,9 +317,11 @@ class BuilderModuleController extends ActionController
                     throw $e;
                 }
             } else {
-                if (!is_array($extensionSettings['ignoreWarnings']) || !in_array(ExtensionValidator::EXTENSION_DIR_EXISTS, $extensionSettings['ignoreWarnings'])) {
+                if (!is_array($extensionSettings['ignoreWarnings']) || !in_array(ExtensionValidator::EXTENSION_DIR_EXISTS,
+                        $extensionSettings['ignoreWarnings'])) {
                     $confirmationRequired = $this->handleValidationWarnings([
-                        new ExtensionException("This action will overwrite previously saved content!\n(Enable the roundtrip feature to avoid this warning).", ExtensionValidator::EXTENSION_DIR_EXISTS)
+                        new ExtensionException("This action will overwrite previously saved content!\n(Enable the roundtrip feature to avoid this warning).",
+                            ExtensionValidator::EXTENSION_DIR_EXISTS)
                     ]);
                     if (!empty($confirmationRequired)) {
                         return $confirmationRequired;
@@ -295,11 +332,12 @@ class BuilderModuleController extends ActionController
         try {
             $this->fileGenerator->build($extension);
             $this->extensionInstallationStatus->setExtension($extension);
+            $this->extensionInstallationStatus->setUsesComposerPath($usesComposerPath);
             $message = '<p>The Extension was saved</p>' . $this->extensionInstallationStatus->getStatusMessage();
             if ($extension->getNeedsUploadFolder()) {
                 $message .= '<br />Notice: File upload is not yet implemented.';
             }
-            $result = ['success' => $message];
+            $result = ['success' => $message, 'usesComposerPath' => $usesComposerPath];
             if ($this->extensionInstallationStatus->isDbUpdateNeeded()) {
                 $result['confirmUpdate'] = true;
             }

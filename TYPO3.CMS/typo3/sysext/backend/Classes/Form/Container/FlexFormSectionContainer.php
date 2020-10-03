@@ -17,8 +17,8 @@ namespace TYPO3\CMS\Backend\Form\Container;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Handle flex form sections.
@@ -63,7 +63,7 @@ class FlexFormSectionContainer extends AbstractContainer
             $options['flexFormFormPrefix'] = $this->data['flexFormFormPrefix'] . '[' . $flexFormFieldName . ']' . '[el]';
             $options['flexFormContainerName'] = $existingSectionContainerDataStructureType;
             $options['flexFormContainerIdentifier'] = $flexFormContainerIdentifier;
-            $options['flexFormContainerElementCollapsed'] = (bool)$existingContainerData['el']['_TOGGLE'];
+            $options['flexFormContainerElementCollapsed'] = (bool)$flexFormRowData[$flexFormContainerIdentifier]['_TOGGLE'];
             $options['renderType'] = 'flexFormContainerContainer';
             $flexFormContainerContainerResult = $this->nodeFactory->create($options)->render();
             $resultArray = $this->mergeChildReturnIntoExistingResult($resultArray, $flexFormContainerContainerResult);
@@ -113,7 +113,7 @@ class FlexFormSectionContainer extends AbstractContainer
         }
 
         // Wrap child stuff
-        $toggleAll = htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.toggleall'));
+        $toggleAll = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.toggleall'));
         $html = [];
         $html[] = '<div class="panel panel-tab">';
         $html[] =     '<div class="panel-body">';

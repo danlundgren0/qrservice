@@ -18,38 +18,52 @@ use TYPO3\CMS\Core\Imaging\ImageManipulation\CropVariantCollection;
 use TYPO3\CMS\Core\Resource\FileInterface;
 use TYPO3\CMS\Core\Resource\FileReference;
 use TYPO3\CMS\Core\Resource\Rendering\RendererRegistry;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Domain\Model\AbstractFileFolder;
 use TYPO3\CMS\Extbase\Service\ImageService;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractTagBasedViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractTagBasedViewHelper;
 
 /**
  * Render a given media file with the correct html tag.
  *
- * It asks the RendererRegister for the correct Renderer class and if not found it falls
- * back to the ImageViewHelper as that is the "Renderer" class for images in Fluid context.
+ * It asks the :php:`RendererRegistry` for the correct Renderer class and if not found it falls
+ * back to the :php:`ImageViewHelper` as that is the "Renderer" class for images in Fluid context.
  *
- * = Examples =
+ * Examples
+ * ========
  *
- * <code title="Image Object">
- *     <f:media file="{file}" width="400" height="375" />
- * </code>
- * <output>
- *     <img alt="alt set in image record" src="fileadmin/_processed_/323223424.png" width="396" height="375" />
- * </output>
+ * Image Object
+ * ------------
  *
- * <code title="MP4 Video Object">
- *     <f:media file="{file}" width="400" height="375" />
- * </code>
- * <output>
- *     <video width="400" height="375" controls><source src="fileadmin/user_upload/my-video.mp4" type="video/mp4"></video>
- * </output>
+ * ::
  *
- * <code title="MP4 Video Object with loop and autoplay option set">
- *     <f:media file="{file}" width="400" height="375" additionalConfig="{loop: '1', autoplay: '1'}" />
- * </code>
- * <output>
- *     <video width="400" height="375" controls loop><source src="fileadmin/user_upload/my-video.mp4" type="video/mp4"></video>
- * </output>
+ *    <f:media file="{file}" width="400" height="375" />
+ *
+ * Output::
+ *
+ *    <img alt="alt set in image record" src="fileadmin/_processed_/323223424.png" width="396" height="375" />
+ *
+ * MP4 Video Object
+ * ----------------
+ *
+ * ::
+ *
+ *    <f:media file="{file}" width="400" height="375" />
+ *
+ * Output::
+ *
+ *    <video width="400" height="375" controls><source src="fileadmin/user_upload/my-video.mp4" type="video/mp4"></video>
+ *
+ * MP4 Video Object with loop and autoplay option set
+ * --------------------------------------------------
+ *
+ * ::
+ *
+ *    <f:media file="{file}" width="400" height="375" additionalConfig="{loop: '1', autoplay: '1'}" />
+ *
+ * Output::
+ *
+ *    <video width="400" height="375" controls loop><source src="fileadmin/user_upload/my-video.mp4" type="video/mp4"></video>
  */
 class MediaViewHelper extends AbstractTagBasedViewHelper
 {
@@ -67,7 +81,7 @@ class MediaViewHelper extends AbstractTagBasedViewHelper
         $this->registerUniversalTagAttributes();
         $this->registerTagAttribute('alt', 'string', 'Specifies an alternate text for an image', false);
         $this->registerArgument('file', 'object', 'File', true);
-        $this->registerArgument('additionalConfig', 'string', 'This array can hold additional configuration that is passed though to the Renderer object', false, []);
+        $this->registerArgument('additionalConfig', 'array', 'This array can hold additional configuration that is passed though to the Renderer object', false, []);
         $this->registerArgument('width', 'string', 'This can be a numeric value representing the fixed width of in pixels. But you can also perform simple calculations by adding "m" or "c" to the value. See imgResource.width for possible options.');
         $this->registerArgument('height', 'string', 'This can be a numeric value representing the fixed height in pixels. But you can also perform simple calculations by adding "m" or "c" to the value. See imgResource.width for possible options.');
         $this->registerArgument('cropVariant', 'string', 'select a cropping variant, in case multiple croppings have been specified or stored in FileReference', false, 'default');
@@ -82,7 +96,7 @@ class MediaViewHelper extends AbstractTagBasedViewHelper
     public function render()
     {
         $file = $this->arguments['file'];
-        $additionalConfig = $this->arguments['additionalConfig'];
+        $additionalConfig = (array)$this->arguments['additionalConfig'];
         $width = $this->arguments['width'];
         $height = $this->arguments['height'];
 
@@ -101,10 +115,9 @@ class MediaViewHelper extends AbstractTagBasedViewHelper
         // Fallback to image when no renderer is found
         if ($fileRenderer === null) {
             return $this->renderImage($file, $width, $height);
-        } else {
-            $additionalConfig = array_merge_recursive($this->arguments, $additionalConfig);
-            return $fileRenderer->render($file, $width, $height, $additionalConfig);
         }
+        $additionalConfig = array_merge_recursive($this->arguments, $additionalConfig);
+        return $fileRenderer->render($file, $width, $height, $additionalConfig);
     }
 
     /**
@@ -161,6 +174,6 @@ class MediaViewHelper extends AbstractTagBasedViewHelper
      */
     protected function getImageService()
     {
-        return $this->objectManager->get(ImageService::class);
+        return GeneralUtility::makeInstance(ImageService::class);
     }
 }

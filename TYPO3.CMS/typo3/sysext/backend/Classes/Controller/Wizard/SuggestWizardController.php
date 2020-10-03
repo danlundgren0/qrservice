@@ -20,11 +20,13 @@ use TYPO3\CMS\Backend\Form\Wizard\SuggestWizardDefaultReceiver;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Configuration\FlexForm\FlexFormTools;
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Http\JsonResponse;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Receives ajax request from FormEngine suggest wizard and creates suggest answer as json result
+ * @internal This class is a specific Backend controller implementation and is not considered part of the Public TYPO3 API.
  */
 class SuggestWizardController
 {
@@ -32,27 +34,26 @@ class SuggestWizardController
      * Ajax handler for the "suggest" feature in FormEngine.
      *
      * @param ServerRequestInterface $request
-     * @param ResponseInterface $response
      * @throws \RuntimeException for incomplete or invalid arguments
      * @return ResponseInterface
      */
-    public function searchAction(ServerRequestInterface $request, ResponseInterface $response)
+    public function searchAction(ServerRequestInterface $request): ResponseInterface
     {
         $parsedBody = $request->getParsedBody();
 
-        $search = $parsedBody['value'];
-        $tableName = $parsedBody['tableName'];
-        $fieldName = $parsedBody['fieldName'];
-        $uid = $parsedBody['uid'];
-        $pid = (int)$parsedBody['pid'];
-        $dataStructureIdentifier = '';
+        $search = $parsedBody['value'] ?? null;
+        $tableName = $parsedBody['tableName'] ?? null;
+        $fieldName = $parsedBody['fieldName'] ?? null;
+        $uid = $parsedBody['uid'] ?? null;
+        $pid = isset($parsedBody['pid']) ? (int)$parsedBody['pid'] : 0;
+        $dataStructureIdentifier = '' ?? null;
         if (!empty($parsedBody['dataStructureIdentifier'])) {
-            $dataStructureIdentifier = json_encode($parsedBody['dataStructureIdentifier']);
+            $dataStructureIdentifier = $parsedBody['dataStructureIdentifier'];
         }
-        $flexFormSheetName = $parsedBody['flexFormSheetName'];
-        $flexFormFieldName = $parsedBody['flexFormFieldName'];
-        $flexFormContainerName = $parsedBody['flexFormContainerName'];
-        $flexFormContainerFieldName = $parsedBody['flexFormContainerFieldName'];
+        $flexFormSheetName = $parsedBody['flexFormSheetName'] ?? null;
+        $flexFormFieldName = $parsedBody['flexFormFieldName'] ?? null;
+        $flexFormContainerName = $parsedBody['flexFormContainerName'] ?? null;
+        $flexFormContainerFieldName = $parsedBody['flexFormContainerFieldName'] ?? null;
 
         // Determine TCA config of field
         if (empty($dataStructureIdentifier)) {
@@ -129,7 +130,7 @@ class SuggestWizardController
                         $replacement['###PAGE_TSCONFIG_ID###'] = (int)$fieldTSconfig['PAGE_TSCONFIG_ID'];
                     }
                     if (isset($fieldTSconfig['PAGE_TSCONFIG_IDLIST'])) {
-                        $replacement['###PAGE_TSCONFIG_IDLIST###'] =  implode(',', GeneralUtility::intExplode(',', $fieldTSconfig['PAGE_TSCONFIG_IDLIST']));
+                        $replacement['###PAGE_TSCONFIG_IDLIST###'] = implode(',', GeneralUtility::intExplode(',', $fieldTSconfig['PAGE_TSCONFIG_IDLIST']));
                     }
                     if (isset($fieldTSconfig['PAGE_TSCONFIG_STR'])) {
                         $connection = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable($fieldConfig['foreign_table']);
@@ -147,7 +148,10 @@ class SuggestWizardController
                 $receiverClassName = SuggestWizardDefaultReceiver::class;
             }
             $receiverObj = GeneralUtility::makeInstance($receiverClassName, $queryTable, $config);
-            $params = ['value' => $search];
+            $params = [
+                'value' => $search,
+                'uid' => $uid,
+            ];
             $rows = $receiverObj->queryTable($params);
             if (empty($rows)) {
                 continue;
@@ -157,13 +161,11 @@ class SuggestWizardController
         }
 
         // Limit the number of items in the result list
-        $maxItems = isset($config['maxItemsInResultList']) ? $config['maxItemsInResultList'] : 10;
+        $maxItems = $config['maxItemsInResultList'] ?? 10;
         $maxItems = min(count($resultRows), $maxItems);
 
         array_splice($resultRows, $maxItems);
-
-        $response->getBody()->write(json_encode(array_values($resultRows)));
-        return $response;
+        return (new JsonResponse())->setPayload(array_values($resultRows));
     }
 
     /**

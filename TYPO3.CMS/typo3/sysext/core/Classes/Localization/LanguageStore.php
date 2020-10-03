@@ -16,12 +16,13 @@ namespace TYPO3\CMS\Core\Localization;
 
 use TYPO3\CMS\Core\Localization\Exception\FileNotFoundException;
 use TYPO3\CMS\Core\Localization\Exception\InvalidParserException;
+use TYPO3\CMS\Core\SingletonInterface;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
- * Language store.
+ * @internal This class is not part of the TYPO3 Core API.
  */
-class LanguageStore implements \TYPO3\CMS\Core\SingletonInterface
+class LanguageStore implements SingletonInterface
 {
     /**
      * File extension supported by the localization parser
@@ -105,7 +106,7 @@ class LanguageStore implements \TYPO3\CMS\Core\SingletonInterface
      */
     public function getDataByLanguage($fileReference, $languageKey)
     {
-        return $this->data[$fileReference][$languageKey];
+        return $this->data[$fileReference][$languageKey] ?? [];
     }
 
     /**
@@ -139,19 +140,17 @@ class LanguageStore implements \TYPO3\CMS\Core\SingletonInterface
      *
      * @param string $fileReference File reference
      * @param string $languageKey Valid language key
-     * @param string $charset Rendering charset
      * @return \TYPO3\CMS\Core\Localization\LanguageStore This instance to allow method chaining
      * @throws \TYPO3\CMS\Core\Localization\Exception\InvalidParserException
      * @throws \TYPO3\CMS\Core\Localization\Exception\FileNotFoundException
      */
-    public function setConfiguration($fileReference, $languageKey, $charset)
+    public function setConfiguration($fileReference, $languageKey)
     {
         $this->configuration[$fileReference] = [
             'fileReference' => $fileReference,
             'fileExtension' => false,
             'parserClass' => null,
-            'languageKey' => $languageKey,
-            'charset' => $charset
+            'languageKey' => $languageKey
         ];
         $fileWithoutExtension = GeneralUtility::getFileAbsFileName($this->getFileReferenceWithoutExtension($fileReference));
         foreach ($this->supportedExtensions as $extension) {
@@ -201,9 +200,8 @@ class LanguageStore implements \TYPO3\CMS\Core\SingletonInterface
     {
         if (isset($this->configuration[$fileReference]['parserClass']) && trim($this->configuration[$fileReference]['parserClass']) !== '') {
             return GeneralUtility::makeInstance((string)$this->configuration[$fileReference]['parserClass']);
-        } else {
-            throw new InvalidParserException(sprintf('Invalid parser configuration for the current file (%s)', $fileReference), 1307293692);
         }
+        throw new InvalidParserException(sprintf('Invalid parser configuration for the current file (%s)', $fileReference), 1307293692);
     }
 
     /**
@@ -217,9 +215,8 @@ class LanguageStore implements \TYPO3\CMS\Core\SingletonInterface
     {
         if (isset($this->configuration[$fileReference]['fileReference']) && trim($this->configuration[$fileReference]['fileReference']) !== '') {
             return (string)$this->configuration[$fileReference]['fileReference'];
-        } else {
-            throw new \InvalidArgumentException(sprintf('Invalid file reference configuration for the current file (%s)', $fileReference), 1307293693);
         }
+        throw new \InvalidArgumentException(sprintf('Invalid file reference configuration for the current file (%s)', $fileReference), 1307293693);
     }
 
     /**

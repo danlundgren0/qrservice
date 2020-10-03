@@ -19,6 +19,7 @@ namespace TYPO3\CMS\Extbase\Scheduler;
  *
  * Takes a \TYPO3\CMS\Extbase\Scheduler\Task and executes the CommandController command
  * defined therein.
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Use symfony/console commands instead.
  */
 class TaskExecutor implements \TYPO3\CMS\Core\SingletonInterface
 {
@@ -108,12 +109,6 @@ class TaskExecutor implements \TYPO3\CMS\Core\SingletonInterface
                 }
             }
         }
-        // initialize reflection
-        $reflectionService = $this->objectManager->get(\TYPO3\CMS\Extbase\Reflection\ReflectionService::class);
-        $reflectionService->setDataCache(\TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Core\Cache\CacheManager::class)->getCache('extbase_reflection'));
-        if (!$reflectionService->isInitialized()) {
-            $reflectionService->initialize();
-        }
     }
 
     /**
@@ -144,10 +139,7 @@ class TaskExecutor implements \TYPO3\CMS\Core\SingletonInterface
      */
     protected function shutdown()
     {
-        // shutdown
         $persistenceManager = $this->objectManager->get(\TYPO3\CMS\Extbase\Persistence\Generic\PersistenceManager::class);
         $persistenceManager->persistAll();
-        $reflectionService = $this->objectManager->get(\TYPO3\CMS\Extbase\Reflection\ReflectionService::class);
-        $reflectionService->shutdown();
     }
 }

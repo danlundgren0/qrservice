@@ -14,18 +14,24 @@ namespace TYPO3\CMS\Scheduler\Task;
  * The TYPO3 project - inspiring people to share!
  */
 
+use Psr\Log\LoggerAwareInterface;
+use Psr\Log\LoggerAwareTrait;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Log\LogManager;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Scheduler\Execution;
 
 /**
  * This is the base class for all Scheduler tasks
  * It's an abstract class, not designed to be instantiated directly
  * All Scheduler tasks should inherit from this class
  */
-abstract class AbstractTask
+abstract class AbstractTask implements LoggerAwareInterface
 {
+    use LoggerAwareTrait;
+
     const TYPE_SINGLE = 1;
     const TYPE_RECURRING = 2;
 
@@ -60,7 +66,7 @@ abstract class AbstractTask
     /**
      * The execution object related to the task
      *
-     * @var \TYPO3\CMS\Scheduler\Execution
+     * @var Execution
      */
     protected $execution;
 
@@ -90,8 +96,9 @@ abstract class AbstractTask
      */
     public function __construct()
     {
-        $this->setScheduler();
-        $this->execution = GeneralUtility::makeInstance(\TYPO3\CMS\Scheduler\Execution::class);
+        // Using makeInstance instead of setScheduler() here as the logger is injected due to LoggerAwareTrait
+        $this->scheduler = GeneralUtility::makeInstance(\TYPO3\CMS\Scheduler\Scheduler::class);
+        $this->execution = GeneralUtility::makeInstance(Execution::class);
     }
 
     /**
@@ -145,7 +152,7 @@ abstract class AbstractTask
      */
     public function getTaskTitle()
     {
-        return $GLOBALS['LANG']->sL($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['scheduler']['tasks'][get_class($this)]['title']);
+        return $GLOBALS['LANG']->sL($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['scheduler']['tasks'][static::class]['title']);
     }
 
     /**
@@ -155,7 +162,7 @@ abstract class AbstractTask
      */
     public function getTaskDescription()
     {
-        return $GLOBALS['LANG']->sL($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['scheduler']['tasks'][get_class($this)]['description']);
+        return $GLOBALS['LANG']->sL($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['scheduler']['tasks'][static::class]['description']);
     }
 
     /**
@@ -165,7 +172,7 @@ abstract class AbstractTask
      */
     public function getTaskClassName()
     {
-        return get_class($this);
+        return static::class;
     }
 
     /**
@@ -274,20 +281,24 @@ abstract class AbstractTask
 
     /**
      * Sets the internal reference to the singleton instance of the Scheduler
+     * and the logger instance in case it was unserialized
      */
     public function setScheduler()
     {
         $this->scheduler = GeneralUtility::makeInstance(\TYPO3\CMS\Scheduler\Scheduler::class);
+        $this->logger = GeneralUtility::makeInstance(LogManager::class)->getLogger(__CLASS__);
     }
 
     /**
      * Unsets the internal reference to the singleton instance of the Scheduler
+     * and the logger instance.
      * This is done before a task is serialized, so that the scheduler instance
-     * is not saved to the database too
+     * and the logger instance are not saved to the database
      */
     public function unsetScheduler()
     {
-        unset($this->scheduler);
+        $this->scheduler = null;
+        $this->logger = null;
     }
 
     /**
@@ -297,8 +308,8 @@ abstract class AbstractTask
      */
     public function registerSingleExecution($timestamp)
     {
-        /** @var $execution \TYPO3\CMS\Scheduler\Execution */
-        $execution = GeneralUtility::makeInstance(\TYPO3\CMS\Scheduler\Execution::class);
+        /** @var Execution $execution */
+        $execution = GeneralUtility::makeInstance(Execution::class);
         $execution->setStart($timestamp);
         $execution->setInterval(0);
         $execution->setEnd($timestamp);
@@ -320,8 +331,8 @@ abstract class AbstractTask
      */
     public function registerRecurringExecution($start, $interval, $end = 0, $multiple = false, $cron_cmd = '')
     {
-        /** @var $execution \TYPO3\CMS\Scheduler\Execution */
-        $execution = GeneralUtility::makeInstance(\TYPO3\CMS\Scheduler\Execution::class);
+        /** @var Execution $execution */
+        $execution = GeneralUtility::makeInstance(Execution::class);
         // Set general values
         $execution->setStart($start);
         $execution->setEnd($end);
@@ -342,9 +353,9 @@ abstract class AbstractTask
     /**
      * Sets the internal execution object
      *
-     * @param \TYPO3\CMS\Scheduler\Execution $execution The execution to add
+     * @param Execution $execution The execution to add
      */
-    public function setExecution(\TYPO3\CMS\Scheduler\Execution $execution)
+    public function setExecution(Execution $execution)
     {
         $this->execution = $execution;
     }
@@ -352,7 +363,7 @@ abstract class AbstractTask
     /**
      * Returns the execution object
      *
-     * @return \TYPO3\CMS\Scheduler\Execution The internal execution object
+     * @return Execution The internal execution object
      */
     public function getExecution()
     {
@@ -426,18 +437,13 @@ abstract class AbstractTask
             ->fetch();
 
         $runningExecutions = [];
-        if ($row && $row['serialized_executions'] !== '') {
+        if ($row && !empty($row['serialized_executions'])) {
             $runningExecutions = unserialize($row['serialized_executions']);
         }
         // Count the number of existing executions and use that number as a key
         // (we need to know that number, because it is returned at the end of the method)
         $numExecutions = count($runningExecutions);
         $runningExecutions[$numExecutions] = time();
-        // Define the context in which the script is running
-        $context = 'BE';
-        if (TYPO3_REQUESTTYPE & TYPO3_REQUESTTYPE_CLI) {
-            $context = 'CLI';
-        }
         GeneralUtility::makeInstance(ConnectionPool::class)
             ->getConnectionForTable('tx_scheduler_task')
             ->update(
@@ -445,7 +451,8 @@ abstract class AbstractTask
                 [
                     'serialized_executions' => serialize($runningExecutions),
                     'lastexecution_time' => time(),
-                    'lastexecution_context' => $context
+                    // Define the context in which the script is running
+                    'lastexecution_context' => Environment::isCli() ? 'CLI' : 'BE'
                 ],
                 [
                     'uid' => $this->taskUid
@@ -461,9 +468,9 @@ abstract class AbstractTask
      * Removes given execution from list
      *
      * @param int $executionID Id of the execution to remove.
-     * @param \Exception $failure An exception to signal a failed execution
+     * @param \Throwable $failure An exception to signal a failed execution
      */
-    public function unmarkExecution($executionID, \Exception $failure = null)
+    public function unmarkExecution($executionID, \Throwable $failure = null)
     {
         // Get the executions for the task
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
@@ -488,11 +495,11 @@ abstract class AbstractTask
             } else {
                 $runningExecutionsSerialized = '';
             }
-            if ($failure instanceof \Exception) {
+            if ($failure instanceof \Throwable) {
                 // Log failed execution
-                $logMessage = 'Task failed to execute successfully. Class: ' . get_class($this)
+                $logMessage = 'Task failed to execute successfully. Class: ' . static::class
                     . ', UID: ' . $this->taskUid . ', Code: ' . $failure->getCode() . ', ' . $failure->getMessage();
-                $this->scheduler->log($logMessage, 1);
+                $this->logger->error($logMessage, ['exception' => $failure]);
                 // Do not serialize the complete exception or the trace, this can lead to huge strings > 50MB
                 $failureString = serialize([
                     'code' => $failure->getCode(),
@@ -564,7 +571,7 @@ abstract class AbstractTask
      */
     public function stop()
     {
-        $this->execution = GeneralUtility::makeInstance(\TYPO3\CMS\Scheduler\Execution::class);
+        $this->execution = GeneralUtility::makeInstance(Execution::class);
     }
 
     /**
@@ -590,24 +597,10 @@ abstract class AbstractTask
     }
 
     /**
-     * Log exception via GeneralUtility::sysLog
-     *
      * @param \Exception $e
      */
     protected function logException(\Exception $e)
     {
-        GeneralUtility::sysLog($e->getMessage(), 'scheduler', GeneralUtility::SYSLOG_SEVERITY_ERROR);
-        $this->getLogger()->error('A Task Exception was captured: ' . $e->getMessage() . ' (' . $e->getCode() . ')', ['exception' => $e]);
-    }
-
-    /**
-     * Instantiates a logger
-     *
-     * @return \TYPO3\CMS\Core\Log\Logger
-     */
-    protected function getLogger()
-    {
-        $logManager = GeneralUtility::makeInstance(LogManager::class);
-        return $logManager->getLogger(get_class($this));
+        $this->logger->error('A Task Exception was captured: ' . $e->getMessage() . ' (' . $e->getCode() . ')', ['exception' => $e]);
     }
 }

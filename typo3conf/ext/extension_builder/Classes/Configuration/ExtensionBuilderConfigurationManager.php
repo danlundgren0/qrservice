@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Configuration;
 
 /*
@@ -25,6 +26,8 @@ use TYPO3\CMS\Extbase\Configuration\ConfigurationManager;
 use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
 use TYPO3\CMS\Extbase\DomainObject\AbstractEntity;
 use TYPO3\CMS\Extbase\DomainObject\AbstractValueObject;
+use TYPO3\CMS\Core\Http\JsonResponse;
+
 
 /**
  * Load settings from yaml file and from TYPO3_CONF_VARS extConf
@@ -71,8 +74,8 @@ class ExtensionBuilderConfigurationManager extends ConfigurationManager
     /**
      * Reads the configuration from this->inputData and returns it as array.
      *
-     * @throws \Exception
      * @return array
+     * @throws \Exception
      */
     public function getConfigurationFromModeler()
     {
@@ -82,6 +85,7 @@ class ExtensionBuilderConfigurationManager extends ConfigurationManager
         $extensionConfigurationJson = json_decode($this->inputData['params']['working'], true);
         $extensionConfigurationJson = $this->reArrangeRelations($extensionConfigurationJson);
         $extensionConfigurationJson['modules'] = $this->checkForAbsoluteClassNames($extensionConfigurationJson['modules']);
+        $extensionConfigurationJson['storagePath'] = $this->inputData['params']['storagePath'] ?? null;
         return $extensionConfigurationJson;
     }
 
@@ -143,10 +147,7 @@ class ExtensionBuilderConfigurationManager extends ConfigurationManager
         if (file_exists($settingsFile)) {
             $yamlParser = new SpycYAMLParser();
             $settings = $yamlParser->YAMLLoadString(file_get_contents($settingsFile));
-        } else {
-            GeneralUtility::devLog('No settings found: ' . $settingsFile, 'extension_builder', 2);
         }
-
         return $settings;
     }
 
@@ -154,12 +155,13 @@ class ExtensionBuilderConfigurationManager extends ConfigurationManager
      * Reads the stored configuration (i.e. the extension model etc.).
      *
      * @param string $extensionKey
+     * @param string|null $storagePath
      * @return array|null
      */
-    public function getExtensionBuilderConfiguration($extensionKey)
+    public function getExtensionBuilderConfiguration($extensionKey, $storagePath = null)
     {
         $result = null;
-        $extensionConfigurationJson = self::getExtensionBuilderJson($extensionKey);
+        $extensionConfigurationJson = self::getExtensionBuilderJson($extensionKey, $storagePath);
         if ($extensionConfigurationJson) {
             $extensionConfigurationJson = $this->fixExtensionBuilderJSON($extensionConfigurationJson);
             $extensionConfigurationJson['properties']['originalExtensionKey'] = $extensionKey;
@@ -170,9 +172,15 @@ class ExtensionBuilderConfigurationManager extends ConfigurationManager
         return $result;
     }
 
-    public static function getExtensionBuilderJson($extensionKey)
+    /**
+     * @param string $extensionKey
+     * @param string|null $storagePath
+     * @return mixed|null
+     */
+    public static function getExtensionBuilderJson($extensionKey, $storagePath = null)
     {
-        $jsonFile = PATH_typo3conf . 'ext/' . $extensionKey . '/' . self::EXTENSION_BUILDER_SETTINGS_FILE;
+        $storagePath = $storagePath ?? PATH_typo3conf . 'ext/';
+        $jsonFile = $storagePath . $extensionKey . '/' . self::EXTENSION_BUILDER_SETTINGS_FILE;
         if (file_exists($jsonFile)) {
             return json_decode(file_get_contents($jsonFile), true);
         } else {
@@ -259,7 +267,8 @@ class ExtensionBuilderConfigurationManager extends ConfigurationManager
         GeneralUtility::mkdir_deep($extension->getExtensionDir(), self::SETTINGS_DIR);
         $settings = file_get_contents($codeTemplateRootPaths[0] . 'Configuration/ExtensionBuilder/settings.yamlt');
         $settings = str_replace('{extension.extensionKey}', $extension->getExtensionKey(), $settings);
-        $settings = str_replace('{f:format.date(format:\'Y-m-d\\TH:i:s\\Z\',date:\'now\')}', date('Y-m-d\TH:i:s\Z'), $settings);
+        $settings = str_replace('{f:format.date(format:\'Y-m-d\\TH:i:s\\Z\',date:\'now\')}', date('Y-m-d\TH:i:s\Z'),
+            $settings);
         GeneralUtility::writeFile(
             $extension->getExtensionDir() . self::SETTINGS_DIR . 'settings.yaml',
             $settings
@@ -530,10 +539,9 @@ class ExtensionBuilderConfigurationManager extends ConfigurationManager
      * the module token.
      *
      * @param ServerRequestInterface $request
-     * @param ResponseInterface $response
      * @return ResponseInterface
      */
-    public function getWiringEditorSmd(ServerRequestInterface $request, ResponseInterface $response)
+    public function getWiringEditorSmd(ServerRequestInterface $request): ResponseInterface
     {
         $smdJsonString = file_get_contents(
             ExtensionManagementUtility::extPath('extension_builder') . 'Resources/Public/jsDomainModeling/phpBackend/WiringEditor.smd'
@@ -546,9 +554,7 @@ class ExtensionBuilderConfigurationManager extends ConfigurationManager
             ]
         ];
         $smdJson->target = BackendUtility::getModuleUrl('tools_ExtensionBuilderExtensionbuilder', $parameters);
-        $smdJsonString = json_encode($smdJson);
 
-        $response->getBody()->write($smdJsonString);
-        return $response;
+        return (new JsonResponse())->setPayload((array)$smdJson);
     }
 }

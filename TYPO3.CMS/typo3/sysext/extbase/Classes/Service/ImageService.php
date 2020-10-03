@@ -14,10 +14,12 @@ namespace TYPO3\CMS\Extbase\Service;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\LinkHandling\LinkService;
 use TYPO3\CMS\Core\Resource\File;
 use TYPO3\CMS\Core\Resource\FileInterface;
 use TYPO3\CMS\Core\Resource\FileReference;
 use TYPO3\CMS\Core\Resource\ProcessedFile;
+use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
 
@@ -27,29 +29,25 @@ use TYPO3\CMS\Core\Utility\MathUtility;
 class ImageService implements \TYPO3\CMS\Core\SingletonInterface
 {
     /**
-     * @var \TYPO3\CMS\Core\Resource\ResourceFactory
+     * @var ResourceFactory
      */
     protected $resourceFactory;
 
     /**
-     * @var \TYPO3\CMS\Extbase\Service\EnvironmentService
+     * @var EnvironmentService
      */
     protected $environmentService;
 
     /**
-     * @param \TYPO3\CMS\Core\Resource\ResourceFactory $resourceFactory
+     * ImageService constructor.
+     *
+     * @param EnvironmentService|null $environmentService
+     * @param ResourceFactory|null $resourceFactory
      */
-    public function injectResourceFactory(\TYPO3\CMS\Core\Resource\ResourceFactory $resourceFactory)
+    public function __construct(EnvironmentService $environmentService = null, ResourceFactory $resourceFactory = null)
     {
-        $this->resourceFactory = $resourceFactory;
-    }
-
-    /**
-     * @param \TYPO3\CMS\Extbase\Service\EnvironmentService $environmentService
-     */
-    public function injectEnvironmentService(\TYPO3\CMS\Extbase\Service\EnvironmentService $environmentService)
-    {
-        $this->environmentService = $environmentService;
+        $this->environmentService = $environmentService ?? GeneralUtility::makeInstance(EnvironmentService::class);
+        $this->resourceFactory = $resourceFactory ?? ResourceFactory::getInstance();
     }
 
     /**
@@ -58,7 +56,6 @@ class ImageService implements \TYPO3\CMS\Core\SingletonInterface
      * @param FileInterface|FileReference $image
      * @param array $processingInstructions
      * @return ProcessedFile
-     * @api
      */
     public function applyProcessingInstructions($image, $processingInstructions)
     {
@@ -77,9 +74,8 @@ class ImageService implements \TYPO3\CMS\Core\SingletonInterface
      * Get public url of image depending on the environment
      *
      * @param FileInterface $image
-     * @param bool|FALSE $absolute Force absolute URL
+     * @param bool|false $absolute Force absolute URL
      * @return string
-     * @api
      */
     public function getImageUri(FileInterface $image, $absolute = false)
     {
@@ -101,9 +97,8 @@ class ImageService implements \TYPO3\CMS\Core\SingletonInterface
                 $uriPrefix = (GeneralUtility::getIndpEnv('TYPO3_SSL') ? 'https:' : 'http:') . $uriPrefix;
             }
             return GeneralUtility::locationHeaderUrl($uriPrefix . $imageUrl);
-        } else {
-            return $uriPrefix . $imageUrl;
         }
+        return $uriPrefix . $imageUrl;
     }
 
     /**
@@ -122,7 +117,7 @@ class ImageService implements \TYPO3\CMS\Core\SingletonInterface
      */
     public function getImage($src, $image, $treatIdAsReference)
     {
-        if (is_null($image)) {
+        if ($image === null) {
             $image = $this->getImageFromSourceString($src, $treatIdAsReference);
         } elseif (is_callable([$image, 'getOriginalResource'])) {
             // We have a domain model, so we need to fetch the FAL resource object from there
@@ -130,7 +125,8 @@ class ImageService implements \TYPO3\CMS\Core\SingletonInterface
         }
 
         if (!($image instanceof File || $image instanceof FileReference)) {
-            throw new \UnexpectedValueException('Supplied file object type ' . get_class($image) . ' for ' . $src . ' must be File or FileReference.', 1382687163);
+            $class = is_object($image) ? get_class($image) : 'null';
+            throw new \UnexpectedValueException('Supplied file object type ' . $class . ' for ' . $src . ' must be File or FileReference.', 1382687163);
         }
 
         return $image;
@@ -145,7 +141,7 @@ class ImageService implements \TYPO3\CMS\Core\SingletonInterface
      */
     protected function getImageFromSourceString($src, $treatIdAsReference)
     {
-        if ($this->environmentService->isEnvironmentInBackendMode() && substr($src, 0, 3) === '../') {
+        if ($this->environmentService->isEnvironmentInBackendMode() && strpos($src, '../') === 0) {
             $src = substr($src, 3);
         }
         if (MathUtility::canBeInterpretedAsInteger($src)) {
@@ -154,6 +150,11 @@ class ImageService implements \TYPO3\CMS\Core\SingletonInterface
             } else {
                 $image = $this->resourceFactory->getFileObject($src);
             }
+        } elseif (strpos($src, 't3://file') === 0) {
+            // We have a t3://file link to a file in FAL
+            $linkService = GeneralUtility::makeInstance(LinkService::class);
+            $data = $linkService->resolveByStringRepresentation($src);
+            $image = $data['file'];
         } else {
             // We have a combined identifier or legacy (storage 0) path
             $image = $this->resourceFactory->retrieveFileOrFolderObject($src);
@@ -170,9 +171,8 @@ class ImageService implements \TYPO3\CMS\Core\SingletonInterface
     protected function setCompatibilityValues(ProcessedFile $processedImage)
     {
         if ($this->environmentService->isEnvironmentInFrontendMode()) {
-            $imageInfo = $this->getCompatibilityImageResourceValues($processedImage);
-            $GLOBALS['TSFE']->lastImageInfo = $imageInfo;
-            $GLOBALS['TSFE']->imagesOnPage[] = $imageInfo[3];
+            $GLOBALS['TSFE']->lastImageInfo = $this->getCompatibilityImageResourceValues($processedImage);
+            $GLOBALS['TSFE']->imagesOnPage[] = $processedImage->getPublicUrl();
         }
     }
 
@@ -186,24 +186,17 @@ class ImageService implements \TYPO3\CMS\Core\SingletonInterface
      */
     protected function getCompatibilityImageResourceValues(ProcessedFile $processedImage)
     {
-        $hash = $processedImage->calculateChecksum();
-        if (isset($GLOBALS['TSFE']->tmpl->fileCache[$hash])) {
-            $compatibilityImageResourceValues = $GLOBALS['TSFE']->tmpl->fileCache[$hash];
-        } else {
-            $compatibilityImageResourceValues = [
-                0 => $processedImage->getProperty('width'),
-                1 => $processedImage->getProperty('height'),
-                2 => $processedImage->getExtension(),
-                3 => $processedImage->getPublicUrl(),
-                'origFile' => $processedImage->getOriginalFile()->getPublicUrl(),
-                'origFile_mtime' => $processedImage->getOriginalFile()->getModificationTime(),
-                // This is needed by \TYPO3\CMS\Frontend\Imaging\GifBuilder,
-                // in order for the setup-array to create a unique filename hash.
-                'originalFile' => $processedImage->getOriginalFile(),
-                'processedFile' => $processedImage,
-                'fileCacheHash' => $hash
-            ];
-        }
-        return $compatibilityImageResourceValues;
+        return [
+            0 => $processedImage->getProperty('width'),
+            1 => $processedImage->getProperty('height'),
+            2 => $processedImage->getExtension(),
+            3 => $processedImage->getPublicUrl(),
+            'origFile' => $processedImage->getOriginalFile()->getPublicUrl(),
+            'origFile_mtime' => $processedImage->getOriginalFile()->getModificationTime(),
+            // This is needed by \TYPO3\CMS\Frontend\Imaging\GifBuilder,
+            // in order for the setup-array to create a unique filename hash.
+            'originalFile' => $processedImage->getOriginalFile(),
+            'processedFile' => $processedImage
+        ];
     }
 }

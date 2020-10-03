@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\ViewHelpers;
 
 /*
@@ -14,7 +15,7 @@ namespace EBT\ExtensionBuilder\ViewHelpers;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 
 /**
  * View helper for preg_replace
@@ -26,17 +27,24 @@ use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
  */
 class PregReplaceViewHelper extends AbstractViewHelper
 {
+
+    /**
+     * Arguments Initialization
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('match', 'string', 'pattern', true);
+        $this->registerArgument('replace', 'string', 'replacement', true);
+        $this->registerArgument('subject', 'string', 'subject', true);
+    }
+
     /**
      * Execute the preg_replace
      *
-     * @param mixed $match
-     * @param mixed $replace
-     * @param mixed $subject
-     *
      * @return mixed
      */
-    public function render($match, $replace, $subject)
+    public function render()
     {
-        return preg_replace($match, $replace, $subject);
+        return preg_replace($this->arguments['match'], $this->arguments['replace'], $this->arguments['subject']);
     }
 }

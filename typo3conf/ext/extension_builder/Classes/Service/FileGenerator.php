@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Service;
 
 /*
@@ -23,7 +24,6 @@ use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Fluid\View\StandaloneView;
-use \EBT\ExtensionBuilder\Domain\Validator\ExtensionValidator;
 
 /**
  * Creates (or updates) all the required files for an extension
@@ -32,16 +32,32 @@ class FileGenerator
 {
     /**
      * @var \EBT\ExtensionBuilder\Service\ClassBuilder
-     * @inject
-     *
      */
     protected $classBuilder = null;
+
+    /**
+     * @param \EBT\ExtensionBuilder\Service\ClassBuilder $classBuilder
+     * @return void
+     */
+    public function injectClassBuilder(ClassBuilder $classBuilder)
+    {
+        $this->classBuilder = $classBuilder;
+    }
+
     /**
      * @var \EBT\ExtensionBuilder\Service\RoundTrip
-     * @inject
-     *
      */
     protected $roundTripService = null;
+
+    /**
+     * @param \EBT\ExtensionBuilder\Service\RoundTrip $roundTripService
+     * @return void
+     */
+    public function injectRoundTripService (RoundTrip $roundTripService)
+    {
+        $this->roundTripService = $roundTripService;
+    }
+
     /**
      * @var array
      */
@@ -74,28 +90,31 @@ class FileGenerator
      * @var string
      */
     protected $iconsDirectory = '';
-    /**
-     * @var \TYPO3\CMS\Extbase\Object\ObjectManagerInterface
-     * @inject
-     */
-    protected $objectManager = null;
-    /**
-     * @var array
-     */
-    protected $overWriteSettings = [];
+
     /**
      * @var bool
      */
     protected $roundTripEnabled = false;
+
     /**
      * @var array
      */
     protected $settings = [];
+
     /**
      * @var \EBT\ExtensionBuilder\Service\Printer
-     * @inject
      */
     protected $printerService = null;
+
+    /**
+     * @param \EBT\ExtensionBuilder\Service\Printer $printerService
+     * @return void
+     */
+    public function injectPrinterService(Printer $printerService)
+    {
+        $this->printerService = $printerService;
+    }
+
     /**
      * @var string[]
      */
@@ -117,14 +136,31 @@ class FileGenerator
         'php', //ext_tables, localconf
         'sql',
         'txt', // Typoscript
-        'ts' // Typoscript
+        'ts', // Typoscript
+        'typoscript', // Typoscript
     ];
     /**
+     * A map of deprecated file extensions
+     * @var string[][]
+     */
+    protected $deprecatedFileExtensions = [
+        'typoscript' => ['ts', 'txt'],
+    ];
+
+    /**
      * @var \EBT\ExtensionBuilder\Service\LocalizationService
-     * @inject
      *
      */
     protected $localizationService = null;
+
+    /**
+     * @param \EBT\ExtensionBuilder\Service\LocalizationService $localizationService
+     * @return void
+     */
+    public function injectLocalizationService (LocalizationService $localizationService)
+    {
+        $this->localizationService = $localizationService;
+    }
 
     /**
      * called by controller
@@ -141,6 +177,7 @@ class FileGenerator
      * @param \EBT\ExtensionBuilder\Domain\Model\Extension $extension
      *
      * @throws \Exception
+     * @throws \EBT\ExtensionBuilder\Domain\Exception\ExtensionException
      */
     public function build(Extension $extension)
     {
@@ -166,6 +203,10 @@ class FileGenerator
         }
 
         $this->generateGitIgnore();
+
+        $this->generateGitAttributes();
+
+        $this->generateEditorConfig();
 
         $this->generateComposerJson();
 
@@ -198,6 +239,8 @@ class FileGenerator
         if ($extension->getGenerateDocumentationTemplate()) {
             $this->generateDocumentationFiles();
         }
+
+        $this->generateEmptyGitRepository();
     }
 
     protected function generateYamlSettingsFile()
@@ -225,13 +268,11 @@ class FileGenerator
                         'extension' => $this->extension
                     ]
                 );
+                if ($extensionFile === 'ext_tables.sql') {
+                    // replace trailing comma in last line before table definition end to get valid SQL
+                    $fileContents = preg_replace('/,(\\s*\\);)/', '$1', $fileContents);
+                }
                 $this->writeFile($this->extensionDirectory . $extensionFile, $fileContents);
-                GeneralUtility::devLog(
-                    'Generated ' . $extensionFile,
-                    'extension_builder',
-                    0,
-                    ['Content' => $fileContents]
-                );
             } catch (\Exception $e) {
                 throw new \Exception('Could not write ' . $extensionFile . ', error: ' . $e->getMessage());
             }
@@ -245,20 +286,18 @@ class FileGenerator
     {
         if ($this->extension->getPlugins()) {
             try {
-                $fileContents = $this->renderTemplate(GeneralUtility::underscoredToLowerCamelCase('ext_localconf.phpt'), [
-                    'extension' => $this->extension
-                ]);
+                $fileContents = $this->renderTemplate(GeneralUtility::underscoredToLowerCamelCase('ext_localconf.phpt'),
+                    [
+                        'extension' => $this->extension
+                    ]);
                 $this->writeFile($this->extensionDirectory . 'ext_localconf.php', $fileContents);
-                GeneralUtility::devLog('Generated ext_localconf.php', 'extension_builder', 0, ['Content' => $fileContents]);
             } catch (\Exception $e) {
                 throw new \Exception('Could not write ext_localconf.php. Error: ' . $e->getMessage());
             }
             $currentPluginKey = '';
             try {
                 foreach ($this->extension->getPlugins() as $plugin) {
-                    /**
-                     * @var $plugin \EBT\ExtensionBuilder\Domain\Model\Plugin
-                     */
+                    /** @var \EBT\ExtensionBuilder\Domain\Model\Plugin $plugin */
                     if ($plugin->getSwitchableControllerActions()) {
                         if (!is_dir($this->extensionDirectory . 'Configuration/FlexForms')) {
                             $this->mkdir_deep($this->extensionDirectory, 'Configuration/FlexForms');
@@ -271,7 +310,6 @@ class FileGenerator
                             $this->extensionDirectory . 'Configuration/FlexForms/flexform_' . $currentPluginKey . '.xml',
                             $fileContents
                         );
-                        GeneralUtility::devLog('Generated flexform_' . $currentPluginKey . '.xml', 'extension_builder', 0, ['Content' => $fileContents]);
                     }
                 }
             } catch (\Exception $e) {
@@ -292,9 +330,7 @@ class FileGenerator
             $domainObjects = $this->extension->getDomainObjects();
 
             foreach ($domainObjects as $domainObject) {
-                /**
-                 * @var $domainObject \EBT\ExtensionBuilder\Domain\Model\DomainObject
-                 */
+                /** @var $domainObject \EBT\ExtensionBuilder\Domain\Model\DomainObject */
                 if (!$domainObject->getMapToTable()) {
                     $fileContents = $this->generateTCA($domainObject);
                     $this->writeFile(
@@ -317,13 +353,7 @@ class FileGenerator
             }
             $tablesNeedingTypeFields = $this->extension->getTablesForTypeFieldDefinitions();
             foreach ($domainObjectsNeedingOverrides as $tableName => $domainObjects) {
-                $skipTypeConfiguration = false;
-                foreach($domainObjects as $domainObject) {
-                    if ($domainObject->getSkipTypeConfiguration()) {
-                        $skipTypeConfiguration = true;
-                    }
-                }
-                $addRecordTypeField = in_array($tableName, $tablesNeedingTypeFields) && !$skipTypeConfiguration;
+                $addRecordTypeField = in_array($tableName, $tablesNeedingTypeFields);
                 $fileContents = $this->generateTCAOverride($domainObjects, $addRecordTypeField);
                 $this->writeFile(
                     $this->configurationDirectory . 'TCA/Overrides/' . $tableName . '.php',
@@ -382,22 +412,17 @@ class FileGenerator
 
         $hasTemplates = false;
         foreach ($this->extension->getDomainObjects() as $domainObject) {
-            /**
-             * @var \EBT\ExtensionBuilder\Domain\Model\DomainObject $domainObject
-             */
+            /** @var \EBT\ExtensionBuilder\Domain\Model\DomainObject $domainObject */
             // Do not generate anything if $domainObject is not an
             // Entity or has no actions defined
-            if (!$domainObject->getEntity() || (count($domainObject->getActions()) == 0)) {
+            if (!$domainObject->getEntity() || (count($domainObject->getActions()) === 0)) {
                 continue;
             }
             $domainTemplateDirectory = $absoluteTemplateRootFolder . 'Templates/' . $domainObject->getName() . '/';
             foreach ($domainObject->getActions() as $action) {
-                /**
-                 * @var \EBT\ExtensionBuilder\Domain\Model\DomainObject\Action $action
-                 */
+                /** @var \EBT\ExtensionBuilder\Domain\Model\DomainObject\Action $action */
                 if ($action->getNeedsTemplate()
                     && $this->templateExists($templateRootFolder . 'Templates/' . $action->getName() . '.htmlt')
-
                 ) {
                     $hasTemplates = true;
                     $this->mkdir_deep(
@@ -447,7 +472,10 @@ class FileGenerator
             // Generate Layouts directory
             $this->mkdir_deep($absoluteTemplateRootFolder, 'Layouts');
             $layoutsDirectory = $absoluteTemplateRootFolder . 'Layouts/';
-            $this->writeFile($layoutsDirectory . 'Default.html', $this->generateLayout($templateRootFolder . 'Layouts/'));
+            $this->writeFile(
+                $layoutsDirectory . 'Default.html',
+                $this->generateLayout($templateRootFolder . 'Layouts/')
+            );
         }
     }
 
@@ -496,7 +524,7 @@ class FileGenerator
                 $this->mkdir_deep($this->extensionDirectory, 'Configuration/TypoScript');
                 $typoscriptDirectory = $this->extensionDirectory . 'Configuration/TypoScript/';
                 $fileContents = $this->generateTyposcriptSetup();
-                $this->writeFile($typoscriptDirectory . 'setup.ts', $fileContents);
+                $this->writeFile($typoscriptDirectory . 'setup.typoscript', $fileContents);
             } catch (\Exception $e) {
                 throw new \Exception('Could not generate typoscript setup, error: ' . $e->getMessage());
             }
@@ -505,7 +533,7 @@ class FileGenerator
             try {
                 $typoscriptDirectory = $this->extensionDirectory . 'Configuration/TypoScript/';
                 $fileContents = $this->generateTyposcriptConstants();
-                $this->writeFile($typoscriptDirectory . 'constants.ts', $fileContents);
+                $this->writeFile($typoscriptDirectory . 'constants.typoscript', $fileContents);
             } catch (\Exception $e) {
                 throw new \Exception('Could not generate typoscript constants, error: ' . $e->getMessage());
             }
@@ -515,7 +543,7 @@ class FileGenerator
         try {
             if ($this->extension->getDomainObjectsThatNeedMappingStatements()) {
                 $fileContents = $this->generateStaticTyposcript();
-                $this->writeFile($this->extensionDirectory . 'ext_typoscript_setup.txt', $fileContents);
+                $this->writeFile($this->extensionDirectory . 'ext_typoscript_setup.typoscript', $fileContents);
             }
         } catch (\Exception $e) {
             throw new \Exception('Could not generate static typoscript, error: ' . $e->getMessage());
@@ -527,6 +555,7 @@ class FileGenerator
      * files like PHP class files, templates etc.
      *
      * @throws \Exception
+     * @throws \EBT\ExtensionBuilder\Exception\FileNotFoundException
      */
     protected function generateDomainObjectRelatedFiles()
     {
@@ -547,19 +576,12 @@ class FileGenerator
                 $crudEnabledControllerTestsDirectory = $this->extensionDirectory . 'Tests/Unit/Controller/';
 
                 foreach ($this->extension->getDomainObjects() as $domainObject) {
-                    /**
-                     * @var \EBT\ExtensionBuilder\Domain\Model\DomainObject $domainObject
-                     */
+                    /** @var \EBT\ExtensionBuilder\Domain\Model\DomainObject $domainObject */
                     $destinationFile = $domainModelDirectory . $domainObject->getName() . '.php';
 
                     $fileContents = $this->generateDomainObjectCode($domainObject);
                     $fileContents = preg_replace('#^[ \t]+$#m', '', $fileContents);
                     $this->writeFile($this->extensionDirectory . $destinationFile, $fileContents);
-                    GeneralUtility::devLog(
-                        'Generated ' . $domainObject->getName() . '.php',
-                        'extension_builder',
-                        0
-                    );
                     $this->extension->setMD5Hash($this->extensionDirectory . $destinationFile);
 
                     if ($domainObject->isAggregateRoot()) {
@@ -580,11 +602,6 @@ class FileGenerator
                         $fileContents = $this->generateDomainRepositoryCode($domainObject);
                         $fileContents = preg_replace('#^[ \t]+$#m', '', $fileContents);
                         $this->writeFile($this->extensionDirectory . $destinationFile, $fileContents);
-                        GeneralUtility::devLog(
-                            'Generated ' . $domainObject->getName() . 'Repository.php',
-                            'extension_builder',
-                            0
-                        );
                         $this->extension->setMD5Hash($this->extensionDirectory . $destinationFile);
                     }
 
@@ -605,11 +622,6 @@ class FileGenerator
                     $fileContents = $this->generateActionControllerCode($domainObject);
                     $fileContents = preg_replace('#^[ \t]+$#m', '', $fileContents);
                     $this->writeFile($this->extensionDirectory . $destinationFile, $fileContents);
-                    GeneralUtility::devLog(
-                        'Generated ' . $domainObject->getName() . 'Controller.php',
-                        'extension_builder',
-                        0
-                    );
                     $this->extension->setMD5Hash($this->extensionDirectory . $destinationFile);
 
                     // Generate basic UnitTests
@@ -636,10 +648,15 @@ class FileGenerator
                     $this->generateTemplateFiles('Backend/');
                 }
             } catch (\Exception $e) {
-                throw new \Exception('Could not generate domain templates, error: ' . $e->getMessage());
+                throw new \Exception(
+                    sprintf(
+                        'Could not generate domain templates, error: %s in %s line %s',
+                        $e->getMessage(),
+                        $e->getFile(),
+                        $e->getLine()
+                    )
+                );
             }
-        } else {
-            GeneralUtility::devLog('No domainObjects in this extension', 'extension_builder', 3, (array)$this->extension);
         }
     }
 
@@ -662,20 +679,22 @@ class FileGenerator
      */
     protected function copyStaticFiles()
     {
-        try {
-            $this->upload_copy_move(
-                ExtensionManagementUtility::extPath('extension_builder') . 'Resources/Private/Icons/ext_icon.gif',
-                $this->extensionDirectory . 'ext_icon.gif'
-            );
-        } catch (\Exception $e) {
-            throw new \Exception('Could not copy ext_icon.gif, error: ' . $e->getMessage());
-        }
+        $publicResourcesDirectory = $this->extensionDirectory . 'Resources/Public/';
+        $this->iconsDirectory = $publicResourcesDirectory . 'Icons/';
 
         try {
             $this->mkdir_deep($this->extensionDirectory, 'Resources/Public');
-            $publicResourcesDirectory = $this->extensionDirectory . 'Resources/Public/';
             $this->mkdir_deep($publicResourcesDirectory, 'Icons');
-            $this->iconsDirectory = $publicResourcesDirectory . 'Icons/';
+        } catch (\Exception $e) {
+            throw new \Exception('Could not create public resources folder, error: ' . $e->getMessage());
+        }
+
+        try {
+            $this->upload_copy_move(
+                $this->getTemplatePath('Resources/Public/Icons/user_extension.svg'),
+                $this->iconsDirectory . 'Extension.svg'
+            );
+
             $needsRelationIcon = false;
             foreach ($this->extension->getDomainObjects() as $domainObject) {
                 if ($domainObject->hasRelations()) {
@@ -705,7 +724,7 @@ class FileGenerator
                 }
             }
         } catch (\Exception $e) {
-            throw new \Exception('Could not create public resources folder, error: ' . $e->getMessage());
+            throw new \Exception('Could not copy/move icon, error: ' . $e->getMessage());
         }
     }
 
@@ -745,8 +764,24 @@ class FileGenerator
         }
         $fileContents = $this->renderTemplate('Documentation.tmpl/Index.rstt', ['extension' => $this->extension]);
         $this->writeFile($this->extensionDirectory . 'Documentation.tmpl/Index.rst', $fileContents);
-        $fileContents = $this->renderTemplate('Documentation.tmpl/Settings.ymlt', ['extension' => $this->extension]);
-        $this->writeFile($this->extensionDirectory . 'Documentation.tmpl/Settings.yml', $fileContents);
+        $fileContents = $this->renderTemplate('Documentation.tmpl/Settings.cfgt', ['extension' => $this->extension]);
+        $this->writeFile($this->extensionDirectory . 'Documentation.tmpl/Settings.cfg', $fileContents);
+    }
+
+    protected function generateEmptyGitRepository()
+    {
+        $targetDirectory = $this->extensionDirectory . '.git/';
+        if (is_file($targetDirectory) || is_dir($targetDirectory) || is_link($targetDirectory)) {
+            return;
+        }
+        $sourceDirectory = ExtensionManagementUtility::extPath('extension_builder') . 'Resources/Private/CodeTemplates/Git/';
+        $targetDirectory = $this->extensionDirectory . '.git/';
+        foreach (['objects/info', 'objects/pack', 'refs/heads', 'refs/tags'] as $item) {
+            $this->mkdir_deep($targetDirectory . $item, '');
+        }
+        foreach (['config', 'description', 'HEAD', 'info/exclude'] as $item) {
+            $this->upload_copy_move($sourceDirectory . $item, $targetDirectory . $item);
+        }
     }
 
     /**
@@ -762,7 +797,7 @@ class FileGenerator
     {
         $variables['settings'] = $this->settings;
         /* @var \TYPO3\CMS\Fluid\View\StandaloneView $standAloneView */
-        $standAloneView = $this->objectManager->get(StandaloneView::class);
+        $standAloneView = GeneralUtility::makeInstance(StandaloneView::class);
         $standAloneView->setLayoutRootPaths($this->codeTemplateRootPaths);
         $standAloneView->setPartialRootPaths($this->codeTemplatePartialPaths);
         $standAloneView->setFormat('txt');
@@ -800,9 +835,9 @@ class FileGenerator
         if ($controllerClassFileObject) {
             $this->addLicenseHeader($controllerClassFileObject->getFirstClass());
             return $this->printerService->renderFileObject($controllerClassFileObject, true);
-        } else {
-            throw new \Exception('Class file for controller could not be generated');
         }
+
+        throw new \Exception('Class file for controller could not be generated');
     }
 
     /**
@@ -823,13 +858,14 @@ class FileGenerator
         if ($this->roundTripEnabled) {
             $existingClassFileObject = $this->roundTripService->getDomainModelClassFile($domainObject);
         }
-        $modelClassFileObject = $this->classBuilder->generateModelClassFileObject($domainObject, $modelTemplateClassPath, $existingClassFileObject);
+        $modelClassFileObject = $this->classBuilder->generateModelClassFileObject($domainObject,
+            $modelTemplateClassPath, $existingClassFileObject);
         if ($modelClassFileObject) {
             $this->addLicenseHeader($modelClassFileObject->getFirstClass());
             return $this->printerService->renderFileObject($modelClassFileObject, true);
-        } else {
-            throw new \Exception('Class file for domain object could not be generated');
         }
+
+        throw new \Exception('Class file for domain object could not be generated');
     }
 
     /**
@@ -873,9 +909,9 @@ class FileGenerator
         if ($repositoryClassFileObject) {
             $this->addLicenseHeader($repositoryClassFileObject->getFirstClass());
             return $this->printerService->renderFileObject($repositoryClassFileObject, true);
-        } else {
-            throw new \Exception('Class file for repository could not be generated');
         }
+
+        throw new \Exception('Class file for repository could not be generated');
     }
 
     /**
@@ -923,7 +959,39 @@ class FileGenerator
                 $fileContents = $this->renderTemplate('gitignore.t', []);
                 $this->writeFile($this->extension->getExtensionDir() . '.gitignore', $fileContents);
             } catch (\Exception $e) {
-                throw new \Exception('Could not create folder, error: ' . $e->getMessage());
+                throw new \Exception('Could not create file, error: ' . $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * @throws \Exception
+     */
+    public function generateGitAttributes()
+    {
+        if (!file_exists($this->extensionDirectory . '.gitattributes')) {
+            // Generate .gitattributes
+            try {
+                $fileContents = $this->renderTemplate('gitattributes.t', []);
+                $this->writeFile($this->extension->getExtensionDir() . '.gitattributes', $fileContents);
+            } catch (\Exception $e) {
+                throw new \Exception('Could not create file, error: ' . $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * @throws \Exception
+     */
+    public function generateEditorConfig()
+    {
+        if (!file_exists($this->extensionDirectory . '.editorconfig')) {
+            // Generate .editorconfig
+            try {
+                $fileContents = $this->renderTemplate('editorconfig.t', []);
+                $this->writeFile($this->extension->getExtensionDir() . '.editorconfig', $fileContents);
+            } catch (\Exception $e) {
+                throw new \Exception('Could not create file, error: ' . $e->getMessage());
             }
         }
     }
@@ -937,8 +1005,8 @@ class FileGenerator
     {
         if (!file_exists($this->extensionDirectory . 'composer.json')) {
             $composerInfo = $this->extension->getComposerInfo();
-            $this->writeFile($this->extension->getExtensionDir() . 'composer.json', json_encode($composerInfo, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-            GeneralUtility::devLog('Generated composer json', 'extension_builder', 0, ['Content' => $composerInfo]);
+            $this->writeFile($this->extension->getExtensionDir() . 'composer.json',
+                json_encode($composerInfo, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
         }
     }
 
@@ -1057,17 +1125,23 @@ class FileGenerator
     {
         $targetFile = 'Resources/Private/Language/locallang' . $fileNameSuffix;
 
-        $variableArray = ['extension' => $this->extension];
-        if (strlen($variableName) > 0) {
+        $variableArray = [
+            'extension' => $this->extension,
+            'fileName' => 'EXT:' . $this->extension->getExtensionKey() . '/' . $targetFile,
+        ];
+        if ($variableName !== '') {
             $variableArray[$variableName] = $variable;
         }
-        $languageLabels = [];
+
         if ($variableName == 'domainObject') {
             $languageLabels = $this->localizationService->prepareLabelArrayForContextHelp($variable);
         } elseif ($variableName == 'backendModule') {
             $languageLabels = $this->localizationService->prepareLabelArrayForBackendModule($variable);
         } else {
-            $languageLabels = $this->localizationService->prepareLabelArray($this->extension, 'locallang' . $fileNameSuffix);
+            $languageLabels = $this->localizationService->prepareLabelArray(
+                $this->extension,
+                'locallang' . $fileNameSuffix
+            );
         }
 
         if ($this->fileShouldBeMerged($targetFile . '.xlf')) {
@@ -1080,7 +1154,6 @@ class FileGenerator
 
             if (@file_exists($existingFile)) {
                 $existingLabels = $this->localizationService->getLabelArrayFromFile($existingFile, 'default');
-                GeneralUtility::devLog('locallang' . $fileNameSuffix . ' existing labels', 'extension_builder', 1, $existingLabels);
                 if (is_array($existingLabels)) {
                     ArrayUtility::mergeRecursiveWithOverrule($languageLabels, $existingLabels);
                 }
@@ -1152,7 +1225,7 @@ class FileGenerator
      */
     public function generateTyposcriptSetup()
     {
-        return $this->renderTemplate('Configuration/TypoScript/setup.tst', [
+        return $this->renderTemplate('Configuration/TypoScript/setup.typoscriptt', [
             'extension' => $this->extension
         ]);
     }
@@ -1163,7 +1236,7 @@ class FileGenerator
      */
     public function generateTyposcriptConstants()
     {
-        return $this->renderTemplate('Configuration/TypoScript/constants.tst', [
+        return $this->renderTemplate('Configuration/TypoScript/constants.typoscriptt', [
             'extension' => $this->extension
         ]);
     }
@@ -1198,18 +1271,15 @@ class FileGenerator
             $methodName = $methodType;
         }
 
-        $variables = [
-            'domainObject' => $domainObject,
-            'property' => $domainProperty,
-            'extension' => $this->extension,
-            'settings' => $this->settings
-        ];
-
-        $methodBody = $this->renderTemplate(
+        return $this->renderTemplate(
             'Partials/Classes/' . $classType . '/Methods/' . $methodName . 'MethodBody.phpt',
-            $variables
+            [
+                'domainObject' => $domainObject,
+                'property' => $domainProperty,
+                'extension' => $this->extension,
+                'settings' => $this->settings
+            ]
         );
-        return $methodBody;
     }
 
     /**
@@ -1244,9 +1314,9 @@ class FileGenerator
                 throw new \Exception('folder could not be created:' . $extensionDirectory . $classPath);
             }
             return $extensionDirectory . $classPath;
-        } else {
-            throw new \Exception('Unexpected classPath:' . $classPath);
         }
+
+        throw new \Exception('Unexpected classPath:' . $classPath);
     }
 
     /**
@@ -1256,9 +1326,9 @@ class FileGenerator
      * path and filename of the targetFile, relative to extension dir:
      * @param string $targetFile
      * @param string $fileContents
+     * @return void
      * @throws \Exception
      *
-     * @return void
      */
     protected function writeFile($targetFile, $fileContents)
     {
@@ -1271,16 +1341,27 @@ class FileGenerator
                 // skip file creation
                 return;
             }
+
+            $fileExtension = strtolower(pathinfo($targetFile, PATHINFO_EXTENSION));
+
+            // special handling for TypoScript files, that used to use "ts" as extension and now use "typoscript":
+            // if a ".typoscript" file SHOULD be written but a corresponding ".ts" file with the same name already
+            // exists, write to THAT file in order to avoid breaking users' extensions.
+            if (array_key_exists($fileExtension, $this->deprecatedFileExtensions)) {
+                foreach ($this->deprecatedFileExtensions[$fileExtension] as $possibleExistingExtension) {
+                    $possibleAlternateTarget = str_replace('.' . $fileExtension, '.' . $possibleExistingExtension,
+                        $targetFile);
+                    if (file_exists($possibleAlternateTarget)) {
+                        $targetFile = $possibleAlternateTarget;
+                        break;
+                    }
+                }
+            }
+
             if ($overWriteMode == 1 && strpos($targetFile, 'Classes') === false) {
                 // classes are merged by the class builder
-                $fileExtension = strtolower(pathinfo($targetFile, PATHINFO_EXTENSION));
                 if ($fileExtension == 'html') {
                     //TODO: We need some kind of protocol to be displayed after code generation
-                    GeneralUtility::devLog(
-                        'File ' . basename($targetFile) . ' was not written. Template files can\'t be merged!',
-                        'extension_builder',
-                        1
-                    );
                     return;
                 } elseif (in_array($fileExtension, $this->filesSupportingSplitToken)) {
                     $fileContents = $this->insertSplitToken($targetFile, $fileContents);
@@ -1292,12 +1373,6 @@ class FileGenerator
         }
 
         if (empty($fileContents)) {
-            GeneralUtility::devLog(
-                'No file content! File ' . $targetFile . ' had no content',
-                'extension_builder',
-                0,
-                $this->settings
-            );
             return;
         }
         $success = GeneralUtility::writeFile($targetFile, $fileContents);
@@ -1315,11 +1390,7 @@ class FileGenerator
     protected function fileShouldBeMerged($destinationFile)
     {
         $overwriteSettings = RoundTrip::getOverWriteSettingForPath($destinationFile, $this->extension);
-        if ($this->roundTripEnabled && $overwriteSettings > 0) {
-            return true;
-        } else {
-            return false;
-        }
+        return $this->roundTripEnabled && $overwriteSettings > 0;
     }
 
     /**
@@ -1334,12 +1405,11 @@ class FileGenerator
     {
         $customFileContent = '';
         if (file_exists($targetFile)) {
-
             // merge the files means append everything behind the split token
             $existingFileContent = file_get_contents($targetFile);
 
             $fileParts = explode(RoundTrip::SPLIT_TOKEN, $existingFileContent);
-            if (count($fileParts) == 2) {
+            if (count($fileParts) === 2) {
                 $customFileContent = str_replace('?>', '', $fileParts[1]);
             }
         }

@@ -1,4 +1,6 @@
 <?php
+declare(strict_types = 1);
+
 namespace TYPO3\CMS\Backend\Domain\Repository\Localization;
 
 /*
@@ -14,47 +16,43 @@ namespace TYPO3\CMS\Backend\Domain\Repository\Localization;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Backend\Utility\BackendUtility;
+use Doctrine\DBAL\Driver\Statement;
+use TYPO3\CMS\Backend\Configuration\TranslationConfigurationProvider;
+use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\QueryBuilder;
-use TYPO3\CMS\Core\Database\Query\QueryHelper;
 use TYPO3\CMS\Core\Database\Query\Restriction\BackendWorkspaceRestriction;
 use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Repository for record localizations
+ *
+ * @internal
  */
 class LocalizationRepository
 {
     /**
-     * Fetch the language from which the records of a colPos in a certain language were initially localized
+     * @var TranslationConfigurationProvider
+     */
+    protected $translationConfigurationProvider;
+
+    public function __construct(TranslationConfigurationProvider $translationConfigurationProvider = null)
+    {
+        $this->translationConfigurationProvider = $translationConfigurationProvider ?? GeneralUtility::makeInstance(TranslationConfigurationProvider::class);
+    }
+
+    /**
+     * Fetch the language from which the records in a certain language were initially localized
      *
      * @param int $pageId
-     * @param int $colPos
      * @param int $localizedLanguage
-     * @return array|false
+     * @return array
      */
-    public function fetchOriginLanguage($pageId, $colPos, $localizedLanguage)
+    public function fetchOriginLanguage(int $pageId, int $localizedLanguage): array
     {
         $queryBuilder = $this->getQueryBuilderWithWorkspaceRestriction('tt_content');
-
-        $constraints = [
-            $queryBuilder->expr()->eq(
-                'tt_content.colPos',
-                $queryBuilder->createNamedParameter($colPos, \PDO::PARAM_INT)
-            ),
-            $queryBuilder->expr()->eq(
-                'tt_content.pid',
-                $queryBuilder->createNamedParameter($pageId, \PDO::PARAM_INT)
-            ),
-            $queryBuilder->expr()->eq(
-                'tt_content.sys_language_uid',
-                $queryBuilder->createNamedParameter($localizedLanguage, \PDO::PARAM_INT)
-            ),
-        ];
-        $constraints += $this->getAllowedLanguageConstraintsForBackendUser();
 
         $queryBuilder->select('tt_content_orig.sys_language_uid')
             ->from('tt_content')
@@ -67,31 +65,31 @@ class LocalizationRepository
                     $queryBuilder->quoteIdentifier('tt_content_orig.uid')
                 )
             )
-            ->join(
-                'tt_content_orig',
-                'sys_language',
-                'sys_language',
+            ->where(
                 $queryBuilder->expr()->eq(
-                    'tt_content_orig.sys_language_uid',
-                    $queryBuilder->quoteIdentifier('sys_language.uid')
+                    'tt_content.pid',
+                    $queryBuilder->createNamedParameter($pageId, \PDO::PARAM_INT)
+                ),
+                $queryBuilder->expr()->eq(
+                    'tt_content.sys_language_uid',
+                    $queryBuilder->createNamedParameter($localizedLanguage, \PDO::PARAM_INT)
                 )
             )
-            ->where(...$constraints)
             ->groupBy('tt_content_orig.sys_language_uid');
+        $this->getAllowedLanguageConstraintsForBackendUser($pageId, $queryBuilder, $this->getBackendUser(), 'tt_content_orig');
 
-        return $queryBuilder->execute()->fetch();
+        return $queryBuilder->execute()->fetch() ?: [];
     }
 
     /**
-     * Returns number of localized records in given page, colPos and language
+     * Returns number of localized records in given page and language
      * Records which were added to the language directly (not through translation) are not counted.
      *
      * @param int $pageId
-     * @param int $colPos
      * @param int $languageId
      * @return int
      */
-    public function getLocalizedRecordCount($pageId, $colPos, $languageId)
+    public function getLocalizedRecordCount(int $pageId, int $languageId): int
     {
         $queryBuilder = $this->getQueryBuilderWithWorkspaceRestriction('tt_content');
 
@@ -99,19 +97,15 @@ class LocalizationRepository
             ->from('tt_content')
             ->where(
                 $queryBuilder->expr()->eq(
-                    'tt_content.sys_language_uid',
+                    'sys_language_uid',
                     $queryBuilder->createNamedParameter($languageId, \PDO::PARAM_INT)
                 ),
                 $queryBuilder->expr()->eq(
-                    'tt_content.colPos',
-                    $queryBuilder->createNamedParameter($colPos, \PDO::PARAM_INT)
-                ),
-                $queryBuilder->expr()->eq(
-                    'tt_content.pid',
+                    'pid',
                     $queryBuilder->createNamedParameter($pageId, \PDO::PARAM_INT)
                 ),
                 $queryBuilder->expr()->neq(
-                    'tt_content.l10n_source',
+                    'l10n_source',
                     $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT)
                 )
             )
@@ -125,132 +119,69 @@ class LocalizationRepository
      * Fetch all available languages
      *
      * @param int $pageId
-     * @param int $colPos
      * @param int $languageId
      * @return array
      */
-    public function fetchAvailableLanguages($pageId, $colPos, $languageId)
+    public function fetchAvailableLanguages(int $pageId, int $languageId): array
     {
         $queryBuilder = $this->getQueryBuilderWithWorkspaceRestriction('tt_content');
-
-        $constraints = [
-            $queryBuilder->expr()->eq(
-                'tt_content.sys_language_uid',
-                $queryBuilder->quoteIdentifier('sys_language.uid')
-            ),
-            $queryBuilder->expr()->eq(
-                'tt_content.colPos',
-                $queryBuilder->createNamedParameter($colPos, \PDO::PARAM_INT)
-            ),
-            $queryBuilder->expr()->eq(
-                'tt_content.pid',
-                $queryBuilder->createNamedParameter($pageId, \PDO::PARAM_INT)
-            ),
-            $queryBuilder->expr()->neq(
-                'sys_language.uid',
-                $queryBuilder->createNamedParameter($languageId, \PDO::PARAM_INT)
-            )
-        ];
-        $constraints += $this->getAllowedLanguageConstraintsForBackendUser();
-
-        $queryBuilder->select('sys_language.uid')
+        $queryBuilder->select('sys_language_uid')
             ->from('tt_content')
-            ->from('sys_language')
-            ->where(...$constraints)
-            ->groupBy('sys_language.uid')
-            ->orderBy('sys_language.sorting');
+            ->where(
+                $queryBuilder->expr()->eq(
+                    'pid',
+                    $queryBuilder->createNamedParameter($pageId, \PDO::PARAM_INT)
+                ),
+                $queryBuilder->expr()->neq(
+                    'sys_language_uid',
+                    $queryBuilder->createNamedParameter($languageId, \PDO::PARAM_INT)
+                )
+            )
+            ->groupBy('sys_language_uid');
 
-        $result = $queryBuilder->execute()->fetchAll();
-
-        return $result;
-    }
-
-    /**
-     * Builds an additional where clause to exclude deleted records and setting the versioning placeholders
-     *
-     * @return string
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function getExcludeQueryPart()
-    {
-        GeneralUtility::logDeprecatedFunction();
-
-        return BackendUtility::deleteClause('tt_content') . BackendUtility::versioningPlaceholderClause('tt_content');
-    }
-
-    /**
-     * Builds an additional where clause to exclude hidden languages and limit a backend user to its allowed languages,
-     * if the user is not an admin.
-     *
-     * @return string
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function getAllowedLanguagesForBackendUser()
-    {
-        GeneralUtility::logDeprecatedFunction();
-
-        $backendUser = $this->getBackendUser();
-        $additionalWhere = '';
-        if (!$backendUser->isAdmin()) {
-            $additionalWhere .= ' AND sys_language.hidden=0';
-
-            if (!empty($backendUser->user['allowed_languages'])) {
-                $additionalWhere .= ' AND sys_language.uid IN(' . implode(',', GeneralUtility::intExplode(',', $backendUser->user['allowed_languages'])) . ')';
-            }
-        }
-
-        return $additionalWhere;
+        $this->getAllowedLanguageConstraintsForBackendUser($pageId, $queryBuilder, $this->getBackendUser());
+        $languages = $queryBuilder->execute()->fetchAll();
+        return $languages ?: [];
     }
 
     /**
      * Builds additional query constraints to exclude hidden languages and
      * limit a backend user to its allowed languages (unless the user is an admin)
      *
-     * @return array
+     * @param int $pageId
+     * @param QueryBuilder $queryBuilder
+     * @param BackendUserAuthentication $backendUser
+     * @param string $alias
      */
-    protected function getAllowedLanguageConstraintsForBackendUser(): array
+    protected function getAllowedLanguageConstraintsForBackendUser(int $pageId, QueryBuilder $queryBuilder, BackendUserAuthentication $backendUser, string $alias = ''): void
     {
-        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_language');
-        $constraints = [];
-
-        $backendUser = $this->getBackendUser();
-        if (!$backendUser->isAdmin()) {
-            if (!empty($GLOBALS['TCA']['sys_language']['ctrl']['enablecolumns']['disabled'])) {
-                $constraints[] = $queryBuilder->expr()->eq(
-                    'sys_language.' . $GLOBALS['TCA']['sys_language']['ctrl']['enablecolumns']['disabled'],
-                    $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT)
-                );
-            }
-
-            if (!empty($backendUser->user['allowed_languages'])) {
-                $constraints[] = $queryBuilder->expr()->in(
-                    'sys_language.uid',
-                    $queryBuilder->createNamedParameter(
-                        GeneralUtility::intExplode(',', $backendUser->user['allowed_languages'], true),
-                        Connection::PARAM_INT_ARRAY
-                    )
-                );
-            }
+        if ($backendUser->isAdmin()) {
+            return;
         }
-
-        return $constraints;
+        // This always includes default language
+        $allowedLanguages = $this->translationConfigurationProvider->getSystemLanguages($pageId);
+        $queryBuilder->andWhere(
+            $queryBuilder->expr()->in(
+                ($alias === '' ? '' : ($alias . '.')) . 'sys_language_uid',
+                $queryBuilder->createNamedParameter(array_keys($allowedLanguages), Connection::PARAM_INT_ARRAY)
+            )
+        );
     }
 
     /**
      * Get records for copy process
      *
      * @param int $pageId
-     * @param int $colPos
      * @param int $destLanguageId
      * @param int $languageId
      * @param string $fields
-     * @return \Doctrine\DBAL\Driver\Statement
+     * @return Statement
      */
-    public function getRecordsToCopyDatabaseResult($pageId, $colPos, $destLanguageId, $languageId, $fields = '*')
+    public function getRecordsToCopyDatabaseResult(int $pageId, int $destLanguageId, int $languageId, string $fields = '*'): Statement
     {
         $originalUids = [];
 
-        // Get original uid of existing elements triggered language / colpos
+        // Get original uid of existing elements triggered language
         $queryBuilder = $this->getQueryBuilderWithWorkspaceRestriction('tt_content');
 
         $originalUidsStatement = $queryBuilder
@@ -262,11 +193,7 @@ class LocalizationRepository
                     $queryBuilder->createNamedParameter($destLanguageId, \PDO::PARAM_INT)
                 ),
                 $queryBuilder->expr()->eq(
-                    'tt_content.colPos',
-                    $queryBuilder->createNamedParameter($colPos, \PDO::PARAM_INT)
-                ),
-                $queryBuilder->expr()->eq(
-                    'tt_content.pid',
+                    'pid',
                     $queryBuilder->createNamedParameter($pageId, \PDO::PARAM_INT)
                 )
             )
@@ -280,25 +207,21 @@ class LocalizationRepository
             ->from('tt_content')
             ->where(
                 $queryBuilder->expr()->eq(
-                    'tt_content.sys_language_uid',
+                    'sys_language_uid',
                     $queryBuilder->createNamedParameter($languageId, \PDO::PARAM_INT)
                 ),
                 $queryBuilder->expr()->eq(
-                    'tt_content.colPos',
-                    $queryBuilder->createNamedParameter($colPos, \PDO::PARAM_INT)
-                ),
-                $queryBuilder->expr()->eq(
-                    'tt_content.pid',
+                    'pid',
                     $queryBuilder->createNamedParameter($pageId, \PDO::PARAM_INT)
                 )
             )
-            ->orderBy('tt_content.sorting');
+            ->orderBy('sorting');
 
         if (!empty($originalUids)) {
             $queryBuilder
                 ->andWhere(
                     $queryBuilder->expr()->notIn(
-                        'tt_content.uid',
+                        'uid',
                         $queryBuilder->createNamedParameter($originalUids, Connection::PARAM_INT_ARRAY)
                     )
                 );
@@ -308,145 +231,11 @@ class LocalizationRepository
     }
 
     /**
-     * Fetches the localization for a given record.
-     *
-     * @FIXME: This method is a clone of BackendUtility::getRecordLocalization, using origUid instead of transOrigPointerField
-     *
-     * @param string $table Table name present in $GLOBALS['TCA']
-     * @param int $uid The uid of the record
-     * @param int $language The uid of the language record in sys_language
-     * @param string $andWhereClause Optional additional WHERE clause (default: '')
-     * @return mixed Multidimensional array with selected records; if none exist, FALSE is returned
-     *
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function getRecordLocalization($table, $uid, $language, $andWhereClause = '')
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $recordLocalization = false;
-
-        // Pages still stores translations in the pages_language_overlay table, all other tables store in themself
-        if ($table === 'pages') {
-            $table = 'pages_language_overlay';
-        }
-
-        if (BackendUtility::isTableLocalizable($table)) {
-            $tcaCtrl = $GLOBALS['TCA'][$table]['ctrl'];
-
-            if (isset($tcaCtrl['origUid'])) {
-                $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
-                    ->getQueryBuilderForTable($table);
-                $queryBuilder->getRestrictions()
-                    ->removeAll()
-                    ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
-                    ->add(GeneralUtility::makeInstance(BackendWorkspaceRestriction::class));
-
-                $queryBuilder->select('*')
-                    ->from($table)
-                    ->where(
-                        $queryBuilder->expr()->eq(
-                            $tcaCtrl['origUid'],
-                            $queryBuilder->createNamedParameter($uid, \PDO::PARAM_INT)
-                        ),
-                        $queryBuilder->expr()->eq(
-                            $tcaCtrl['languageField'],
-                            $queryBuilder->createNamedParameter((int)$language, \PDO::PARAM_INT)
-                        )
-                    )
-                    ->setMaxResults(1);
-
-                if ($andWhereClause) {
-                    $queryBuilder->andWhere(QueryHelper::stripLogicalOperatorPrefix($andWhereClause));
-                }
-
-                $recordLocalization = $queryBuilder->execute()->fetchAll();
-            }
-        }
-        return $recordLocalization;
-    }
-
-    /**
-     * Returning uid of previous localized record, if any, for tables with a "sortby" column
-     * Used when new localized records are created so that localized records are sorted in the same order as the default language records
-     *
-     * @FIXME: This method is a clone of DataHandler::getPreviousLocalizedRecordUid which is protected there and uses
-     * BackendUtility::getRecordLocalization which we also needed to clone in this class. Also, this method takes two
-     * language arguments.
-     *
-     * @param string $table Table name
-     * @param int $uid Uid of default language record
-     * @param int $pid Pid of default language record
-     * @param int $sourceLanguage Language of origin
-     * @param int $destinationLanguage Language of localization
-     * @return int uid of record after which the localized record should be inserted
-     *
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function getPreviousLocalizedRecordUid($table, $uid, $pid, $sourceLanguage, $destinationLanguage)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $previousLocalizedRecordUid = $uid;
-        if ($GLOBALS['TCA'][$table] && $GLOBALS['TCA'][$table]['ctrl']['sortby']) {
-            $sortRow = $GLOBALS['TCA'][$table]['ctrl']['sortby'];
-            $select = [$sortRow, 'pid', 'uid'];
-            // For content elements, we also need the colPos
-            if ($table === 'tt_content') {
-                $select[] = 'colPos';
-            }
-            // Get the sort value of the default language record
-            $row = BackendUtility::getRecord($table, $uid, implode(',', $select));
-            if (is_array($row)) {
-                $queryBuilder = $this->getQueryBuilderWithWorkspaceRestriction('tt_content');
-
-                $queryBuilder->select(...$select)
-                    ->from($table)
-                    ->where(
-                        $queryBuilder->expr()->eq('pid', $queryBuilder->createNamedParameter($pid, \PDO::PARAM_INT)),
-                        $queryBuilder->expr()->eq(
-                            'sys_language_uid',
-                            $queryBuilder->createNamedParameter($sourceLanguage, \PDO::PARAM_INT)
-                        ),
-                        $queryBuilder->expr()->lt(
-                            $sortRow,
-                            $queryBuilder->createNamedParameter($row[$sortRow], \PDO::PARAM_INT)
-                        )
-                    );
-
-                // Respect the colPos for content elements
-                if ($table === 'tt_content') {
-                    $queryBuilder->andWhere(
-                        $queryBuilder->expr()->eq(
-                            'colPos',
-                            $queryBuilder->createNamedParameter($row['colPos'], \PDO::PARAM_INT)
-                        )
-                    );
-                }
-
-                $previousRow = $queryBuilder->orderBy($sortRow, 'DESC')->execute()->fetch();
-
-                // If there is an element, find its localized record in specified localization language
-                if ($previousRow !== false) {
-                    $previousLocalizedRecord = $this->getRecordLocalization(
-                        $table,
-                        $previousRow['uid'],
-                        $destinationLanguage
-                    );
-                    if (is_array($previousLocalizedRecord[0])) {
-                        $previousLocalizedRecordUid = $previousLocalizedRecord[0]['uid'];
-                    }
-                }
-            }
-        }
-
-        return $previousLocalizedRecordUid;
-    }
-
-    /**
      * Returns the current BE user.
      *
-     * @return \TYPO3\CMS\Core\Authentication\BackendUserAuthentication
+     * @return BackendUserAuthentication
      */
-    protected function getBackendUser()
+    protected function getBackendUser(): BackendUserAuthentication
     {
         return $GLOBALS['BE_USER'];
     }
@@ -456,7 +245,7 @@ class LocalizationRepository
      * to not retrieve workspace placeholders or deleted records.
      *
      * @param string $tableName
-     * @return \TYPO3\CMS\Core\Database\Query\QueryBuilder
+     * @return QueryBuilder
      */
     protected function getQueryBuilderWithWorkspaceRestriction(string $tableName): QueryBuilder
     {

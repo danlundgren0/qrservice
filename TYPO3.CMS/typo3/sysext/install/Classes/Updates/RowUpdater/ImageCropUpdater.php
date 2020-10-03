@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Install\Updates\RowUpdater;
 
 /*
@@ -25,6 +25,7 @@ use TYPO3\CMS\Core\Utility\MathUtility;
 /**
  * Migrate values for database records having columns
  * using "l10n_mode" set to "mergeIfNotBlank".
+ * @internal This class is only meant to be used within EXT:install and is not part of the TYPO3 Core API.
  */
 class ImageCropUpdater implements RowUpdaterInterface
 {
@@ -185,7 +186,7 @@ class ImageCropUpdater implements RowUpdaterInterface
      *
      * @param array $row
      * @param string $fieldName
-     * @return null|\TYPO3\CMS\Core\Resource\File
+     * @return \TYPO3\CMS\Core\Resource\File|null
      */
     private function getFile(array $row, $fieldName)
     {

@@ -47,6 +47,7 @@ class Response extends Message implements ResponseInterface
         100 => 'Continue',
         101 => 'Switching Protocols',
         102 => 'Processing',
+        103 => 'Early Hints',
         // SUCCESS CODES
         200 => 'OK',
         201 => 'Created',
@@ -55,8 +56,9 @@ class Response extends Message implements ResponseInterface
         204 => 'No Content',
         205 => 'Reset Content',
         206 => 'Partial Content',
-        207 => 'Multi-status',
+        207 => 'Multi-Status',
         208 => 'Already Reported',
+        226 => 'IM Used',
         // REDIRECTION CODES
         300 => 'Multiple Choices',
         301 => 'Moved Permanently',
@@ -66,6 +68,7 @@ class Response extends Message implements ResponseInterface
         305 => 'Use Proxy',
         306 => 'Switch Proxy', // Deprecated
         307 => 'Temporary Redirect',
+        308 => 'Permanent Redirect',
         // CLIENT ERROR
         400 => 'Bad Request',
         401 => 'Unauthorized',
@@ -75,17 +78,18 @@ class Response extends Message implements ResponseInterface
         405 => 'Method Not Allowed',
         406 => 'Not Acceptable',
         407 => 'Proxy Authentication Required',
-        408 => 'Request Time-out',
+        408 => 'Request Timeout',
         409 => 'Conflict',
         410 => 'Gone',
         411 => 'Length Required',
         412 => 'Precondition Failed',
-        413 => 'Request Entity Too Large',
-        414 => 'Request-URI Too Large',
+        413 => 'Payload Too Large',
+        414 => 'URI Too Long',
         415 => 'Unsupported Media Type',
-        416 => 'Requested range not satisfiable',
+        416 => 'Range Not Satisfiable',
         417 => 'Expectation Failed',
         418 => 'I\'m a teapot',
+        421 => 'Misdirected Request',
         422 => 'Unprocessable Entity',
         423 => 'Locked',
         424 => 'Failed Dependency',
@@ -94,17 +98,19 @@ class Response extends Message implements ResponseInterface
         428 => 'Precondition Required',
         429 => 'Too Many Requests',
         431 => 'Request Header Fields Too Large',
+        451 => 'Unavailable For Legal Reasons',
         // SERVER ERROR
         500 => 'Internal Server Error',
         501 => 'Not Implemented',
         502 => 'Bad Gateway',
         503 => 'Service Unavailable',
-        504 => 'Gateway Time-out',
-        505 => 'HTTP Version not supported',
+        504 => 'Gateway Timeout',
+        505 => 'HTTP Version Not Supported',
         506 => 'Variant Also Negotiates',
         507 => 'Insufficient Storage',
         508 => 'Loop Detected',
         509 => 'Bandwidth Limit Exceeded',
+        510 => 'Not Extended',
         511 => 'Network Authentication Required'
     ];
 
@@ -134,7 +140,7 @@ class Response extends Message implements ResponseInterface
         $this->statusCode = (int)$statusCode;
 
         $this->reasonPhrase = $this->availableStatusCodes[$this->statusCode];
-        $headers = $this->filterHeaders($headers)[1];
+        list($this->lowercasedHeaderNames, $headers) = $this->filterHeaders($headers);
         $this->assertHeaders($headers);
         $this->headers = $headers;
     }
@@ -170,7 +176,7 @@ class Response extends Message implements ResponseInterface
      * @param string $reasonPhrase The reason phrase to use with the
      *     provided status code; if none is provided, implementations MAY
      *     use the defaults as suggested in the HTTP specification.
-     * @return Response
+     * @return static
      * @throws \InvalidArgumentException For invalid status code arguments.
      */
     public function withStatus($code, $reasonPhrase = '')
@@ -179,7 +185,7 @@ class Response extends Message implements ResponseInterface
             throw new \InvalidArgumentException('The given status code is not a valid HTTP status code', 1436717279);
         }
         $clonedObject = clone $this;
-        $clonedObject->statusCode = $code;
+        $clonedObject->statusCode = (int)$code;
         $clonedObject->reasonPhrase = $reasonPhrase !== '' ? $reasonPhrase : $this->availableStatusCodes[$code];
         return $clonedObject;
     }

@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Finishers;
 
 /*
@@ -49,7 +49,7 @@ class DeleteUploadsFinisher extends AbstractFinisher
             if ($file instanceof FileReference) {
                 $file = $file->getOriginalResource();
             }
-            $file->getStorage()->deleteFile($file);
+            $file->getStorage()->deleteFile($file->getOriginalFile());
         }
     }
 }

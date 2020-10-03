@@ -74,18 +74,16 @@ class ContentContentObject extends AbstractContentObject
                 $this->cObj->currentRecordTotal = count($records);
                 $this->getTimeTracker()->setTSlogMessage('NUMROWS: ' . count($records));
 
-                /** @var $cObj ContentObjectRenderer */
+                /** @var ContentObjectRenderer $cObj */
                 $cObj = GeneralUtility::makeInstance(ContentObjectRenderer::class);
                 $cObj->setParent($this->cObj->data, $this->cObj->currentRecord);
                 $this->cObj->currentRecordNumber = 0;
 
                 foreach ($records as $row) {
                     // Call hook for possible manipulation of database row for cObj->data
-                    if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/class.tslib_content_content.php']['modifyDBRow'])) {
-                        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/class.tslib_content_content.php']['modifyDBRow'] as $_classRef) {
-                            $_procObj = GeneralUtility::getUserObj($_classRef);
-                            $_procObj->modifyDBRow($row, $conf['table']);
-                        }
+                    foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/class.tslib_content_content.php']['modifyDBRow'] ?? [] as $className) {
+                        $_procObj = GeneralUtility::makeInstance($className);
+                        $_procObj->modifyDBRow($row, $conf['table']);
                     }
                     if (!$frontendController->recordRegister[$conf['table'] . ':' . $row['uid']]) {
                         $this->cObj->currentRecordNumber++;

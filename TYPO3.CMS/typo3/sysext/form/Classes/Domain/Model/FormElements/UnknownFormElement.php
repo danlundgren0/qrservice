@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Model\FormElements;
 
 /*
@@ -20,7 +20,6 @@ namespace TYPO3\CMS\Form\Domain\Model\FormElements;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Form\Domain\Exception\IdentifierNotValidException;
 use TYPO3\CMS\Form\Domain\Model\Renderable\AbstractRenderable;
-use TYPO3\CMS\Form\Domain\Runtime\FormRuntime;
 
 /**
  * A Form Element that has no definition.
@@ -36,7 +35,6 @@ class UnknownFormElement extends AbstractRenderable implements FormElementInterf
      * @param string $identifier The FormElement's identifier
      * @param string $type The Form Element Type
      * @throws IdentifierNotValidException
-     * @api
      */
     public function __construct(string $identifier, string $type)
     {
@@ -48,21 +46,16 @@ class UnknownFormElement extends AbstractRenderable implements FormElementInterf
     }
 
     /**
-     * @api
+     * Sets up the form element
      */
     public function initializeFormElement()
     {
-        if (
-            isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/form']['initializeFormElement'])
-            && is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/form']['initializeFormElement'])
-        ) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/form']['initializeFormElement'] as $className) {
-                $hookObj = GeneralUtility::makeInstance($className);
-                if (method_exists($hookObj, 'initializeFormElement')) {
-                    $hookObj->initializeFormElement(
-                        $this
-                    );
-                }
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/form']['initializeFormElement'] ?? [] as $className) {
+            $hookObj = GeneralUtility::makeInstance($className);
+            if (method_exists($hookObj, 'initializeFormElement')) {
+                $hookObj->initializeFormElement(
+                    $this
+                );
             }
         }
     }
@@ -73,7 +66,6 @@ class UnknownFormElement extends AbstractRenderable implements FormElementInterf
      * this includes the identifier of the form itself, making it "globally" unique
      *
      * @return string the "globally" unique identifier of this element
-     * @api
      */
     public function getUniqueIdentifier(): string
     {
@@ -87,7 +79,6 @@ class UnknownFormElement extends AbstractRenderable implements FormElementInterf
      * Get the template name of the renderable
      *
      * @return string
-     * @api
      */
     public function getTemplateName(): string
     {
@@ -140,20 +131,5 @@ class UnknownFormElement extends AbstractRenderable implements FormElementInterf
     public function isRequired(): bool
     {
         return false;
-    }
-
-    /**
-     * Not used in this implementation
-     *
-     * @param FormRuntime $formRuntime
-     * @param mixed $elementValue submitted value of the element *before post processing*
-     * @param array $requestArguments submitted raw request values
-     * @see FormRuntime::mapAndValidate()
-     * @internal
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function onSubmit(FormRuntime $formRuntime, &$elementValue, array $requestArguments = [])
-    {
-        GeneralUtility::logDeprecatedFunction();
     }
 }

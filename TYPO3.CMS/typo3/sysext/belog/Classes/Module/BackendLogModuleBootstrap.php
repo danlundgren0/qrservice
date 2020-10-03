@@ -14,6 +14,10 @@ namespace TYPO3\CMS\Belog\Module;
  * The TYPO3 project - inspiring people to share!
  */
 
+use Psr\Http\Message\ServerRequestInterface;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Extbase\Core\Bootstrap;
+
 /**
  * This class is a wrapper for WebInfo controller of belog.
  * It is registered in ext_tables.php with \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::insertModuleFunction()
@@ -21,23 +25,10 @@ namespace TYPO3\CMS\Belog\Module;
  *
  * Extbase currently provides no way to register a "TBE_MODULES_EXT" module directly,
  * therefore we need to bootstrap extbase on our own here to jump to the WebInfo controller.
+ * @internal This class is a experimental and is not considered part of the Public TYPO3 API.
  */
 class BackendLogModuleBootstrap
 {
-    /**
-     * Dummy method, called by SCbase external object handling
-     */
-    public function init()
-    {
-    }
-
-    /**
-     * Dummy method, called by SCbase external object handling
-     */
-    public function checkExtObj()
-    {
-    }
-
     /**
      * Bootstrap extbase and jump to WebInfo controller
      *
@@ -45,18 +36,21 @@ class BackendLogModuleBootstrap
      */
     public function main()
     {
-        $configuration = [
+        $_GET['tx_belog_system_beloglog']['pageId'] = GeneralUtility::_GP('id');
+        $_GET['tx_belog_system_beloglog']['layout'] = 'Plain';
+        $serverRequest = $GLOBALS['TYPO3_REQUEST'] ?? null;
+        if ($serverRequest instanceof ServerRequestInterface) {
+            $GLOBALS['TYPO3_REQUEST'] = $serverRequest->withQueryParams($_GET);
+        }
+        $options['moduleConfiguration'] = [
             'extensionName' => 'Belog',
-            'pluginName' => 'system_BelogLog',
             'vendorName' => 'TYPO3\\CMS',
         ];
-        // Yeah, this is ugly. But currently, there is no other direct way
-        // in extbase to force a specific controller in backend mode.
-        // Overwriting $_GET was the most simple solution here until extbase
-        // provides a clean way to solve this.
-        $_GET['tx_belog_system_beloglog']['controller'] = 'WebInfo';
-        /** @var $extbaseBootstrap \TYPO3\CMS\Extbase\Core\Bootstrap */
-        $extbaseBootstrap = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Extbase\Core\Bootstrap::class);
-        return $extbaseBootstrap->run('', $configuration);
+        $options['moduleName'] = 'system_BelogLog';
+
+        $route = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\Route::class, '/system/BelogLog/', $options);
+        $serverRequest = $serverRequest->withAttribute('route', $route);
+        $extbaseBootstrap = GeneralUtility::makeInstance(Bootstrap::class);
+        return $extbaseBootstrap->handleBackendRequest($serverRequest);
     }
 }

@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Configuration\FlexForm;
 
 /*
@@ -66,7 +66,7 @@ class FlexFormTools
      *
      * @var object
      */
-    public $callBackObj = null;
+    public $callBackObj;
 
     /**
      * Used for accumulation of clean XML
@@ -107,6 +107,11 @@ class FlexFormTools
      * @param array $row The data row
      * @return string Identifier string
      * @throws \RuntimeException If TCA is misconfigured
+     * @throws InvalidParentRowException in getDataStructureIdentifierFromRecord
+     * @throws InvalidParentRowLoopException in getDataStructureIdentifierFromRecord
+     * @throws InvalidParentRowRootException in getDataStructureIdentifierFromRecord
+     * @throws InvalidPointerFieldValueException in getDataStructureIdentifierFromRecord
+     * @throws InvalidTcaException in getDataStructureIdentifierFromRecord
      */
     public function getDataStructureIdentifier(array $fieldTca, string $tableName, string $fieldName, array $row): string
     {
@@ -130,7 +135,10 @@ class FlexFormTools
                 $hookInstance = GeneralUtility::makeInstance($hookClass);
                 if (method_exists($hookClass, 'getDataStructureIdentifierPreProcess')) {
                     $dataStructureIdentifier = $hookInstance->getDataStructureIdentifierPreProcess(
-                        $fieldTca, $tableName, $fieldName, $row
+                        $fieldTca,
+                        $tableName,
+                        $fieldName,
+                        $row
                     );
                     if (!is_array($dataStructureIdentifier)) {
                         throw new \RuntimeException(
@@ -152,11 +160,19 @@ class FlexFormTools
             $tcaDataStructurePointerField = $fieldTca['config']['ds_pointerField'] ?? null;
             if (!is_array($tcaDataStructureArray) && $tcaDataStructurePointerField) {
                 // "ds" is not an array, but "ds_pointerField" is set -> data structure is found in different table
-                $dataStructureIdentifier = $this->getDataStructureIdentifierFromRecord($fieldTca, $tableName,
-                    $fieldName, $row);
+                $dataStructureIdentifier = $this->getDataStructureIdentifierFromRecord(
+                    $fieldTca,
+                    $tableName,
+                    $fieldName,
+                    $row
+                );
             } elseif (is_array($tcaDataStructureArray)) {
-                $dataStructureIdentifier = $this->getDataStructureIdentifierFromTcaArray($fieldTca, $tableName,
-                    $fieldName, $row);
+                $dataStructureIdentifier = $this->getDataStructureIdentifierFromTcaArray(
+                    $fieldTca,
+                    $tableName,
+                    $fieldName,
+                    $row
+                );
             } else {
                 throw new \RuntimeException(
                     'TCA misconfiguration in table "' . $tableName . '" field "' . $fieldName . '" config section:'
@@ -181,7 +197,11 @@ class FlexFormTools
                 $hookInstance = GeneralUtility::makeInstance($hookClass);
                 if (method_exists($hookClass, 'getDataStructureIdentifierPostProcess')) {
                     $dataStructureIdentifier = $hookInstance->getDataStructureIdentifierPostProcess(
-                        $fieldTca, $tableName, $fieldName, $row, $dataStructureIdentifier
+                        $fieldTca,
+                        $tableName,
+                        $fieldName,
+                        $row,
+                        $dataStructureIdentifier
                     );
                     if (!is_array($dataStructureIdentifier) || empty($dataStructureIdentifier)) {
                         throw new \RuntimeException(
@@ -274,12 +294,18 @@ class FlexFormTools
                     $queryBuilder->addSelect($pointerSubFieldName);
                 }
                 $queryStatement = $queryBuilder->from($tableName)
-                    ->where($queryBuilder->expr()->eq(
-                        'uid',
-                        $queryBuilder->createNamedParameter($row[$parentFieldName], \PDO::PARAM_INT))
+                    ->where(
+                        $queryBuilder->expr()->eq(
+                            'uid',
+                            $queryBuilder->createNamedParameter($row[$parentFieldName], \PDO::PARAM_INT)
+                        )
                     )
                     ->execute();
-                if ($queryStatement->rowCount() !== 1) {
+                $rowCount = $queryBuilder
+                    ->count('uid')
+                    ->execute()
+                    ->fetchColumn(0);
+                if ($rowCount !== 1) {
                     throw new InvalidParentRowException(
                         'The data structure for field "' . $fieldName . '" in table "' . $tableName . '" has to be looked up'
                         . ' in field "' . $pointerFieldName . '". That field had no valid value, so a lookup in parent record'
@@ -490,22 +516,6 @@ class FlexFormTools
                 if (isset($fieldTca['config']['ds'][$row[$pointerFieldArray[0]] . ',' . $row[$pointerFieldArray[1]]])) {
                     // firstValue,secondValue
                     $dataStructureIdentifier['dataStructureKey'] = $row[$pointerFieldArray[0]] . ',' . $row[$pointerFieldArray[1]];
-                } elseif (isset($fieldTca['config']['ds'][$row[$pointerFieldArray[1]] . ',*'])) {
-                    // secondValue,* ?!
-                    // @deprecated since TYPO3 v8, will be removed in TYPO3 v9 - just remove this elseif together with two unit tests
-                    // This case is a wrong implementation - it matches "secondFieldValue,*", but it
-                    // should match "*,secondFieldValue" only. Since this bug has been in the code for ages, it
-                    // still works in v8 but is deprecated now.
-                    // Try to log a meaningful deprecation message though, so devs can adapt
-                    GeneralUtility::deprecationLog(
-                        'TCA field "' . $fieldName . '" of table "' . $tableName . '" has a registered data structure'
-                        . ' with name "' . $row[$pointerFieldArray[1]] . ',*". The ds_pointerField is set to "'
-                        . $tcaDataStructurePointerField . '", with the matching value "' . $row[$pointerFieldArray[1]] . '"'
-                        . ' for field "' . $pointerFieldArray[1] . '". This should be the other way round, so the name'
-                        . ' should be: "*,' . $row[$pointerFieldArray[1]] . '" in the ds TCA array. Please change that'
-                        . ' until TYPO3 v9, this matching code will be removed then.'
-                    );
-                    $dataStructureIdentifier['dataStructureKey'] = $row[$pointerFieldArray[1]] . ',*';
                 } elseif (isset($fieldTca['config']['ds'][$row[$pointerFieldArray[0]] . ',*'])) {
                     // firstValue,*
                     $dataStructureIdentifier['dataStructureKey'] = $row[$pointerFieldArray[0]] . ',*';
@@ -595,26 +605,21 @@ class FlexFormTools
         // Result of the FIRST hook that gives an non-empty string is used, namespace your identifiers in
         // a way that there is little chance they overlap (eg. prefix with extension name).
         // If implemented, this hook should be paired with a hook in getDataStructureIdentifier() above.
-        if (!empty($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['flexParsing'])
-            && is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['flexParsing'])
-        ) {
-            $hookClasses = $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['flexParsing'];
-            foreach ($hookClasses as $hookClass) {
-                $hookInstance = GeneralUtility::makeInstance($hookClass);
-                if (method_exists($hookClass, 'parseDataStructureByIdentifierPreProcess')) {
-                    $dataStructure = $hookInstance->parseDataStructureByIdentifierPreProcess($identifier);
-                    if (!is_string($dataStructure) && !is_array($dataStructure)) {
-                        // Programming error -> not catchable
-                        throw new \RuntimeException(
-                            'Hook class ' . $hookClass . ' method parseDataStructureByIdentifierPreProcess must either'
-                            . ' return an empty string or a data structure string or a parsed data structure array.',
-                            1478168512
-                        );
-                    }
-                    if (!empty($dataStructure)) {
-                        // Early break if a hook resolved to something!
-                        break;
-                    }
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['flexParsing'] ?? [] as $hookClass) {
+            $hookInstance = GeneralUtility::makeInstance($hookClass);
+            if (method_exists($hookClass, 'parseDataStructureByIdentifierPreProcess')) {
+                $dataStructure = $hookInstance->parseDataStructureByIdentifierPreProcess($identifier);
+                if (!is_string($dataStructure) && !is_array($dataStructure)) {
+                    // Programming error -> not catchable
+                    throw new \RuntimeException(
+                        'Hook class ' . $hookClass . ' method parseDataStructureByIdentifierPreProcess must either'
+                        . ' return an empty string or a data structure string or a parsed data structure array.',
+                        1478168512
+                    );
+                }
+                if (!empty($dataStructure)) {
+                    // Early break if a hook resolved to something!
+                    break;
                 }
             }
         }
@@ -732,21 +737,16 @@ class FlexFormTools
         // Hook to manipulate data structure further. This can be used to add or remove fields
         // from given structure. Multiple hooks can be registered, all are called. They
         // receive the parsed structure and the identifier array.
-        if (!empty($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['flexParsing'])
-            && is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['flexParsing'])
-        ) {
-            $hookClasses = $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['flexParsing'];
-            foreach ($hookClasses as $hookClass) {
-                $hookInstance = GeneralUtility::makeInstance($hookClass);
-                if (method_exists($hookClass, 'parseDataStructureByIdentifierPostProcess')) {
-                    $dataStructure = $hookInstance->parseDataStructureByIdentifierPostProcess($dataStructure, $identifier);
-                    if (!is_array($dataStructure)) {
-                        // Programming error -> not catchable
-                        throw new \RuntimeException(
-                            'Hook class ' . $hookClass . ' method parseDataStructureByIdentifierPreProcess must return and array.',
-                            1478350806
-                        );
-                    }
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['flexParsing'] ?? [] as $hookClass) {
+            $hookInstance = GeneralUtility::makeInstance($hookClass);
+            if (method_exists($hookClass, 'parseDataStructureByIdentifierPostProcess')) {
+                $dataStructure = $hookInstance->parseDataStructureByIdentifierPostProcess($dataStructure, $identifier);
+                if (!is_array($dataStructure)) {
+                    // Programming error -> not catchable
+                    throw new \RuntimeException(
+                        'Hook class ' . $hookClass . ' method parseDataStructureByIdentifierPreProcess must return and array.',
+                        1478350806
+                    );
                 }
             }
         }
@@ -770,9 +770,21 @@ class FlexFormTools
             return 'TCA table/field was not defined.';
         }
         $this->callBackObj = $callBackObj;
-        // Get Data Structure:
-        $dataStructureIdentifier = $this->getDataStructureIdentifier($GLOBALS['TCA'][$table]['columns'][$field], $table, $field, $row);
-        $dataStructureArray = $this->parseDataStructureByIdentifier($dataStructureIdentifier);
+
+        // Get data structure. The methods may throw various exceptions, with some of them being
+        // ok in certain scenarios, for instance on new record rows. Those are ok to "eat" here
+        // and substitute with a dummy DS.
+        $dataStructureArray = ['sheets' => ['sDEF' => []]];
+        try {
+            $dataStructureIdentifier = $this->getDataStructureIdentifier($GLOBALS['TCA'][$table]['columns'][$field], $table, $field, $row);
+            $dataStructureArray = $this->parseDataStructureByIdentifier($dataStructureIdentifier);
+        } catch (InvalidParentRowException $e) {
+        } catch (InvalidParentRowLoopException $e) {
+        } catch (InvalidParentRowRootException $e) {
+        } catch (InvalidPointerFieldValueException $e) {
+        } catch (InvalidIdentifierException $e) {
+        }
+
         // Get flexform XML data
         $editData = GeneralUtility::xml2array($row[$field]);
         if (!is_array($editData)) {
@@ -808,53 +820,55 @@ class FlexFormTools
      * @param array $editData (Part of) edit data array, reflecting current part of data structure
      * @param array $PA Additional parameters passed.
      * @param string $path Telling the "path" to the element in the flexform XML
-     * @return array
      */
-    public function traverseFlexFormXMLData_recurse($dataStruct, $editData, &$PA, $path = '')
+    public function traverseFlexFormXMLData_recurse($dataStruct, $editData, &$PA, $path = ''): void
     {
         if (is_array($dataStruct)) {
             foreach ($dataStruct as $key => $value) {
-                // The value of each entry must be an array.
-                if (is_array($value)) {
-                    if ($value['type'] === 'array') {
-                        // Array (Section) traversal
-                        if ($value['section']) {
-                            $cc = 0;
-                            if (is_array($editData[$key]['el'])) {
-                                if ($this->reNumberIndexesOfSectionData) {
-                                    $temp = [];
-                                    $c3 = 0;
-                                    foreach ($editData[$key]['el'] as $v3) {
-                                        $temp[++$c3] = $v3;
-                                    }
-                                    $editData[$key]['el'] = $temp;
+                if (isset($value['type']) && $value['type'] === 'array') {
+                    // Array (Section) traversal
+                    if ($value['section']) {
+                        $cc = 0;
+                        if (isset($editData[$key]['el']) && is_array($editData[$key]['el'])) {
+                            if ($this->reNumberIndexesOfSectionData) {
+                                $temp = [];
+                                $c3 = 0;
+                                foreach ($editData[$key]['el'] as $v3) {
+                                    $temp[++$c3] = $v3;
                                 }
-                                foreach ($editData[$key]['el'] as $k3 => $v3) {
-                                    if (is_array($v3)) {
-                                        $cc = $k3;
-                                        $theType = key($v3);
-                                        $theDat = $v3[$theType];
-                                        $newSectionEl = $value['el'][$theType];
-                                        if (is_array($newSectionEl)) {
-                                            $this->traverseFlexFormXMLData_recurse([$theType => $newSectionEl], [$theType => $theDat], $PA, $path . '/' . $key . '/el/' . $cc);
-                                        }
-                                    }
-                                }
+                                $editData[$key]['el'] = $temp;
                             }
-                        } else {
-                            // Array traversal
-                            if (is_array($editData) && is_array($editData[$key])) {
-                                $this->traverseFlexFormXMLData_recurse($value['el'], $editData[$key]['el'], $PA, $path . '/' . $key . '/el');
+                            foreach ($editData[$key]['el'] as $k3 => $v3) {
+                                if (is_array($v3)) {
+                                    $cc = $k3;
+                                    $theType = key($v3);
+                                    $theDat = $v3[$theType];
+                                    $newSectionEl = $value['el'][$theType];
+                                    if (is_array($newSectionEl)) {
+                                        $this->traverseFlexFormXMLData_recurse([$theType => $newSectionEl], [$theType => $theDat], $PA, $path . '/' . $key . '/el/' . $cc);
+                                    }
+                                }
                             }
                         }
-                    } elseif (is_array($value['TCEforms']['config'])) {
-                        // Processing a field value:
-                        foreach ($PA['vKeys'] as $vKey) {
-                            $vKey = 'v' . $vKey;
-                            // Call back
-                            if ($PA['callBackMethod_value'] && is_array($editData) && is_array($editData[$key])) {
-                                $this->executeCallBackMethod($PA['callBackMethod_value'], [$value, $editData[$key][$vKey], $PA, $path . '/' . $key . '/' . $vKey, $this]);
-                            }
+                    } else {
+                        // Array traversal
+                        if (isset($editData[$key]['el'])) {
+                            $this->traverseFlexFormXMLData_recurse($value['el'], $editData[$key]['el'], $PA, $path . '/' . $key . '/el');
+                        }
+                    }
+                } elseif (isset($value['TCEforms']['config']) && is_array($value['TCEforms']['config'])) {
+                    // Processing a field value:
+                    foreach ($PA['vKeys'] as $vKey) {
+                        $vKey = 'v' . $vKey;
+                        // Call back
+                        if (!empty($PA['callBackMethod_value']) && isset($editData[$key][$vKey])) {
+                            $this->executeCallBackMethod($PA['callBackMethod_value'], [
+                                $value,
+                                $editData[$key][$vKey],
+                                $PA,
+                                $path . '/' . $key . '/' . $vKey,
+                                $this
+                            ]);
                         }
                     }
                 }

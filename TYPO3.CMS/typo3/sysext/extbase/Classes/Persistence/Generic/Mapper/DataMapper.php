@@ -14,16 +14,21 @@ namespace TYPO3\CMS\Extbase\Persistence\Generic\Mapper;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Database\Query\QueryHelper;
+use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
 use TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface;
 use TYPO3\CMS\Extbase\Object\Exception\CannotReconstituteObjectException;
 use TYPO3\CMS\Extbase\Persistence;
 use TYPO3\CMS\Extbase\Persistence\Generic\Exception\UnexpectedTypeException;
+use TYPO3\CMS\Extbase\Persistence\QueryInterface;
+use TYPO3\CMS\Extbase\Reflection\ClassSchema;
 use TYPO3\CMS\Extbase\Utility\TypeHandlingUtility;
 
 /**
  * A mapper to map database tables configured in $TCA on domain objects.
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
-class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
+class DataMapper
 {
     /**
      * @var \TYPO3\CMS\Extbase\Reflection\ReflectionService
@@ -48,13 +53,6 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
     protected $pageSelectObject;
 
     /**
-     * Cached data maps
-     *
-     * @var array
-     */
-    protected $dataMaps = [];
-
-    /**
      * @var \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapFactory
      */
     protected $dataMapFactory;
@@ -73,6 +71,25 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
      * @var \TYPO3\CMS\Extbase\SignalSlot\Dispatcher
      */
     protected $signalSlotDispatcher;
+
+    /**
+     * @var ConfigurationManagerInterface
+     */
+    protected $configurationManager;
+
+    /**
+     * @var ?QueryInterface
+     */
+    protected $query;
+
+    /**
+     * DataMapper constructor.
+     * @param ?QueryInterface $query
+     */
+    public function __construct(?QueryInterface $query = null)
+    {
+        $this->query = $query;
+    }
 
     /**
      * @param \TYPO3\CMS\Extbase\Reflection\ReflectionService $reflectionService
@@ -128,6 +145,14 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
     public function injectSignalSlotDispatcher(\TYPO3\CMS\Extbase\SignalSlot\Dispatcher $signalSlotDispatcher)
     {
         $this->signalSlotDispatcher = $signalSlotDispatcher;
+    }
+
+    /**
+     * @param \TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface $configurationManager
+     */
+    public function injectConfigurationManager(ConfigurationManagerInterface $configurationManager)
+    {
+        $this->configurationManager = $configurationManager;
     }
 
     /**
@@ -225,6 +250,8 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
      *
      * @param DomainObjectInterface $object The object to set properties on
      * @param array $row
+     * @throws Exception\NonExistentPropertyException
+     * @throws Exception\UnknownPropertyTypeException
      */
     protected function thawProperties(DomainObjectInterface $object, array $row)
     {
@@ -232,7 +259,7 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
         $classSchema = $this->reflectionService->getClassSchema($className);
         $dataMap = $this->getDataMap($className);
         $object->_setProperty('uid', (int)$row['uid']);
-        $object->_setProperty('pid', (int)$row['pid']);
+        $object->_setProperty('pid', (int)($row['pid'] ?? 0));
         $object->_setProperty('_localizedUid', (int)$row['uid']);
         $object->_setProperty('_versionedUid', (int)$row['uid']);
         if ($dataMap->getLanguageIdColumnName() !== null) {
@@ -251,10 +278,30 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
             }
             $columnMap = $dataMap->getColumnMap($propertyName);
             $columnName = $columnMap->getColumnName();
-            $propertyData = $classSchema->getProperty($propertyName);
+
+            $property = $classSchema->getProperty($propertyName);
+            if (empty($property)) {
+                throw new Exception\NonExistentPropertyException(
+                    'The type of property ' . $className . '::' . $propertyName . ' could not be identified, ' .
+                    'as property ' . $propertyName . ' is unknown to the ' . ClassSchema::class . ' instance of class ' .
+                    $className . '. Please make sure said property exists and that you cleared all caches to trigger ' .
+                    'a new build of said ' . ClassSchema::class . ' instance.',
+                    1580056272
+                );
+            }
+
+            $propertyType = $property['type'] ?? null;
+            if ($propertyType === null) {
+                throw new Exception\UnknownPropertyTypeException(
+                    'The type of property ' . $className . '::' . $propertyName . ' could not be identified, therefore the desired value (' .
+                    var_export($propertyValue, true) . ') cannot be mapped onto it. The type of a class property is usually defined via php doc blocks. ' .
+                    'Make sure the property has a valid @var tag set which defines the type.',
+                    1579965021
+                );
+            }
             $propertyValue = null;
-            if ($row[$columnName] !== null) {
-                switch ($propertyData['type']) {
+            if (isset($row[$columnName])) {
+                switch ($propertyType) {
                     case 'integer':
                         $propertyValue = (int)$row[$columnName];
                         break;
@@ -271,7 +318,7 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
                         // $propertyValue = $this->mapArray($row[$columnName]); // Not supported, yet!
                         break;
                     case 'SplObjectStorage':
-                    case \TYPO3\CMS\Extbase\Persistence\ObjectStorage::class:
+                    case Persistence\ObjectStorage::class:
                         $propertyValue = $this->mapResultToPropertyValue(
                             $object,
                             $propertyName,
@@ -279,10 +326,14 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
                         );
                         break;
                     default:
-                        if ($propertyData['type'] === 'DateTime' || in_array('DateTime', class_parents($propertyData['type']))) {
-                            $propertyValue = $this->mapDateTime($row[$columnName], $columnMap->getDateTimeStorageFormat(), $propertyData['type']);
-                        } elseif (TypeHandlingUtility::isCoreType($propertyData['type'])) {
-                            $propertyValue = $this->mapCoreType($propertyData['type'], $row[$columnName]);
+                        if (is_subclass_of($propertyType, \DateTimeInterface::class)) {
+                            $propertyValue = $this->mapDateTime(
+                                $row[$columnName],
+                                $columnMap->getDateTimeStorageFormat(),
+                                $propertyType
+                            );
+                        } elseif (TypeHandlingUtility::isCoreType($propertyType)) {
+                            $propertyValue = $this->mapCoreType($propertyType, $row[$columnName]);
                         } else {
                             $propertyValue = $this->mapObjectToClassProperty(
                                 $object,
@@ -312,29 +363,31 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
     }
 
     /**
-     * Creates a DateTime from an unix timestamp or date/datetime value.
+     * Creates a DateTime from an unix timestamp or date/datetime/time value.
      * If the input is empty, NULL is returned.
      *
-     * @param int|string $value Unix timestamp or date/datetime value
-     * @param NULL|string $storageFormat Storage format for native date/datetime fields
-     * @param NULL|string $targetType The object class name to be created
-     * @return \DateTime
+     * @param int|string $value Unix timestamp or date/datetime/time value
+     * @param string|null $storageFormat Storage format for native date/datetime/time fields
+     * @param string|null $targetType The object class name to be created
+     * @return \DateTimeInterface
      */
-    protected function mapDateTime($value, $storageFormat = null, $targetType = 'DateTime')
+    protected function mapDateTime($value, $storageFormat = null, $targetType = \DateTime::class)
     {
-        if (empty($value) || $value === '0000-00-00' || $value === '0000-00-00 00:00:00') {
+        $dateTimeTypes = QueryHelper::getDateTimeTypes();
+
+        if (empty($value) || $value === '0000-00-00' || $value === '0000-00-00 00:00:00' || $value === '00:00:00') {
             // 0 -> NULL !!!
             return null;
-        } elseif ($storageFormat === 'date' || $storageFormat === 'datetime') {
-            // native date/datetime values are stored in UTC
+        }
+        if (in_array($storageFormat, $dateTimeTypes, true)) {
+            // native date/datetime/time values are stored in UTC
             $utcTimeZone = new \DateTimeZone('UTC');
             $utcDateTime = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance($targetType, $value, $utcTimeZone);
             $currentTimeZone = new \DateTimeZone(date_default_timezone_get());
             return $utcDateTime->setTimezone($currentTimeZone);
-        } else {
-            // integer timestamps are local server time
-            return \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance($targetType, date('c', $value));
         }
+        // integer timestamps are local server time
+        return \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance($targetType, date('c', (int)$value));
     }
 
     /**
@@ -349,14 +402,14 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
     public function fetchRelated(DomainObjectInterface $parentObject, $propertyName, $fieldValue = '', $enableLazyLoading = true)
     {
         $propertyMetaData = $this->reflectionService->getClassSchema(get_class($parentObject))->getProperty($propertyName);
-        if ($enableLazyLoading === true && $propertyMetaData['lazy']) {
-            if ($propertyMetaData['type'] === \TYPO3\CMS\Extbase\Persistence\ObjectStorage::class) {
-                $result = $this->objectManager->get(\TYPO3\CMS\Extbase\Persistence\Generic\LazyObjectStorage::class, $parentObject, $propertyName, $fieldValue);
+        if ($enableLazyLoading === true && $propertyMetaData['annotations']['lazy']) {
+            if ($propertyMetaData['type'] === Persistence\ObjectStorage::class) {
+                $result = $this->objectManager->get(\TYPO3\CMS\Extbase\Persistence\Generic\LazyObjectStorage::class, $parentObject, $propertyName, $fieldValue, $this);
             } else {
                 if (empty($fieldValue)) {
                     $result = null;
                 } else {
-                    $result = $this->objectManager->get(\TYPO3\CMS\Extbase\Persistence\Generic\LazyLoadingProxy::class, $parentObject, $propertyName, $fieldValue);
+                    $result = $this->objectManager->get(\TYPO3\CMS\Extbase\Persistence\Generic\LazyLoadingProxy::class, $parentObject, $propertyName, $fieldValue, $this);
                 }
             }
         } else {
@@ -381,7 +434,7 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
     /**
      * @param DomainObjectInterface $parentObject
      * @param string $propertyName
-     * @return array|NULL
+     * @return array|null
      */
     protected function getEmptyRelationValue(DomainObjectInterface $parentObject, $propertyName)
     {
@@ -412,11 +465,32 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
      */
     protected function getPreparedQuery(DomainObjectInterface $parentObject, $propertyName, $fieldValue = '')
     {
-        $columnMap = $this->getDataMap(get_class($parentObject))->getColumnMap($propertyName);
+        $dataMap = $this->getDataMap(get_class($parentObject));
+        $columnMap = $dataMap->getColumnMap($propertyName);
         $type = $this->getType(get_class($parentObject), $propertyName);
         $query = $this->queryFactory->create($type);
+        if ($this->query && $query instanceof Persistence\Generic\Query) {
+            $query->setParentQuery($this->query);
+        }
         $query->getQuerySettings()->setRespectStoragePage(false);
         $query->getQuerySettings()->setRespectSysLanguage(false);
+
+        if ($this->configurationManager->isFeatureEnabled('consistentTranslationOverlayHandling')) {
+            //we always want to overlay relations as most of the time they are stored in db using default lang uids
+            $query->getQuerySettings()->setLanguageOverlayMode(true);
+            if ($this->query) {
+                $query->getQuerySettings()->setLanguageUid($this->query->getQuerySettings()->getLanguageUid());
+
+                if ($dataMap->getLanguageIdColumnName() !== null && !$this->query->getQuerySettings()->getRespectSysLanguage()) {
+                    //pass language of parent record to child objects, so they can be overlaid correctly in case
+                    //e.g. findByUid is used.
+                    //the languageUid is used for getRecordOverlay later on, despite RespectSysLanguage being false
+                    $languageUid = (int)$parentObject->_getProperty('_languageUid');
+                    $query->getQuerySettings()->setLanguageUid($languageUid);
+                }
+            }
+        }
+
         if ($columnMap->getTypeOfRelation() === ColumnMap::RELATION_HAS_MANY) {
             if ($columnMap->getChildSortByFieldName() !== null) {
                 $query->setOrderings([$columnMap->getChildSortByFieldName() => Persistence\QueryInterface::ORDER_ASCENDING]);
@@ -546,14 +620,14 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
             $propertyValue = $result;
         } else {
             $propertyMetaData = $this->reflectionService->getClassSchema(get_class($parentObject))->getProperty($propertyName);
-            if (in_array($propertyMetaData['type'], ['array', 'ArrayObject', 'SplObjectStorage', \TYPO3\CMS\Extbase\Persistence\ObjectStorage::class], true)) {
+            if (in_array($propertyMetaData['type'], ['array', 'ArrayObject', 'SplObjectStorage', Persistence\ObjectStorage::class], true)) {
                 $objects = [];
                 foreach ($result as $value) {
                     $objects[] = $value;
                 }
                 if ($propertyMetaData['type'] === 'ArrayObject') {
                     $propertyValue = new \ArrayObject($objects);
-                } elseif (in_array($propertyMetaData['type'], [\TYPO3\CMS\Extbase\Persistence\ObjectStorage::class], true)) {
+                } elseif ($propertyMetaData['type'] === Persistence\ObjectStorage::class) {
                     $propertyValue = new Persistence\ObjectStorage();
                     foreach ($objects as $object) {
                         $propertyValue->attach($object);
@@ -613,10 +687,7 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
         if (!is_string($className) || $className === '') {
             throw new Persistence\Generic\Exception('No class name was given to retrieve the Data Map for.', 1251315965);
         }
-        if (!isset($this->dataMaps[$className])) {
-            $this->dataMaps[$className] = $this->dataMapFactory->buildDataMap($className);
-        }
-        return $this->dataMaps[$className];
+        return $this->dataMapFactory->buildDataMap($className);
     }
 
     /**
@@ -678,13 +749,11 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
      *
      * @param mixed $input The value that will be converted.
      * @param ColumnMap $columnMap Optional column map for retrieving the date storage format.
-     * @param callable $parseStringValueCallback Optional callback method that will be called for string values. Can be used to do database quotation.
-     * @param array $parseStringValueCallbackParameters Additional parameters that will be passed to the callabck as second parameter.
      * @throws \InvalidArgumentException
      * @throws UnexpectedTypeException
      * @return int|string
      */
-    public function getPlainValue($input, $columnMap = null, $parseStringValueCallback = null, array $parseStringValueCallbackParameters = [])
+    public function getPlainValue($input, $columnMap = null)
     {
         if ($input === null) {
             return 'NULL';
@@ -697,8 +766,8 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
             $parameter = (int)$input;
         } elseif (is_int($input)) {
             $parameter = $input;
-        } elseif ($input instanceof \DateTime) {
-            if (!is_null($columnMap) && !is_null($columnMap->getDateTimeStorageFormat())) {
+        } elseif ($input instanceof \DateTimeInterface) {
+            if ($columnMap !== null && $columnMap->getDateTimeStorageFormat() !== null) {
                 $storageFormat = $columnMap->getDateTimeStorageFormat();
                 $timeZoneToStore = clone $input;
                 // set to UTC to store in database
@@ -710,8 +779,11 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
                     case 'date':
                         $parameter = $timeZoneToStore->format('Y-m-d');
                         break;
+                    case 'time':
+                        $parameter = $timeZoneToStore->format('H:i');
+                        break;
                     default:
-                        throw new \InvalidArgumentException('Column map DateTime format "' . $storageFormat . '" is unknown. Allowed values are datetime or date.', 1395353470);
+                        throw new \InvalidArgumentException('Column map DateTime format "' . $storageFormat . '" is unknown. Allowed values are date, datetime or time.', 1395353470);
                 }
             } else {
                 $parameter = $input->format('U');
@@ -721,35 +793,18 @@ class DataMapper implements \TYPO3\CMS\Core\SingletonInterface
         } elseif (TypeHandlingUtility::isValidTypeForMultiValueComparison($input)) {
             $plainValueArray = [];
             foreach ($input as $inputElement) {
-                $plainValueArray[] = $this->getPlainValue($inputElement, $columnMap, $parseStringValueCallback, $parseStringValueCallbackParameters);
+                $plainValueArray[] = $this->getPlainValue($inputElement, $columnMap);
             }
             $parameter = implode(',', $plainValueArray);
         } elseif (is_object($input)) {
             if (TypeHandlingUtility::isCoreType($input)) {
-                $parameter = $this->getPlainStringValue($input, $parseStringValueCallback, $parseStringValueCallbackParameters);
+                $parameter = (string)$input;
             } else {
                 throw new UnexpectedTypeException('An object of class "' . get_class($input) . '" could not be converted to a plain value.', 1274799934);
             }
         } else {
-            $parameter = $this->getPlainStringValue($input, $parseStringValueCallback, $parseStringValueCallbackParameters);
+            $parameter = (string)$input;
         }
         return $parameter;
-    }
-
-    /**
-     * If the given callback is set the value will be passed on the the callback function.
-     * The value will be converted to a string.
-     *
-     * @param string $value The string value that should be processed. Will be passed to the callback as first parameter.
-     * @param callable $callback The data passed to call_user_func().
-     * @param array $additionalParameters Optional additional parameters passed to the callback as second argument.
-     * @return string
-     */
-    protected function getPlainStringValue($value, $callback = null, array $additionalParameters = [])
-    {
-        if (is_callable($callback)) {
-            $value = call_user_func($callback, $value, $additionalParameters);
-        }
-        return (string)$value;
     }
 }

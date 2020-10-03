@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Domain\Model\DomainObject;
 
 /*
@@ -22,6 +23,11 @@ class EmailProperty extends AbstractProperty
      * @var string
      */
     protected $defaultValue = '';
+
+    /**
+     * @var bool
+     */
+    protected $searchable = true;
 
     public function getTypeForComment()
     {

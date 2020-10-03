@@ -15,22 +15,29 @@ namespace EBT\ExtensionBuilder\ViewHelpers;
  */
 
 use EBT\ExtensionBuilder\Domain\Model\DomainObject\Relation\ZeroToManyRelation;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 
 /**
  * Indentation ViewHelper
  */
 class ListForeignKeyRelationsViewHelper extends AbstractViewHelper
 {
+
     /**
-     * @param \EBT\ExtensionBuilder\Domain\Model\Extension $extension
-     * @param mixed $domainObject
-     *
+    * Arguments Initialization
+    */
+    public function initializeArguments()
+    {
+        $this->registerArgument('domainObject', \EBT\ExtensionBuilder\Domain\Model\DomainObject::class, 'domainObject', TRUE);
+    }
+
+    /**
      * @return array
      */
-    public function render($extension, $domainObject)
+    public function render()
     {
-        $expectedDomainObject = $domainObject;
+        $expectedDomainObject = $this->arguments['domainObject'];
+        $extension = $expectedDomainObject->getExtension();
         $results = [];
         foreach ($extension->getDomainObjects() as $domainObject) {
             if (!count($domainObject->getProperties())) {
@@ -38,6 +45,7 @@ class ListForeignKeyRelationsViewHelper extends AbstractViewHelper
             }
             foreach ($domainObject->getProperties() as $property) {
                 if ($property instanceof ZeroToManyRelation
+                    && $property->getRenderType() === 'inline'
                     && $property->getForeignClassName() === $expectedDomainObject->getFullQualifiedClassName()
                 ) {
                     $results[] = $property;

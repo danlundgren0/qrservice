@@ -14,13 +14,17 @@ namespace TYPO3\CMS\Extbase\Persistence\Generic;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface;
+use TYPO3\CMS\Extbase\Object\ObjectManager;
 use TYPO3\CMS\Extbase\Persistence\Generic\Mapper\ColumnMap;
+use TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper;
 use TYPO3\CMS\Extbase\Persistence\ObjectMonitoringInterface;
 
 /**
  * A persistence backend. This backend maps objects to the relational model of the storage backend.
  * It persists all added, removed and changed objects.
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface, \TYPO3\CMS\Core\SingletonInterface
 {
@@ -70,9 +74,9 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
     protected $storageBackend;
 
     /**
-     * @var \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper
+     * @var \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapFactory
      */
-    protected $dataMapper;
+    protected $dataMapFactory;
 
     /**
      * The TYPO3 reference index object
@@ -124,11 +128,11 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
     }
 
     /**
-     * @param \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper $dataMapper
+     * @param \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapFactory $dataMapFactory
      */
-    public function injectDataMapper(\TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper $dataMapper)
+    public function injectDataMapFactory(\TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapFactory $dataMapFactory)
     {
-        $this->dataMapper = $dataMapper;
+        $this->dataMapFactory = $dataMapFactory;
     }
 
     /**
@@ -148,6 +152,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
     {
         $this->configurationManager = $configurationManager;
         $this->referenceIndex = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Core\Database\ReferenceIndex::class);
+        $this->referenceIndex->enableRuntimeCache();
         $this->aggregateRootObjects = new \TYPO3\CMS\Extbase\Persistence\ObjectStorage();
         $this->deletedEntities = new \TYPO3\CMS\Extbase\Persistence\ObjectStorage();
         $this->changedEntities = new \TYPO3\CMS\Extbase\Persistence\ObjectStorage();
@@ -169,16 +174,6 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
     public function getSession()
     {
         return $this->session;
-    }
-
-    /**
-     * Returns the Data Mapper
-     *
-     * @return \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper
-     */
-    public function getDataMapper()
-    {
-        return $this->dataMapper;
     }
 
     /**
@@ -206,7 +201,6 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
      *
      * @param \TYPO3\CMS\Extbase\Persistence\QueryInterface $query
      * @return int
-     * @api
      */
     public function getObjectCountByQuery(\TYPO3\CMS\Extbase\Persistence\QueryInterface $query)
     {
@@ -218,7 +212,6 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
      *
      * @param \TYPO3\CMS\Extbase\Persistence\QueryInterface $query
      * @return array
-     * @api
      */
     public function getObjectDataByQuery(\TYPO3\CMS\Extbase\Persistence\QueryInterface $query)
     {
@@ -258,7 +251,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
      * backend. Otherwise NULL is returned.
      *
      * @param object $object
-     * @return string|NULL The identifier for the object if it is known, or NULL
+     * @return string|null The identifier for the object if it is known, or NULL
      */
     public function getIdentifierByObject($object)
     {
@@ -277,18 +270,18 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
      *
      * @param string $identifier
      * @param string $className
-     * @return object|NULL The object for the identifier if it is known, or NULL
+     * @return object|null The object for the identifier if it is known, or NULL
      */
     public function getObjectByIdentifier($identifier, $className)
     {
         if ($this->session->hasIdentifier($identifier, $className)) {
             return $this->session->getObjectByIdentifier($identifier, $className);
-        } else {
-            $query = $this->persistenceManager->createQueryForType($className);
-            $query->getQuerySettings()->setRespectStoragePage(false);
-            $query->getQuerySettings()->setRespectSysLanguage(false);
-            return $query->matching($query->equals('uid', $identifier))->execute()->getFirst();
         }
+        $query = $this->persistenceManager->createQueryForType($className);
+        $query->getQuerySettings()->setRespectStoragePage(false);
+        $query->getQuerySettings()->setRespectSysLanguage(false);
+        $query->getQuerySettings()->setLanguageOverlayMode(true);
+        return $query->matching($query->equals('uid', $identifier))->execute()->getFirst();
     }
 
     /**
@@ -352,10 +345,10 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
             if ($object->_isNew()) {
                 $this->insertObject($object);
             }
-            $this->persistObject($object, null);
+            $this->persistObject($object);
         }
         foreach ($this->changedEntities as $object) {
-            $this->persistObject($object, null);
+            $this->persistObject($object);
         }
     }
 
@@ -371,7 +364,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
         }
         $row = [];
         $queue = [];
-        $dataMap = $this->dataMapper->getDataMap(get_class($object));
+        $dataMap = $this->dataMapFactory->buildDataMap(get_class($object));
         $properties = $object->_getProperties();
         foreach ($properties as $propertyName => $propertyValue) {
             if (!$dataMap->isPersistableProperty($propertyName) || $this->propertyValueIsLazyLoaded($propertyValue)) {
@@ -398,14 +391,11 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
                     if ($propertyValue->_isNew()) {
                         $this->insertObject($propertyValue, $object, $propertyName);
                     }
-                    // Check explicitly for NULL, as getPlainValue would convert this to 'NULL'
-                    $row[$columnMap->getColumnName()] = $propertyValue !== null
-                        ? $this->dataMapper->getPlainValue($propertyValue)
-                        : null;
+                    $row[$columnMap->getColumnName()] = $this->getPlainValue($propertyValue);
                 }
                 $queue[] = $propertyValue;
             } elseif ($object->_isNew() || $object->_isDirty($propertyName)) {
-                $row[$columnMap->getColumnName()] = $this->dataMapper->getPlainValue($propertyValue, $columnMap);
+                $row[$columnMap->getColumnName()] = $this->getPlainValue($propertyValue, $columnMap);
             }
         }
         if (!empty($row)) {
@@ -439,9 +429,10 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
     }
 
     /**
-     * Persists an object storage. Objects of a 1:n or m:n relation are queued and processed with the parent object. A 1:1 relation
-     * gets persisted immediately. Objects which were removed from the property were detached from the parent object. They will not be
-     * deleted by default. You have to annotate the property with "@cascade remove" if you want them to be deleted as well.
+     * Persists an object storage. Objects of a 1:n or m:n relation are queued and processed with the parent object.
+     * A 1:1 relation gets persisted immediately. Objects which were removed from the property were detached from
+     * the parent object. They will not be deleted by default. You have to annotate the property
+     * with '@TYPO3\CMS\Extbase\Annotation\ORM\Cascade("remove")' if you want them to be deleted as well.
      *
      * @param \TYPO3\CMS\Extbase\Persistence\ObjectStorage $objectStorage The object storage to be persisted.
      * @param \TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $parentObject The parent object. One of the properties holds the object storage.
@@ -451,11 +442,13 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
     protected function persistObjectStorage(\TYPO3\CMS\Extbase\Persistence\ObjectStorage $objectStorage, \TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $parentObject, $propertyName, array &$row)
     {
         $className = get_class($parentObject);
-        $columnMap = $this->dataMapper->getDataMap($className)->getColumnMap($propertyName);
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $dataMapper = $objectManager->get(DataMapper::class);
+        $columnMap = $this->dataMapFactory->buildDataMap($className)->getColumnMap($propertyName);
         $propertyMetaData = $this->reflectionService->getClassSchema($className)->getProperty($propertyName);
         foreach ($this->getRemovedChildObjects($parentObject, $propertyName) as $removedObject) {
             $this->detachObjectFromParentObject($removedObject, $parentObject, $propertyName);
-            if ($columnMap->getTypeOfRelation() === \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\ColumnMap::RELATION_HAS_MANY && $propertyMetaData['cascade'] === 'remove') {
+            if ($columnMap->getTypeOfRelation() === \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\ColumnMap::RELATION_HAS_MANY && $propertyMetaData['annotations']['cascade'] === 'remove') {
                 $this->removeEntity($removedObject);
             }
         }
@@ -498,7 +491,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
         if ($columnMap->getParentKeyFieldName() === null) {
             $row[$columnMap->getColumnName()] = implode(',', $currentUids);
         } else {
-            $row[$columnMap->getColumnName()] = $this->dataMapper->countRelated($parentObject, $propertyName);
+            $row[$columnMap->getColumnName()] = $dataMapper->countRelated($parentObject, $propertyName);
         }
     }
 
@@ -535,7 +528,8 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
      */
     protected function attachObjectToParentObject(\TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $object, \TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $parentObject, $parentPropertyName, $sortingPosition = 0)
     {
-        $parentDataMap = $this->dataMapper->getDataMap(get_class($parentObject));
+        $parentDataMap = $this->dataMapFactory->buildDataMap(get_class($parentObject));
+
         $parentColumnMap = $parentDataMap->getColumnMap($parentPropertyName);
         if ($parentColumnMap->getTypeOfRelation() === \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\ColumnMap::RELATION_HAS_MANY) {
             $this->attachObjectToParentObjectRelationHasMany($object, $parentObject, $parentPropertyName, $sortingPosition);
@@ -554,7 +548,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
      */
     protected function updateRelationOfObjectToParentObject(\TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $object, \TYPO3\CMS\Extbase\DomainObject\AbstractEntity $parentObject, $parentPropertyName, $sortingPosition = 0)
     {
-        $parentDataMap = $this->dataMapper->getDataMap(get_class($parentObject));
+        $parentDataMap = $this->dataMapFactory->buildDataMap(get_class($parentObject));
         $parentColumnMap = $parentDataMap->getColumnMap($parentPropertyName);
         if ($parentColumnMap->getTypeOfRelation() === \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\ColumnMap::RELATION_HAS_MANY) {
             $this->attachObjectToParentObjectRelationHasMany($object, $parentObject, $parentPropertyName, $sortingPosition);
@@ -574,7 +568,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
      */
     protected function attachObjectToParentObjectRelationHasMany(\TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $object, \TYPO3\CMS\Extbase\DomainObject\AbstractEntity $parentObject, $parentPropertyName, $sortingPosition = 0)
     {
-        $parentDataMap = $this->dataMapper->getDataMap(get_class($parentObject));
+        $parentDataMap = $this->dataMapFactory->buildDataMap(get_class($parentObject));
         $parentColumnMap = $parentDataMap->getColumnMap($parentPropertyName);
         if ($parentColumnMap->getTypeOfRelation() !== \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\ColumnMap::RELATION_HAS_MANY) {
             throw new \TYPO3\CMS\Extbase\Persistence\Exception\IllegalRelationTypeException(
@@ -586,7 +580,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
         $row = [];
         $parentKeyFieldName = $parentColumnMap->getParentKeyFieldName();
         if ($parentKeyFieldName !== null) {
-            $row[$parentKeyFieldName] = $parentObject->getUid();
+            $row[$parentKeyFieldName] = $parentObject->_getProperty('_localizedUid') ?: $parentObject->getUid();
             $parentTableFieldName = $parentColumnMap->getParentTableFieldName();
             if ($parentTableFieldName !== null) {
                 $row[$parentTableFieldName] = $parentDataMap->getTableName();
@@ -614,7 +608,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
      */
     protected function detachObjectFromParentObject(\TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $object, \TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $parentObject, $parentPropertyName)
     {
-        $parentDataMap = $this->dataMapper->getDataMap(get_class($parentObject));
+        $parentDataMap = $this->dataMapFactory->buildDataMap(get_class($parentObject));
         $parentColumnMap = $parentDataMap->getColumnMap($parentPropertyName);
         if ($parentColumnMap->getTypeOfRelation() === \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\ColumnMap::RELATION_HAS_MANY) {
             $row = [];
@@ -658,7 +652,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
                 return;
             }
         }
-        $dataMap = $this->dataMapper->getDataMap(get_class($object));
+        $dataMap = $this->dataMapFactory->buildDataMap(get_class($object));
         $row = [];
         $properties = $object->_getProperties();
         foreach ($properties as $propertyName => $propertyValue) {
@@ -677,7 +671,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
                     $row[$columnMap->getColumnName()] = 0;
                 }
             } elseif ($propertyValue !== null) {
-                $row[$columnMap->getColumnName()] = $this->dataMapper->getPlainValue($propertyValue, $columnMap);
+                $row[$columnMap->getColumnName()] = $this->getPlainValue($propertyValue, $columnMap);
             }
         }
         $this->addCommonFieldsToRow($object, $row);
@@ -692,7 +686,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
             $row[$dataMap->getTranslationOriginDiffSourceName()] = '';
         }
         if ($parentObject !== null && $parentPropertyName) {
-            $parentColumnDataMap = $this->dataMapper->getDataMap(get_class($parentObject))->getColumnMap($parentPropertyName);
+            $parentColumnDataMap = $this->dataMapFactory->buildDataMap(get_class($parentObject))->getColumnMap($parentPropertyName);
             $relationTableMatchFields = $parentColumnDataMap->getRelationTableMatchFields();
             if (is_array($relationTableMatchFields)) {
                 $row = array_merge($relationTableMatchFields, $row);
@@ -760,7 +754,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
      */
     protected function insertRelationInRelationtable(\TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $object, \TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $parentObject, $propertyName, $sortingPosition = null)
     {
-        $dataMap = $this->dataMapper->getDataMap(get_class($parentObject));
+        $dataMap = $this->dataMapFactory->buildDataMap(get_class($parentObject));
         $columnMap = $dataMap->getColumnMap($propertyName);
         $parentUid = $parentObject->getUid();
         if ($parentObject->_getProperty('_localizedUid') !== null) {
@@ -769,7 +763,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
         $row = [
             $columnMap->getParentKeyFieldName() => (int)$parentUid,
             $columnMap->getChildKeyFieldName() => (int)$object->getUid(),
-            $columnMap->getChildSortByFieldName() => !is_null($sortingPosition) ? (int)$sortingPosition : 0
+            $columnMap->getChildSortByFieldName() => $sortingPosition !== null ? (int)$sortingPosition : 0
         ];
         $relationTableName = $columnMap->getRelationTableName();
         if ($columnMap->getRelationTablePageIdColumnName() !== null) {
@@ -798,7 +792,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
      */
     protected function updateRelationInRelationTable(\TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $object, \TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $parentObject, $propertyName, $sortingPosition = 0)
     {
-        $dataMap = $this->dataMapper->getDataMap(get_class($parentObject));
+        $dataMap = $this->dataMapFactory->buildDataMap(get_class($parentObject));
         $columnMap = $dataMap->getColumnMap($propertyName);
         $row = [
             $columnMap->getParentKeyFieldName() => (int)$parentObject->getUid(),
@@ -812,7 +806,8 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
         }
         $res = $this->storageBackend->updateRelationTableRow(
             $relationTableName,
-            $row);
+            $row
+        );
         return $res;
     }
 
@@ -825,7 +820,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
      */
     protected function deleteAllRelationsFromRelationtable(\TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $parentObject, $parentPropertyName)
     {
-        $dataMap = $this->dataMapper->getDataMap(get_class($parentObject));
+        $dataMap = $this->dataMapFactory->buildDataMap(get_class($parentObject));
         $columnMap = $dataMap->getColumnMap($parentPropertyName);
         $relationTableName = $columnMap->getRelationTableName();
         $relationMatchFields = [
@@ -849,7 +844,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
      */
     protected function deleteRelationFromRelationtable(\TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $relatedObject, \TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $parentObject, $parentPropertyName)
     {
-        $dataMap = $this->dataMapper->getDataMap(get_class($parentObject));
+        $dataMap = $this->dataMapFactory->buildDataMap(get_class($parentObject));
         $columnMap = $dataMap->getColumnMap($parentPropertyName);
         $relationTableName = $columnMap->getRelationTableName();
         $relationMatchFields = [
@@ -874,7 +869,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
      */
     protected function fetchMaxSortingFromParentTable(\TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $parentObject, $parentPropertyName)
     {
-        $parentDataMap = $this->dataMapper->getDataMap(get_class($parentObject));
+        $parentDataMap = $this->dataMapFactory->buildDataMap(get_class($parentObject));
         $parentColumnMap = $parentDataMap->getColumnMap($parentPropertyName);
         if ($parentColumnMap->getTypeOfRelation() === \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\ColumnMap::RELATION_HAS_MANY) {
             $tableName = $parentColumnMap->getChildTableName();
@@ -915,7 +910,8 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
         $result = $this->storageBackend->getMaxValueFromTable(
             $tableName,
             $matchFields,
-            $sortByFieldName);
+            $sortByFieldName
+        );
         return $result;
     }
 
@@ -928,7 +924,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
      */
     protected function updateObject(\TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $object, array $row)
     {
-        $dataMap = $this->dataMapper->getDataMap(get_class($object));
+        $dataMap = $this->dataMapFactory->buildDataMap(get_class($object));
         $this->addCommonFieldsToRow($object, $row);
         $row['uid'] = $object->getUid();
         if ($dataMap->getLanguageIdColumnName() !== null) {
@@ -976,7 +972,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
      */
     protected function addCommonFieldsToRow(\TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $object, array &$row)
     {
-        $dataMap = $this->dataMapper->getDataMap(get_class($object));
+        $dataMap = $this->dataMapFactory->buildDataMap(get_class($object));
         $this->addCommonDateFieldsToRow($object, $row);
         if ($dataMap->getRecordTypeColumnName() !== null && $dataMap->getRecordType() !== null) {
             $row[$dataMap->getRecordTypeColumnName()] = $dataMap->getRecordType();
@@ -994,7 +990,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
      */
     protected function addCommonDateFieldsToRow(\TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $object, array &$row)
     {
-        $dataMap = $this->dataMapper->getDataMap(get_class($object));
+        $dataMap = $this->dataMapFactory->buildDataMap(get_class($object));
         if ($object->_isNew() && $dataMap->getCreationDateColumnName() !== null) {
             $row[$dataMap->getCreationDateColumnName()] = $GLOBALS['EXEC_TIME'];
         }
@@ -1026,7 +1022,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
      */
     protected function removeEntity(\TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $object, $markAsDeleted = true)
     {
-        $dataMap = $this->dataMapper->getDataMap(get_class($object));
+        $dataMap = $this->dataMapFactory->buildDataMap(get_class($object));
         $tableName = $dataMap->getTableName();
         if ($markAsDeleted === true && $dataMap->getDeletedFlagColumnName() !== null) {
             $deletedColumnName = $dataMap->getDeletedFlagColumnName();
@@ -1067,7 +1063,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
     protected function removeRelatedObjects(\TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface $object)
     {
         $className = get_class($object);
-        $dataMap = $this->dataMapper->getDataMap($className);
+        $dataMap = $this->dataMapFactory->buildDataMap($className);
         $classSchema = $this->reflectionService->getClassSchema($className);
         $properties = $object->_getProperties();
         foreach ($properties as $propertyName => $propertyValue) {
@@ -1076,7 +1072,7 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
                 continue;
             }
             $propertyMetaData = $classSchema->getProperty($propertyName);
-            if ($propertyMetaData['cascade'] === 'remove') {
+            if ($propertyMetaData['annotations']['cascade'] === 'remove') {
                 if ($columnMap->getTypeOfRelation() === \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\ColumnMap::RELATION_HAS_MANY) {
                     foreach ($propertyValue as $containedObject) {
                         $this->removeEntity($containedObject);
@@ -1120,5 +1116,24 @@ class Backend implements \TYPO3\CMS\Extbase\Persistence\Generic\BackendInterface
         }
         $storagePidList = \TYPO3\CMS\Core\Utility\GeneralUtility::intExplode(',', $frameworkConfiguration['persistence']['storagePid']);
         return (int)$storagePidList[0];
+    }
+
+    /**
+     * Returns a plain value
+     *
+     * i.e. objects are flattened out if possible.
+     * Checks explicitly for null values as DataMapper's getPlainValue would convert this to 'NULL'
+     *
+     * @param mixed $input The value that will be converted
+     * @param ColumnMap $columnMap Optional column map for retrieving the date storage format
+     * @return int|string|null
+     */
+    protected function getPlainValue($input, ColumnMap $columnMap = null)
+    {
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $dataMapper = $objectManager->get(DataMapper::class);
+        return $input !== null
+            ? $dataMapper->getPlainValue($input, $columnMap)
+            : null;
     }
 }

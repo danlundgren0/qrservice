@@ -16,8 +16,8 @@ namespace TYPO3\CMS\Backend\Form\Container;
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Type\Bitmask\JsConfirmation;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * The container handles single elements.
@@ -36,7 +36,6 @@ class FlexFormElementContainer extends AbstractContainer
      */
     public function render()
     {
-        $table = $this->data['tableName'];
         $flexFormDataStructureArray = $this->data['flexFormDataStructureArray'];
         $flexFormRowData = $this->data['flexFormRowData'];
         $flexFormFormPrefix = $this->data['flexFormFormPrefix'];
@@ -63,7 +62,7 @@ class FlexFormElementContainer extends AbstractContainer
 
                 $options = $this->data;
                 $options['flexFormDataStructureArray'] = $flexFormFieldArray;
-                $options['flexFormRowData'] = isset($flexFormRowData[$flexFormFieldName]['el']) ? $flexFormRowData[$flexFormFieldName]['el'] : [];
+                $options['flexFormRowData'] = $flexFormRowData[$flexFormFieldName]['el'] ?? [];
                 $options['flexFormFieldName'] = $flexFormFieldName;
                 $options['renderType'] = 'flexFormSectionContainer';
                 $sectionContainerResult = $this->nodeFactory->create($options)->render();
@@ -80,6 +79,10 @@ class FlexFormElementContainer extends AbstractContainer
                     'fieldChangeFunc' => $parameterArray['fieldChangeFunc'],
                     'label' => $parameterArray['label'],
                 ];
+
+                if (isset($flexFormFieldArray['description']) && !empty($flexFormFieldArray['description'])) {
+                    $fakeParameterArray['fieldConf']['description'] = $flexFormFieldArray['description'];
+                }
 
                 $alertMsgOnChange = '';
                 if (isset($fakeParameterArray['fieldConf']['onChange']) && $fakeParameterArray['fieldConf']['onChange'] === 'reload') {
@@ -110,8 +113,7 @@ class FlexFormElementContainer extends AbstractContainer
                         $fakeParameterArray['fieldChangeFunc']['TBE_EDITOR_fieldChanged'] = str_replace($originalFieldName, $fakeParameterArray['itemFormElName'], $fakeParameterArray['fieldChangeFunc']['TBE_EDITOR_fieldChanged']);
                     }
                 }
-                // @todo: is that a bug? name and id should usually be of different form
-                $fakeParameterArray['itemFormElID'] = $fakeParameterArray['itemFormElName'];
+                $fakeParameterArray['itemFormElID'] = $parameterArray['itemFormElID'] . '_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $flexFormFieldName) . '_' . md5($fakeParameterArray['itemFormElName']);
                 if (isset($flexFormRowData[$flexFormFieldName]['vDEF'])) {
                     $fakeParameterArray['itemFormElValue'] = $flexFormRowData[$flexFormFieldName]['vDEF'];
                 } else {
@@ -136,22 +138,23 @@ class FlexFormElementContainer extends AbstractContainer
                 }
                 $childResult = $this->nodeFactory->create($options)->render();
 
-                // Possible line breaks in the label through xml: \n => <br/>, usage of nl2br() not possible, so it's done through str_replace (?!)
-                $processedTitle = str_replace('\\n', '<br />', htmlspecialchars($fakeParameterArray['fieldConf']['label']));
-                $html = [];
-                $html[] = '<div class="form-section">';
-                $html[] =    '<div class="form-group t3js-formengine-palette-field t3js-formengine-validation-marker">';
-                $html[] =        '<label class="t3js-formengine-label">';
-                $html[] =            BackendUtility::wrapInHelp($parameterArray['_cshKey'], $flexFormFieldName, $processedTitle);
-                $html[] =        '</label>';
-                $html[] =        '<div class="formengine-field-item t3js-formengine-field-item">';
-                $html[] =            $childResult['html'];
-                $html[] =        '</div>';
-                $html[] =    '</div>';
-                $html[] = '</div>';
-
-                $resultArray['html'] .= implode(LF, $html);
-                $resultArray = $this->mergeChildReturnIntoExistingResult($resultArray, $childResult, false);
+                if (!empty($childResult['html'])) {
+                    // Possible line breaks in the label through xml: \n => <br/>, usage of nl2br() not possible, so it's done through str_replace (?!)
+                    $processedTitle = str_replace('\\n', '<br />', htmlspecialchars($fakeParameterArray['fieldConf']['label']));
+                    $html = [];
+                    $html[] = '<div class="form-section">';
+                    $html[] =   '<div class="form-group t3js-formengine-palette-field t3js-formengine-validation-marker">';
+                    $html[] =       '<label class="t3js-formengine-label">';
+                    $html[] =           BackendUtility::wrapInHelp($parameterArray['_cshKey'], $flexFormFieldName, $processedTitle);
+                    $html[] =       '</label>';
+                    $html[] =       '<div class="formengine-field-item t3js-formengine-field-item">';
+                    $html[] =           $childResult['html'];
+                    $html[] =       '</div>';
+                    $html[] =   '</div>';
+                    $html[] = '</div>';
+                    $resultArray['html'] .= implode(LF, $html);
+                    $resultArray = $this->mergeChildReturnIntoExistingResult($resultArray, $childResult, false);
+                }
             }
         }
 

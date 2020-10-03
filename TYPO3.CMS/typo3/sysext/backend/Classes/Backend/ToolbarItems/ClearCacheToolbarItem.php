@@ -14,9 +14,9 @@ namespace TYPO3\CMS\Backend\Backend\ToolbarItems;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Backend\Routing\UriBuilder;
 use TYPO3\CMS\Backend\Toolbar\ClearCacheActionsHookInterface;
 use TYPO3\CMS\Backend\Toolbar\ToolbarItemInterface;
-use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Page\PageRenderer;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -46,15 +46,17 @@ class ClearCacheToolbarItem implements ToolbarItemInterface
     public function __construct()
     {
         $this->getPageRenderer()->loadRequireJsModule('TYPO3/CMS/Backend/Toolbar/ClearCacheMenu');
-        $backendUser = $this->getBackendUser();
+        $isAdmin = $this->getBackendUser()->isAdmin();
+        $userTsConfig = $this->getBackendUser()->getTSConfig();
+        $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
 
         // Clear all page-related caches
-        if ($backendUser->isAdmin() || $backendUser->getTSConfigVal('options.clearCache.pages')) {
+        if ($isAdmin || $userTsConfig['options.']['clearCache.']['pages'] ?? false) {
             $this->cacheActions[] = [
                 'id' => 'pages',
-                'title' => 'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:flushPageCachesTitle',
-                'description' => 'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:flushPageCachesDescription',
-                'href' => BackendUtility::getModuleUrl('tce_db', ['cacheCmd' => 'pages']),
+                'title' => 'LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:flushPageCachesTitle',
+                'description' => 'LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:flushPageCachesDescription',
+                'href' => (string)$uriBuilder->buildUriFromRoute('tce_db', ['cacheCmd' => 'pages']),
                 'iconIdentifier' => 'actions-system-cache-clear-impact-low'
             ];
             $this->optionValues[] = 'pages';
@@ -63,26 +65,26 @@ class ClearCacheToolbarItem implements ToolbarItemInterface
         // Clearing of all caches is only shown if explicitly enabled via TSConfig
         // or if BE-User is admin and the TSconfig explicitly disables the possibility for admins.
         // This is useful for big production systems where admins accidentally could slow down the system.
-        if ($backendUser->getTSConfigVal('options.clearCache.all') || ($backendUser->isAdmin() && $backendUser->getTSConfigVal('options.clearCache.all') !== '0')) {
+        if (($userTsConfig['options.']['clearCache.']['all'] ?? false)
+            || ($isAdmin && (bool)($userTsConfig['options.']['clearCache.']['all'] ?? true))
+        ) {
             $this->cacheActions[] = [
                 'id' => 'all',
-                'title' => 'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:flushAllCachesTitle2',
-                'description' => 'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:flushAllCachesDescription2',
-                'href' => BackendUtility::getModuleUrl('tce_db', ['cacheCmd' => 'all']),
+                'title' => 'LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:flushAllCachesTitle2',
+                'description' => 'LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:flushAllCachesDescription2',
+                'href' => (string)$uriBuilder->buildUriFromRoute('tce_db', ['cacheCmd' => 'all']),
                 'iconIdentifier' => 'actions-system-cache-clear-impact-high'
             ];
             $this->optionValues[] = 'all';
         }
 
         // Hook for manipulating cacheActions
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['additionalBackendItems']['cacheActions'])) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['additionalBackendItems']['cacheActions'] as $cacheAction) {
-                $hookObject = GeneralUtility::getUserObj($cacheAction);
-                if (!$hookObject instanceof ClearCacheActionsHookInterface) {
-                    throw new \UnexpectedValueException($cacheAction . ' must implement interface ' . ClearCacheActionsHookInterface::class, 1228262000);
-                }
-                $hookObject->manipulateCacheActions($this->cacheActions, $this->optionValues);
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['additionalBackendItems']['cacheActions'] ?? [] as $cacheAction) {
+            $hookObject = GeneralUtility::makeInstance($cacheAction);
+            if (!$hookObject instanceof ClearCacheActionsHookInterface) {
+                throw new \UnexpectedValueException($cacheAction . ' must implement interface ' . ClearCacheActionsHookInterface::class, 1228262000);
             }
+            $hookObject->manipulateCacheActions($this->cacheActions, $this->optionValues);
         }
     }
 
@@ -98,7 +100,7 @@ class ClearCacheToolbarItem implements ToolbarItemInterface
             return true;
         }
         foreach ($this->optionValues as $value) {
-            if ($backendUser->getTSConfigVal('options.clearCache.' . $value)) {
+            if ($backendUser->getTSConfig()['options.']['clearCache.'][$value] ?? false) {
                 return true;
             }
         }
@@ -114,16 +116,15 @@ class ClearCacheToolbarItem implements ToolbarItemInterface
     {
         if ($this->hasDropDown()) {
             return $this->getFluidTemplateObject('ClearCacheToolbarItem.html')->render();
-        } else {
-            $view = $this->getFluidTemplateObject('ClearCacheToolbarItemSingle.html');
-            $cacheAction = end($this->cacheActions);
-            $view->assignMultiple([
+        }
+        $view = $this->getFluidTemplateObject('ClearCacheToolbarItemSingle.html');
+        $cacheAction = end($this->cacheActions);
+        $view->assignMultiple([
                 'link'  => $cacheAction['href'],
                 'title' => $cacheAction['title'],
                 'iconIdentifier'  => $cacheAction['iconIdentifier'],
             ]);
-            return $view->render();
-        }
+        return $view->render();
     }
 
     /**

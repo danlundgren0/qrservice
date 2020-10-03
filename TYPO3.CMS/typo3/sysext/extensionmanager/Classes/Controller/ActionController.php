@@ -20,6 +20,7 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 /**
  * Controller for handling extension related actions like
  * installing, removing, downloading of data or files
+ * @internal This class is a specific controller implementation and is not considered part of the Public TYPO3 API.
  */
 class ActionController extends AbstractController
 {
@@ -127,6 +128,13 @@ class ActionController extends AbstractController
     protected function removeExtensionAction($extension)
     {
         try {
+            if (\TYPO3\CMS\Core\Core\Environment::isComposerMode()) {
+                throw new \TYPO3\CMS\Extensionmanager\Exception\ExtensionManagerException(
+                    'The system is set to composer mode. You are not allowed to remove any extension.',
+                    1590314046
+                );
+            }
+
             $this->installUtility->removeExtension($extension);
             $this->addFlashMessage(
                 \TYPO3\CMS\Extbase\Utility\LocalizationUtility::translate(
@@ -158,26 +166,6 @@ class ActionController extends AbstractController
     }
 
     /**
-     * Download data of an extension as sql statements
-     *
-     * @param string $extension
-     * @throws \TYPO3\CMS\Extensionmanager\Exception\ExtensionManagerException
-     */
-    protected function downloadExtensionDataAction($extension)
-    {
-        $error = null;
-        $sqlData = $this->installUtility->getExtensionSqlDataDump($extension);
-        $dump = $sqlData['extTables'] . $sqlData['staticSql'];
-        $fileName = $extension . '_sqlDump.sql';
-        $filePath = PATH_site . 'typo3temp/var/ExtensionManager/' . $fileName;
-        $error = \TYPO3\CMS\Core\Utility\GeneralUtility::writeFileToTypo3tempDir($filePath, $dump);
-        if (is_string($error)) {
-            throw new \TYPO3\CMS\Extensionmanager\Exception\ExtensionManagerException($error, 1343048718);
-        }
-        $this->fileHandlingUtility->sendSqlDumpFileToBrowserAndDelete($filePath, $fileName);
-    }
-
-    /**
      * Reloads the static SQL data of an extension
      *
      * @param string $extension
@@ -190,7 +178,7 @@ class ActionController extends AbstractController
         $registry = GeneralUtility::makeInstance(Registry::class);
         $registry->remove('extensionDataImport', $registryKey);
 
-        $this->installUtility->processDatabaseUpdates($extension);
+        $this->installUtility->processExtensionSetup($extension['key']);
 
         $this->redirect('index', 'List');
     }

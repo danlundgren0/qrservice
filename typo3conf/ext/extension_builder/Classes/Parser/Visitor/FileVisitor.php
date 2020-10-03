@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Parser\Visitor;
 
 /*
@@ -71,8 +72,6 @@ class FileVisitor extends NodeVisitorAbstract implements FileVisitorInterface
     }
 
     /**
-     *
-     *
      * @param \PhpParser\Node $node
      */
     public function enterNode(Node $node)
@@ -140,7 +139,7 @@ class FileVisitor extends NodeVisitorAbstract implements FileVisitorInterface
             } elseif (!$node instanceof Node\Name) {
                 // any other nodes (except the name node of the current container node)
                 // go into statements container
-                    if ($this->currentContainer->getFirstClass() === false) {
+                if ($this->currentContainer->getFirstClass() === false) {
                     $this->currentContainer->addPreClassStatements($node);
                 } else {
                     $this->currentContainer->addPostClassStatements($node);

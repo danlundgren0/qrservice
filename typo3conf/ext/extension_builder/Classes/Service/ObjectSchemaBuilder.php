@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Service;
 
 /*
@@ -18,7 +19,6 @@ use EBT\ExtensionBuilder\Configuration\ExtensionBuilderConfigurationManager;
 use EBT\ExtensionBuilder\Domain\Model\DomainObject;
 use EBT\ExtensionBuilder\Domain\Model\DomainObject\Action;
 use EBT\ExtensionBuilder\Domain\Model\DomainObject\Relation\ZeroToManyRelation;
-use EBT\ExtensionBuilder\Service\ValidationService;
 use EBT\ExtensionBuilder\Utility\Tools;
 use TYPO3\CMS\Core\SingletonInterface;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -50,8 +50,8 @@ class ObjectSchemaBuilder implements SingletonInterface
     /**
      *
      * @param array $jsonDomainObject
-     * @throws \Exception
      * @return \EBT\ExtensionBuilder\Domain\Model\DomainObject $domainObject
+     * @throws \Exception
      */
     public function build(array $jsonDomainObject)
     {
@@ -79,15 +79,14 @@ class ObjectSchemaBuilder implements SingletonInterface
         if (!empty($jsonDomainObject['objectsettings']['parentClass'])) {
             $domainObject->setParentClass($jsonDomainObject['objectsettings']['parentClass']);
         }
-        if (!empty($jsonDomainObject['objectsettings']['skipTypeConfiguration'])) {
-            $domainObject->setSkipTypeConfiguration($jsonDomainObject['objectsettings']['skipTypeConfiguration']);
-        }
-
         // properties
         if (isset($jsonDomainObject['propertyGroup']['properties'])) {
             foreach ($jsonDomainObject['propertyGroup']['properties'] as $propertyJsonConfiguration) {
                 $propertyType = $propertyJsonConfiguration['propertyType'];
-                if (in_array($propertyType, ['Image', 'File']) && !empty($propertyJsonConfiguration['maxItems']) && $propertyJsonConfiguration['maxItems'] > 1) {
+                if (in_array($propertyType, [
+                        'Image',
+                        'File'
+                    ]) && !empty($propertyJsonConfiguration['maxItems']) && $propertyJsonConfiguration['maxItems'] > 1) {
                     $propertyJsonConfiguration['relationType'] = 'zeroToMany';
                     $propertyJsonConfiguration['relationName'] = $propertyJsonConfiguration['propertyName'];
                     $propertyJsonConfiguration['relationDescription'] = $propertyJsonConfiguration['propertyDescription'];
@@ -140,8 +139,8 @@ class ObjectSchemaBuilder implements SingletonInterface
     /**
      * @param array $relationJsonConfiguration
      * @param \EBT\ExtensionBuilder\Domain\Model\DomainObject $domainObject
-     * @throws \Exception
      * @return \EBT\ExtensionBuilder\Domain\Model\DomainObject\Relation\AbstractRelation
+     * @throws \Exception
      */
     public function buildRelation($relationJsonConfiguration, $domainObject)
     {
@@ -175,13 +174,12 @@ class ObjectSchemaBuilder implements SingletonInterface
             $extbaseClassConfiguration = $this->configurationManager->getExtbaseClassConfiguration(
                 $relationJsonConfiguration['foreignRelationClass']
             );
-            if (isset($extbaseClassConfiguration['tableName'])) {
-                $foreignDatabaseTableName = $extbaseClassConfiguration['tableName'];
-            } else {
-                $foreignDatabaseTableName = Tools::parseTableNameFromClassName(
+            if (!empty($relationJsonConfiguration['renderType'])) {
+                $relation->setRenderType($relationJsonConfiguration['renderType']);
+            }
+            $foreignDatabaseTableName = $extbaseClassConfiguration['tableName'] ?? Tools::parseTableNameFromClassName(
                     $relationJsonConfiguration['foreignRelationClass']
                 );
-            }
             $relation->setForeignDatabaseTableName($foreignDatabaseTableName);
             if ($relation instanceof ZeroToManyRelation) {
                 $foreignKeyName = strtolower($domainObject->getName());
@@ -197,11 +195,14 @@ class ObjectSchemaBuilder implements SingletonInterface
                 $relation->setForeignKeyName($foreignKeyName);
                 $relation->setForeignDatabaseTableName($foreignDatabaseTableName);
             }
-            if ($relation->isFileReference() && !empty($relationJsonConfiguration['maxItems'])) {
-                /** @var $relation \EBT\ExtensionBuilder\Domain\Model\DomainObject\FileProperty */
-                $relation->setMaxItems($relationJsonConfiguration['maxItems']);
-                if (!empty($relationJsonConfiguration['allowedFileTypes'])) {
-                    $relation->setAllowedFileTypes($relationJsonConfiguration['allowedFileTypes']);
+            if ($relation->isFileReference()) {
+                $relation->setRenderType('inline');
+                if (!empty($relationJsonConfiguration['maxItems'])) {
+                    /** @var $relation \EBT\ExtensionBuilder\Domain\Model\DomainObject\FileProperty */
+                    $relation->setMaxItems($relationJsonConfiguration['maxItems']);
+                    if (!empty($relationJsonConfiguration['allowedFileTypes'])) {
+                        $relation->setAllowedFileTypes($relationJsonConfiguration['allowedFileTypes']);
+                    }
                 }
             }
         }

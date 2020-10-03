@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Lowlevel\Command;
 
 /*
@@ -22,7 +22,6 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Core\Bootstrap;
-use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\DataHandling\DataHandler;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -70,7 +69,7 @@ Manual repair suggestions:
     protected function execute(InputInterface $input, OutputInterface $output)
     {
         // Make sure the _cli_ user is loaded
-        Bootstrap::getInstance()->initializeBackendAuthentication();
+        Bootstrap::initializeBackendAuthentication();
 
         $io = new SymfonyStyle($input, $output);
         $io->title($this->getDescription());
@@ -102,26 +101,23 @@ Manual repair suggestions:
                 ->where(
                     $queryBuilder->expr()->notIn(
                         'uid',
-                        $queryBuilder->createNamedParameter($idList, Connection::PARAM_INT_ARRAY)
+                        // do not use named parameter here as the list can get too long
+                        array_map('intval', $idList)
                     )
                 )
                 ->orderBy('uid')
                 ->execute();
 
-            $totalOrphans = 0;
-            if ($result->rowCount()) {
+            $rowCount = $queryBuilder->count('uid')->execute()->fetchColumn(0);
+            if ($rowCount) {
                 $orphans[$tableName] = [];
                 while ($orphanRecord = $result->fetch()) {
                     $orphans[$tableName][$orphanRecord['uid']] = $orphanRecord['uid'];
                 }
-                $totalOrphans += count($orphans[$tableName]);
 
-                if ($io->isVeryVerbose() && count($orphans[$tableName])) {
-                    $io->writeln('Found ' . count($orphans[$tableName]) . ' orphan records in table "' . $tableName . '".');
+                if (count($orphans[$tableName])) {
+                    $io->note('Found ' . count($orphans[$tableName]) . ' orphan records in table "' . $tableName . '" with following ids: ' . implode(', ', $orphans[$tableName]));
                 }
-            }
-            if (!$io->isQuiet() && $totalOrphans) {
-                $io->note('Found ' . $totalOrphans . ' records in ' . count($orphans) . ' database tables.');
             }
         }
 
@@ -209,7 +205,7 @@ Manual repair suggestions:
                 ->execute();
 
             while ($row = $result->fetch()) {
-                $allRecords = $this->findAllConnectedRecordsInPage($row['uid'], $depth, $allRecords);
+                $allRecords = $this->findAllConnectedRecordsInPage((int)$row['uid'], $depth, $allRecords);
             }
         }
 
@@ -219,7 +215,7 @@ Manual repair suggestions:
             if (is_array($versions)) {
                 foreach ($versions as $verRec) {
                     if (!$verRec['_CURRENT_VERSION']) {
-                        $allRecords = $this->findAllConnectedRecordsInPage($verRec['uid'], $depth, $allRecords);
+                        $allRecords = $this->findAllConnectedRecordsInPage((int)$verRec['uid'], $depth, $allRecords);
                     }
                 }
             }

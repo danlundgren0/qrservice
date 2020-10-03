@@ -16,11 +16,13 @@ namespace TYPO3\CMS\Backend\View;
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\TypoScript\Parser\TypoScriptParser;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Backend layout for CMS
+ * @internal This class is a TYPO3 Backend implementation and is not considered part of the Public TYPO3 API.
  */
 class BackendLayoutView implements \TYPO3\CMS\Core\SingletonInterface
 {
@@ -52,7 +54,7 @@ class BackendLayoutView implements \TYPO3\CMS\Core\SingletonInterface
      */
     protected function initializeDataProviderCollection()
     {
-        /** @var $dataProviderCollection BackendLayout\DataProviderCollection */
+        /** @var BackendLayout\DataProviderCollection $dataProviderCollection */
         $dataProviderCollection = GeneralUtility::makeInstance(
             BackendLayout\DataProviderCollection::class
         );
@@ -200,7 +202,8 @@ class BackendLayoutView implements \TYPO3\CMS\Core\SingletonInterface
                         // If layout for "next level" is set to "none" - don't use any and stop searching
                         $this->selectedCombinedIdentifier[$pageId] = false;
                         break;
-                    } elseif ($this->selectedCombinedIdentifier[$pageId] !== '' && $this->selectedCombinedIdentifier[$pageId] !== '0') {
+                    }
+                    if ($this->selectedCombinedIdentifier[$pageId] !== '' && $this->selectedCombinedIdentifier[$pageId] !== '0') {
                         // Stop searching if a layout for "next level" is set
                         break;
                     }
@@ -272,17 +275,19 @@ class BackendLayoutView implements \TYPO3\CMS\Core\SingletonInterface
      */
     public function getColPosListItemsParsed($id)
     {
-        $tsConfig = BackendUtility::getModTSconfig($id, 'TCEFORM.tt_content.colPos');
+        $tsConfig = BackendUtility::getPagesTSconfig($id)['TCEFORM.']['tt_content.']['colPos.'] ?? [];
         $tcaConfig = $GLOBALS['TCA']['tt_content']['columns']['colPos']['config'];
         $tcaItems = $tcaConfig['items'];
-        $tcaItems = $this->addItems($tcaItems, $tsConfig['properties']['addItems.']);
+        $tcaItems = $this->addItems($tcaItems, $tsConfig['addItems.']);
         if (isset($tcaConfig['itemsProcFunc']) && $tcaConfig['itemsProcFunc']) {
             $tcaItems = $this->addColPosListLayoutItems($id, $tcaItems);
         }
-        foreach (GeneralUtility::trimExplode(',', $tsConfig['properties']['removeItems'], true) as $removeId) {
-            foreach ($tcaItems as $key => $item) {
-                if ($item[1] == $removeId) {
-                    unset($tcaItems[$key]);
+        if (!empty($tsConfig['removeItems'])) {
+            foreach (GeneralUtility::trimExplode(',', $tsConfig['removeItems'], true) as $removeId) {
+                foreach ($tcaItems as $key => $item) {
+                    if ($item[1] == $removeId) {
+                        unset($tcaItems[$key]);
+                    }
                 }
             }
         }
@@ -326,7 +331,7 @@ class BackendLayoutView implements \TYPO3\CMS\Core\SingletonInterface
      * Gets the selected backend layout
      *
      * @param int $pageId
-     * @return array|NULL $backendLayout
+     * @return array|null $backendLayout
      */
     public function getSelectedBackendLayout($pageId)
     {
@@ -343,17 +348,17 @@ class BackendLayoutView implements \TYPO3\CMS\Core\SingletonInterface
 
         $backendLayout = $this->getDataProviderCollection()->getBackendLayout($selectedCombinedIdentifier, $pageId);
         // If backend layout is not found available anymore, use default
-        if (is_null($backendLayout)) {
+        if ($backendLayout === null) {
             $selectedCombinedIdentifier = 'default';
             $backendLayout = $this->getDataProviderCollection()->getBackendLayout($selectedCombinedIdentifier, $pageId);
         }
 
         if (!empty($backendLayout)) {
-            /** @var $parser \TYPO3\CMS\Core\TypoScript\Parser\TypoScriptParser */
-            $parser = GeneralUtility::makeInstance(\TYPO3\CMS\Core\TypoScript\Parser\TypoScriptParser::class);
+            /** @var TypoScriptParser $parser */
+            $parser = GeneralUtility::makeInstance(TypoScriptParser::class);
             /** @var \TYPO3\CMS\Backend\Configuration\TypoScript\ConditionMatching\ConditionMatcher $conditionMatcher */
             $conditionMatcher = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Configuration\TypoScript\ConditionMatching\ConditionMatcher::class);
-            $parser->parse($parser->checkIncludeLines($backendLayout->getConfiguration()), $conditionMatcher);
+            $parser->parse(TypoScriptParser::checkIncludeLines($backendLayout->getConfiguration()), $conditionMatcher);
 
             $backendLayoutData = [];
             $backendLayoutData['config'] = $backendLayout->getConfiguration();
@@ -396,26 +401,14 @@ class BackendLayoutView implements \TYPO3\CMS\Core\SingletonInterface
     {
         return '
 		backend_layout {
-			colCount = 4
+			colCount = 1
 			rowCount = 1
 			rows {
 				1 {
 					columns {
 						1 {
-							name = LLL:EXT:frontend/Resources/Private/Language/locallang_ttc.xlf:colPos.I.0
-							colPos = 1
-						}
-						2 {
 							name = LLL:EXT:frontend/Resources/Private/Language/locallang_ttc.xlf:colPos.I.1
 							colPos = 0
-						}
-						3 {
-							name = LLL:EXT:frontend/Resources/Private/Language/locallang_ttc.xlf:colPos.I.2
-							colPos = 2
-						}
-						4 {
-							name = LLL:EXT:frontend/Resources/Private/Language/locallang_ttc.xlf:colPos.I.3
-							colPos = 3
 						}
 					}
 				}
@@ -428,7 +421,7 @@ class BackendLayoutView implements \TYPO3\CMS\Core\SingletonInterface
      * Gets a page record.
      *
      * @param int $pageId
-     * @return NULL|array
+     * @return array|null
      */
     protected function getPage($pageId)
     {
@@ -472,7 +465,7 @@ class BackendLayoutView implements \TYPO3\CMS\Core\SingletonInterface
     }
 
     /**
-     * @return \TYPO3\CMS\Lang\LanguageService
+     * @return \TYPO3\CMS\Core\Localization\LanguageService
      */
     protected function getLanguageService()
     {

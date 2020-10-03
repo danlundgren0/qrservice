@@ -164,14 +164,16 @@ class PageTsBackendLayoutDataProvider implements DataProviderInterface
     /**
      * Generates a Backend Layout from PageTsConfig array
      *
+     * @param string $identifier
+     * @param array $data
      * @return mixed
      */
     protected function generateBackendLayoutFromTsConfig($identifier, $data)
     {
         if (!empty($data['config.']['backend_layout.']) && is_array($data['config.']['backend_layout.'])) {
             $backendLayout['uid'] = substr($identifier, 0, -1);
-            $backendLayout['title'] = ($data['title']) ? $data['title'] : $backendLayout['uid'];
-            $backendLayout['icon'] = ($data['icon']) ? $data['icon'] : '';
+            $backendLayout['title'] = $data['title'] ? $data['title'] : $backendLayout['uid'];
+            $backendLayout['icon'] = $data['icon'] ?: '';
             // Convert PHP array back to plain TypoScript so it can be procecced
             $config = \TYPO3\CMS\Core\Utility\ArrayUtility::flatten($data['config.']);
             $backendLayout['config'] = '';
@@ -213,7 +215,7 @@ class PageTsBackendLayoutDataProvider implements DataProviderInterface
      *
      * @param string $identifier
      * @param int $pageId
-     * @return NULL|BackendLayout
+     * @return BackendLayout|null
      */
     public function getBackendLayout($identifier, $pageId)
     {

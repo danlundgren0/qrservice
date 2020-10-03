@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\ViewHelpers;
 
 /*
@@ -18,11 +18,13 @@ namespace TYPO3\CMS\Form\ViewHelpers;
  */
 
 use TYPO3\CMS\Core\Utility\ArrayUtility;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Mvc\Web\Response;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3\CMS\Extbase\Object\ObjectManager;
 use TYPO3\CMS\Form\Domain\Factory\ArrayFormFactory;
 use TYPO3\CMS\Form\Mvc\Persistence\FormPersistenceManagerInterface;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
@@ -31,15 +33,14 @@ use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
  * Usage
  * =====
  *
- * <pre>
- * {namespace formvh=TYPO3\CMS\Form\ViewHelpers}
- * <formvh:render factoryClass="NameOfYourCustomFactoryClass" />
- * </pre>
+ * Default::
  *
- * The factory class must implement {@link TYPO3\CMS\Form\Domain\Factory\FormFactoryInterface}.
+ *    {namespace formvh=TYPO3\CMS\Form\ViewHelpers}
+ *    <formvh:render factoryClass="NameOfYourCustomFactoryClass" />
+ *
+ * The factory class must implement :php:`TYPO3\CMS\Form\Domain\Factory\FormFactoryInterface`.
  *
  * Scope: frontend
- * @api
  */
 class RenderViewHelper extends AbstractViewHelper
 {
@@ -57,7 +58,6 @@ class RenderViewHelper extends AbstractViewHelper
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('persistenceIdentifier', 'string', 'The persistence identifier for the form.', false, null);
         $this->registerArgument('factoryClass', 'string', 'The fully qualified class name of the factory', false, ArrayFormFactory::class);
         $this->registerArgument('prototypeName', 'string', 'Name of the prototype to use', false, null);
@@ -69,7 +69,6 @@ class RenderViewHelper extends AbstractViewHelper
      * @param \Closure $renderChildrenClosure
      * @param RenderingContextInterface $renderingContext
      * @return string
-     * @public
      */
     public static function renderStatic(array $arguments, \Closure $renderChildrenClosure, RenderingContextInterface $renderingContext)
     {
@@ -78,8 +77,9 @@ class RenderViewHelper extends AbstractViewHelper
         $prototypeName = $arguments['prototypeName'];
         $overrideConfiguration = $arguments['overrideConfiguration'];
 
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
         if (!empty($persistenceIdentifier)) {
-            $formPersistenceManager = $renderingContext->getObjectManager()->get(FormPersistenceManagerInterface::class);
+            $formPersistenceManager = $objectManager->get(FormPersistenceManagerInterface::class);
             $formConfiguration = $formPersistenceManager->load($persistenceIdentifier);
             ArrayUtility::mergeRecursiveWithOverrule(
                 $formConfiguration,
@@ -90,13 +90,25 @@ class RenderViewHelper extends AbstractViewHelper
         }
 
         if (empty($prototypeName)) {
-            $prototypeName = isset($overrideConfiguration['prototypeName']) ? $overrideConfiguration['prototypeName'] : 'standard';
+            $prototypeName = $overrideConfiguration['prototypeName'] ?? 'standard';
         }
 
-        $factory = $renderingContext->getObjectManager()->get($factoryClass);
+        $factory = $objectManager->get($factoryClass);
         $formDefinition = $factory->build($overrideConfiguration, $prototypeName);
-        $response = $renderingContext->getObjectManager()->get(Response::class, $renderingContext->getControllerContext()->getResponse());
+        $response = $renderingContext->getControllerContext()->getResponse() ?? $objectManager->get(Response::class);
         $form = $formDefinition->bind($renderingContext->getControllerContext()->getRequest(), $response);
+
+        // If the controller context does not contain a response object, this viewhelper is used in a
+        // fluid template rendered by the FluidTemplateContentObject. Handle the StopActionException
+        // as there is no extbase dispatcher involved that catches that. */
+        if ($renderingContext->getControllerContext()->getResponse() === null) {
+            try {
+                return $form->render();
+            } catch (\TYPO3\CMS\Extbase\Mvc\Exception\StopActionException $exception) {
+                return $response->shutdown();
+            }
+        }
+
         return $form->render();
     }
 }

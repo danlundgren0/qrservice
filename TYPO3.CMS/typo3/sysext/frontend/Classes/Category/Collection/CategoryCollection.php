@@ -14,14 +14,18 @@ namespace TYPO3\CMS\Frontend\Category\Collection;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Context\Context;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Restriction\FrontendRestrictionContainer;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Frontend\Page\PageRepository;
 
 /**
  * Extend category collection for the frontend, to collect related records
  * while respecting language, enable fields, etc.
+ *
+ * @internal this is a concrete TYPO3 hook implementation and solely used for EXT:frontend and not part of TYPO3's Core API.
  */
 class CategoryCollection extends \TYPO3\CMS\Core\Category\Collection\CategoryCollection
 {
@@ -37,7 +41,7 @@ class CategoryCollection extends \TYPO3\CMS\Core\Category\Collection\CategoryCol
      */
     public static function create(array $collectionRecord, $fillItems = false)
     {
-        /** @var $collection \TYPO3\CMS\Frontend\Category\Collection\CategoryCollection */
+        /** @var \TYPO3\CMS\Frontend\Category\Collection\CategoryCollection $collection */
         $collection = GeneralUtility::makeInstance(
             __CLASS__,
             $collectionRecord['table_name'],
@@ -105,7 +109,9 @@ class CategoryCollection extends \TYPO3\CMS\Core\Category\Collection\CategoryCol
 
         $queryBuilder = $this->getCollectedRecordsQueryBuilder();
         $queryBuilder->setRestrictions(GeneralUtility::makeInstance(FrontendRestrictionContainer::class));
-        $tsfe = self::getTypoScriptFrontendController();
+        $context = GeneralUtility::makeInstance(Context::class);
+        $pageRepository = GeneralUtility::makeInstance(PageRepository::class, $context);
+        $languageId = $context->getPropertyFromAspect('language', 'contentId', 0);
 
         // If language handling is defined for item table, add language condition
         if (isset($GLOBALS['TCA'][$this->getItemTableName()]['ctrl']['languageField'])) {
@@ -122,7 +128,7 @@ class CategoryCollection extends \TYPO3\CMS\Core\Category\Collection\CategoryCol
             );
 
             // If not in default language, also consider items in current language with no original
-            if ($tsfe->sys_language_content > 0) {
+            if ($languageId > 0) {
                 $transOrigPointerField = sprintf(
                     '%s.%s',
                     $this->getItemTableName(),
@@ -134,7 +140,7 @@ class CategoryCollection extends \TYPO3\CMS\Core\Category\Collection\CategoryCol
                     $queryBuilder->expr()->andX(
                         $queryBuilder->expr()->eq(
                             $languageField,
-                            $queryBuilder->createNamedParameter($tsfe->sys_language_content, \PDO::PARAM_INT)
+                            $queryBuilder->createNamedParameter($languageId, \PDO::PARAM_INT)
                         ),
                         $queryBuilder->expr()->eq(
                             $transOrigPointerField,
@@ -152,23 +158,14 @@ class CategoryCollection extends \TYPO3\CMS\Core\Category\Collection\CategoryCol
 
         while ($record = $result->fetch()) {
             // Overlay the record for workspaces
-            $tsfe->sys_page->versionOL(
+            $pageRepository->versionOL(
                 $this->getItemTableName(),
                 $record
             );
 
             // Overlay the record for translations
-            if (is_array($record) && $tsfe->sys_language_contentOL) {
-                if ($this->getItemTableName() === 'pages') {
-                    $record = $tsfe->sys_page->getPageOverlay($record);
-                } else {
-                    $record = $tsfe->sys_page->getRecordOverlay(
-                        $this->getItemTableName(),
-                        $record,
-                        $tsfe->sys_language_content,
-                        $tsfe->sys_language_contentOL
-                    );
-                }
+            if (is_array($record)) {
+                $record = $pageRepository->getLanguageOverlay($this->getItemTableName(), $record);
             }
 
             // Record may have been unset during the overlay process
@@ -178,15 +175,5 @@ class CategoryCollection extends \TYPO3\CMS\Core\Category\Collection\CategoryCol
         }
 
         return $relatedRecords;
-    }
-
-    /**
-     * Gets the TSFE object.
-     *
-     * @return \TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController
-     */
-    protected static function getTypoScriptFrontendController()
-    {
-        return $GLOBALS['TSFE'];
     }
 }

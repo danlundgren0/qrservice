@@ -23,11 +23,13 @@ namespace GridElementsTeam\Gridelements\Hooks;
 use GridElementsTeam\Gridelements\Backend\LayoutSetup;
 use GridElementsTeam\Gridelements\Helper\Helper;
 use TYPO3\CMS\Backend\Controller\PageLayoutController;
+use TYPO3\CMS\Backend\Routing\UriBuilder;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Backend\View\PageLayoutView;
 use TYPO3\CMS\Backend\View\PageLayoutViewDrawFooterHookInterface;
 use TYPO3\CMS\Backend\View\PageLayoutViewDrawItemHookInterface;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Expression\ExpressionBuilder;
@@ -43,7 +45,6 @@ use TYPO3\CMS\Core\Messaging\FlashMessageQueue;
 use TYPO3\CMS\Core\Messaging\FlashMessageService;
 use TYPO3\CMS\Core\SingletonInterface;
 use TYPO3\CMS\Core\Type\Bitmask\Permission;
-use TYPO3\CMS\Core\Utility\DebugUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\StringUtility;
 use TYPO3\CMS\Core\Versioning\VersionState;
@@ -101,7 +102,7 @@ class DrawItem implements PageLayoutViewDrawItemHookInterface, SingletonInterfac
 
     public function __construct()
     {
-        $this->extentensionConfiguration = unserialize($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['gridelements']);
+        $this->extentensionConfiguration =  GeneralUtility::makeInstance(ExtensionConfiguration::class)->get('gridelements');
         $this->setLanguageService($GLOBALS['LANG']);
         $this->helper = Helper::getInstance();
         $this->iconFactory = GeneralUtility::makeInstance(IconFactory::class);
@@ -169,7 +170,7 @@ class DrawItem implements PageLayoutViewDrawItemHookInterface, SingletonInterfac
         }
         $listType = $row['list_type'] && $row['CType'] === 'list' ? ' data-list_type="' . $row['list_type'] . '"' : '';
         $gridType = $row['tx_gridelements_backend_layout'] && $row['CType'] === 'gridelements_pi1' ? ' data-tx_gridelements_backend_layout="' . $row['tx_gridelements_backend_layout'] . '"' : '';
-        $headerContent = '<div id="element-tt_content-' . $row['uid'] . '" class="t3-ctype-identifier " data-ctype="' . $row['CType'] . '"' . $listType . $gridType . '>' . $headerContent . '</div>';
+        $headerContent = '<div id="element-tt_content-' . $row['uid'] . '" class="t3-ctype-identifier " data-ctype="' . $row['CType'] . '" ' . $listType . $gridType . '>' . $headerContent . '</div>';
     }
 
     /**
@@ -254,7 +255,7 @@ class DrawItem implements PageLayoutViewDrawItemHookInterface, SingletonInterfac
             foreach ($parserRows as $parserRow) {
                 if (is_array($parserRow['columns.']) && !empty($parserRow['columns.'])) {
                     foreach ($parserRow['columns.'] as $parserColumns) {
-                        $name = $this->languageService->sL($parserColumns['name'], true);
+                        $name = $this->languageService->sL($parserColumns['name']);
                         if (isset($parserColumns['colPos']) && $parserColumns['colPos'] !== '') {
                             $columnKey = (int)$parserColumns['colPos'];
                             $colPosValues[$columnKey] = [
@@ -588,7 +589,10 @@ class DrawItem implements PageLayoutViewDrawItemHookInterface, SingletonInterfac
                         'uid_pid'                    => $parentObject->id,
                         'returnUrl'                  => GeneralUtility::getIndpEnv('REQUEST_URI'),
                     ];
-                    $url = BackendUtility::getModuleUrl('new_content_element', $urlParameters);
+                    $routeName = BackendUtility::getPagesTSconfig($parentObject->id)['mod.']['newContentElementWizard.']['override']
+                        ?? 'new_content_element_wizard';
+                    $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+                    $url = (string)$uriBuilder->buildUriFromRoute($routeName, $urlParameters);
                 } else {
                     $urlParameters = [
                         'edit'      => [
@@ -608,7 +612,8 @@ class DrawItem implements PageLayoutViewDrawItemHookInterface, SingletonInterfac
                         ],
                         'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI'),
                     ];
-                    $url = BackendUtility::getModuleUrl('record_edit', $urlParameters);
+                    $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+                    $url = (string)$uriBuilder->buildUriFromRoute('record_edit', $urlParameters);
                 }
             }
         }
@@ -617,13 +622,14 @@ class DrawItem implements PageLayoutViewDrawItemHookInterface, SingletonInterfac
 
         if ($colPos !== '' && $colPos !== null && $colPos < 32768 && $url) {
             $iconsArray = [
-                'new' => '<a href="' . htmlspecialchars($url) . '" title="' . $this->languageService->getLL(
-                    'newContentElement',
-                        true
-                ) . '" class="btn btn-default btn-sm">' . $this->iconFactory->getIcon(
-                            'actions-document-new',
-                        'small'
-                        ) . ' ' . $this->languageService->getLL('content', true) . '</a>',
+                'new' => '<a 
+                            href="' . htmlspecialchars($url) . '" 
+                            data-title="' . htmlspecialchars($this->getLanguageService()->getLL('newContentElement')) . '" 
+                            title="' . htmlspecialchars($this->getLanguageService()->getLL('newContentElement')) . '" 
+                            class="btn btn-default btn-sm t3js-toggle-new-content-element-wizard">' .
+                                $this->iconFactory->getIcon('actions-add', 'small') . ' ' .
+                                $this->languageService->getLL('content') .
+                        '</a>',
             ];
         }
 
@@ -692,7 +698,10 @@ class DrawItem implements PageLayoutViewDrawItemHookInterface, SingletonInterfac
                                 'uid_pid'                    => -$specificIds['uid'],
                                 'returnUrl'                  => GeneralUtility::getIndpEnv('REQUEST_URI'),
                             ];
-                            $url = BackendUtility::getModuleUrl('new_content_element', $urlParameters);
+                            $routeName = BackendUtility::getPagesTSconfig($pid)['mod.']['newContentElementWizard.']['override']
+                                ?? 'new_content_element_wizard';
+                            $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+                            $url = (string)$uriBuilder->buildUriFromRoute($routeName, $urlParameters);
                         } else {
                             $urlParameters = [
                                 'edit'      => [
@@ -712,15 +721,17 @@ class DrawItem implements PageLayoutViewDrawItemHookInterface, SingletonInterfac
                                 ],
                                 'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI'),
                             ];
-                            $url = BackendUtility::getModuleUrl('record_edit', $urlParameters);
+                            $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+                            $url = (string)$uriBuilder->buildUriFromRoute('record_edit', $urlParameters);
                         }
                         $iconsArray = [
                             'new' => '<a 
-                                href="' . htmlspecialchars($url) . '" 
-                                title="' . $this->languageService->getLL('newContentElement', true) . '" 
-                                class="btn btn-default btn-sm">' .
-                                $this->iconFactory->getIcon('actions-document-new', 'small') . ' ' .
-                                $this->languageService->getLL('content', true) .
+                                href="' . htmlspecialchars($url) . '"
+                                data-title="' . htmlspecialchars($this->getLanguageService()->getLL('newContentElement')) . '" 
+                                title="' . htmlspecialchars($this->getLanguageService()->getLL('newContentElement')) . '" 
+                                class="btn btn-default btn-sm btn t3js-toggle-new-content-element-wizard">' .
+                                    $this->iconFactory->getIcon('actions-add', 'small') . ' ' .
+                                    $this->languageService->getLL('content') .
                                 '</a>',
                         ];
                     }
@@ -763,6 +774,7 @@ class DrawItem implements PageLayoutViewDrawItemHookInterface, SingletonInterfac
      * @param PageLayoutView $parentObject
      *
      * @return bool
+     * @throws \TYPO3\CMS\Core\Exception
      */
     protected function checkIfTranslationsExistInLanguage(
         array $contentElements,
@@ -773,10 +785,7 @@ class DrawItem implements PageLayoutViewDrawItemHookInterface, SingletonInterfac
         // Also, you may override this strict behavior via user TS Config
         // If you do so, you're on your own and cannot rely on any support by the TYPO3 core
         // We jump out here since we don't need to do the expensive loop operations
-        $allowInconsistentLanguageHandling = BackendUtility::getModTSconfig(
-            $parentObject->id,
-            'mod.web_layout.allowInconsistentLanguageHandling'
-        );
+        $allowInconsistentLanguageHandling = BackendUtility::getPagesTSconfig($parentObject->id)['mod.']['web_layout.']['allowInconsistentLanguageHandling'] ?? [];
         if ($language === 0 || $language === -1 || (isset($allowInconsistentLanguageHandling['value']) && $allowInconsistentLanguageHandling['value'] === '1')) {
             return false;
         }
@@ -796,6 +805,7 @@ class DrawItem implements PageLayoutViewDrawItemHookInterface, SingletonInterfac
             if ($this->languageHasTranslationsCache[$language]['hasStandAloneContent']
                 && $this->languageHasTranslationsCache[$language]['hasTranslations']
             ) {
+                /** @var $message FlashMessage */
                 $message = GeneralUtility::makeInstance(
                     FlashMessage::class,
                     sprintf(
@@ -811,7 +821,7 @@ class DrawItem implements PageLayoutViewDrawItemHookInterface, SingletonInterfac
                 $service = GeneralUtility::makeInstance(FlashMessageService::class);
                 /** @var $queue FlashMessageQueue */
                 $queue = $service->getMessageQueueByIdentifier();
-                $queue->addMessage($message);
+                $queue->enqueue($message);
             }
         }
         if ($this->languageHasTranslationsCache[$language]['hasTranslations']) {
@@ -897,31 +907,20 @@ class DrawItem implements PageLayoutViewDrawItemHookInterface, SingletonInterfac
         $content = '';
         // Get processed values:
         $info = [];
-        $parentObject->getProcessedValue(
-            'tt_content',
-            'starttime,endtime,fe_group,spaceBefore,spaceAfter',
-            $row,
-            $info
-        );
+        $parentObject->getProcessedValue('tt_content', 'starttime,endtime,fe_group,space_before_class,space_after_class', $row, $info);
 
         // Content element annotation
-        if (!empty($GLOBALS['TCA']['tt_content']['ctrl']['descriptionColumn'])) {
+        if (!empty($GLOBALS['TCA']['tt_content']['ctrl']['descriptionColumn']) && !empty($row[$GLOBALS['TCA']['tt_content']['ctrl']['descriptionColumn']])) {
             $info[] = htmlspecialchars($row[$GLOBALS['TCA']['tt_content']['ctrl']['descriptionColumn']]);
         }
 
         // Call drawFooter hooks
-        $drawFooterHooks = &$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['cms/layout/class.tx_cms_layout.php']['tt_content_drawFooter'];
-        if (is_array($drawFooterHooks)) {
-            foreach ($drawFooterHooks as $hookClass) {
-                $hookObject = GeneralUtility::getUserObj($hookClass);
-                if (!$hookObject instanceof PageLayoutViewDrawFooterHookInterface) {
-                    throw new \UnexpectedValueException(
-                        $hookClass . ' must implement interface ' . PageLayoutViewDrawFooterHookInterface::class,
-                        1404378171
-                    );
-                }
-                $hookObject->preProcess($parentObject, $info, $row);
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['cms/layout/class.tx_cms_layout.php']['tt_content_drawFooter'] ?? [] as $className) {
+            $hookObject = GeneralUtility::makeInstance($className);
+            if (!$hookObject instanceof PageLayoutViewDrawFooterHookInterface) {
+                throw new \UnexpectedValueException($className . ' must implement interface ' . PageLayoutViewDrawFooterHookInterface::class, 1404378171);
             }
+            $hookObject->preProcess($parentObject, $info, $row);
         }
 
         // Display info from records fields:
@@ -982,13 +981,13 @@ class DrawItem implements PageLayoutViewDrawItemHookInterface, SingletonInterfac
         if ($parentObject->tt_contentConfig['showCommands']) {
             // Edit whole of column:
             if ($editParams) {
-                $iconsArr['edit'] = '<a class="btn btn-default" href="#" onclick="' . htmlspecialchars(BackendUtility::editOnClick($editParams)) . '" title="' . $this->getLanguageService()->getLL(
-                    'editColumn',
-                        true
-                ) . '">' . $this->iconFactory->getIcon(
-                            'actions-document-open',
-                        Icon::SIZE_SMALL
-                        )->render() . '</a>';
+                $iconsArr['edit'] = '<a 
+                    class="btn btn-default" 
+                    href="#" 
+                    onclick="' . htmlspecialchars(BackendUtility::editOnClick($editParams)) . '" 
+                    title="' . $this->getLanguageService()->getLL('editColumn') . '">' .
+                    $this->iconFactory->getIcon('actions-document-open', Icon::SIZE_SMALL)->render() .
+                '</a>';
             }
         }
 
@@ -1322,7 +1321,7 @@ class DrawItem implements PageLayoutViewDrawItemHookInterface, SingletonInterfac
         $shortcutItem,
         &$collectedItems,
         $recursive = 0,
-        $parentUid,
+        $parentUid = 0,
         $language = 0
     ) {
         $itemList = str_replace('pages_', '', $shortcutItem);

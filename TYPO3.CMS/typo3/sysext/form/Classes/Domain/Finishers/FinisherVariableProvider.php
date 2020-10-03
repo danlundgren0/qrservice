@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Finishers;
 
 /*
@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Form\Domain\Finishers;
  */
 
 use TYPO3\CMS\Core\Utility\ArrayUtility;
+use TYPO3\CMS\Core\Utility\Exception\MissingArrayPathException;
 
 /**
  * Store data for usage between the finishers.
@@ -24,7 +25,7 @@ use TYPO3\CMS\Core\Utility\ArrayUtility;
  * **This class is NOT meant to be sub classed by developers.**
  * @internal
  */
-final class FinisherVariableProvider implements \ArrayAccess
+final class FinisherVariableProvider implements \ArrayAccess, \IteratorAggregate, \Countable
 {
 
     /**
@@ -41,7 +42,6 @@ final class FinisherVariableProvider implements \ArrayAccess
      * @param string $finisherIdentifier
      * @param string $key
      * @param mixed $value
-     * @api
      */
     public function add(string $finisherIdentifier, string $key, $value)
     {
@@ -76,7 +76,6 @@ final class FinisherVariableProvider implements \ArrayAccess
      * @param string $key
      * @param mixed $default
      * @return mixed
-     * @api
      */
     public function get(string $finisherIdentifier, string $key, $default = null)
     {
@@ -92,13 +91,12 @@ final class FinisherVariableProvider implements \ArrayAccess
      * @param string $finisherIdentifier
      * @param string $key
      * @return bool
-     * @api
      */
     public function exists($finisherIdentifier, $key): bool
     {
         try {
             ArrayUtility::getValueByPath($this->objects[$finisherIdentifier], $key, '.');
-        } catch (\RuntimeException $e) {
+        } catch (MissingArrayPathException $e) {
             return false;
         }
         return true;
@@ -109,7 +107,6 @@ final class FinisherVariableProvider implements \ArrayAccess
      *
      * @param string $finisherIdentifier
      * @param string $key
-     * @api
      */
     public function remove(string $finisherIdentifier, string $key)
     {
@@ -177,5 +174,26 @@ final class FinisherVariableProvider implements \ArrayAccess
     public function offsetUnset($offset)
     {
         unset($this->objects[$offset]);
+    }
+
+    /**
+     * @return \Traversable
+     */
+    public function getIterator(): \Traversable
+    {
+        foreach ($this->objects as $offset => $value) {
+            yield $offset => $value;
+        }
+    }
+
+    /**
+     * Count elements of an object
+     *
+     * @link http://php.net/manual/en/countable.count.php
+     * @return int The custom count as an integer.
+     */
+    public function count()
+    {
+        return count($this->objects);
     }
 }

@@ -15,33 +15,32 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Uri;
  */
 
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
- * A view helper for creating URIs to extbase actions.
+ * A ViewHelper for creating URIs to extbase actions.
  *
- * = Examples =
+ * Examples
+ * ========
  *
- * <code title="URI to the show-action of the current controller">
- * <f:uri.action action="show" />
- * </code>
- * <output>
- * index.php?id=123&tx_myextension_plugin[action]=show&tx_myextension_plugin[controller]=Standard&cHash=xyz
- * (depending on the current page and your TS configuration)
- * </output>
+ * URI to the show-action of the current controller::
+ *
+ *    <f:uri.action action="show" />
+ *
+ * ``/page/path/name.html?tx_myextension_plugin[action]=show&tx_myextension_plugin[controller]=Standard&cHash=xyz``
+ *
+ * Depending on current page, routing and page path configuration.
  */
-class ActionViewHelper extends \TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper
+class ActionViewHelper extends AbstractViewHelper
 {
     use CompileWithRenderStatic;
 
     /**
      * Initialize arguments
-     *
-     * @api
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('action', 'string', 'Target action');
         $this->registerArgument('arguments', 'array', 'Arguments', false, []);
         $this->registerArgument('controller', 'string', 'Target controller. If NULL current controllerName is used');

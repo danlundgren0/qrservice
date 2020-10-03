@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 
 namespace TYPO3\CMS\Core\Database\Schema\Parser;
 
@@ -19,7 +19,7 @@ namespace TYPO3\CMS\Core\Database\Schema\Parser;
 /**
  * Scans a MySQL CREATE TABLE statement for tokens.
  */
-class Lexer extends \Doctrine\Common\Lexer
+class Lexer extends \Doctrine\Common\Lexer\AbstractLexer
 {
     // All tokens that are not valid identifiers must be < 100
     const T_NONE = 1;
@@ -134,7 +134,7 @@ class Lexer extends \Doctrine\Common\Lexer
     const T_CHECKSUM = 352;
     const T_COMPRESSION = 353;
     const T_CONNECTION = 354;
-    const T_DATA= 355;
+    const T_DATA = 355;
     const T_DIRECTORY = 356;
     const T_DELAY_KEY_WRITE = 357;
     const T_ENCRYPTION = 358;

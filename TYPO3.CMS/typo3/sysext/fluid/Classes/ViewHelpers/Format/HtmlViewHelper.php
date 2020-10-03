@@ -17,41 +17,55 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Format;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
 use TYPO3\CMS\Extbase\Object\ObjectManager;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
- * Renders a string by passing it to a TYPO3 parseFunc.
- * You can either specify a path to the TypoScript setting or set the parseFunc options directly.
- * By default lib.parseFunc_RTE is used to parse the string.
+ * Renders a string by passing it to a TYPO3 `parseFunc`_.
+ * You can either specify a path to the TypoScript setting or set the `parseFunc`_ options directly.
+ * By default :ts:`lib.parseFunc_RTE` is used to parse the string.
  *
- * == Examples ==
+ * Examples
+ * ========
  *
- * <code title="Default parameters">
- * <f:format.html>foo <b>bar</b>. Some <LINK 1>link</LINK>.</f:format.html>
- * </code>
- * <output>
- * <p class="bodytext">foo <b>bar</b>. Some <a href="index.php?id=1" >link</a>.</p>
- * (depending on your TYPO3 setup)
- * </output>
+ * Default parameters
+ * ------------------
  *
- * <code title="Custom parseFunc">
- * <f:format.html parseFuncTSPath="lib.parseFunc">foo <b>bar</b>. Some <LINK 1>link</LINK>.</f:format.html>
- * </code>
- * <output>
- * foo <b>bar</b>. Some <a href="index.php?id=1" >link</a>.
- * </output>
+ * ::
  *
- * <code title="Inline notation">
- * {someText -> f:format.html(parseFuncTSPath: 'lib.parseFunc')}
- * </code>
- * <output>
- * foo <b>bar</b>. Some <a href="index.php?id=1" >link</a>.
- * </output>
+ *    <f:format.html>foo <b>bar</b>. Some <LINK 1>link</LINK>.</f:format.html>
  *
- * @see https://docs.typo3.org/typo3cms/TyposcriptReference/Functions/Parsefunc/
+ * Output::
+ *
+ *    <p class="bodytext">foo <b>bar</b>. Some <a href="index.php?id=1" >link</a>.</p>
+ *
+ * Depending on TYPO3 setup.
+ *
+ * Custom parseFunc
+ * ----------------
+ *
+ * ::
+ *
+ *    <f:format.html parseFuncTSPath="lib.parseFunc">foo <b>bar</b>. Some <LINK 1>link</LINK>.</f:format.html>
+ *
+ * Output::
+ *
+ *    foo <b>bar</b>. Some <a href="index.php?id=1" >link</a>.
+ *
+ * Inline notation
+ * ---------------
+ *
+ * ::
+ *
+ *    {someText -> f:format.html(parseFuncTSPath: 'lib.parseFunc')}
+ *
+ * Output::
+ *
+ *    foo <b>bar</b>. Some <a href="index.php?id=1" >link</a>.
+ *
+ * .. _parseFunc: https://docs.typo3.org/m/typo3/reference-typoscript/master/en-us/Functions/Parsefunc.html
  */
 class HtmlViewHelper extends AbstractViewHelper
 {
@@ -83,7 +97,6 @@ class HtmlViewHelper extends AbstractViewHelper
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('parseFuncTSPath', 'string', ' path to TypoScript parseFunc setup.', false, 'lib.parseFunc_RTE');
     }
 
@@ -116,7 +129,7 @@ class HtmlViewHelper extends AbstractViewHelper
      */
     protected static function simulateFrontendEnvironment()
     {
-        self::$tsfeBackup = isset($GLOBALS['TSFE']) ? $GLOBALS['TSFE'] : null;
+        self::$tsfeBackup = $GLOBALS['TSFE'] ?? null;
         $GLOBALS['TSFE'] = new \stdClass();
         $GLOBALS['TSFE']->tmpl = new \stdClass();
         $objectManager = GeneralUtility::makeInstance(ObjectManager::class);

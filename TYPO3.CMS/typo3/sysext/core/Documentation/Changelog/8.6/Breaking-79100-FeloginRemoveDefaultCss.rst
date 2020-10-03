@@ -22,7 +22,7 @@ EXT:felogin doesn't add default CSS styles anymore.
 Affected Installations
 ======================
 
-All installations using EXT:felogin with default/non-overwritten `plugin.tx_felogin_pi1._CSS_DEFAULT_STYLE`
+All installations using EXT:felogin with default/non-overwritten :ts:`plugin.tx_felogin_pi1._CSS_DEFAULT_STYLE`
 TypoScript setup are affected.
 
 
@@ -40,4 +40,4 @@ your own:
 
 
 
-.. index:: Frontend
+.. index:: Frontend, ext:felogin

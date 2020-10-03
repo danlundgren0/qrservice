@@ -1,4 +1,4 @@
-﻿.. ==================================================
+.. ==================================================
 .. FOR YOUR INFORMATION
 .. --------------------------------------------------
 .. -*- coding: utf-8 -*- with BOM.
@@ -9,8 +9,9 @@
 
 .. _administration:
 
-Administration
---------------
+======================
+Backend administration
+======================
 
 The Scheduler provides a BE module to manage tasks. It provides three
 screens: a setup check, an information screen and the main (default)

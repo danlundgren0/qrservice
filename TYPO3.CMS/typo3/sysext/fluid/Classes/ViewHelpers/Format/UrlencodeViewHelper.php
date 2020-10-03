@@ -14,31 +14,39 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Format;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Exception;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithContentArgumentAndRenderStatic;
 
 /**
- * Encodes the given string according to http://www.faqs.org/rfcs/rfc3986.html (applying PHPs rawurlencode() function)
- * @see http://www.php.net/manual/function.rawurlencode.php
- * Note: The output is not escaped. You may have to ensure proper escaping on your own.
+ * Encodes the given string according to http://www.faqs.org/rfcs/rfc3986.html
+ * Applying PHPs :php:`rawurlencode()` function.
+ * See https://www.php.net/manual/function.rawurlencode.php.
  *
- * = Examples =
+ * .. note::
+ *    The output is not escaped. You may have to ensure proper escaping on your own.
  *
- * <code title="default notation">
- * <f:format.rawurlencode>foo @+%/</f:format.rawurlencode>
- * </code>
- * <output>
- * foo%20%40%2B%25%2F (rawurlencode() applied)
- * </output>
+ * Examples
+ * ========
  *
- * <code title="inline notation">
- * {text -> f:format.urlencode()}
- * </code>
- * <output>
- * Url encoded text (rawurlencode() applied)
- * </output>
+ * Default notation
+ * ----------------
+ *
+ * ::
+ *
+ *    <f:format.rawurlencode>foo @+%/</f:format.rawurlencode>
+ *
+ * ``foo%20%40%2B%25%2F`` :php:`rawurlencode()` applied.
+ *
+ * Inline notation
+ * ---------------
+ *
+ * ::
+ *
+ *    {text -> f:format.urlencode()}
+ *
+ * Url encoded text :php:`rawurlencode()` applied.
  */
 class UrlencodeViewHelper extends AbstractViewHelper
 {
@@ -58,14 +66,13 @@ class UrlencodeViewHelper extends AbstractViewHelper
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('value', 'string', 'string to format');
     }
 
     /**
      * Escapes special characters with their escaped counterparts as needed using PHPs rawurlencode() function.
      *
-     * @see http://www.php.net/manual/function.rawurlencode.php
+     * @see https://www.php.net/manual/function.rawurlencode.php
      * @param array $arguments
      * @param \Closure $renderChildrenClosure
      * @param RenderingContextInterface $renderingContext
@@ -75,10 +82,9 @@ class UrlencodeViewHelper extends AbstractViewHelper
     public static function renderStatic(array $arguments, \Closure $renderChildrenClosure, RenderingContextInterface $renderingContext)
     {
         $value = $renderChildrenClosure();
-
-        if (!is_string($value)) {
+        if (!is_string($value) && !(is_object($value) && method_exists($value, '__toString'))) {
             return $value;
         }
-        return rawurlencode($value);
+        return rawurlencode((string)$value);
     }
 }

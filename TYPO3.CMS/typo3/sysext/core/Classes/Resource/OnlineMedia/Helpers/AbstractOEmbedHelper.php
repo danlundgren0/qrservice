@@ -46,7 +46,7 @@ abstract class AbstractOEmbedHelper extends AbstractOnlineMediaHelper
         // no existing file create new
         if ($file === null) {
             $oEmbed = $this->getOEmbedData($mediaId);
-            if (!empty($oEmbed)) {
+            if (!empty($oEmbed['title'])) {
                 $fileName = $oEmbed['title'] . '.' . $fileExtension;
             } else {
                 $fileName = $mediaId . '.' . $fileExtension;
@@ -60,7 +60,7 @@ abstract class AbstractOEmbedHelper extends AbstractOnlineMediaHelper
      * Get OEmbed data
      *
      * @param string $mediaId
-     * @return array|NULL
+     * @return array|null
      */
     protected function getOEmbedData($mediaId)
     {

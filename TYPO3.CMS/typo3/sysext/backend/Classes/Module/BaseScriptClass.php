@@ -16,12 +16,12 @@ namespace TYPO3\CMS\Backend\Module;
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
-use TYPO3\CMS\Core\Database\DatabaseConnection;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Messaging\FlashMessage;
 use TYPO3\CMS\Core\Messaging\FlashMessageService;
 use TYPO3\CMS\Core\Page\PageRenderer;
+use TYPO3\CMS\Core\Type\Bitmask\Permission;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Parent class for 'ScriptClasses' in backend modules.
@@ -43,7 +43,7 @@ use TYPO3\CMS\Lang\LanguageService;
  * class PrototypeController extends \TYPO3\CMS\Backend\Module\BaseScriptClass {
  * 	public function __construct() {
  * 		$this->getLanguageService()->includeLLFile('EXT:prototype/Resources/Private/Language/locallang.xlf');
- * 		$this->getBackendUser()->modAccess($GLOBALS['MCONF'], TRUE);
+ * 		$this->getBackendUser()->modAccess($GLOBALS['MCONF']);
  * 	}
  * }
  *
@@ -65,6 +65,8 @@ use TYPO3\CMS\Lang\LanguageService;
  *
  * THEN WE CALL THE main() METHOD AND THIS SHOULD SPARK THE CREATION OF THE MODULE OUTPUT.
  * $GLOBALS['SOBE']->main();
+ *
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
  */
 class BaseScriptClass
 {
@@ -184,7 +186,18 @@ class BaseScriptClass
     /**
      * @var PageRenderer
      */
-    protected $pageRenderer = null;
+    protected $pageRenderer;
+
+    /**
+     * Constructor deprecates the class
+     */
+    public function __construct()
+    {
+        trigger_error(
+            'Class BaseScriptClass is deprecated and will be removed in TYPO3 v10.0',
+            E_USER_DEPRECATED
+        );
+    }
 
     /**
      * Initializes the backend module by setting internal variables, initializing the menu.
@@ -199,7 +212,7 @@ class BaseScriptClass
         }
         $this->id = (int)GeneralUtility::_GP('id');
         $this->CMD = GeneralUtility::_GP('CMD');
-        $this->perms_clause = $this->getBackendUser()->getPagePermsClause(1);
+        $this->perms_clause = $this->getBackendUser()->getPagePermsClause(Permission::PAGE_SHOW);
         $this->menuConfig();
         $this->handleExternalFunctionValue();
     }
@@ -213,10 +226,15 @@ class BaseScriptClass
      */
     public function menuConfig()
     {
-        // Page/be_user TSconfig settings and blinding of menu-items
-        $this->modTSconfig = BackendUtility::getModTSconfig($this->id, 'mod.' . $this->MCONF['name']);
+        // Page / user TSconfig settings and blinding of menu-items
+        $this->modTSconfig['properties'] = BackendUtility::getPagesTSconfig($this->id)['mod.'][$this->MCONF['name'] . '.'] ?? [];
         $this->MOD_MENU['function'] = $this->mergeExternalItems($this->MCONF['name'], 'function', $this->MOD_MENU['function']);
-        $this->MOD_MENU['function'] = BackendUtility::unsetMenuItems($this->modTSconfig['properties'], $this->MOD_MENU['function'], 'menu.function');
+        $blindActions = $this->modTSconfig['properties']['menu.']['function.'] ?? [];
+        foreach ($blindActions as $key => $value) {
+            if (!$value && array_key_exists($key, $this->MOD_MENU['function'])) {
+                unset($this->MOD_MENU['function'][$key]);
+            }
+        }
         $this->MOD_SETTINGS = BackendUtility::getModuleData($this->MOD_MENU, GeneralUtility::_GP('SET'), $this->MCONF['name'], $this->modMenu_type, $this->modMenu_dontValidateList, $this->modMenu_setDefaultList);
     }
 
@@ -227,7 +245,7 @@ class BaseScriptClass
      * @param string $menuKey Menu key, eg. 'function' for the function menu.
      * @param array $menuArr The part of a MOD_MENU array to work on.
      * @return array Modified array part.
-     * @access private
+     * @internal
      * @see \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::insertModuleFunction(), menuConfig()
      */
     public function mergeExternalItems($modName, $menuKey, $menuArr)
@@ -327,9 +345,9 @@ class BaseScriptClass
                 $this->getLanguageService()->getLL('title'),
                 FlashMessage::ERROR
             );
-            /** @var $flashMessageService \TYPO3\CMS\Core\Messaging\FlashMessageService */
+            /** @var \TYPO3\CMS\Core\Messaging\FlashMessageService $flashMessageService */
             $flashMessageService = GeneralUtility::makeInstance(FlashMessageService::class);
-            /** @var $defaultFlashMessageQueue \TYPO3\CMS\Core\Messaging\FlashMessageQueue */
+            /** @var \TYPO3\CMS\Core\Messaging\FlashMessageQueue $defaultFlashMessageQueue */
             $defaultFlashMessageQueue = $flashMessageService->getMessageQueueByIdentifier();
             $defaultFlashMessageQueue->enqueue($flashMessage);
         } else {
@@ -371,16 +389,6 @@ class BaseScriptClass
     protected function getBackendUser()
     {
         return $GLOBALS['BE_USER'];
-    }
-
-    /**
-     * @return DatabaseConnection
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9, use the Doctrine DBAL layer via the ConnectionPool class
-     */
-    protected function getDatabaseConnection()
-    {
-        GeneralUtility::logDeprecatedFunction();
-        return $GLOBALS['TYPO3_DB'];
     }
 
     /**

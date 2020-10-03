@@ -13,33 +13,29 @@ namespace TYPO3\CMS\Install\Service;
  *
  * The TYPO3 project - inspiring people to share!
  */
+use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Basic Service to check and create install tool files
+ * @internal This class is only meant to be used within EXT:install and is not part of the TYPO3 Core API.
  */
 class EnableFileService
 {
     /**
-     * @constant Relative path to ENABLE_INSTALL_TOOL file
+     * @var string Relative path to ENABLE_INSTALL_TOOL file
      */
     const INSTALL_TOOL_ENABLE_FILE_PATH = 'typo3conf/ENABLE_INSTALL_TOOL';
 
     /**
-     * @constant Relative path to  FIRST_INSTALL file
+     * @var string Relative path to  FIRST_INSTALL file
      */
     const FIRST_INSTALL_FILE_PATH = 'FIRST_INSTALL';
 
     /**
-     * @constant Maximum age of ENABLE_INSTALL_TOOL file before it gets removed (in seconds)
+     * @var string Maximum age of ENABLE_INSTALL_TOOL file before it gets removed (in seconds)
      */
     const INSTALL_TOOL_ENABLE_FILE_LIFETIME = 3600;
-
-    /**
-     * Path site property, needed for unit testing
-     *
-     * @var string
-     */
-    protected static $sitePath = PATH_site;
 
     /**
      * @return bool
@@ -47,7 +43,7 @@ class EnableFileService
     public static function isFirstInstallAllowed()
     {
         $files = self::getFirstInstallFilePaths();
-        if (!empty($files) && !\TYPO3\CMS\Core\Core\Bootstrap::getInstance()->checkIfEssentialConfigurationExists()) {
+        if (!empty($files)) {
             return true;
         }
         return false;
@@ -67,7 +63,7 @@ class EnableFileService
             $result = true;
             self::extendInstallToolEnableFileLifetime();
         }
-        \TYPO3\CMS\Core\Utility\GeneralUtility::fixPermissions($installEnableFilePath);
+        GeneralUtility::fixPermissions($installEnableFilePath);
         return $result;
     }
 
@@ -91,7 +87,7 @@ class EnableFileService
         $result = true;
         $files = self::getFirstInstallFilePaths();
         foreach ($files as $file) {
-            $result = unlink(self::$sitePath . $file) && $result;
+            $result = unlink(Environment::getPublicPath() . '/' . $file) && $result;
         }
         return $result;
     }
@@ -151,9 +147,8 @@ class EnableFileService
     {
         if (time() - @filemtime(self::getInstallToolEnableFilePath()) > self::INSTALL_TOOL_ENABLE_FILE_LIFETIME) {
             return true;
-        } else {
-            return false;
         }
+        return false;
     }
 
     /**
@@ -181,7 +176,7 @@ class EnableFileService
      */
     protected static function getInstallToolEnableFilePath()
     {
-        return PATH_site . self::INSTALL_TOOL_ENABLE_FILE_PATH;
+        return Environment::getPublicPath() . '/' . self::INSTALL_TOOL_ENABLE_FILE_PATH;
     }
 
     /**
@@ -191,8 +186,8 @@ class EnableFileService
      */
     protected static function getFirstInstallFilePaths()
     {
-        $files = array_filter(scandir(self::$sitePath), function ($file) {
-            return @is_file(self::$sitePath . $file) && preg_match('~^' . self::FIRST_INSTALL_FILE_PATH . '.*~i', $file);
+        $files = array_filter(scandir(Environment::getPublicPath() . '/'), function ($file) {
+            return @is_file(Environment::getPublicPath() . '/' . $file) && preg_match('~^' . self::FIRST_INSTALL_FILE_PATH . '.*~i', $file);
         });
         return $files;
     }

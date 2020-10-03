@@ -63,6 +63,7 @@ class PreProcessFieldArray extends AbstractDataHandler
         if ($table === 'tt_content') {
             $this->init($table, $id, $parentObj);
             if (!$this->getTceMain()->isImporting) {
+                $cmdId = '';
                 if (is_array($parentObj->cmdmap['tt_content'])) {
                     $cmdId = (int)key($parentObj->cmdmap['tt_content']);
                 }
@@ -105,7 +106,7 @@ class PreProcessFieldArray extends AbstractDataHandler
         $newRow = []; // Used to store default values as found here:
 
         // Default values as set in userTS:
-        $TCAdefaultOverride = $this->getBackendUser()->getTSConfigProp('TCAdefaults');
+        $TCAdefaultOverride = (array)($this->getBackendUser()->getTSConfig()['TCAdefaults'] ?? []);
         if (is_array($TCAdefaultOverride['tt_content.'])) {
             foreach ($TCAdefaultOverride['tt_content.'] as $field => $value) {
                 if (isset($GLOBALS['TCA']['tt_content']['columns'][$field])) {

@@ -7,15 +7,18 @@ $EM_CONF[$_EXTKEY] = [
     'uploadfolder' => 0,
     'createDirs' => '',
     'clearCacheOnLoad' => 1,
-    'author' => 'Form Team',
-    'author_email' => '',
+    'author' => 'TYPO3 Core Team',
+    'author_email' => 'typo3cms@typo3.org',
     'author_company' => '',
-    'version' => '8.7.3',
+    'version' => '9.5.21',
     'constraints' => [
         'depends' => [
-            'typo3' => '8.7.0-8.7.3',
+            'typo3' => '9.5.21',
         ],
         'conflicts' => [],
-        'suggests' => [],
+        'suggests' => [
+            'filelist' => '9.5.21',
+            'impexp' => '9.5.21',
+        ],
     ],
 ];

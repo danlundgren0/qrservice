@@ -58,12 +58,12 @@ class PaginateController extends AbstractWidgetController
     /**
      * @var int
      */
-    protected $displayRangeStart = null;
+    protected $displayRangeStart;
 
     /**
      * @var int
      */
-    protected $displayRangeEnd = null;
+    protected $displayRangeEnd;
 
     /**
      * Initializes the current information on which page the visitor is.
@@ -94,8 +94,11 @@ class PaginateController extends AbstractWidgetController
             // modify query
             $itemsPerPage = (int)$this->configuration['itemsPerPage'];
             $offset = 0;
+            if ($this->objects instanceof QueryResultInterface) {
+                $offset = (int)$this->objects->getQuery()->getOffset();
+            }
             if ($this->currentPage > 1) {
-                $offset = ((int)($itemsPerPage * ($this->currentPage - 1)));
+                $offset = $offset + ((int)($itemsPerPage * ($this->currentPage - 1)));
             }
             $modifiedObjects = $this->prepareObjectsSlice($itemsPerPage, $offset);
         }
@@ -170,14 +173,21 @@ class PaginateController extends AbstractWidgetController
     protected function prepareObjectsSlice($itemsPerPage, $offset)
     {
         if ($this->objects instanceof QueryResultInterface) {
+            $currentRange = $offset + $itemsPerPage;
+            $endOfRange = min($currentRange, count($this->objects));
             $query = $this->objects->getQuery();
             $query->setLimit($itemsPerPage);
             if ($offset > 0) {
                 $query->setOffset($offset);
+                if ($currentRange > $endOfRange) {
+                    $newLimit = $endOfRange - $offset;
+                    $query->setLimit($newLimit);
+                }
             }
             $modifiedObjects = $query->execute();
             return $modifiedObjects;
-        } elseif ($this->objects instanceof ObjectStorage) {
+        }
+        if ($this->objects instanceof ObjectStorage) {
             $modifiedObjects = [];
             $objectArray = $this->objects->toArray();
             $endOfRange = min($offset + $itemsPerPage, count($objectArray));
@@ -185,14 +195,16 @@ class PaginateController extends AbstractWidgetController
                 $modifiedObjects[] = $objectArray[$i];
             }
             return $modifiedObjects;
-        } elseif (is_array($this->objects)) {
+        }
+        if (is_array($this->objects)) {
             $modifiedObjects = array_slice($this->objects, $offset, $itemsPerPage);
             return $modifiedObjects;
-        } else {
-            throw new \InvalidArgumentException('The view helper "' . get_class($this)
-                . '" accepts as argument "QueryResultInterface", "\SplObjectStorage", "ObjectStorage" or an array. '
-                . 'given: ' . get_class($this->objects), 1385547291
-            );
         }
+        throw new \InvalidArgumentException(
+            'The ViewHelper "' . static::class
+                . '" accepts as argument "QueryResultInterface", "\SplObjectStorage", "ObjectStorage" or an array. '
+                . 'given: ' . get_class($this->objects),
+            1385547291
+        );
     }
 }

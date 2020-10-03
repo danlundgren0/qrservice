@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\ViewHelpers;
 
 /*
@@ -15,15 +15,14 @@ namespace TYPO3\CMS\Form\ViewHelpers;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3\CMS\Form\Domain\Model\FormElements\GridContainerInterface;
 use TYPO3\CMS\Form\Domain\Model\Renderable\RootRenderableInterface;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
  * Scope: frontend
- * @api
  */
 class GridColumnClassAutoConfigurationViewHelper extends AbstractViewHelper
 {
@@ -41,7 +40,6 @@ class GridColumnClassAutoConfigurationViewHelper extends AbstractViewHelper
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('element', RootRenderableInterface::class, 'A RootRenderableInterface instance', true);
     }
 
@@ -50,7 +48,6 @@ class GridColumnClassAutoConfigurationViewHelper extends AbstractViewHelper
      * @param \Closure $renderChildrenClosure
      * @param RenderingContextInterface $renderingContext
      * @return string
-     * @public
      */
     public static function renderStatic(
         array $arguments,
@@ -61,7 +58,7 @@ class GridColumnClassAutoConfigurationViewHelper extends AbstractViewHelper
 
         $gridRowElement = $formElement->getParentRenderable();
         $gridContainerElement = $gridRowElement->getParentRenderable();
-        $gridRowEChildElements = $gridRowElement->getElementsRecursively();
+        $gridRowEChildElements = $gridRowElement->getElements();
 
         if ($gridContainerElement instanceof GridContainerInterface) {
             $gridViewPortConfiguration = $gridContainerElement->getProperties()['gridColumnClassAutoConfiguration'];
@@ -112,7 +109,7 @@ class GridColumnClassAutoConfigurationViewHelper extends AbstractViewHelper
                 $restElements = (int)$columnsToCalculate[$viewPortName]['elements'];
 
                 if ($restColumnsToDivide < 1) {
-                    $restColumnsToDivide = 1;
+                    $restColumnsToDivide = $gridSize;
                 }
                 if ($restElements < 1) {
                     $restElements = 1;

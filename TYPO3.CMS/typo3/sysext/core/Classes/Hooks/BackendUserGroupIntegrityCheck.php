@@ -16,14 +16,15 @@ namespace TYPO3\CMS\Core\Hooks;
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\DataHandling\DataHandler;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Messaging\FlashMessage;
 use TYPO3\CMS\Core\Messaging\FlashMessageQueue;
 use TYPO3\CMS\Core\Messaging\FlashMessageService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * DataHandler hook class to check the integrity of submitted be_groups data
+ * @internal This class is a hook implementation and is not part of the TYPO3 Core API.
  */
 class BackendUserGroupIntegrityCheck
 {
@@ -45,17 +46,17 @@ class BackendUserGroupIntegrityCheck
         foreach ($explicitAllowDenyFields as $value) {
             if ($value !== '' && strpos($value, 'tt_content:list_type:') === 0) {
                 if (!in_array('tt_content:CType:list:ALLOW', $explicitAllowDenyFields, true)) {
-                    /** @var $flashMessage FlashMessage */
+                    /** @var FlashMessage $flashMessage */
                     $flashMessage = GeneralUtility::makeInstance(
                         FlashMessage::class,
-                        $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:error.backendUserGroupListTypeError.message'),
-                        $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:error.backendUserGroupListTypeError.header'),
+                        $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:error.backendUserGroupListTypeError.message'),
+                        $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:error.backendUserGroupListTypeError.header'),
                         FlashMessage::WARNING,
                         true
                     );
-                    /** @var $flashMessageService FlashMessageService */
+                    /** @var FlashMessageService $flashMessageService */
                     $flashMessageService = GeneralUtility::makeInstance(FlashMessageService::class);
-                    /** @var $defaultFlashMessageQueue FlashMessageQueue */
+                    /** @var FlashMessageQueue $defaultFlashMessageQueue */
                     $defaultFlashMessageQueue = $flashMessageService->getMessageQueueByIdentifier();
                     $defaultFlashMessageQueue->enqueue($flashMessage);
                 }

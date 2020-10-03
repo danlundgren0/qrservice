@@ -14,55 +14,62 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Form;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
+
 /**
- * Validation results view helper
+ * Validation results ViewHelper
  *
- * = Examples =
+ * Examples
+ * ========
  *
- * <code title="Output error messages as a list">
- * <f:form.validationResults>
- *   <f:if condition="{validationResults.flattenedErrors}">
- *     <ul class="errors">
- *       <f:for each="{validationResults.flattenedErrors}" as="errors" key="propertyPath">
- *         <li>{propertyPath}
- *           <ul>
- *           <f:for each="{errors}" as="error">
- *             <li>{error.code}: {error}</li>
- *           </f:for>
- *           </ul>
- *         </li>
- *       </f:for>
- *     </ul>
- *   </f:if>
- * </f:form.validationResults>
- * </code>
- * <output>
- * <ul class="errors">
- *   <li>1234567890: Validation errors for argument "newBlog"</li>
- * </ul>
- * </output>
+ * Output error messages as a list::
  *
- * <code title="Output error messages for a single property">
- * <f:form.validationResults for="someProperty">
- *   <f:if condition="{validationResults.flattenedErrors}">
- *     <ul class="errors">
- *       <f:for each="{validationResults.errors}" as="error">
- *         <li>{error.code}: {error}</li>
- *       </f:for>
- *     </ul>
- *   </f:if>
- * </f:form.validationResults>
- * </code>
- * <output>
- * <ul class="errors">
- *   <li>1234567890: Some error message</li>
- * </ul>
- * </output>
+ *    <f:form.validationResults>
+ *       <f:if condition="{validationResults.flattenedErrors}">
+ *          <ul class="errors">
+ *             <f:for each="{validationResults.flattenedErrors}" as="errors" key="propertyPath">
+ *                <li>{propertyPath}
+ *                   <ul>
+ *                      <f:for each="{errors}" as="error">
+ *                         <li>{error.code}: {error}</li>
+ *                      </f:for>
+ *                   </ul>
+ *                </li>
+ *             </f:for>
+ *          </ul>
+ *       </f:if>
+ *    </f:form.validationResults>
  *
- * @api
+ * Output::
+ *
+ *    <ul class="errors">
+ *       <li>1234567890: Validation errors for argument "newBlog"</li>
+ *    </ul>
+ *
+ * Output error messages for a single property::
+ *
+ *    <f:form.validationResults for="someProperty">
+ *       <f:if condition="{validationResults.flattenedErrors}">
+ *          <ul class="errors">
+ *             <f:for each="{validationResults.errors}" as="error">
+ *                <li>{error.code}: {error}</li>
+ *             </f:for>
+ *          </ul>
+ *       </f:if>
+ *    </f:form.validationResults>
+ *
+ * Output::
+ *
+ *    <ul class="errors">
+ *      <li>1234567890: Some error message</li>
+ *    </ul>
  */
-class ValidationResultsViewHelper extends \TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper
+class ValidationResultsViewHelper extends AbstractViewHelper
 {
+    use CompileWithRenderStatic;
+
     /**
      * As this ViewHelper renders HTML, the output must not be escaped.
      *
@@ -72,34 +79,33 @@ class ValidationResultsViewHelper extends \TYPO3\CMS\Fluid\Core\ViewHelper\Abstr
 
     /**
      * Initialize arguments
-     *
-     * @api
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('for', 'string', 'The name of the error name (e.g. argument name or property name). This can also be a property path (like blog.title), and will then only display the validation errors of that property.', false, '');
         $this->registerArgument('as', 'string', 'The name of the variable to store the current error', false, 'validationResults');
     }
 
     /**
-     * Iterates through selected errors of the request.
-     *
-     * @return string Rendered string
-     * @api
+     * @param array $arguments
+     * @param \Closure $renderChildrenClosure
+     * @param RenderingContextInterface $renderingContext
+     * @return mixed
      */
-    public function render()
+    public static function renderStatic(array $arguments, \Closure $renderChildrenClosure, RenderingContextInterface $renderingContext)
     {
-        $for = $this->arguments['for'];
-        $as = $this->arguments['as'];
+        $templateVariableContainer = $renderingContext->getVariableProvider();
+        $controllerContext = $renderingContext->getcontrollerContext();
+        $for = $arguments['for'];
+        $as = $arguments['as'];
 
-        $validationResults = $this->controllerContext->getRequest()->getOriginalRequestMappingResults();
+        $validationResults = $controllerContext->getRequest()->getOriginalRequestMappingResults();
         if ($validationResults !== null && $for !== '') {
             $validationResults = $validationResults->forProperty($for);
         }
-        $this->templateVariableContainer->add($as, $validationResults);
-        $output = $this->renderChildren();
-        $this->templateVariableContainer->remove($as);
+        $templateVariableContainer->add($as, $validationResults);
+        $output = $renderChildrenClosure();
+        $templateVariableContainer->remove($as);
         return $output;
     }
 }

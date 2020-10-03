@@ -23,6 +23,7 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Handling of presets
+ * @internal this is not part of TYPO3's Core API.
  */
 class PresetRepository
 {
@@ -147,7 +148,6 @@ class PresetRepository
                         'preset_data' => serialize($inData)
                     ],
                     ['preset_data' => Connection::PARAM_LOB]
-
                 );
 
                 $msg = 'New preset "' . htmlspecialchars($inData['preset']['title']) . '" is created';
@@ -212,9 +212,9 @@ class PresetRepository
                 $msg,
                 $err ? FlashMessage::ERROR : FlashMessage::INFO
             );
-            /** @var $flashMessageService FlashMessageService */
+            /** @var FlashMessageService $flashMessageService */
             $flashMessageService = GeneralUtility::makeInstance(FlashMessageService::class);
-            /** @var $defaultFlashMessageQueue FlashMessageQueue */
+            /** @var FlashMessageQueue $defaultFlashMessageQueue */
             $defaultFlashMessageQueue = $flashMessageService->getMessageQueueByIdentifier();
             $defaultFlashMessageQueue->enqueue($flashMessage);
         }

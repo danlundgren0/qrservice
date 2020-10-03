@@ -6,6 +6,7 @@ namespace TYPO3Fluid\Fluid\ViewHelpers;
  * See LICENSE.txt that was shipped with this package.
  */
 
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
 use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractConditionViewHelper;
 
 /**
@@ -25,9 +26,8 @@ use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractConditionViewHelper;
  * - Object Accessor
  * - Array
  * - a ViewHelper
- * Note: Strings at XX/YY are NOT allowed, however, for the time being,
- * a string comparison can be achieved with comparing arrays (see example
- * below).
+ * - string
+ *
  * ::
  *
  *   <f:if condition="{rank} > 100">
@@ -39,8 +39,8 @@ use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractConditionViewHelper;
  *   <f:if condition="{rank} == {k:bar()}">
  *     Checks if rank is equal to the result of the ViewHelper "k:bar"
  *   </f:if>
- *   <f:if condition="{0: foo.bar} == {0: 'stringToCompare'}">
- *     Will result true if {foo.bar}'s represented value equals 'stringToCompare'.
+ *   <f:if condition="{foo.bar} == 'stringToCompare'">
+ *     Will result in true if {foo.bar}'s represented value equals 'stringToCompare'.
  *   </f:if>
  *
  * = Examples =
@@ -81,19 +81,19 @@ use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractConditionViewHelper;
  */
 class IfViewHelper extends AbstractConditionViewHelper
 {
+    public function initializeArguments()
+    {
+        parent::initializeArguments();
+        $this->registerArgument('condition', 'boolean', 'Condition expression conforming to Fluid boolean rules', false, false);
+    }
 
     /**
-     * Renders <f:then> child if $condition is true, otherwise renders <f:else> child.
-     *
-     * @return string the rendered string
-     * @api
+     * @param array $arguments
+     * @param RenderingContextInterface $renderingContext
+     * @return bool
      */
-    public function render()
+    public static function verdict(array $arguments, RenderingContextInterface $renderingContext)
     {
-        if ($this->arguments['condition']) {
-            return $this->renderThenChild();
-        } else {
-            return $this->renderElseChild();
-        }
+        return (bool)$arguments['condition'];
     }
 }

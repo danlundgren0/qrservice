@@ -15,7 +15,6 @@ namespace TYPO3\CMS\Backend\Form;
  */
 
 use TYPO3\CMS\Backend\Form\Utility\FormEngineUtility;
-use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -73,15 +72,14 @@ class InlineStackProcessor
                 if ($i > 0 && $i % 3 == 0) {
                     // Load the TCA configuration of the table field and store it in the stack
                     // @todo: This TCA loading here must fall - config sub-array shouldn't exist at all!
-                    $unstable['config'] = $GLOBALS['TCA'][$unstable['table']]['columns'][$unstable['field']]['config'];
+                    $unstable['config'] = $GLOBALS['TCA'][$unstable['table']]['columns'][$unstable['field']]['config'] ?? [];
                     // Fetch TSconfig:
                     // @todo: aaargs ;)
                     $TSconfig = FormEngineUtility::getTSconfigForTableRow($unstable['table'], ['uid' => $unstable['uid'], 'pid' => $inlineFirstPid], $unstable['field']);
                     // Override TCA field config by TSconfig:
-                    if (!$TSconfig['disabled']) {
+                    if (!isset($TSconfig['disabled']) || !$TSconfig['disabled']) {
                         $unstable['config'] = FormEngineUtility::overrideFieldConf($unstable['config'], $TSconfig);
                     }
-                    $unstable['localizationMode'] = BackendUtility::getInlineLocalizationMode($unstable['table'], $unstable['config']);
 
                     // Extract FlexForm from field part (if any)
                     if (strpos($unstable['field'], ':') !== false) {
@@ -119,10 +117,6 @@ class InlineStackProcessor
         }
         $current = &$this->inlineStructure['stable'][$level];
         $current['config'] = $config;
-        $current['localizationMode'] = BackendUtility::getInlineLocalizationMode(
-            $current['table'],
-            $current['config']
-        );
     }
 
     /**
@@ -164,7 +158,7 @@ class InlineStackProcessor
     /**
      * DOM object-id for this inline level
      *
-     * @param int $inlineFirstPid Pid of top level inline element storage
+     * @param int|string $inlineFirstPid Pid of top level inline element storage or "NEW..."
      * @return string
      */
     public function getCurrentStructureDomObjectIdPrefix($inlineFirstPid)
@@ -193,9 +187,8 @@ class InlineStackProcessor
 
         if ($level !== false) {
             return $this->inlineStructure['stable'][$level];
-        } else {
-            return false;
         }
+        return false;
     }
 
     /**
@@ -290,7 +283,7 @@ class InlineStackProcessor
                     $parts[] = implode('][', $levelData['flexform']);
                 }
                 $name = '[' . implode('][', $parts) . ']';
-                // Use in object id attributes:
+            // Use in object id attributes:
             } else {
                 $name = implode('-', $parts);
 

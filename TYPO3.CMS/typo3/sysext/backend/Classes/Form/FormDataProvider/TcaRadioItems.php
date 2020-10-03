@@ -15,7 +15,7 @@ namespace TYPO3\CMS\Backend\Form\FormDataProvider;
  */
 
 use TYPO3\CMS\Backend\Form\FormDataProviderInterface;
-use TYPO3\CMS\Lang\LanguageService;
+use TYPO3\CMS\Core\Localization\LanguageService;
 
 /**
  * Resolve radio items and set processed item list in processedTca
@@ -39,7 +39,7 @@ class TcaRadioItems extends AbstractItemProvider implements FormDataProviderInte
                 continue;
             }
 
-            if (!is_array($fieldConfig['config']['items'])) {
+            if (!isset($fieldConfig['config']['items']) || !is_array($fieldConfig['config']['items'])) {
                 throw new \UnexpectedValueException(
                     'Radio field ' . $fieldName . ' of TCA table ' . $result['tableName'] . ' must have \'config\' \'items\' definition',
                     1438594829
@@ -54,7 +54,7 @@ class TcaRadioItems extends AbstractItemProvider implements FormDataProviderInte
             foreach ($items as $itemKey => $itemValue) {
                 if (!is_array($itemValue)) {
                     throw new \UnexpectedValueException(
-                        'Item ' . $itemKey . ' of field ' . $fieldName . ' of TCA table ' . $result['tableName'] . ' is no array as exepcted',
+                        'Item ' . $itemKey . ' of field ' . $fieldName . ' of TCA table ' . $result['tableName'] . ' is not an array as expected',
                         1438607163
                     );
                 }

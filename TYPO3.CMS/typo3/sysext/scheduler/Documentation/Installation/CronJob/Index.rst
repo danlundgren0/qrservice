@@ -1,4 +1,4 @@
-﻿.. ==================================================
+.. ==================================================
 .. FOR YOUR INFORMATION
 .. --------------------------------------------------
 .. -*- coding: utf-8 -*- with BOM.
@@ -57,11 +57,16 @@ and add a line like
 
 ::
 
-   */15 * * * * /usr/local/bin/php /home/bob/www/typo3/cli_dispatch.phpsh scheduler
+   */15 * * * * /usr/local/bin/php /home/user/www/typo3/sysext/core/bin/typo3 scheduler:run
 
 Save the modified crontab. Obviously the paths have to be adapted to
 your system. The above command will call up the Scheduler every 15
 minutes.
+
+.. seealso::
+
+   See :ref:`scheduler-shell-script` for more information about
+   calling the scheduler from the command line.
 
 If you are editing system crontabs (for example :code:`/etc/crontab`
 and :code:`/etc/cron.d/\*` ), there will be one additional parameter
@@ -70,7 +75,7 @@ to enter, i.e. the user with which the job should run. Example
 
 ::
 
-   */15 * * * * www /usr/local/bin/php /home/bob/www/typo3/cli_dispatch.phpsh scheduler
+   */15 * * * * www /usr/local/bin/php /home/user/www/typo3/sysext/core/bin/typo3 scheduler:run
 
 This will run the job as user "www".
 
@@ -95,7 +100,7 @@ following command line to create a new task:
 
 ::
 
-   schtasks /create /sc minute /mo 15 /tn "T3scheduler" /tr "c:\winstaller\php\php.exe c:\winstaller\htdocs\quickstart\typo3\cli_dispatch.phpsh scheduler"
+   schtasks /create /sc minute /mo 15 /tn "T3scheduler" /tr "c:\winstaller\php\php.exe c:\winstaller\htdocs\quickstart\typo3\sysext\core\bin\typo3 scheduler:run"
 
 At task creation you will be prompted to give a password or you can
 use the :code:`/u` and :code:`/p` switches to provide user and

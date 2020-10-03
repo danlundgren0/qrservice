@@ -7,8 +7,11 @@ namespace TYPO3Fluid\Fluid\Core\Parser;
  */
 
 use TYPO3Fluid\Fluid\Core\Compiler\StopCompilingException;
-use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\Expression\ExpressionNodeInterface;
 use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\ArrayNode;
+use TYPO3Fluid\Fluid\Core\Compiler\UncompilableTemplateInterface;
+use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\Expression\ExpressionException;
+use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\Expression\ExpressionNodeInterface;
+use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\Expression\ParseTimeEvaluatedExpressionNodeInterface;
 use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\NodeInterface;
 use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\NumericNode;
 use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\ObjectAccessorNode;
@@ -132,7 +135,6 @@ class TemplateParser
         try {
             $this->reset();
 
-            $templateString = $this->extractEscapingModifier($templateString);
             $templateString = $this->preProcessTemplateSource($templateString);
 
             $splitTemplate = $this->splitTemplateAtDynamicTags($templateString);
@@ -180,22 +182,35 @@ class TemplateParser
             $parsedTemplate = $this->parsedTemplates[$templateIdentifier];
         } elseif ($compiler->has($templateIdentifier)) {
             $parsedTemplate = $compiler->get($templateIdentifier);
+            if ($parsedTemplate instanceof UncompilableTemplateInterface) {
+                $parsedTemplate = $this->parseTemplateSource($templateIdentifier, $templateSourceClosure);
+            }
         } else {
-            $parsedTemplate = $this->parse(
-                $templateSourceClosure($this, $this->renderingContext->getTemplatePaths()),
-                $templateIdentifier
-            );
-            $parsedTemplate->setIdentifier($templateIdentifier);
-            $this->parsedTemplates[$templateIdentifier] = $parsedTemplate;
-            if ($parsedTemplate->isCompilable()) {
-                try {
-                    $compiler->store($templateIdentifier, $parsedTemplate);
-                } catch (StopCompilingException $stop) {
-                    $parsedTemplate->setCompilable(false);
-                    return $parsedTemplate;
-                }
+            $parsedTemplate = $this->parseTemplateSource($templateIdentifier, $templateSourceClosure);
+            try {
+                $compiler->store($templateIdentifier, $parsedTemplate);
+            } catch (StopCompilingException $stop) {
+                $this->renderingContext->getErrorHandler()->handleCompilerError($stop);
+                $parsedTemplate->setCompilable(false);
+                $compiler->store($templateIdentifier, $parsedTemplate);
             }
         }
+        return $parsedTemplate;
+    }
+
+    /**
+     * @param string $templateIdentifier
+     * @param \Closure $templateSourceClosure
+     * @return ParsedTemplateInterface
+     */
+    protected function parseTemplateSource($templateIdentifier, $templateSourceClosure)
+    {
+        $parsedTemplate = $this->parse(
+            $templateSourceClosure($this, $this->renderingContext->getTemplatePaths()),
+            $templateIdentifier
+        );
+        $parsedTemplate->setIdentifier($templateIdentifier);
+        $this->parsedTemplates[$templateIdentifier] = $parsedTemplate;
         return $parsedTemplate;
     }
 
@@ -224,31 +239,6 @@ class TemplateParser
         $this->escapingEnabled = true;
         $this->pointerLineNumber = 1;
         $this->pointerLineCharacter = 1;
-    }
-
-    /**
-     * Extracts escaping modifiers ({escapingEnabled=true/false}) out of the given template and sets $this->escapingEnabled accordingly
-     *
-     * @param string $templateString Template string to extract the {escaping = ..} definitions from
-     * @return string The updated template string without escaping declarations inside
-     * @throws Exception if there is more than one modifier
-     */
-    protected function extractEscapingModifier($templateString)
-    {
-        $matches = [];
-        preg_match_all(Patterns::$SCAN_PATTERN_ESCAPINGMODIFIER, $templateString, $matches, PREG_SET_ORDER);
-        if ($matches === []) {
-            return $templateString;
-        }
-        if (count($matches) > 1) {
-            throw new Exception('There is more than one escaping modifier defined. There can only be one {escapingEnabled=...} per template.', 1461009874);
-        }
-        if (strtolower($matches[0]['enabled']) === 'false') {
-            $this->escapingEnabled = false;
-        }
-        $templateString = preg_replace(Patterns::$SCAN_PATTERN_ESCAPINGMODIFIER, '', $templateString);
-
-        return $templateString;
     }
 
     /**
@@ -311,7 +301,10 @@ class TemplateParser
         }
 
         if ($state->countNodeStack() !== 1) {
-            throw new Exception('Not all tags were closed!', 1238169398);
+            throw new Exception(
+                'Not all tags were closed!',
+                1238169398
+            );
         }
         return $state;
     }
@@ -362,23 +355,38 @@ class TemplateParser
     protected function initializeViewHelperAndAddItToStack(ParsingState $state, $namespaceIdentifier, $methodIdentifier, $argumentsObjectTree)
     {
         $viewHelperResolver = $this->renderingContext->getViewHelperResolver();
-        if (!$viewHelperResolver->isNamespaceValid($namespaceIdentifier)) {
+        if ($viewHelperResolver->isNamespaceIgnored($namespaceIdentifier)) {
             return null;
         }
-        $currentViewHelperNode = new ViewHelperNode(
-            $this->renderingContext,
-            $namespaceIdentifier,
-            $methodIdentifier,
-            $argumentsObjectTree,
-            $state
-        );
+        if (!$viewHelperResolver->isNamespaceValid($namespaceIdentifier)) {
+            throw new UnknownNamespaceException('Unknown Namespace: ' . $namespaceIdentifier);
+        }
+        try {
+            $currentViewHelperNode = new ViewHelperNode(
+                $this->renderingContext,
+                $namespaceIdentifier,
+                $methodIdentifier,
+                $argumentsObjectTree,
+                $state
+            );
 
-        $this->callInterceptor($currentViewHelperNode, InterceptorInterface::INTERCEPT_OPENING_VIEWHELPER, $state);
-        $viewHelper = $currentViewHelperNode->getUninitializedViewHelper();
-        $viewHelper::postParseEvent($currentViewHelperNode, $argumentsObjectTree, $state->getVariableContainer());
-        $state->pushNodeToStack($currentViewHelperNode);
-
-        return $currentViewHelperNode;
+            $this->callInterceptor($currentViewHelperNode, InterceptorInterface::INTERCEPT_OPENING_VIEWHELPER, $state);
+            $viewHelper = $currentViewHelperNode->getUninitializedViewHelper();
+            $viewHelper::postParseEvent($currentViewHelperNode, $argumentsObjectTree, $state->getVariableContainer());
+            $state->pushNodeToStack($currentViewHelperNode);
+            return $currentViewHelperNode;
+        } catch (\TYPO3Fluid\Fluid\Core\ViewHelper\Exception $error) {
+            $this->textHandler(
+                $state,
+                $this->renderingContext->getErrorHandler()->handleViewHelperError($error)
+            );
+        } catch (Exception $error) {
+            $this->textHandler(
+                $state,
+                $this->renderingContext->getErrorHandler()->handleParserError($error)
+            );
+        }
+        return null;
     }
 
     /**
@@ -393,8 +401,11 @@ class TemplateParser
     protected function closingViewHelperTagHandler(ParsingState $state, $namespaceIdentifier, $methodIdentifier)
     {
         $viewHelperResolver = $this->renderingContext->getViewHelperResolver();
-        if (!$viewHelperResolver->isNamespaceValid($namespaceIdentifier)) {
+        if ($viewHelperResolver->isNamespaceIgnored($namespaceIdentifier)) {
             return false;
+        }
+        if (!$viewHelperResolver->isNamespaceValid($namespaceIdentifier)) {
+            throw new UnknownNamespaceException('Unknown Namespace: ' . $namespaceIdentifier);
         }
         $lastStackElement = $state->popNodeFromStack();
         if (!($lastStackElement instanceof ViewHelperNode)) {
@@ -559,9 +570,12 @@ class TemplateParser
     public function unquoteString($quotedValue)
     {
         $value = $quotedValue;
-        if ($quotedValue{0} === '"') {
+        if ($value === '') {
+            return $value;
+        }
+        if ($quotedValue[0] === '"') {
             $value = str_replace('\\"', '"', preg_replace('/(^"|"$)/', '', $quotedValue));
-        } elseif ($quotedValue{0} === '\'') {
+        } elseif ($quotedValue[0] === '\'') {
             $value = str_replace("\\'", "'", preg_replace('/(^\'|\'$)/', '', $quotedValue));
         }
         return str_replace('\\\\', '\\', $value);
@@ -580,6 +594,11 @@ class TemplateParser
     protected function textAndShorthandSyntaxHandler(ParsingState $state, $text, $context)
     {
         $sections = preg_split(Patterns::$SPLIT_PATTERN_SHORTHANDSYNTAX, $text, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
+        if ($sections === false) {
+            // String $text was not possible to split; we must return a text node with the full text instead.
+            $this->textHandler($state, $text);
+            return;
+        }
         foreach ($sections as $section) {
             $matchedVariables = [];
             $expressionNode = null;
@@ -608,23 +627,35 @@ class TemplateParser
                             $expressionStartPosition = strpos($section, $matchedVariableSet[0]);
                             /** @var ExpressionNodeInterface $expressionNode */
                             $expressionNode = new $expressionNodeTypeClassName($matchedVariableSet[0], $matchedVariableSet, $state);
-                            if ($expressionStartPosition > 0) {
-                                $state->getNodeFromStack()->addChildNode(new TextNode(substr($section, 0, $expressionStartPosition)));
-                            }
-                            $state->getNodeFromStack()->addChildNode($expressionNode);
-                            $expressionEndPosition = $expressionStartPosition + strlen($matchedVariableSet[0]);
-                            if ($expressionEndPosition < strlen($section)) {
-                                $this->textAndShorthandSyntaxHandler($state, substr($section, $expressionEndPosition), $context);
-                                break;
+                            try {
+                                // Trigger initial parse-time evaluation to allow the node to manipulate the rendering context.
+                                if ($expressionNode instanceof ParseTimeEvaluatedExpressionNodeInterface) {
+                                    $expressionNode->evaluate($this->renderingContext);
+                                }
+
+                                if ($expressionStartPosition > 0) {
+                                    $state->getNodeFromStack()->addChildNode(new TextNode(substr($section, 0, $expressionStartPosition)));
+                                }
+
+                                $this->callInterceptor($expressionNode, InterceptorInterface::INTERCEPT_EXPRESSION, $state);
+                                $state->getNodeFromStack()->addChildNode($expressionNode);
+
+                                $expressionEndPosition = $expressionStartPosition + strlen($matchedVariableSet[0]);
+                                if ($expressionEndPosition < strlen($section)) {
+                                    $this->textAndShorthandSyntaxHandler($state, substr($section, $expressionEndPosition), $context);
+                                    break;
+                                }
+                            } catch (ExpressionException $error) {
+                                $this->textHandler(
+                                    $state,
+                                    $this->renderingContext->getErrorHandler()->handleExpressionError($error)
+                                );
                             }
                         }
                     }
                 }
 
-                if ($expressionNode) {
-                    // Trigger initial parse-time evaluation to allow the node to manipulate the rendering context.
-                    $expressionNode->evaluate($this->renderingContext);
-                } else {
+                if (!$expressionNode) {
                     // As fallback we simply render the expression back as template content.
                     $this->textHandler($state, $section);
                 }
@@ -667,15 +698,16 @@ class TemplateParser
         if (preg_match_all(Patterns::$SPLIT_PATTERN_SHORTHANDSYNTAX_ARRAY_PARTS, $arrayText, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $singleMatch) {
                 $arrayKey = $this->unquoteString($singleMatch['Key']);
-                if (!empty($singleMatch['VariableIdentifier'])) {
+                if (array_key_exists('Subarray', $singleMatch) && !empty($singleMatch['Subarray'])) {
+                    $arrayToBuild[$arrayKey] = new ArrayNode($this->recursiveArrayHandler($singleMatch['Subarray']));
+                } elseif (!empty($singleMatch['VariableIdentifier'])) {
                     $arrayToBuild[$arrayKey] = new ObjectAccessorNode($singleMatch['VariableIdentifier']);
                 } elseif (array_key_exists('Number', $singleMatch) && (!empty($singleMatch['Number']) || $singleMatch['Number'] === '0')) {
-                    $arrayToBuild[$arrayKey] = floatval($singleMatch['Number']);
+                    // Note: this method of casting picks "int" when value is a natural number and "float" if any decimals are found. See also NumericNode.
+                    $arrayToBuild[$arrayKey] = $singleMatch['Number'] + 0;
                 } elseif ((array_key_exists('QuotedString', $singleMatch) && !empty($singleMatch['QuotedString']))) {
                     $argumentString = $this->unquoteString($singleMatch['QuotedString']);
                     $arrayToBuild[$arrayKey] = $this->buildArgumentObjectTree($argumentString);
-                } elseif (array_key_exists('Subarray', $singleMatch) && !empty($singleMatch['Subarray'])) {
-                    $arrayToBuild[$arrayKey] = new ArrayNode($this->recursiveArrayHandler($singleMatch['Subarray']));
                 }
             }
         }

@@ -1,4 +1,5 @@
 <?php
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Controller;
 
 /*
@@ -16,12 +17,15 @@ namespace TYPO3\CMS\Backend\Controller;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Backend\Routing\UriBuilder;
+use TYPO3\CMS\Backend\Template\DocumentTemplate;
+use TYPO3\CMS\Core\Http\HtmlResponse;
 use TYPO3\CMS\Core\Page\PageRenderer;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Script Class, putting the frameset together.
+ * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0. All logic is moved into LoginController.
  */
 class LoginFramesetController
 {
@@ -35,6 +39,7 @@ class LoginFramesetController
      */
     public function __construct()
     {
+        trigger_error(__CLASS__ . ' will be removed in TYPO3 v10.0. Request "index.php?loginRefresh=1" directly to work without the frameset.', E_USER_DEPRECATED);
         $GLOBALS['SOBE'] = $this;
     }
 
@@ -43,14 +48,12 @@ class LoginFramesetController
      * As this controller goes only through the main() method, it is rather simple for now
      *
      * @param ServerRequestInterface $request
-     * @param ResponseInterface $response
      * @return ResponseInterface
      */
-    public function mainAction(ServerRequestInterface $request, ResponseInterface $response)
+    public function mainAction(ServerRequestInterface $request): ResponseInterface
     {
-        $this->main();
-        $response->getBody()->write($this->content);
-        return $response;
+        $this->createFrameset();
+        return new HtmlResponse($this->content);
     }
 
     /**
@@ -59,14 +62,23 @@ class LoginFramesetController
      */
     public function main()
     {
+        $this->createFrameset();
+    }
+    /**
+     * Main function.
+     * Creates the header code and the frameset for the two frames.
+     */
+    protected function createFrameset(): void
+    {
         $title = 'TYPO3 Re-Login (' . $GLOBALS['TYPO3_CONF_VARS']['SYS']['sitename'] . ')';
         $this->getDocumentTemplate()->startPage($title);
-
+        /** @var UriBuilder $uriBuilder */
+        $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
         // Create the frameset for the window
         $this->content = $this->getPageRenderer()->render(PageRenderer::PART_HEADER) . '
 			<frameset rows="*,1">
 				<frame name="login" src="index.php?loginRefresh=1" marginwidth="0" marginheight="0" scrolling="no" noresize="noresize" />
-				<frame name="dummy" src="' . htmlspecialchars(BackendUtility::getModuleUrl('dummy')) . '" marginwidth="0" marginheight="0" scrolling="auto" noresize="noresize" />
+				<frame name="dummy" src="' . htmlspecialchars((string)$uriBuilder->buildUriFromRoute('dummy')) . '" marginwidth="0" marginheight="0" scrolling="auto" noresize="noresize" />
 			</frameset>
 		</html>';
     }
@@ -74,9 +86,9 @@ class LoginFramesetController
     /**
      * Returns an instance of DocumentTemplate
      *
-     * @return \TYPO3\CMS\Backend\Template\DocumentTemplate
+     * @return DocumentTemplate
      */
-    protected function getDocumentTemplate()
+    protected function getDocumentTemplate(): DocumentTemplate
     {
         return $GLOBALS['TBE_TEMPLATE'];
     }
@@ -84,7 +96,7 @@ class LoginFramesetController
     /**
      * @return PageRenderer
      */
-    protected function getPageRenderer()
+    protected function getPageRenderer(): PageRenderer
     {
         return GeneralUtility::makeInstance(PageRenderer::class);
     }

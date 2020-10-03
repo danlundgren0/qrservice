@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Model\Renderable;
 
 /*
@@ -17,8 +17,6 @@ namespace TYPO3\CMS\Form\Domain\Model\Renderable;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Form\Domain\Runtime\FormRuntime;
-
 /**
  * Base interface which all parts of a form must adhere to.
  *
@@ -34,7 +32,6 @@ interface RootRenderableInterface
      * the particular element.
      *
      * @return string
-     * @api
      */
     public function getType(): string;
 
@@ -42,7 +39,6 @@ interface RootRenderableInterface
      * The identifier of this renderable
      *
      * @return string
-     * @api
      */
     public function getIdentifier(): string;
 
@@ -50,27 +46,14 @@ interface RootRenderableInterface
      * Get the label which shall be displayed next to the form element
      *
      * @return string
-     * @api
      */
     public function getLabel(): string;
-
-    /**
-     * This is a callback that is invoked by the Renderer before the corresponding element is rendered.
-     * Use this to access previously submitted values and/or modify the $formRuntime before an element
-     * is outputted to the browser.
-     *
-     * @param FormRuntime $formRuntime
-     * @api
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function beforeRendering(FormRuntime $formRuntime);
 
     /**
      * Get the renderer class name to be used to display this form;
      * must implement RendererInterface
      *
      * @return string the renderer class name
-     * @api
      */
     public function getRendererClassName(): string;
 
@@ -78,7 +61,6 @@ interface RootRenderableInterface
      * Get all rendering options
      *
      * @return array associative array of rendering options
-     * @api
      */
     public function getRenderingOptions(): array;
 }

@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Form\FieldControl;
 
 /*
@@ -38,16 +38,16 @@ class ElementBrowser extends AbstractNode
         $elementName = $parameterArray['itemFormElName'];
         $config = $parameterArray['fieldConf']['config'];
         $internalType = (string)$config['internal_type'];
-        $allowed = GeneralUtility::trimExplode(',', $config['allowed'], true);
+        $allowed = $config['allowed'];
 
         if (isset($config['readOnly']) && $config['readOnly']) {
             return [];
         }
 
         if ($internalType === 'db') {
-            $title = 'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.browse_db';
+            $title = 'LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.browse_db';
         } else {
-            $title = 'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.browse_file';
+            $title = 'LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.browse_file';
         }
 
         // Check against inline uniqueness - Create some onclick js for delete control and element browser
@@ -67,10 +67,12 @@ class ElementBrowser extends AbstractNode
         if (is_array($config['appearance']) && isset($config['appearance']['elementBrowserType'])) {
             $elementBrowserType = $config['appearance']['elementBrowserType'];
         }
-        $elementBrowserAllowed = implode(',', $allowed);
         if (is_array($config['appearance']) && isset($config['appearance']['elementBrowserAllowed'])) {
-            $elementBrowserAllowed = $config['appearance']['elementBrowserAllowed'];
+            $allowed = $config['appearance']['elementBrowserAllowed'];
         }
+        // Remove any white-spaces from the allowed extension lists
+        $elementBrowserAllowed = implode(',', GeneralUtility::trimExplode(',', $allowed, true));
+
         $elementBrowserOnClick = 'setFormValueOpenBrowser('
                 . GeneralUtility::quoteJSvalue($elementBrowserType) . ','
                 . GeneralUtility::quoteJSvalue($elementName . '|||' . $elementBrowserAllowed . '|' . $elementBrowserOnClickInline)

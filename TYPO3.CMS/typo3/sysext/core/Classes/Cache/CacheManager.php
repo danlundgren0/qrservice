@@ -15,6 +15,8 @@ namespace TYPO3\CMS\Core\Cache;
  */
 
 use TYPO3\CMS\Core\Cache\Backend\BackendInterface;
+use TYPO3\CMS\Core\Cache\Backend\NullBackend;
+use TYPO3\CMS\Core\Cache\Backend\TransientMemoryBackend;
 use TYPO3\CMS\Core\Cache\Backend\Typo3DatabaseBackend;
 use TYPO3\CMS\Core\Cache\Exception\DuplicateIdentifierException;
 use TYPO3\CMS\Core\Cache\Exception\InvalidBackendException;
@@ -27,10 +29,6 @@ use TYPO3\CMS\Core\SingletonInterface;
 
 /**
  * The Cache Manager
- *
- * This file is a backport from FLOW3
- * @scope singleton
- * @api
  */
 class CacheManager implements SingletonInterface
 {
@@ -65,6 +63,29 @@ class CacheManager implements SingletonInterface
     ];
 
     /**
+     * @var bool
+     */
+    protected $disableCaching = false;
+
+    /**
+     * Used by Bootstrap to define whether the configuration has been set finally.
+     * Controls whether a deprecation warning is logged in getCache().
+     * This property will be removed in TYPO3 v10.0.
+     *
+     * @var bool
+     * @internal
+     */
+    protected $limbo = false;
+
+    /**
+     * @param bool $disableCaching
+     */
+    public function __construct(bool $disableCaching = false)
+    {
+        $this->disableCaching = $disableCaching;
+    }
+
+    /**
      * Sets configurations for caches. The key of each entry specifies the
      * cache identifier and the value is an array of configuration options.
      * Possible options are:
@@ -94,7 +115,6 @@ class CacheManager implements SingletonInterface
      *
      * @param FrontendInterface $cache The cache frontend to be registered
      * @throws DuplicateIdentifierException if a cache with the given identifier has already been registered.
-     * @api
      */
     public function registerCache(FrontendInterface $cache)
     {
@@ -111,7 +131,6 @@ class CacheManager implements SingletonInterface
      * @param string $identifier Identifies which cache to return
      * @return FrontendInterface The specified cache frontend
      * @throws NoSuchCacheException
-     * @api
      */
     public function getCache($identifier)
     {
@@ -129,7 +148,6 @@ class CacheManager implements SingletonInterface
      *
      * @param string $identifier The identifier of the cache
      * @return bool TRUE if a cache with the given identifier exists, otherwise FALSE
-     * @api
      */
     public function hasCache($identifier)
     {
@@ -138,8 +156,6 @@ class CacheManager implements SingletonInterface
 
     /**
      * Flushes all registered caches
-     *
-     * @api
      */
     public function flushCaches()
     {
@@ -154,7 +170,6 @@ class CacheManager implements SingletonInterface
      *
      * @param string $groupIdentifier
      * @throws NoSuchCacheGroupException
-     * @api
      */
     public function flushCachesInGroup($groupIdentifier)
     {
@@ -176,7 +191,6 @@ class CacheManager implements SingletonInterface
      * @param string $groupIdentifier
      * @param string|array $tag Tag to search for
      * @throws NoSuchCacheGroupException
-     * @api
      */
     public function flushCachesInGroupByTag($groupIdentifier, $tag)
     {
@@ -201,7 +215,6 @@ class CacheManager implements SingletonInterface
      * @param string $groupIdentifier
      * @param string[] $tags Tags to search for
      * @throws NoSuchCacheGroupException
-     * @api
      */
     public function flushCachesInGroupByTags($groupIdentifier, array $tags)
     {
@@ -224,7 +237,6 @@ class CacheManager implements SingletonInterface
      * caches.
      *
      * @param string $tag Tag to search for
-     * @api
      */
     public function flushCachesByTag($tag)
     {
@@ -238,7 +250,6 @@ class CacheManager implements SingletonInterface
      * Flushes entries tagged by any of the specified tags in all registered caches.
      *
      * @param string[] $tags Tags to search for
-     * @api
      */
     public function flushCachesByTags(array $tags)
     {
@@ -270,6 +281,10 @@ class CacheManager implements SingletonInterface
      */
     protected function createCache($identifier)
     {
+        // @deprecated will be removed with TYPO3 v10.0
+        if ($this->limbo) {
+            trigger_error('Usage of ' . self::class . '->createCache(\'' . $identifier . '\') in ext_localconf.php will not be supported in TYPO3 v10.0.', E_USER_DEPRECATED);
+        }
         if (isset($this->cacheConfigurations[$identifier]['frontend'])) {
             $frontend = $this->cacheConfigurations[$identifier]['frontend'];
         } else {
@@ -284,6 +299,11 @@ class CacheManager implements SingletonInterface
             $backendOptions = $this->cacheConfigurations[$identifier]['options'];
         } else {
             $backendOptions = $this->defaultCacheConfiguration['options'];
+        }
+
+        if ($this->disableCaching && $backend !== TransientMemoryBackend::class) {
+            $backend = NullBackend::class;
+            $backendOptions = [];
         }
 
         // Add the cache identifier to the groups that it should be attached to, or use the default ones.
@@ -320,5 +340,19 @@ class CacheManager implements SingletonInterface
         }
 
         $this->registerCache($frontendInstance);
+    }
+
+    /**
+     * Sets the limbo state
+     *
+     * If limbo is enable, then getCache() will log a deprecation warning.
+     * This method will be removed in TYPO3 v10.0.
+     *
+     * @param bool $limbo
+     * @internal
+     */
+    public function setLimbo(bool $limbo)
+    {
+        $this->limbo = $limbo;
     }
 }

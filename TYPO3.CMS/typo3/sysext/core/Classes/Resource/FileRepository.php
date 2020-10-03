@@ -17,10 +17,10 @@ namespace TYPO3\CMS\Core\Resource;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Restriction\FrontendRestrictionContainer;
-use TYPO3\CMS\Core\Database\Query\Restriction\HiddenRestriction;
 use TYPO3\CMS\Core\Database\RelationHandler;
 use TYPO3\CMS\Core\Resource\Exception\ResourceDoesNotExistException;
 use TYPO3\CMS\Core\Resource\Index\FileIndexRepository;
+use TYPO3\CMS\Core\Resource\Search\FileSearchDemand;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
 
@@ -66,7 +66,6 @@ class FileRepository extends AbstractRepository
      * @param int $uid The UID of the related record (needs to be the localized uid, as translated IRRE elements relate to them)
      * @return array An array of objects, empty if no objects found
      * @throws \InvalidArgumentException
-     * @api
      */
     public function findByRelation($tableName, $fieldName, $uid)
     {
@@ -78,15 +77,11 @@ class FileRepository extends AbstractRepository
             );
         }
         $referenceUids = [];
-        if ($this->getEnvironmentMode() === 'FE' && !empty($GLOBALS['TSFE']->sys_page)) {
+        if ($this->getEnvironmentMode() === 'FE') {
             $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
                 ->getQueryBuilderForTable('sys_file_reference');
 
             $queryBuilder->setRestrictions(GeneralUtility::makeInstance(FrontendRestrictionContainer::class));
-            if ($GLOBALS['TSFE']->sys_page->showHiddenRecords) {
-                $queryBuilder->getRestrictions()->removeByType(HiddenRestriction::class);
-            }
-
             $res = $queryBuilder
                 ->select('uid')
                 ->from('sys_file_reference')
@@ -111,10 +106,14 @@ class FileRepository extends AbstractRepository
                 $referenceUids[] = $row['uid'];
             }
         } else {
-            /** @var $relationHandler RelationHandler */
+            /** @var RelationHandler $relationHandler */
             $relationHandler = GeneralUtility::makeInstance(RelationHandler::class);
             $relationHandler->start(
-                '', 'sys_file_reference', '', $uid, $tableName,
+                '',
+                'sys_file_reference',
+                '',
+                $uid,
+                $tableName,
                 BackendUtility::getTcaFieldConfiguration($tableName, $fieldName)
             );
             if (!empty($relationHandler->tableArray['sys_file_reference'])) {
@@ -131,6 +130,7 @@ class FileRepository extends AbstractRepository
                     // No handling, just omit the invalid reference uid
                 }
             }
+            $itemList = $this->reapplySorting($itemList);
         }
 
         return $itemList;
@@ -142,7 +142,6 @@ class FileRepository extends AbstractRepository
      * @param int $uid The UID of the sys_file_reference record
      * @return FileReference|bool
      * @throws \InvalidArgumentException
-     * @api
      */
     public function findFileReferenceByUid($uid)
     {
@@ -158,32 +157,44 @@ class FileRepository extends AbstractRepository
     }
 
     /**
+     * As sorting might have changed due to workspace overlays, PHP does the sorting again.
+     *
+     * @param array $itemList
+     */
+    protected function reapplySorting(array $itemList): array
+    {
+        uasort(
+            $itemList,
+            function (FileReference $a, FileReference $b) {
+                $sortA = (int)$a->getReferenceProperty('sorting_foreign');
+                $sortB = (int)$b->getReferenceProperty('sorting_foreign');
+
+                if ($sortA === $sortB) {
+                    return 0;
+                }
+
+                return ($sortA < $sortB) ? -1 : 1;
+            }
+        );
+        return $itemList;
+    }
+
+    /**
      * Search for files by name in a given folder
      *
      * @param Folder $folder
      * @param string $fileName
      * @return File[]
+     * @internal
+     * @deprecated Use ResourceStorage::searchFiles instead
      */
     public function searchByName(Folder $folder, $fileName)
     {
-        /** @var ResourceFactory $fileFactory */
-        $fileFactory = GeneralUtility::makeInstance(ResourceFactory::class);
+        trigger_error(__METHOD__ . ' is deprecated. Use ResourceStorage::searchFiles instead', \E_USER_DEPRECATED);
+        $searchDemand = FileSearchDemand::createForSearchTerm($fileName)
+            ->addSearchField('sys_file', 'name');
 
-        $folders = $folder->getStorage()->getFoldersInFolder($folder, 0, 0, true, true);
-        $folders[$folder->getIdentifier()] = $folder;
-
-        $fileRecords = $this->getFileIndexRepository()->findByFolders($folders, false, $fileName);
-
-        $files = [];
-        foreach ($fileRecords as $fileRecord) {
-            try {
-                $files[] = $fileFactory->getFileObject($fileRecord['uid'], $fileRecord);
-            } catch (Exception\FileDoesNotExistException $ignoredException) {
-                continue;
-            }
-        }
-
-        return $files;
+        return iterator_to_array($folder->searchFiles($searchDemand));
     }
 
     /**

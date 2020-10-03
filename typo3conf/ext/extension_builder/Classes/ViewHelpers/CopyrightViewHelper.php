@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\ViewHelpers;
 
 /*
@@ -14,7 +15,7 @@ namespace EBT\ExtensionBuilder\ViewHelpers;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 
 /**
  * Format the Copyright notice
@@ -27,19 +28,27 @@ class CopyrightViewHelper extends AbstractViewHelper
     protected $escapeChildren = false;
 
     /**
+     * Arguments Initialization
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('date', 'string', 'Date', true);
+        $this->registerArgument('persons', 'array', 'Array with persons', true);
+    }
+
+    /**
      * Format the copyright holder's name(s)
      *
      * @param string $date
      * @param array $persons (\EBT\ExtensionBuilder\Domain\Model\Person )
      * @return string The copyright ownership
-     * @author Andreas Lappe <nd@kaeufli.ch>
      */
-    public function render($date, $persons)
+    public function render()
     {
-        $copyright = ' *  (c) ' . $date . ' ';
+        $copyright = ' *  (c) ' . $this->arguments['date'] . ' ';
         $offset = strlen($copyright) - 2;
 
-        foreach ($persons as $index => $person) {
+        foreach ($this->arguments['persons'] as $index => $person) {
             $entry = '';
 
             if ($index !== 0) {

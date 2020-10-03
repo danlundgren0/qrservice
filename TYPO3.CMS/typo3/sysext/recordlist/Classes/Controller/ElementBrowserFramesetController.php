@@ -17,13 +17,15 @@ namespace TYPO3\CMS\Recordlist\Controller;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use TYPO3\CMS\Backend\Template\DocumentTemplate;
-use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Http\HtmlResponse;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Page\PageRenderer;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Script Class, putting the frameset together.
+ *
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
  */
 class ElementBrowserFramesetController
 {
@@ -37,13 +39,17 @@ class ElementBrowserFramesetController
     /**
      * @var PageRenderer
      */
-    protected $pageRenderer = null;
+    protected $pageRenderer;
 
     /**
      * Constructor
      */
     public function __construct()
     {
+        trigger_error(
+            self::class . ' will be removed in TYPO3 v10.0. Use route wizard_element_browser instead.',
+            E_USER_DEPRECATED
+        );
         $GLOBALS['SOBE'] = $this;
     }
 
@@ -52,15 +58,12 @@ class ElementBrowserFramesetController
      * As this controller goes only through the main() method, it is rather simple for now
      *
      * @param ServerRequestInterface $request the current request
-     * @param ResponseInterface $response the prepared response
      * @return ResponseInterface the response with the content
      */
-    public function mainAction(ServerRequestInterface $request, ResponseInterface $response)
+    public function mainAction(ServerRequestInterface $request): ResponseInterface
     {
         $this->main();
-
-        $response->getBody()->write($this->content);
-        return $response;
+        return new HtmlResponse($this->content);
     }
 
     /**
@@ -72,7 +75,9 @@ class ElementBrowserFramesetController
         // Setting GPvars:
         $mode = GeneralUtility::_GP('mode');
         $bparams = GeneralUtility::_GP('bparams');
-        $moduleUrl = BackendUtility::getModuleUrl('wizard_element_browser') . '&mode=';
+        /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
+        $moduleUrl = (string)$uriBuilder->buildUriFromRoute('wizard_element_browser') . '&mode=';
         $documentTemplate = $this->getDocumentTemplate();
         $documentTemplate->JScode = GeneralUtility::wrapJS('
 				function closing() {	//
@@ -88,7 +93,7 @@ class ElementBrowserFramesetController
 		');
 
         // build the header part
-        $documentTemplate->startPage($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:TYPO3_Element_Browser'));
+        $documentTemplate->startPage($this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:TYPO3_Element_Browser'));
 
         // URL for the inner main frame:
         $url = $moduleUrl . rawurlencode($mode) . '&bparams=' . rawurlencode($bparams);
@@ -98,13 +103,13 @@ class ElementBrowserFramesetController
         $this->content = $this->getPageRenderer()->render(PageRenderer::PART_HEADER) .
             '<frameset rows="*,1" framespacing="0" frameborder="0" border="0">
 				<frame name="content" src="' . htmlspecialchars($url) . '" marginwidth="0" marginheight="0" frameborder="0" scrolling="auto" noresize="noresize" />
-				<frame name="menu" src="' . htmlspecialchars(BackendUtility::getModuleUrl('dummy')) . '" marginwidth="0" marginheight="0" frameborder="0" scrolling="no" noresize="noresize" />
+				<frame name="menu" src="' . htmlspecialchars((string)$uriBuilder->buildUriFromRoute('dummy')) . '" marginwidth="0" marginheight="0" frameborder="0" scrolling="no" noresize="noresize" />
 			</frameset>
 		</html>
 		';
     }
 
-   /**
+    /**
      * @return DocumentTemplate
      */
     protected function getDocumentTemplate()

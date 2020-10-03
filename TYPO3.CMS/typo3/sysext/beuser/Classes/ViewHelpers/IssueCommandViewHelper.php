@@ -14,11 +14,9 @@ namespace TYPO3\CMS\Beuser\ViewHelpers;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Backend\Utility\BackendUtility;
-use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
@@ -34,34 +32,31 @@ class IssueCommandViewHelper extends AbstractViewHelper
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
-        $this->registerArgument('parameters', 'string', 'Is a set of GET params to send to tce_db.php. Example: "&cmd[tt_content][123][move]=456" or "&data[tt_content][123][hidden]=1&data[tt_content][123][title]=Hello%20World', true);
+        $this->registerArgument('parameters', 'string', 'Is a set of GET params to send to route tce_db (SimpleDataHandlerController). Example: "&cmd[tt_content][123][move]=456" or "&data[tt_content][123][hidden]=1&data[tt_content][123][title]=Hello%20World', true);
         $this->registerArgument('redirectUrl', 'string', 'Redirect URL if any other that \TYPO3\CMS\Core\Utility\GeneralUtility::getIndpEnv(\'REQUEST_URI\') is preferred', false, '');
     }
 
     /**
-     * Returns a URL with a command to TYPO3 Core Engine (tce_db.php)
+     * Returns a URL with a command to TYPO3 Core Engine - DataHandler (route tce_db)
      *
      * @param array $arguments
      * @param \Closure $renderChildrenClosure
      * @param RenderingContextInterface $renderingContext
      *
-     * @return string URL to tce_db.php + parameters
+     * @return string URL to tce_db + parameters
      * @see \TYPO3\CMS\Backend\Utility\BackendUtility::getLinkToDataHandlerAction()
      */
     public static function renderStatic(array $arguments, \Closure $renderChildrenClosure, RenderingContextInterface $renderingContext)
     {
-        /** @var BackendUserAuthentication $beUser */
-        $beUser = $GLOBALS['BE_USER'];
         $urlParameters = [
-            'prErr' => 1,
-            'uPT' => 1,
             'redirect' => $arguments['redirectUrl'] ?: GeneralUtility::getIndpEnv('REQUEST_URI')
         ];
         if (isset($arguments['parameters'])) {
             $parametersArray = GeneralUtility::explodeUrl2Array($arguments['parameters']);
             $urlParameters += $parametersArray;
         }
-        return BackendUtility::getModuleUrl('tce_db', $urlParameters);
+        /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
+        return (string)$uriBuilder->buildUriFromRoute('tce_db', $urlParameters);
     }
 }

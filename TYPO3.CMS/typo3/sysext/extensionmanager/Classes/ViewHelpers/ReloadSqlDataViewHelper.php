@@ -14,16 +14,19 @@ namespace TYPO3\CMS\Extensionmanager\ViewHelpers;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
 use TYPO3\CMS\Core\Registry;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Utility\LocalizationUtility;
+use TYPO3\CMS\Fluid\ViewHelpers\Link\ActionViewHelper;
 
 /**
- * View helper for update script link
+ * ViewHelper for update script link
+ * @internal
  */
-class ReloadSqlDataViewHelper extends Link\ActionViewHelper
+class ReloadSqlDataViewHelper extends ActionViewHelper
 {
     /**
      * @var string
@@ -47,7 +50,7 @@ class ReloadSqlDataViewHelper extends Link\ActionViewHelper
         $iconFactory = GeneralUtility::makeInstance(IconFactory::class);
 
         $staticSqlDataFile = $extension['siteRelPath'] . 'ext_tables_static+adt.sql';
-        if (!file_exists(PATH_site . $staticSqlDataFile)) {
+        if (!file_exists(Environment::getPublicPath() . '/' . $staticSqlDataFile)) {
             return '<span class="btn btn-default disabled">' . $iconFactory->getIcon('empty-empty', Icon::SIZE_SMALL)->render() . '</span>';
         }
 
@@ -58,7 +61,7 @@ class ReloadSqlDataViewHelper extends Link\ActionViewHelper
         // We used to only store "1" in the database when data was imported
         // No need to compare file content here and just show the reload icon
         if (!empty($oldMd5Hash) && $oldMd5Hash !== 1) {
-            $currentMd5Hash = md5_file(PATH_site . $staticSqlDataFile);
+            $currentMd5Hash = md5_file(Environment::getPublicPath() . '/' . $staticSqlDataFile);
             $md5HashIsEqual = $oldMd5Hash === $currentMd5Hash;
         }
 
@@ -70,11 +73,10 @@ class ReloadSqlDataViewHelper extends Link\ActionViewHelper
             $languageKey = 'extensionList.databaseImport';
         }
 
-        $uriBuilder = $this->controllerContext->getUriBuilder();
+        $uriBuilder = $this->renderingContext->getControllerContext()->getUriBuilder();
         $uriBuilder->reset();
         $uri = $uriBuilder->uriFor('reloadExtensionData', ['extension' => $extension['key']], 'Action');
         $this->tag->addAttribute('href', $uri);
-        $this->tag->addAttribute('class', 'downloadExtensionData btn btn-default');
         $this->tag->addAttribute('title', LocalizationUtility::translate($languageKey, 'extensionmanager'));
         $this->tag->setContent($iconFactory->getIcon($iconIdentifier, Icon::SIZE_SMALL)->render());
 

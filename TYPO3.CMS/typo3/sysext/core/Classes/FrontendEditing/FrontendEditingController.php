@@ -14,17 +14,25 @@ namespace TYPO3\CMS\Core\FrontendEditing;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Adminpanel\View\AdminPanelView;
+use TYPO3\CMS\Backend\FrontendBackendUserAuthentication;
+use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Context\Context;
+use TYPO3\CMS\Core\Context\LanguageAspect;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Restriction\EndTimeRestriction;
 use TYPO3\CMS\Core\Database\Query\Restriction\FrontendGroupRestriction;
 use TYPO3\CMS\Core\Database\Query\Restriction\HiddenRestriction;
 use TYPO3\CMS\Core\Database\Query\Restriction\StartTimeRestriction;
+use TYPO3\CMS\Core\DataHandling\DataHandler;
 use TYPO3\CMS\Core\Type\Bitmask\Permission;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Frontend\View\AdminPanelView;
+use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
 
 /**
  * Controller class for frontend editing.
+ *
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Functionality has been moved to EXT:feedit, FrontendBackendUserAuthentication and ContentObjectRenderer.
  */
 class FrontendEditingController
 {
@@ -36,10 +44,10 @@ class FrontendEditingController
      */
     public $TSFE_EDIT;
 
-    /**
-     * @var \TYPO3\CMS\Core\DataHandling\DataHandler
-     */
-    protected $tce;
+    public function __construct()
+    {
+        trigger_error(__CLASS__ . ' will be removed in TYPO3 v10.0. Functionality has been moved to EXT:feedit, FrontendBackendUserAuthentication and ContentObjectRenderer.', E_USER_DEPRECATED);
+    }
 
     /**
      * Initializes configuration options.
@@ -48,10 +56,11 @@ class FrontendEditingController
     {
         $this->TSFE_EDIT = GeneralUtility::_GP('TSFE_EDIT');
         // Include classes for editing IF editing module in Admin Panel is open
-        if ($GLOBALS['BE_USER']->isFrontendEditingActive()) {
-            if ($this->isEditAction()) {
-                $this->editAction();
-            }
+        if (((int)$this->getTypoScriptFrontendController()->displayEditIcons === 1
+            || (int)$this->getTypoScriptFrontendController()->displayFieldEditIcons === 1)
+            && $this->isEditAction()
+        ) {
+            $this->editAction();
         }
     }
 
@@ -79,12 +88,12 @@ class FrontendEditingController
         // Page ID for new records, 0 if not specified
         $newRecordPid = (int)$conf['newRecordInPid'];
         $newUid = null;
-        if (!$conf['onlyCurrentPid'] || $dataArray['pid'] == $GLOBALS['TSFE']->id) {
+        if (!$conf['onlyCurrentPid'] || $dataArray['pid'] == $this->getTypoScriptFrontendController()->id) {
             if ($table === 'pages') {
                 $newUid = $uid;
             } else {
                 if ($conf['newRecordFromTable']) {
-                    $newUid = $GLOBALS['TSFE']->id;
+                    $newUid = $this->getTypoScriptFrontendController()->id;
                     if ($newRecordPid) {
                         $newUid = $newRecordPid;
                     }
@@ -93,14 +102,12 @@ class FrontendEditingController
                 }
             }
         }
-        if ($GLOBALS['TSFE']->displayEditIcons && $table && $this->allowedToEdit($table, $dataArray, $conf, $checkEditAccessInternals) && $this->allowedToEditLanguage($table, $dataArray)) {
+        if ($this->getTypoScriptFrontendController()->displayEditIcons && $table && $this->allowedToEdit($table, $dataArray, $conf, $checkEditAccessInternals) && $this->allowedToEditLanguage($table, $dataArray)) {
             $editClass = $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/classes/class.frontendedit.php']['edit'];
             if ($editClass) {
-                $edit = GeneralUtility::getUserObj($editClass);
-                if (is_object($edit)) {
-                    $allowedActions = $this->getAllowedEditActions($table, $conf, $dataArray['pid']);
-                    $content = $edit->editPanel($content, $conf, $currentRecord, $dataArray, $table, $allowedActions, $newUid, $this->getHiddenFields($dataArray));
-                }
+                $edit = GeneralUtility::makeInstance($editClass);
+                $allowedActions = $this->getAllowedEditActions($table, $conf, $dataArray['pid']);
+                $content = $edit->editPanel($content, $conf, $currentRecord, $dataArray, $table, $allowedActions, $newUid, $this->getHiddenFields($dataArray));
             }
         }
         return $content;
@@ -135,13 +142,11 @@ class FrontendEditingController
         if (!array_key_exists('allow', $conf)) {
             $conf['allow'] = 'edit';
         }
-        if ($GLOBALS['TSFE']->displayFieldEditIcons && $table && $this->allowedToEdit($table, $dataArray, $conf) && $fieldList && $this->allowedToEditLanguage($table, $dataArray)) {
+        if ($this->getTypoScriptFrontendController()->displayFieldEditIcons && $table && $this->allowedToEdit($table, $dataArray, $conf) && $fieldList && $this->allowedToEditLanguage($table, $dataArray)) {
             $editClass = $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/classes/class.frontendedit.php']['edit'];
             if ($editClass) {
-                $edit = GeneralUtility::getUserObj($editClass);
-                if (is_object($edit)) {
-                    $content = $edit->editIcons($content, $params, $conf, $currentRecord, $dataArray, $addUrlParamStr, $table, $editUid, $fieldList);
-                }
+                $edit = GeneralUtility::makeInstance($editClass);
+                $content = $edit->editIcons($content, $params, $conf, $currentRecord, $dataArray, $addUrlParamStr, $table, $editUid, $fieldList);
             }
         }
         return $content;
@@ -156,7 +161,6 @@ class FrontendEditingController
      * Returns TRUE if an edit-action is sent from the Admin Panel
      *
      * @return bool
-     * @see \TYPO3\CMS\Frontend\Http\RequestHandler
      */
     public function isEditAction()
     {
@@ -176,10 +180,8 @@ class FrontendEditingController
 
     /**
      * Returns TRUE if an edit form is shown on the page.
-     * Used from RequestHandler where a TRUE return-value will result in classes etc. being included.
      *
      * @return bool
-     * @see \TYPO3\CMS\Frontend\Http\RequestHandler
      */
     public function isEditFormShown()
     {
@@ -196,7 +198,6 @@ class FrontendEditingController
      * Basically taking in the data and commands and passes them on to the proper classes as they should be.
      *
      * @throws \UnexpectedValueException if TSFE_EDIT[cmd] is not a valid command
-     * @see \TYPO3\CMS\Frontend\Http\RequestHandler
      */
     public function editAction()
     {
@@ -210,11 +211,9 @@ class FrontendEditingController
         }
         if ($cmd === 'save' || $cmd && $table && $uid && isset($GLOBALS['TCA'][$table])) {
             // Hook for defining custom editing actions. Naming is incorrect, but preserves compatibility.
-            if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_tsfebeuserauth.php']['extEditAction'])) {
-                $_params = [];
-                foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_tsfebeuserauth.php']['extEditAction'] as $_funcRef) {
-                    GeneralUtility::callUserFunction($_funcRef, $_params, $this);
-                }
+            $_params = [];
+            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_tsfebeuserauth.php']['extEditAction'] ?? [] as $_funcRef) {
+                GeneralUtility::callUserFunction($_funcRef, $_params, $this);
             }
             // Perform the requested editing command.
             $cmdAction = 'do' . ucwords($cmd);
@@ -238,9 +237,9 @@ class FrontendEditingController
         if ($hideField) {
             $recData = [];
             $recData[$table][$uid][$hideField] = 1;
-            $this->initializeTceMain();
-            $this->tce->start($recData, []);
-            $this->tce->process_datamap();
+            $dataHandler = GeneralUtility::makeInstance(DataHandler::class);
+            $dataHandler->start($recData, []);
+            $dataHandler->process_datamap();
         }
     }
 
@@ -256,9 +255,9 @@ class FrontendEditingController
         if ($hideField) {
             $recData = [];
             $recData[$table][$uid][$hideField] = 0;
-            $this->initializeTceMain();
-            $this->tce->start($recData, []);
-            $this->tce->process_datamap();
+            $dataHandler = GeneralUtility::makeInstance(DataHandler::class);
+            $dataHandler->start($recData, []);
+            $dataHandler->process_datamap();
         }
     }
 
@@ -292,7 +291,7 @@ class FrontendEditingController
      */
     public function doMoveAfter($table, $uid)
     {
-        $afterUID = $GLOBALS['BE_USER']->frontendEdit->TSFE_EDIT['moveAfter'];
+        $afterUID = $this->TSFE_EDIT['moveAfter'];
         $this->move($table, $uid, '', $afterUID);
     }
 
@@ -353,7 +352,7 @@ class FrontendEditingController
                     ->setMaxResults(2);
 
                 // Disable the default restrictions (but not all) if the admin panel is in preview mode
-                if ($GLOBALS['BE_USER']->adminPanel instanceof AdminPanelView && $GLOBALS['BE_USER']->adminPanel->extGetFeAdminValue('preview')) {
+                if ($this->getBackendUser()->adminPanel instanceof AdminPanelView && $this->getBackendUser()->adminPanel->extGetFeAdminValue('preview')) {
                     $queryBuilder->getRestrictions()
                         ->removeByType(StartTimeRestriction::class)
                         ->removeByType(EndTimeRestriction::class)
@@ -409,9 +408,9 @@ class FrontendEditingController
 
             // If any data handler commands were set, execute the data handler command
             if (!empty($dataHandlerCommands)) {
-                $this->initializeTceMain();
-                $this->tce->start([], $dataHandlerCommands);
-                $this->tce->process_cmdmap();
+                $dataHandler = GeneralUtility::makeInstance(DataHandler::class);
+                $dataHandler->start([], $dataHandlerCommands);
+                $dataHandler->process_cmdmap();
             }
         }
     }
@@ -426,9 +425,9 @@ class FrontendEditingController
     {
         $cmdData[$table][$uid]['delete'] = 1;
         if (!empty($cmdData)) {
-            $this->initializeTceMain();
-            $this->tce->start([], $cmdData);
-            $this->tce->process_cmdmap();
+            $dataHandler = GeneralUtility::makeInstance(DataHandler::class);
+            $dataHandler->start([], $cmdData);
+            $dataHandler->process_cmdmap();
         }
     }
 
@@ -442,24 +441,24 @@ class FrontendEditingController
     {
         $data = $this->TSFE_EDIT['data'];
         if (!empty($data)) {
-            $this->initializeTceMain();
-            $this->tce->start($data, []);
-            $this->tce->process_uploads($_FILES);
-            $this->tce->process_datamap();
+            $dataHandler = GeneralUtility::makeInstance(DataHandler::class);
+            $dataHandler->start($data, []);
+            $dataHandler->process_uploads($_FILES);
+            $dataHandler->process_datamap();
             // Save the new UID back into TSFE_EDIT
-            $newUID = $this->tce->substNEWwithIDs['NEW'];
+            $newUID = $dataHandler->substNEWwithIDs['NEW'];
             if ($newUID) {
-                $GLOBALS['BE_USER']->frontendEdit->TSFE_EDIT['newUID'] = $newUID;
+                $this->TSFE_EDIT['newUID'] = $newUID;
             }
         }
     }
 
     /**
      * Saves a record based on its data array and closes it.
+     * Note: This method is only a wrapper for doSave() but is needed so
      *
      * @param string $table The table name for the record to save.
      * @param int $uid The UID for the record to save.
-     * @note 	This method is only a wrapper for doSave() but is needed so
      */
     public function doSaveAndClose($table, $uid)
     {
@@ -488,21 +487,18 @@ class FrontendEditingController
     protected function allowedToEditLanguage($table, array $currentRecord)
     {
         // If no access right to record languages, return immediately
+        /** @var LanguageAspect $languageAspect */
+        $languageAspect = GeneralUtility::makeInstance(Context::class)->getAspect('language');
         if ($table === 'pages') {
-            $lang = $GLOBALS['TSFE']->sys_language_uid;
+            $lang = $languageAspect->getId();
         } elseif ($table === 'tt_content') {
-            $lang = $GLOBALS['TSFE']->sys_language_content;
+            $lang = $languageAspect->getContentId();
         } elseif ($GLOBALS['TCA'][$table]['ctrl']['languageField']) {
             $lang = $currentRecord[$GLOBALS['TCA'][$table]['ctrl']['languageField']];
         } else {
             $lang = -1;
         }
-        if ($GLOBALS['BE_USER']->checkLanguageAccess($lang)) {
-            $languageAccess = true;
-        } else {
-            $languageAccess = false;
-        }
-        return $languageAccess;
+        return $this->getBackendUser()->checkLanguageAccess($lang);
     }
 
     /**
@@ -519,27 +515,25 @@ class FrontendEditingController
         // Unless permissions specifically allow it, editing is not allowed.
         $mayEdit = false;
         if ($checkEditAccessInternals) {
-            $editAccessInternals = $GLOBALS['BE_USER']->recordEditAccessInternals($table, $dataArray, false, false);
+            $editAccessInternals = $this->getBackendUser()->recordEditAccessInternals($table, $dataArray, false, false);
         } else {
             $editAccessInternals = true;
         }
         if ($editAccessInternals) {
             if ($table === 'pages') {
-                // 2 = permission to edit the page
-                if ($GLOBALS['BE_USER']->isAdmin() || $GLOBALS['BE_USER']->doesUserHaveAccess($dataArray, 2)) {
+                if ($this->getBackendUser()->isAdmin() || $this->getBackendUser()->doesUserHaveAccess($dataArray, Permission::PAGE_EDIT)) {
                     $mayEdit = true;
                 }
             } else {
-                // 16 = permission to edit content on the page
-                if ($GLOBALS['BE_USER']->isAdmin() || $GLOBALS['BE_USER']->doesUserHaveAccess(\TYPO3\CMS\Backend\Utility\BackendUtility::getRecord('pages', $dataArray['pid']), 16)) {
+                if ($this->getBackendUser()->isAdmin() || $this->getBackendUser()->doesUserHaveAccess(BackendUtility::getRecord('pages', $dataArray['pid']), Permission::CONTENT_EDIT)) {
                     $mayEdit = true;
                 }
             }
-            if (!$conf['onlyCurrentPid'] || $dataArray['pid'] == $GLOBALS['TSFE']->id) {
+            if (!$conf['onlyCurrentPid'] || $dataArray['pid'] == $this->getTypoScriptFrontendController()->id) {
                 // Permissions:
                 $types = GeneralUtility::trimExplode(',', strtolower($conf['allow']), true);
                 $allow = array_flip($types);
-                $perms = $GLOBALS['BE_USER']->calcPerms($GLOBALS['TSFE']->page);
+                $perms = $this->getBackendUser()->calcPerms($this->getTypoScriptFrontendController()->page);
                 if ($table === 'pages') {
                     $allow = $this->getAllowedEditActions($table, $conf, $dataArray['pid'], $allow);
                     // Can only display editbox if there are options in the menu
@@ -569,19 +563,19 @@ class FrontendEditingController
             $types = GeneralUtility::trimExplode(',', strtolower($conf['allow']), true);
             $allow = array_flip($types);
         }
-        if (!$conf['onlyCurrentPid'] || $pid == $GLOBALS['TSFE']->id) {
+        if (!$conf['onlyCurrentPid'] || $pid == $this->getTypoScriptFrontendController()->id) {
             // Permissions
             $types = GeneralUtility::trimExplode(',', strtolower($conf['allow']), true);
             $allow = array_flip($types);
-            $perms = $GLOBALS['BE_USER']->calcPerms($GLOBALS['TSFE']->page);
+            $perms = $this->getBackendUser()->calcPerms($this->getTypoScriptFrontendController()->page);
             if ($table === 'pages') {
                 // Rootpage
-                if (count($GLOBALS['TSFE']->config['rootLine']) === 1) {
+                if (count($this->getTypoScriptFrontendController()->config['rootLine']) === 1) {
                     unset($allow['move']);
                     unset($allow['hide']);
                     unset($allow['delete']);
                 }
-                if (!($perms & Permission::PAGE_EDIT) || !$GLOBALS['BE_USER']->checkLanguageAccess(0)) {
+                if (!($perms & Permission::PAGE_EDIT) || !$this->getBackendUser()->checkLanguageAccess(0)) {
                     unset($allow['edit']);
                     unset($allow['move']);
                     unset($allow['hide']);
@@ -622,12 +616,18 @@ class FrontendEditingController
     }
 
     /**
-     * Initializes \TYPO3\CMS\Core\DataHandling\DataHandler since it is used on modification actions.
+     * @return FrontendBackendUserAuthentication|null
      */
-    protected function initializeTceMain()
+    protected function getBackendUser(): ?FrontendBackendUserAuthentication
     {
-        if (!isset($this->tce)) {
-            $this->tce = GeneralUtility::makeInstance(\TYPO3\CMS\Core\DataHandling\DataHandler::class);
-        }
+        return $GLOBALS['BE_USER'] instanceof FrontendBackendUserAuthentication ? $GLOBALS['BE_USER'] : null;
+    }
+
+    /**
+     * @return TypoScriptFrontendController
+     */
+    protected function getTypoScriptFrontendController(): TypoScriptFrontendController
+    {
+        return $GLOBALS['TSFE'];
     }
 }

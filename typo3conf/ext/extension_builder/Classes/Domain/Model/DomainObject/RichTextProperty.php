@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Domain\Model\DomainObject;
 
 /*
@@ -26,6 +27,11 @@ class RichTextProperty extends AbstractProperty
      * @var bool
      */
     protected $useRTE = true;
+
+    /**
+     * @var bool
+     */
+    protected $searchable = true;
 
     public function getTypeForComment()
     {

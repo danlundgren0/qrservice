@@ -6,8 +6,6 @@ namespace TYPO3Fluid\Fluid\Core\Parser;
  * See LICENSE.txt that was shipped with this package.
  */
 
-use TYPO3Fluid\Fluid\Core\Parser\Exception as ParserException;
-
 /**
  * This BooleanParser helps to parse and evaluate boolean expressions.
  * it's basically a recursive decent parser that uses a tokenizing regex
@@ -52,7 +50,7 @@ class BooleanParser
 			|
 				[\'"]
 			|
-				[A-Za-z0-9\.\{\}\-\\\\]+
+				[_A-Za-z0-9\.\{\}\-\\\\]+
 			|
 				\=\=\=
 			|
@@ -74,11 +72,15 @@ class BooleanParser
 			|
 				\|\|
 			|
+			    [aA][nN][dD]
+			|
 				&&
+			|
+			    [oO][rR]
 			|
 				.?
 			)\s*
-	/xs';
+	/xsu';
 
     /**
      * Cursor that contains a integer value pointing to the location inside the
@@ -149,7 +151,7 @@ class BooleanParser
      */
     protected function peek($includeWhitespace = false)
     {
-        preg_match(static::TOKENREGEX, substr($this->expression, $this->cursor), $matches);
+        preg_match(static::TOKENREGEX, mb_substr($this->expression, $this->cursor), $matches);
         if ($includeWhitespace === true) {
             return $matches[0];
         }
@@ -165,10 +167,10 @@ class BooleanParser
      */
     protected function consume($string)
     {
-        if (strlen($string) === 0) {
+        if (mb_strlen($string) === 0) {
             return;
         }
-        $this->cursor = strpos($this->expression, $string, $this->cursor) + strlen($string);
+        $this->cursor = mb_strpos($this->expression, $string, $this->cursor) + mb_strlen($string);
     }
 
     /**
@@ -180,8 +182,8 @@ class BooleanParser
     protected function parseOrToken()
     {
         $x = $this->parseAndToken();
-        while ($this->peek() === '||') {
-            $this->consume('||');
+        while (($token = $this->peek()) && in_array(strtolower($token), ['||', 'or'])) {
+            $this->consume($token);
             $y = $this->parseAndToken();
 
             if ($this->compileToCode === true) {
@@ -202,8 +204,8 @@ class BooleanParser
     protected function parseAndToken()
     {
         $x = $this->parseCompareToken();
-        while ($this->peek() === '&&') {
-            $this->consume('&&');
+        while (($token = $this->peek()) && in_array(strtolower($token), ['&&', 'and'])) {
+            $this->consume($token);
             $y = $this->parseCompareToken();
 
             if ($this->compileToCode === true) {
@@ -310,25 +312,8 @@ class BooleanParser
     protected function parseTermToken()
     {
         $t = $this->peek();
-        if ($this->isTerm($t)) {
-            $this->consume($t);
-            return $this->evaluateTerm($t, $this->context);
-        }
-        throw ParserException(sprintf('%t is not a valid expression term', $t));
-    }
-
-    /**
-     * Checks if the given string is a term or keyword
-     *
-     * @param string $x
-     */
-    protected function isTerm($x)
-    {
-        if (in_array($x, ['&&', '||', '!', '==', '\''])) {
-            return false;
-        }
-
-        return is_string($x);
+        $this->consume($t);
+        return $this->evaluateTerm($t, $this->context);
     }
 
     /**
@@ -363,9 +348,6 @@ class BooleanParser
      */
     protected function evaluateNot($x)
     {
-        if ($this->compileToCode === true) {
-            return '!(' . $x . ')';
-        }
         return !$x;
     }
 
@@ -442,21 +424,21 @@ class BooleanParser
      */
     protected function evaluateTerm($x, $context)
     {
-        if (strpos($x, '{') === 0 && substr($x, -1) === '}') {
+        if (isset($context[$x]) || (mb_strpos($x, '{') === 0 && mb_substr($x, -1) === '}')) {
             if ($this->compileToCode === true) {
-                return '($context["' . trim($x, '{}') . '"])';
+                return BooleanParser::class . '::convertNodeToBoolean($context["' . trim($x, '{}') . '"])';
             }
-            return $context[trim($x, '{}')];
+            return self::convertNodeToBoolean($context[trim($x, '{}')]);
         }
 
         if (is_numeric($x)) {
             if ($this->compileToCode === true) {
                 return $x;
             }
-            if (strpos($x, '.') !== false) {
-                return floatval($x);
+            if (mb_strpos($x, '.') !== false) {
+                return (float)$x;
             } else {
-                return intval($x);
+                return (int)$x;
             }
         }
 
@@ -473,17 +455,17 @@ class BooleanParser
             return false;
         }
 
-        if (isset($context[$x]) === true) {
-            if ($this->compileToCode === true) {
-                return '($context["' . $x . '"])';
-            }
-            return $context[$x];
-        }
-
         if ($this->compileToCode === true) {
             return '"' . trim($x, '\'"') . '"';
         }
 
         return trim($x, '\'"');
+    }
+
+    public static function convertNodeToBoolean($value) {
+        if (is_object($value) && $value instanceof \Countable) {
+            return count($value) > 0;
+        }
+        return $value;
     }
 }

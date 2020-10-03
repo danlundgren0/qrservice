@@ -30,7 +30,7 @@ abstract class AbstractContentObject
     /**
      * @var PageRenderer
      */
-    protected $pageRenderer = null;
+    protected $pageRenderer;
 
     /**
      * Default constructor.
@@ -49,18 +49,6 @@ abstract class AbstractContentObject
      * @return string
      */
     abstract public function render($conf = []);
-
-    /**
-     * Getter for current ContentObjectRenderer
-     *
-     * @return ContentObjectRenderer
-     * @deprecated since TYPO3 v8, will be removed with TYPO3 v9. Use getContentObjectRenderer() instead.
-     */
-    public function getContentObject()
-    {
-        GeneralUtility::logDeprecatedFunction();
-        return $this->getContentObjectRenderer();
-    }
 
     /**
      * Getter for current ContentObjectRenderer

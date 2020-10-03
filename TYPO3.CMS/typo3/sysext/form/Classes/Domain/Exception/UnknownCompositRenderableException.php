@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Exception;
 
 /*
@@ -21,9 +21,7 @@ use TYPO3\CMS\Form\Domain\Exception;
 
 /**
  * This exception is thrown if the ArrayFormFactory want to create child
- * elements within a unknown composit renderable.
- *
- * @api
+ * elements within a unknown composite renderable.
  */
 class UnknownCompositRenderableException extends Exception
 {

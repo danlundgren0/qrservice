@@ -21,9 +21,6 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * An abstract cache
- *
- * This file is a backport from FLOW3
- * @api
  */
 abstract class AbstractFrontend implements FrontendInterface
 {
@@ -60,7 +57,6 @@ abstract class AbstractFrontend implements FrontendInterface
      * Returns this cache's identifier
      *
      * @return string The identifier for this cache
-     * @api
      */
     public function getIdentifier()
     {
@@ -71,7 +67,6 @@ abstract class AbstractFrontend implements FrontendInterface
      * Returns the backend used by this cache
      *
      * @return BackendInterface The backend used by this cache
-     * @api
      */
     public function getBackend()
     {
@@ -84,7 +79,6 @@ abstract class AbstractFrontend implements FrontendInterface
      * @param string $entryIdentifier An identifier specifying the cache entry
      * @return bool TRUE if such an entry exists, FALSE if not
      * @throws \InvalidArgumentException If $entryIdentifier is invalid
-     * @api
      */
     public function has($entryIdentifier)
     {
@@ -100,7 +94,6 @@ abstract class AbstractFrontend implements FrontendInterface
      * @param string $entryIdentifier An identifier specifying the cache entry
      * @return bool TRUE if such an entry exists, FALSE if not
      * @throws \InvalidArgumentException
-     * @api
      */
     public function remove($entryIdentifier)
     {
@@ -112,8 +105,6 @@ abstract class AbstractFrontend implements FrontendInterface
 
     /**
      * Removes all cache entries of this cache.
-     *
-     * @api
      */
     public function flush()
     {
@@ -143,19 +134,18 @@ abstract class AbstractFrontend implements FrontendInterface
      *
      * @param string $tag The tag the entries must have
      * @throws \InvalidArgumentException
-     * @api
      */
     public function flushByTag($tag)
     {
         if (!$this->isValidTag($tag)) {
             throw new \InvalidArgumentException('"' . $tag . '" is not a valid tag for a cache entry.', 1233057359);
         }
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/cache/frontend/class.t3lib_cache_frontend_abstractfrontend.php']['flushByTag'])) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/cache/frontend/class.t3lib_cache_frontend_abstractfrontend.php']['flushByTag'] as $_funcRef) {
-                $params = ['tag' => $tag];
-                GeneralUtility::callUserFunction($_funcRef, $params, $this);
-            }
+
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/cache/frontend/class.t3lib_cache_frontend_abstractfrontend.php']['flushByTag'] ?? [] as $_funcRef) {
+            $params = ['tag' => $tag];
+            GeneralUtility::callUserFunction($_funcRef, $params, $this);
         }
+
         if ($this->backend instanceof TaggableBackendInterface) {
             $this->backend->flushByTag($tag);
         }
@@ -163,8 +153,6 @@ abstract class AbstractFrontend implements FrontendInterface
 
     /**
      * Does garbage collection
-     *
-     * @api
      */
     public function collectGarbage()
     {
@@ -176,7 +164,6 @@ abstract class AbstractFrontend implements FrontendInterface
      *
      * @param string $identifier An identifier to be checked for validity
      * @return bool
-     * @api
      */
     public function isValidEntryIdentifier($identifier)
     {
@@ -188,7 +175,6 @@ abstract class AbstractFrontend implements FrontendInterface
      *
      * @param string|array $tag An identifier to be checked for validity
      * @return bool
-     * @api
      */
     public function isValidTag($tag)
     {

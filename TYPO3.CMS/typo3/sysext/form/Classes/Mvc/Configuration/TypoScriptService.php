@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Mvc\Configuration;
 
 /*
@@ -26,15 +26,15 @@ class TypoScriptService
 {
 
     /**
-     * @var \TYPO3\CMS\Extbase\Service\TypoScriptService
+     * @var \TYPO3\CMS\Core\TypoScript\TypoScriptService
      */
     protected $extbaseTypoScriptService;
 
     /**
-     * @param \TYPO3\CMS\Extbase\Service\TypoScriptService $typoScriptService
+     * @param \TYPO3\CMS\Core\TypoScript\TypoScriptService $typoScriptService
      * @internal
      */
-    public function injectTypoScriptService(\TYPO3\CMS\Extbase\Service\TypoScriptService $typoScriptService)
+    public function injectTypoScriptService(\TYPO3\CMS\Core\TypoScript\TypoScriptService $typoScriptService)
     {
         $this->extbaseTypoScriptService = $typoScriptService;
     }
@@ -78,7 +78,8 @@ class TypoScriptService
             if (isset($configuration[$keyWithoutDot]) && isset($configuration[$keyWithoutDot . '.'])) {
                 $value = $this->getTypoScriptFrontendController()->cObj->cObjGetSingle(
                     $configuration[$keyWithoutDot],
-                    $configuration[$keyWithoutDot . '.']
+                    $configuration[$keyWithoutDot . '.'],
+                    $keyWithoutDot
                 );
                 $configuration[$keyWithoutDot] = $value;
             } elseif (!isset($configuration[$keyWithoutDot]) && isset($configuration[$keyWithoutDot . '.'])) {

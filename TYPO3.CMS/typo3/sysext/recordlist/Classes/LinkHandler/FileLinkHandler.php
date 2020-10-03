@@ -31,6 +31,7 @@ use TYPO3\CMS\Recordlist\View\FolderUtilityRenderer;
 
 /**
  * Link handler for files
+ * @internal This class is a specific LinkHandler implementation and is not part of the TYPO3's Core API.
  */
 class FileLinkHandler extends AbstractLinkHandler implements LinkHandlerInterface, LinkParameterProviderInterface
 {
@@ -103,7 +104,7 @@ class FileLinkHandler extends AbstractLinkHandler implements LinkHandlerInterfac
         $folderTree->setLinkParameterProvider($this);
         $this->view->assign('tree', $folderTree->getBrowsableTree());
 
-        $this->expandFolder = isset($request->getQueryParams()['expandFolder']) ? $request->getQueryParams()['expandFolder'] : null;
+        $this->expandFolder = $request->getQueryParams()['expandFolder'] ?? null;
         if (!empty($this->linkParts) && !isset($this->expandFolder)) {
             $this->expandFolder = $this->linkParts['url'][$this->mode];
             if ($this->expandFolder instanceof File) {
@@ -123,17 +124,14 @@ class FileLinkHandler extends AbstractLinkHandler implements LinkHandlerInterfac
             $uploadForm = $this->mode === 'file' ? $folderUtilityRenderer->uploadForm($selectedFolder, []) : '';
             $createFolder = $folderUtilityRenderer->createFolder($selectedFolder);
 
-            // Insert the upload form on top, if so configured
-            $positionOfUploadFieldsOnTop = $this->getBackendUser()->getTSConfigVal('options.uploadFieldsInTopOfEB');
-            $this->view->assign('positionOfUploadFields', $positionOfUploadFieldsOnTop ? 'top' : 'bottom');
             $this->view->assign('uploadFileForm', $uploadForm);
             $this->view->assign('createFolderForm', $createFolder);
 
             // Render the file or folderlist
             if ($selectedFolder->checkActionPermission('read')) {
                 $this->view->assign('selectedFolder', $selectedFolder);
-                $parameters = $this->linkBrowser->getUrlParameters();
-                $allowedExtensions = isset($parameters['allowedExtensions']) ? $parameters['allowedExtensions'] : '';
+                $parameters = $this->linkBrowser->getParameters();
+                $allowedExtensions = $parameters['params']['allowedExtensions'] ?? '';
                 $this->expandFolder($selectedFolder, $allowedExtensions);
             }
         }
@@ -146,7 +144,6 @@ class FileLinkHandler extends AbstractLinkHandler implements LinkHandlerInterfac
      *
      * @param Folder $folder The folder path to expand
      * @param string $extensionList List of file extensions to show
-     * @return string HTML output
      */
     public function expandFolder(Folder $folder, $extensionList = '')
     {
@@ -154,6 +151,7 @@ class FileLinkHandler extends AbstractLinkHandler implements LinkHandlerInterfac
         $folderIcon = $this->iconFactory->getIconForResource($folder, Icon::SIZE_SMALL)->render();
         $this->view->assign('selectedFolderIcon', $folderIcon);
         $this->view->assign('selectedFolderTitle', GeneralUtility::fixed_lgd_cs($folder->getIdentifier(), (int)$this->getBackendUser()->uc['titleLen']));
+        $this->view->assign('selectedFolderUrl', GeneralUtility::makeInstance(LinkService::class)->asString(['type' => LinkService::TYPE_FOLDER, 'folder' => $folder]));
         if ($this->mode === 'file') {
             $this->view->assign('currentIdentifier', !empty($this->linkParts) ? $this->linkParts['url']['file']->getUid() : '');
         } else {
@@ -204,7 +202,7 @@ class FileLinkHandler extends AbstractLinkHandler implements LinkHandlerInterfac
         // Get size and icon:
         $size = GeneralUtility::formatSize(
             $fileOrFolderObject->getSize(),
-            $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_common.xlf:byteSizeUnits')
+            $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_common.xlf:byteSizeUnits')
         );
 
         return [

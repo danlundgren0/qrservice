@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Mvc\Property;
 
 /*
@@ -19,6 +19,8 @@ use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\PathUtility;
 use TYPO3\CMS\Extbase\Object\ObjectManager;
+use TYPO3\CMS\Extbase\Property\TypeConverter\DateTimeConverter;
+use TYPO3\CMS\Extbase\Validation\Validator\NotEmptyValidator;
 use TYPO3\CMS\Form\Domain\Model\FormElements\FileUpload;
 use TYPO3\CMS\Form\Domain\Model\Renderable\RenderableInterface;
 use TYPO3\CMS\Form\Mvc\Property\TypeConverter\UploadedFileReferenceConverter;
@@ -26,48 +28,68 @@ use TYPO3\CMS\Form\Mvc\Validation\MimeTypeValidator;
 
 /**
  * Scope: frontend
+ * @internal
  */
 class PropertyMappingConfiguration
 {
 
     /**
-     * Set the property mapping configuration for the file upload element.
-     * * Add the UploadedFileReferenceConverter to convert an uploaded file to an
-     *   FileReference.
-     * * Add the MimeTypeValidator to the UploadedFileReferenceConverter to
-     *   delete non valid filetypes directly.
-     * * Setup the storage:
-     *   If the property "saveToFileMount" exist for this element it will be used.
-     *   If this file mount or the property "saveToFileMount" does not exist
-     *   the folder in which the form definition lies (persistence identifier) will be used.
-     *   If the form is generated programmatically and therefore no
-     *   persistence identifier exist the default storage "1:/user_upload/" will be used.
+     * This hook is called for each form element after the class
+     * TYPO3\CMS\Form\Domain\Factory\ArrayFormFactory has built the entire form.
      *
      * @param RenderableInterface $renderable
      * @internal
-     * @todo: could we find a not so ugly solution for that?
      */
     public function afterBuildingFinished(RenderableInterface $renderable)
     {
-        if (get_class($renderable) === FileUpload::class) {
+        if ($renderable instanceof FileUpload) {
+            // Set the property mapping configuration for the file upload element.
+            // * Add the UploadedFileReferenceConverter to convert an uploaded file to a
+            //   FileReference.
+            // * Add the MimeTypeValidator to the UploadedFileReferenceConverter to
+            //   delete non-valid file types directly.
+            // * Setup the storage:
+            //   If the property "saveToFileMount" exist for this element it will be used.
+            //   If this file mount or the property "saveToFileMount" does not exist
+            //   the folder in which the form definition lies (persistence identifier) will be used.
+            //   If the form is generated programmatically and therefore no
+            //   persistence identifier exist the default storage "1:/user_upload/" will be used.
+
             /** @var \TYPO3\CMS\Extbase\Property\PropertyMappingConfiguration $propertyMappingConfiguration */
             $propertyMappingConfiguration = $renderable->getRootForm()->getProcessingRule($renderable->getIdentifier())->getPropertyMappingConfiguration();
 
-            $mimeTypeValidator = GeneralUtility::makeInstance(ObjectManager::class)
-                ->get(MimeTypeValidator::class, ['allowedMimeTypes' => $renderable->getProperties()['allowedMimeTypes']]);
+            $allowedMimeTypes = [];
+            $validators = [];
+            if (isset($renderable->getProperties()['allowedMimeTypes']) && \is_array($renderable->getProperties()['allowedMimeTypes'])) {
+                $allowedMimeTypes = array_filter($renderable->getProperties()['allowedMimeTypes']);
+            }
+            if (!empty($allowedMimeTypes)) {
+                $mimeTypeValidator = GeneralUtility::makeInstance(ObjectManager::class)
+                    ->get(MimeTypeValidator::class, ['allowedMimeTypes' => $allowedMimeTypes]);
+                $validators = [$mimeTypeValidator];
+            }
+
+            $processingRule = $renderable->getRootForm()->getProcessingRule($renderable->getIdentifier());
+            foreach ($processingRule->getValidators() as $validator) {
+                if (!($validator instanceof NotEmptyValidator)) {
+                    $validators[] = $validator;
+                    $processingRule->removeValidator($validator);
+                }
+            }
+
             $uploadConfiguration = [
-                UploadedFileReferenceConverter::CONFIGURATION_FILE_VALIDATORS => [$mimeTypeValidator],
+                UploadedFileReferenceConverter::CONFIGURATION_FILE_VALIDATORS => $validators,
                 UploadedFileReferenceConverter::CONFIGURATION_UPLOAD_CONFLICT_MODE => 'rename',
             ];
 
-            $saveToFileMountIdentifier = (isset($renderable->getProperties()['saveToFileMount'])) ? $renderable->getProperties()['saveToFileMount'] : null;
+            $saveToFileMountIdentifier = $renderable->getProperties()['saveToFileMount'] ?? '';
             if ($this->checkSaveFileMountAccess($saveToFileMountIdentifier)) {
                 $uploadConfiguration[UploadedFileReferenceConverter::CONFIGURATION_UPLOAD_FOLDER] = $saveToFileMountIdentifier;
             } else {
                 $persistenceIdentifier = $renderable->getRootForm()->getPersistenceIdentifier();
                 if (!empty($persistenceIdentifier)) {
                     $pathinfo = PathUtility::pathinfo($persistenceIdentifier);
-                    $saveToFileMountIdentifier  = $pathinfo['dirname'];
+                    $saveToFileMountIdentifier = $pathinfo['dirname'];
                     if ($this->checkSaveFileMountAccess($saveToFileMountIdentifier)) {
                         $uploadConfiguration[UploadedFileReferenceConverter::CONFIGURATION_UPLOAD_FOLDER] = $saveToFileMountIdentifier;
                     }
@@ -75,6 +97,17 @@ class PropertyMappingConfiguration
             }
 
             $propertyMappingConfiguration->setTypeConverterOptions(UploadedFileReferenceConverter::class, $uploadConfiguration);
+            return;
+        }
+
+        if ($renderable->getType() === 'Date') {
+            // Set the property mapping configuration for the `Date` element.
+
+            /** @var \TYPO3\CMS\Extbase\Property\PropertyMappingConfiguration $propertyMappingConfiguration */
+            $propertyMappingConfiguration = $renderable->getRootForm()->getProcessingRule($renderable->getIdentifier())->getPropertyMappingConfiguration();
+            // @see https://www.w3.org/TR/2011/WD-html-markup-20110405/input.date.html#input.date.attrs.value
+            // 'Y-m-d' = https://tools.ietf.org/html/rfc3339#section-5.6 -> full-date
+            $propertyMappingConfiguration->setTypeConverterOption(DateTimeConverter::class, DateTimeConverter::CONFIGURATION_DATE_FORMAT, 'Y-m-d');
         }
     }
 

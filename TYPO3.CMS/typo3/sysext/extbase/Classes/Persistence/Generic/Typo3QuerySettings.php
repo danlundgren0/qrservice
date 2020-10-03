@@ -14,13 +14,15 @@ namespace TYPO3\CMS\Extbase\Persistence\Generic;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Context\Context;
+use TYPO3\CMS\Core\Context\LanguageAspect;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
+use TYPO3\CMS\Extbase\Object\ObjectManager;
+use TYPO3\CMS\Extbase\Service\EnvironmentService;
 
 /**
- * Query settings. This class is NOT part of the TYPO3.Flow API.
- * It reflects the settings unique to TYPO3 CMS.
- *
- * @api
+ * Query settings, reflects the settings unique to TYPO3 CMS.
  */
 class Typo3QuerySettings implements QuerySettingsInterface
 {
@@ -77,34 +79,33 @@ class Typo3QuerySettings implements QuerySettingsInterface
     protected $languageOverlayMode = true;
 
     /**
+     * Language Mode is NOT used when consistentTranslationOverlayHandling is enabled
+     *
      * Representing sys_language_mode only valid for current context
      *
      * @var string
      */
-    protected $languageMode = null;
+    protected $languageMode;
 
     /**
-     * Represensting sys_language_uid only valid for current context
+     * Representing sys_language_uid only valid for current context
      *
      * @var int
      */
     protected $languageUid = 0;
 
     /**
-     * Flag whether the query should use a prepared statement
-     *
-     * @var bool
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 9, this option is handled automatically now in the database abstraction
+     * @var EnvironmentService
      */
-    protected $usePreparedStatement = false;
+    protected $environmentService;
 
     /**
-     * Flag whether the query should be cached using the caching framework
-     *
-     * @var bool
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9, as the database is taking care of query caching
+     * @param EnvironmentService $environmentService
      */
-    protected $useQueryCache = true;
+    public function injectEnvironmentService(EnvironmentService $environmentService)
+    {
+        $this->environmentService = $environmentService;
+    }
 
     /**
      * As long as we use a feature flag ignoreAllEnableFieldsInBe to determine the default behavior, the
@@ -112,24 +113,22 @@ class Typo3QuerySettings implements QuerySettingsInterface
      */
     public function initializeObject()
     {
-        /** @var $objectManager \TYPO3\CMS\Extbase\Object\ObjectManager */
-        $objectManager = GeneralUtility::makeInstance(\TYPO3\CMS\Extbase\Object\ObjectManager::class);
-        /** @var $configurationManager \TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface */
-        $configurationManager = $objectManager->get(\TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface::class);
-        if (TYPO3_MODE === 'BE' && $configurationManager->isFeatureEnabled('ignoreAllEnableFieldsInBe')) {
+        /** @var ObjectManager $objectManager */
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        /** @var ConfigurationManagerInterface $configurationManager */
+        $configurationManager = $objectManager->get(ConfigurationManagerInterface::class);
+        if ($this->environmentService->isEnvironmentInBackendMode() && $configurationManager->isFeatureEnabled('ignoreAllEnableFieldsInBe')) {
             $this->setIgnoreEnableFields(true);
         }
-
-        // TYPO3 CMS language defaults
-        $this->setLanguageUid(0);
-        $this->setLanguageMode(null);
+        /** @var LanguageAspect $languageAspect */
+        $languageAspect = GeneralUtility::makeInstance(Context::class)->getAspect('language');
+        $this->setLanguageUid($languageAspect->getContentId());
         $this->setLanguageOverlayMode(false);
 
-        // Set correct language uid for frontend handling
-        if (isset($GLOBALS['TSFE']) && is_object($GLOBALS['TSFE'])) {
-            $this->setLanguageUid((int)$GLOBALS['TSFE']->sys_language_content);
-            $this->setLanguageOverlayMode($GLOBALS['TSFE']->sys_language_contentOL ?: false);
-            $this->setLanguageMode($GLOBALS['TSFE']->sys_language_mode ?: null);
+        if ($this->environmentService->isEnvironmentInFrontendMode()) {
+            $overlayMode = $languageAspect->getLegacyOverlayType() === 'hideNonTranslated' ? 'hideNonTranslated' : (bool)$languageAspect->getLegacyOverlayType();
+            $this->setLanguageOverlayMode($overlayMode);
+            $this->setLanguageMode($languageAspect->getLegacyLanguageMode() ?: null);
         } elseif ((int)GeneralUtility::_GP('L')) {
             // Set language from 'L' parameter
             $this->setLanguageUid((int)GeneralUtility::_GP('L'));
@@ -141,7 +140,6 @@ class Typo3QuerySettings implements QuerySettingsInterface
      *
      * @param bool $respectStoragePage If TRUE the storage page ID will be determined and the statement will be extended accordingly.
      * @return QuerySettingsInterface
-     * @api
      */
     public function setRespectStoragePage($respectStoragePage)
     {
@@ -164,7 +162,6 @@ class Typo3QuerySettings implements QuerySettingsInterface
      *
      * @param array $storagePageIds If given the storage page IDs will be determined and the statement will be extended accordingly.
      * @return QuerySettingsInterface
-     * @api
      */
     public function setStoragePageIds(array $storagePageIds)
     {
@@ -185,7 +182,6 @@ class Typo3QuerySettings implements QuerySettingsInterface
     /**
      * @param bool $respectSysLanguage TRUE if TYPO3 language settings are to be applied
      * @return QuerySettingsInterface
-     * @api
      */
     public function setRespectSysLanguage($respectSysLanguage)
     {
@@ -204,7 +200,6 @@ class Typo3QuerySettings implements QuerySettingsInterface
     /**
      * @param mixed $languageOverlayMode TRUE, FALSE or "hideNonTranslated"
      * @return QuerySettingsInterface instance of $this to allow method chaining
-     * @api
      */
     public function setLanguageOverlayMode($languageOverlayMode = false)
     {
@@ -221,9 +216,10 @@ class Typo3QuerySettings implements QuerySettingsInterface
     }
 
     /**
+     * Language Mode is NOT used when consistentTranslationOverlayHandling is enabled
+     *
      * @param string $languageMode NULL, "content_fallback", "strict" or "ignore"
      * @return QuerySettingsInterface instance of $this to allow method chaining
-     * @api
      */
     public function setLanguageMode($languageMode = '')
     {
@@ -232,6 +228,8 @@ class Typo3QuerySettings implements QuerySettingsInterface
     }
 
     /**
+     * Language Mode is NOT used when consistentTranslationOverlayHandling is enabled
+     *
      * @return string NULL, "content_fallback", "strict" or "ignore"
      */
     public function getLanguageMode()
@@ -242,7 +240,6 @@ class Typo3QuerySettings implements QuerySettingsInterface
     /**
      * @param int $languageUid
      * @return QuerySettingsInterface instance of $this to allow method chaining
-     * @api
      */
     public function setLanguageUid($languageUid)
     {
@@ -266,7 +263,6 @@ class Typo3QuerySettings implements QuerySettingsInterface
      * @param bool $ignoreEnableFields
      * @return QuerySettingsInterface
      * @see setEnableFieldsToBeIgnored()
-     * @api
      */
     public function setIgnoreEnableFields($ignoreEnableFields)
     {
@@ -296,7 +292,6 @@ class Typo3QuerySettings implements QuerySettingsInterface
      * @param array $enableFieldsToBeIgnored
      * @return QuerySettingsInterface
      * @see setIgnoreEnableFields()
-     * @api
      */
     public function setEnableFieldsToBeIgnored($enableFieldsToBeIgnored)
     {
@@ -321,7 +316,6 @@ class Typo3QuerySettings implements QuerySettingsInterface
      *
      * @param bool $includeDeleted
      * @return QuerySettingsInterface
-     * @api
      */
     public function setIncludeDeleted($includeDeleted)
     {
@@ -337,49 +331,5 @@ class Typo3QuerySettings implements QuerySettingsInterface
     public function getIncludeDeleted()
     {
         return $this->includeDeleted;
-    }
-
-    /**
-     * @param bool $usePreparedStatement
-     * @return QuerySettingsInterface
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 9, this option is handled automatically now in the database abstraction
-     */
-    public function usePreparedStatement($usePreparedStatement)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $this->usePreparedStatement = $usePreparedStatement;
-        return $this;
-    }
-
-    /**
-     * @return bool
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 9, this option is handled automatically now in the database abstraction
-     */
-    public function getUsePreparedStatement()
-    {
-        GeneralUtility::logDeprecatedFunction();
-        return (bool)$this->usePreparedStatement;
-    }
-
-    /**
-     * @param bool $useQueryCache
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9, as the database is taking care of query caching
-     * @return QuerySettingsInterface
-     */
-    public function useQueryCache($useQueryCache)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $this->useQueryCache = (bool)$useQueryCache;
-        return $this;
-    }
-
-    /**
-     * @return bool
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9, as the database is taking care of query caching
-     */
-    public function getUseQueryCache()
-    {
-        GeneralUtility::logDeprecatedFunction();
-        return $this->useQueryCache;
     }
 }

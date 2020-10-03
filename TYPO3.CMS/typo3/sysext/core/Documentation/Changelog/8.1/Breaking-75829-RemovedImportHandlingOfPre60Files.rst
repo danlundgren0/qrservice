@@ -10,9 +10,9 @@ See :issue:`75829`
 Description
 ===========
 
-The functionality for importing .t3d files created from installations lower than TYPO3 CMS 6.0 has been removed.
+The functionality for importing :file:`*.t3d` files created from installations lower than TYPO3 CMS 6.0 has been removed.
 
-The following public method has been removed: :php`\TYPO3\CMS\Impexp\Import::fixCharsets()`.
+The following public method has been removed: :php:`\TYPO3\CMS\Impexp\Import::fixCharsets()`.
 
 
 Impact
@@ -37,4 +37,4 @@ Migration
 It is recommended to import files in a 6.x or 7.x installation and export the files from there again to import them
 in TYPO3 v8.
 
-.. index:: PHP-API, Backend
+.. index:: PHP-API, Backend, ext:impexp

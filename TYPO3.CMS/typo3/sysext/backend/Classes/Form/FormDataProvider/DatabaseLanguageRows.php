@@ -45,15 +45,9 @@ class DatabaseLanguageRows implements FormDataProviderInterface
             if (isset($result['databaseRow'][$languageField]) && $result['databaseRow'][$languageField] > 0
                 && isset($result['databaseRow'][$fieldWithUidOfDefaultRecord]) && $result['databaseRow'][$fieldWithUidOfDefaultRecord] > 0
             ) {
-                // Table pages has its overlays in pages_language_overlay, this is accounted here
-                $tableNameWithDefaultRecords = $result['tableName'];
-                if ($tableNameWithDefaultRecords === 'pages_language_overlay') {
-                    $tableNameWithDefaultRecords = 'pages';
-                }
-
                 // Default language record of localized record
                 $defaultLanguageRow = $this->getRecordWorkspaceOverlay(
-                    $tableNameWithDefaultRecords,
+                    $result['tableName'],
                     (int)$result['databaseRow'][$fieldWithUidOfDefaultRecord]
                 );
                 if (empty($defaultLanguageRow)) {
@@ -70,7 +64,10 @@ class DatabaseLanguageRows implements FormDataProviderInterface
                     && !empty($result['databaseRow'][$result['processedTca']['ctrl']['transOrigDiffSourceField']])
                 ) {
                     $defaultLanguageKey = $result['tableName'] . ':' . (int)$result['databaseRow']['uid'];
-                    $result['defaultLanguageDiffRow'][$defaultLanguageKey] = unserialize($result['databaseRow'][$result['processedTca']['ctrl']['transOrigDiffSourceField']]);
+                    $result['defaultLanguageDiffRow'][$defaultLanguageKey] = unserialize(
+                        $result['databaseRow'][$result['processedTca']['ctrl']['transOrigDiffSourceField']],
+                        ['allowed_classes' => false]
+                    );
                 }
 
                 // Add language overlays from further localizations if requested
@@ -90,7 +87,7 @@ class DatabaseLanguageRows implements FormDataProviderInterface
                             continue;
                         }
                         $translationInfo = $translationProvider->translationInfo(
-                            $tableNameWithDefaultRecords,
+                            $result['tableName'],
                             (int)$result['databaseRow'][$fieldWithUidOfDefaultRecord],
                             $additionalLanguageUid
                         );

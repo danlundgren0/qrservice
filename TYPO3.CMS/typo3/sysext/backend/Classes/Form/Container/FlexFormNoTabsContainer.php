@@ -26,6 +26,17 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 class FlexFormNoTabsContainer extends AbstractContainer
 {
     /**
+     * Default field information enabled for this element.
+     *
+     * @var array
+     */
+    protected $defaultFieldInformation = [
+        'tcaDescription' => [
+            'renderType' => 'tcaDescription',
+        ],
+    ];
+
+    /**
      * Entry method
      *
      * @return array As defined in initializeResultArray() of AbstractNode
@@ -45,7 +56,6 @@ class FlexFormNoTabsContainer extends AbstractContainer
         $sheetName = array_pop($flexFormSheetNames);
         $flexFormRowDataSubPart = $flexFormRowData['data'][$sheetName]['lDEF'] ?: [];
 
-        // That was taken from GeneralUtility::resolveSheetDefInDS - no idea if it is important
         unset($flexFormDataStructureArray['meta']);
 
         if (!is_array($flexFormDataStructureArray['sheets'][$sheetName]['ROOT']['el'])) {
@@ -72,7 +82,14 @@ class FlexFormNoTabsContainer extends AbstractContainer
         $options['flexFormFormPrefix'] = '[data][' . $sheetName . '][lDEF]';
         $options['parameterArray'] = $parameterArray;
 
+        $resultArray = $this->initializeResultArray();
+
+        $fieldInformationResult = $this->renderFieldInformation();
+        $resultArray['html'] = '<div>' . $fieldInformationResult['html'] . '</div>';
+        $resultArray = $this->mergeChildReturnIntoExistingResult($resultArray, $fieldInformationResult, false);
+
         $options['renderType'] = 'flexFormElementContainer';
-        return $this->nodeFactory->create($options)->render();
+        $childResult = $this->nodeFactory->create($options)->render();
+        return $this->mergeChildReturnIntoExistingResult($resultArray, $childResult, true);
     }
 }

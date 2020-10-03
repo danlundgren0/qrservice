@@ -13,23 +13,29 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Uri;
  *
  * The TYPO3 project - inspiring people to share!
  */
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
+
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
- * Email URI view helper.
- * Generates an email URI incorporating TYPO3s spamProtectEmailAddresses-settings.
+ * Email URI ViewHelper.
+ * Generates an email URI incorporating TYPO3s `spamProtectEmailAddresses`_ TypoScript setting.
  *
- * = Examples
+ * .. _spamProtectEmailAddresses: https://docs.typo3.org/m/typo3/reference-typoscript/master/en-us/Setup/Config/Index.html#spamprotectemailaddresses
  *
- * <code title="basic email URI">
- * <f:uri.email email="foo@bar.tld" />
- * </code>
- * <output>
- * javascript:linkTo_UnCryptMailto('ocknvq,hqqBdct0vnf');
- * (depending on your spamProtectEmailAddresses-settings)
- * </output>
+ * Example
+ * =======
+ *
+ * Basic email URI::
+ *
+ *    <f:uri.email email="foo@bar.tld" />
+ *
+ * Output::
+ *
+ *    javascript:linkTo_UnCryptMailto('ocknvq,hqqBdct0vnf');
+ *
+ * Depending on `spamProtectEmailAddresses`_ setting.
  */
 class EmailViewHelper extends AbstractViewHelper
 {
@@ -37,12 +43,9 @@ class EmailViewHelper extends AbstractViewHelper
 
     /**
      * Initialize arguments
-     *
-     * @api
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('email', 'string', 'The email address to be turned into a URI', true);
     }
 
@@ -60,8 +63,7 @@ class EmailViewHelper extends AbstractViewHelper
         if (TYPO3_MODE === 'FE') {
             $emailParts = $GLOBALS['TSFE']->cObj->getMailTo($email, $email);
             return reset($emailParts);
-        } else {
-            return 'mailto:' . $email;
         }
+        return 'mailto:' . $email;
     }
 }

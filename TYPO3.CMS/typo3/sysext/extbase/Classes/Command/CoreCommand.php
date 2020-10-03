@@ -16,6 +16,8 @@ namespace TYPO3\CMS\Extbase\Command;
 
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
+use TYPO3\CMS\Core\Package\FailsafePackageManager;
+use TYPO3\CMS\Core\Package\PackageManager;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Core\Bootstrap;
 use TYPO3\CMS\Extbase\Mvc\Cli\CommandManager;
@@ -25,6 +27,7 @@ use TYPO3\CMS\Extbase\Object\ObjectManager;
  * Main call to register any Extbase command from Extbase command controllers
  *
  * Fetches all registered Extbase commands and adds them to the application as custom Extbase commands
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Use symfony/console commands instead.
  */
 class CoreCommand extends Command
 {
@@ -52,6 +55,11 @@ class CoreCommand extends Command
     public function setApplication(Application $application = null)
     {
         parent::setApplication($application);
+
+        // Extbase commands can not be initialized in failsafe mode
+        if (GeneralUtility::makeInstance(PackageManager::class) instanceof FailsafePackageManager) {
+            return;
+        }
 
         // Find any registered Extbase commands
         $this->extbaseBootstrap = GeneralUtility::makeInstance(Bootstrap::class);

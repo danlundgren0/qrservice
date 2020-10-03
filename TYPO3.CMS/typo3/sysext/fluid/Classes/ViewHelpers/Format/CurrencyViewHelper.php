@@ -14,38 +14,65 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Format;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
  * Formats a given float to a currency representation.
  *
- * = Examples =
+ * Examples
+ * ========
  *
- * <code title="Defaults">
- * <f:format.currency>123.456</f:format.currency>
- * </code>
- * <output>
- * 123,46
- * </output>
+ * Defaults
+ * --------
  *
- * <code title="All parameters">
- * <f:format.currency currencySign="$" decimalSeparator="." thousandsSeparator="," prependCurrency="true" separateCurrency="false" decimals="2">54321</f:format.currency>
- * </code>
- * <output>
- * $54,321.00
- * </output>
+ * ::
  *
- * <code title="Inline notation">
- * {someNumber -> f:format.currency(thousandsSeparator: ',', currencySign: '€')}
- * </code>
- * <output>
- * 54,321,00 €
- * (depending on the value of {someNumber})
- * </output>
+ *    <f:format.currency>123.456</f:format.currency>
  *
- * @api
+ * Output::
+ *
+ *     123,46
+ *
+ * All parameters
+ * --------------
+ *
+ * ::
+ *
+ *    <f:format.currency decimalSeparator="." thousandsSeparator="," decimals="2"
+ *        currencySign="$" prependCurrency="true" separateCurrency="false"
+ *    >
+ *        54321
+ *    </f:format.currency>
+ *
+ * Output::
+ *
+ *     $54,321.00
+ *
+ * Inline notation
+ * ---------------
+ *
+ * ::
+ *
+ *    {someNumber -> f:format.currency(thousandsSeparator: ',', currencySign: 'EUR')}
+ *
+ * Output::
+ *
+ *    54,321,00 EUR
+ *
+ * Depending on the value of ``{someNumber}``.
+ *
+ * Use dash for decimals without value
+ * -----------------------------------
+ *
+ * ::
+ *
+ *    <f:format.currency useDash="true">123.00</f:format.currency>
+ *
+ * Output::
+ *
+ *     123,-
  */
 class CurrencyViewHelper extends AbstractViewHelper
 {
@@ -65,13 +92,13 @@ class CurrencyViewHelper extends AbstractViewHelper
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('currencySign', 'string', 'The currency sign, eg $ or €.', false, '');
         $this->registerArgument('decimalSeparator', 'string', 'The separator for the decimal point.', false, ',');
         $this->registerArgument('thousandsSeparator', 'string', 'The thousands separator.', false, '.');
         $this->registerArgument('prependCurrency', 'bool', 'Select if the currency sign should be prepended', false, false);
         $this->registerArgument('separateCurrency', 'bool', 'Separate the currency sign from the number by a single space, defaults to true due to backwards compatibility', false, true);
         $this->registerArgument('decimals', 'int', 'Set decimals places.', false, 2);
+        $this->registerArgument('useDash', 'bool', 'Use the dash instead of decimal 00', false, false);
     }
 
     /**
@@ -91,6 +118,7 @@ class CurrencyViewHelper extends AbstractViewHelper
         $prependCurrency = $arguments['prependCurrency'];
         $separateCurrency = $arguments['separateCurrency'];
         $decimals = $arguments['decimals'];
+        $useDash = $arguments['useDash'];
 
         $floatToFormat = $renderChildrenClosure();
         if (empty($floatToFormat)) {
@@ -99,6 +127,11 @@ class CurrencyViewHelper extends AbstractViewHelper
             $floatToFormat = (float)$floatToFormat;
         }
         $output = number_format($floatToFormat, $decimals, $decimalSeparator, $thousandsSeparator);
+
+        if ($useDash && $floatToFormat === floor($floatToFormat)) {
+            $output = explode($decimalSeparator, $output)[0] . $decimalSeparator . '—';
+        }
+
         if ($currencySign !== '') {
             $currencySeparator = $separateCurrency ? ' ' : '';
             if ($prependCurrency === true) {

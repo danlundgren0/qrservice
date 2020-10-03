@@ -46,9 +46,10 @@ class DatabaseRowInitializeNew implements FormDataProviderInterface
         $result = $this->setDefaultsFromUserTsConfig($result);
         $result = $this->setDefaultsFromPageTsConfig($result);
         $result = $this->setDefaultsFromNeighborRow($result);
-        $result = $this->setDefaultsFromDevVals($result);
+        $result = $this->setDefaultsFromDefaultValues($result);
         $result = $this->setDefaultsFromInlineRelations($result);
         $result = $this->setDefaultsFromInlineParentLanguage($result);
+        $result = $this->setDefaultsFromInlineParentUid($result);
         $result = $this->setPid($result);
 
         return $result;
@@ -122,28 +123,49 @@ class DatabaseRowInitializeNew implements FormDataProviderInterface
     }
 
     /**
-     * Apply default values from GET / POST
-     *
-     * @todo: Fetch this stuff from request object as soon as modules were moved to PSR-7,
-     * @todo: or hand values over via $result array, so the _GP access is transferred to
-     * @todo: controllers concern.
+     * Apply default values.
+     * These are typically carried around as "defVals" GET vars and set by controllers
+     * in $result['defaultValues'] array as init values.
      *
      * @param array $result Result array
      * @return array Modified result array
      */
-    protected function setDefaultsFromDevVals(array $result)
+    protected function setDefaultsFromDefaultValues(array $result)
     {
+        $result = $this->setDefaultValuesFromGetPost($result);
         $tableName = $result['tableName'];
-        $defaultValuesFromGetPost = GeneralUtility::_GP('defVals');
-        if (isset($defaultValuesFromGetPost[$tableName])
-            && is_array($defaultValuesFromGetPost[$tableName])
-        ) {
-            foreach ($defaultValuesFromGetPost[$tableName] as $fieldName => $fieldValue) {
+        $defaultValues = $result['defaultValues'] ?? [];
+        if (isset($defaultValues[$tableName]) && is_array($defaultValues[$tableName])) {
+            foreach ($defaultValues[$tableName] as $fieldName => $fieldValue) {
                 if (isset($result['processedTca']['columns'][$fieldName])) {
                     $result['databaseRow'][$fieldName] = $fieldValue;
                 }
             }
         }
+        return $result;
+    }
+
+    /**
+     * @param array $result
+     * @return array
+     * @deprecated since TYPO3 v9 will be removed in TYPO3 v10.0 - see $result['defaultValues']
+     */
+    protected function setDefaultValuesFromGetPost(array $result)
+    {
+        if (!empty($result['defaultValues'])) {
+            return $result;
+        }
+
+        $defaultValues = GeneralUtility::_GP('defVals');
+        if (!empty($defaultValues)) {
+            trigger_error(
+                'Default values for new database rows should be set from controller context. Applying default values'
+                . ' via GET/POST parameters is deprecated since 9.2 and will be removed in version 10',
+                E_USER_DEPRECATED
+            );
+            $result['defaultValues'] = $defaultValues;
+        }
+
         return $result;
     }
 
@@ -176,7 +198,8 @@ class DatabaseRowInitializeNew implements FormDataProviderInterface
         }
         $selectorFieldName = $result['inlineParentConfig']['foreign_selector'];
         if (!isset($result['processedTca']['columns'][$selectorFieldName]['config']['type'])
-            || ($result['processedTca']['columns'][$selectorFieldName]['config']['type'] !== 'select'
+            || (
+                $result['processedTca']['columns'][$selectorFieldName]['config']['type'] !== 'select'
                 && $result['processedTca']['columns'][$selectorFieldName]['config']['type'] !== 'group'
             )
         ) {
@@ -222,6 +245,24 @@ class DatabaseRowInitializeNew implements FormDataProviderInterface
         $parentSysLanguageUid = (int)$result['inlineParentConfig']['inline']['parentSysLanguageUid'];
         $languageFieldName = $result['processedTca']['ctrl']['languageField'];
         $result['databaseRow'][$languageFieldName] = $parentSysLanguageUid;
+
+        return $result;
+    }
+
+    /**
+     * Set the parent uid of inline relations created via ajax to the corresponding foreign field
+     *
+     * @param array $result Result array
+     * @return array
+     */
+    protected function setDefaultsFromInlineParentUid(array $result): array
+    {
+        $isInlineChild = $result['isInlineChild'] ?? false;
+        $parentField = $result['inlineParentConfig']['foreign_field'] ?? false;
+
+        if ($isInlineChild && $parentField && !empty($result['inlineParentUid'])) {
+            $result['databaseRow'][$parentField] = $result['inlineParentUid'];
+        }
 
         return $result;
     }

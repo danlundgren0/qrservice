@@ -55,7 +55,7 @@ class TemplatePaths
      *
      * @var array
      */
-    protected static $resolvedIdentifiers = [
+    protected $resolvedIdentifiers = [
         self::NAME_TEMPLATES => [],
         self::NAME_LAYOUTS => [],
         self::NAME_PARTIALS => []
@@ -66,7 +66,7 @@ class TemplatePaths
      *
      * @var array
      */
-    protected static $resolvedFiles = [
+    protected $resolvedFiles = [
         self::NAME_TEMPLATES => [],
         self::NAME_LAYOUTS => [],
         self::NAME_PARTIALS => []
@@ -108,11 +108,10 @@ class TemplatePaths
     protected $format = self::DEFAULT_FORMAT;
 
     /**
-     * @param string|NULL $packageNameOrArray
+     * @param array|string|NULL $packageNameOrArray
      */
     public function __construct($packageNameOrArray = null)
     {
-        $this->clearResolvedIdentifiersAndTemplates();
         if (is_array($packageNameOrArray)) {
             $this->fillFromConfigurationArray($packageNameOrArray);
         } elseif (!empty($packageNameOrArray)) {
@@ -147,7 +146,7 @@ class TemplatePaths
      */
     public function setLayoutPathAndFilename($layoutPathAndFilename)
     {
-        $this->layoutPathAndFilename = $layoutPathAndFilename;
+        $this->layoutPathAndFilename = (string) $this->sanitizePath($layoutPathAndFilename);
     }
 
     /**
@@ -250,25 +249,26 @@ class TemplatePaths
      * @return string|NULL
      * @api
      */
-    public function resolveTemplateFileForControllerAndActionAndFormat($controller, $action, $format = self::DEFAULT_FORMAT)
+    public function resolveTemplateFileForControllerAndActionAndFormat($controller, $action, $format = null)
     {
         if ($this->templatePathAndFilename !== null) {
             return $this->templatePathAndFilename;
         }
+        $format = $format ?: $this->getFormat();
         $controller = str_replace('\\', '/', $controller);
         $action = ucfirst($action);
         $identifier = $controller . '/' . $action . '.' . $format;
-        if (!array_key_exists($identifier, self::$resolvedFiles['templates'])) {
+        if (!array_key_exists($identifier, $this->resolvedFiles['templates'])) {
             $templateRootPaths = $this->getTemplateRootPaths();
             foreach ([$controller . '/' . $action, $action] as $possibleRelativePath) {
                 try {
-                    return self::$resolvedFiles['templates'][$identifier] = $this->resolveFileInPaths($templateRootPaths, $possibleRelativePath, $format);
+                    return $this->resolvedFiles['templates'][$identifier] = $this->resolveFileInPaths($templateRootPaths, $possibleRelativePath, $format);
                 } catch (InvalidTemplateResourceException $error) {
-                    self::$resolvedFiles['templates'][$identifier] = null;
+                    $this->resolvedFiles['templates'][$identifier] = null;
                 }
             }
         }
-        return isset(self::$resolvedFiles[self::NAME_TEMPLATES][$identifier]) ? self::$resolvedFiles[self::NAME_TEMPLATES][$identifier] : null;
+        return isset($this->resolvedFiles[self::NAME_TEMPLATES][$identifier]) ? $this->resolvedFiles[self::NAME_TEMPLATES][$identifier] : null;
     }
 
     /**
@@ -276,31 +276,31 @@ class TemplatePaths
      * @param string $format
      * @return array
      */
-    public function resolveAvailableTemplateFiles($controllerName, $format = self::DEFAULT_FORMAT)
+    public function resolveAvailableTemplateFiles($controllerName, $format = null)
     {
         $paths = $this->getTemplateRootPaths();
         foreach ($paths as $index => $path) {
             $paths[$index] = rtrim($path . $controllerName, '/') . '/';
         }
-        return $this->resolveFilesInFolders($paths, $format);
+        return $this->resolveFilesInFolders($paths, $format ?: $this->getFormat());
     }
 
     /**
      * @param string $format
      * @return array
      */
-    public function resolveAvailablePartialFiles($format = self::DEFAULT_FORMAT)
+    public function resolveAvailablePartialFiles($format = null)
     {
-        return $this->resolveFilesInFolders($this->getPartialRootPaths(), $format);
+        return $this->resolveFilesInFolders($this->getPartialRootPaths(), $format ?: $this->getFormat());
     }
 
     /**
      * @param string $format
      * @return array
      */
-    public function resolveAvailableLayoutFiles($format = self::DEFAULT_FORMAT)
+    public function resolveAvailableLayoutFiles($format = null)
     {
-        return $this->resolveFilesInFolders($this->getLayoutRootPaths(), $format);
+        return $this->resolveFilesInFolders($this->getLayoutRootPaths(), $format ?: $this->getFormat());
     }
 
     /**
@@ -324,8 +324,17 @@ class TemplatePaths
      */
     protected function resolveFilesInFolder($folder, $format)
     {
-        $files = glob($folder . '*.' . $format);
-        return !$files ? [] : $files;
+        if (!is_dir($folder)) {
+            return [];
+        }
+
+        $directoryIterator = new \RecursiveDirectoryIterator($folder, \FilesystemIterator::FOLLOW_SYMLINKS | \FilesystemIterator::SKIP_DOTS);
+        $recursiveIterator = new \RecursiveIteratorIterator($directoryIterator, \RecursiveIteratorIterator::SELF_FIRST);
+        $filterIterator = new \CallbackFilterIterator($recursiveIterator, function($current, $key, $iterator) use ($format) {
+            return $current->getExtension() === $format;
+        });
+
+        return array_keys(iterator_to_array($filterIterator));
     }
 
     /**
@@ -403,7 +412,7 @@ class TemplatePaths
         if (is_array($path)) {
             $paths = array_map([$this, 'sanitizePath'], $path);
             return array_unique($paths);
-        } elseif (strpos($path, 'php://') === 0) {
+        } elseif (($wrapper = parse_url($path, PHP_URL_SCHEME)) && in_array($wrapper, stream_get_wrappers())) {
             return $path;
         } elseif (!empty($path)) {
             $path = str_replace(['\\', '//'], '/', (string) $path);
@@ -435,7 +444,7 @@ class TemplatePaths
      */
     protected function ensureAbsolutePath($path)
     {
-        return ((!empty($path) && $path{0} !== '/' && $path{1} !== ':') ? $this->sanitizePath(realpath($path)) : $path);
+        return ((!empty($path) && $path[0] !== '/' && $path[1] !== ':') ? $this->sanitizePath(realpath($path)) : $path);
     }
 
     /**
@@ -456,7 +465,7 @@ class TemplatePaths
      */
     protected function ensureSuffixedPath($path)
     {
-        return rtrim($path, '/') . '/';
+        return $path !== '' ? rtrim($path, '/') . '/' : '';
     }
 
     /**
@@ -475,7 +484,7 @@ class TemplatePaths
      */
     protected function extractPathArrays(array $paths)
     {
-        $format = self::DEFAULT_FORMAT;
+        $format = $this->getFormat();
         // pre-processing: if special parameters exist, extract them:
         if (isset($paths[self::CONFIG_FORMAT])) {
             $format = $paths[self::CONFIG_FORMAT];
@@ -489,9 +498,9 @@ class TemplatePaths
         foreach ($pathParts as $pathPart) {
             $partPaths = [];
             if (isset($paths[$pathPart]) && is_array($paths[$pathPart])) {
-                $partPaths = array_merge($partPaths, array_values($paths[$pathPart]));
+                $partPaths = array_merge($partPaths, $paths[$pathPart]);
             }
-            $pathCollections[] = array_values(array_unique(array_map([$this, 'ensureSuffixedPath'], $partPaths)));
+            $pathCollections[] = array_unique(array_map([$this, 'ensureSuffixedPath'], $partPaths));
         }
         $pathCollections = array_map([$this, 'ensureAbsolutePaths'], $pathCollections);
         $pathCollections[] = $format;
@@ -518,7 +527,7 @@ class TemplatePaths
     {
         $filePathAndFilename = $this->getLayoutPathAndFilename($layoutName);
         $layoutName = str_replace('.', '_', $layoutName);
-        $prefix = 'layout_' . $layoutName;
+        $prefix = 'layout_' . $layoutName . '_' . $this->getFormat();
         return $this->createIdentifierForFile($filePathAndFilename, $prefix);
     }
 
@@ -550,11 +559,10 @@ class TemplatePaths
      */
     public function getTemplateIdentifier($controller = 'Default', $action = 'Default')
     {
-        $format = $this->getFormat();
         if ($this->templateSource !== null) {
-            return 'source_' . sha1($this->templateSource) . '_' . $controller . '_' . $action . '_' . $format;
+            return 'source_' . sha1($this->templateSource) . '_' . $controller . '_' . $action . '_' . $this->getFormat();
         }
-        $templatePathAndFilename = $this->resolveTemplateFileForControllerAndActionAndFormat($controller, $action, $format);
+        $templatePathAndFilename = $this->resolveTemplateFileForControllerAndActionAndFormat($controller, $action);
         $prefix = $controller . '_action_' . $action;
         return $this->createIdentifierForFile($templatePathAndFilename, $prefix);
     }
@@ -584,18 +592,18 @@ class TemplatePaths
             rewind($this->templateSource);
             return $this->templateSource = stream_get_contents($this->templateSource);
         }
-        $format = $this->getFormat();
-        $templateReference = $this->resolveTemplateFileForControllerAndActionAndFormat($controller, $action, $format);
+        $templateReference = $this->resolveTemplateFileForControllerAndActionAndFormat($controller, $action);
         if (!file_exists($templateReference) && $templateReference !== 'php://stdin') {
+            $format = $this->getFormat();
             throw new InvalidTemplateResourceException(
                 sprintf(
                     'Tried resolving a template file for controller action "%s->%s" in format ".%s", but none of the paths ' .
-                    'contained the expected template file (%s). The following paths were checked: %s',
+                    'contained the expected template file (%s). %s',
                     $controller,
                     $action,
                     $format,
                     $templateReference === null ? $controller . '/' . ucfirst($action) . '.' . $format : $templateReference,
-                    implode(',', $this->getTemplateRootPaths())
+                    count($this->getTemplateRootPaths()) ? 'The following paths were checked: ' . implode(', ', $this->getTemplateRootPaths()) : 'No paths configured.'
                 ),
                 1257246929
             );
@@ -614,7 +622,7 @@ class TemplatePaths
      */
     protected function createIdentifierForFile($pathAndFilename, $prefix)
     {
-        $templateModifiedTimestamp = $pathAndFilename !== 'php://stdin' ? filemtime($pathAndFilename) : 0;
+        $templateModifiedTimestamp = $pathAndFilename !== 'php://stdin' && file_exists($pathAndFilename) ? filemtime($pathAndFilename) : 0;
         return sprintf('%s_%s', $prefix, sha1($pathAndFilename . '|' . $templateModifiedTimestamp));
     }
 
@@ -632,14 +640,16 @@ class TemplatePaths
      */
     public function getLayoutPathAndFilename($layoutName = 'Default')
     {
-        $format = $this->getFormat();
-        $layoutName = ucfirst($layoutName);
-        $layoutKey = $layoutName . '.' . $format;
-        if (!array_key_exists($layoutKey, self::$resolvedFiles[self::NAME_LAYOUTS])) {
-            $paths = $this->getLayoutRootPaths();
-            self::$resolvedFiles[self::NAME_LAYOUTS][$layoutKey] = $this->resolveFileInPaths($paths, $layoutName, $format);
+        if ($this->layoutPathAndFilename !== null) {
+            return $this->layoutPathAndFilename;
         }
-        return self::$resolvedFiles[self::NAME_LAYOUTS][$layoutKey];
+        $layoutName = ucfirst($layoutName);
+        $layoutKey = $layoutName . '.' . $this->getFormat();
+        if (!array_key_exists($layoutKey, $this->resolvedFiles[self::NAME_LAYOUTS])) {
+            $paths = $this->getLayoutRootPaths();
+            $this->resolvedFiles[self::NAME_LAYOUTS][$layoutKey] = $this->resolveFileInPaths($paths, $layoutName);
+        }
+        return $this->resolvedFiles[self::NAME_LAYOUTS][$layoutKey];
     }
 
     /**
@@ -652,12 +662,12 @@ class TemplatePaths
     public function getPartialIdentifier($partialName)
     {
         $partialKey = $partialName . '.' . $this->getFormat();
-        if (!array_key_exists($partialKey, self::$resolvedIdentifiers[self::NAME_PARTIALS])) {
+        if (!array_key_exists($partialKey, $this->resolvedIdentifiers[self::NAME_PARTIALS])) {
             $partialPathAndFilename = $this->getPartialPathAndFilename($partialName);
             $prefix = 'partial_' . $partialName;
-            self::$resolvedIdentifiers[self::NAME_PARTIALS][$partialKey] = $this->createIdentifierForFile($partialPathAndFilename, $prefix);
+            $this->resolvedIdentifiers[self::NAME_PARTIALS][$partialKey] = $this->createIdentifierForFile($partialPathAndFilename, $prefix);
         }
-        return self::$resolvedIdentifiers[self::NAME_PARTIALS][$partialKey];
+        return $this->resolvedIdentifiers[self::NAME_PARTIALS][$partialKey];
     }
 
     /**
@@ -682,24 +692,25 @@ class TemplatePaths
      */
     public function getPartialPathAndFilename($partialName)
     {
-        $format = $this->getFormat();
-        $partialKey = $partialName . '.' . $format;
-        if (!array_key_exists($partialKey, self::$resolvedFiles[self::NAME_PARTIALS])) {
+        $partialKey = $partialName . '.' . $this->getFormat();
+        if (!array_key_exists($partialKey, $this->resolvedFiles[self::NAME_PARTIALS])) {
             $paths = $this->getPartialRootPaths();
             $partialName = ucfirst($partialName);
-            self::$resolvedFiles[self::NAME_PARTIALS][$partialKey] = $this->resolveFileInPaths($paths, $partialName, $format);
+            $this->resolvedFiles[self::NAME_PARTIALS][$partialKey] = $this->resolveFileInPaths($paths, $partialName);
         }
-        return self::$resolvedFiles[self::NAME_PARTIALS][$partialKey];
+        return $this->resolvedFiles[self::NAME_PARTIALS][$partialKey];
     }
 
     /**
      * @param array $paths
      * @param string $relativePathAndFilename
+     * @param string $format Optional format to resolve.
      * @return string
      * @throws \TYPO3Fluid\Fluid\View\Exception\InvalidTemplateResourceException
      */
-    protected function resolveFileInPaths(array $paths, $relativePathAndFilename, $format = self::DEFAULT_FORMAT)
+    protected function resolveFileInPaths(array $paths, $relativePathAndFilename, $format = null)
     {
+        $format = $format ?: $this->getFormat();
         $tried = [];
         // Note about loop: iteration with while + array_pop causes paths to be checked in opposite
         // order, which is intentional. Paths are considered overlays, e.g. adding a path to the
@@ -729,9 +740,9 @@ class TemplatePaths
     protected function clearResolvedIdentifiersAndTemplates($type = null)
     {
         if ($type !== null) {
-            self::$resolvedIdentifiers[$type] = self::$resolvedFiles[$type] = [];
+            $this->resolvedIdentifiers[$type] = $this->resolvedFiles[$type] = [];
         } else {
-            self::$resolvedIdentifiers = self::$resolvedFiles = [
+            $this->resolvedIdentifiers = $this->resolvedFiles = [
                 self::NAME_TEMPLATES => [],
                 self::NAME_LAYOUTS => [],
                 self::NAME_PARTIALS => []

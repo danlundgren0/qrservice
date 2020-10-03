@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Extensionmanager\Utility;
 
 /**
  * Utility for dealing with extension model related helper functions
+ * @internal This class is a specific ExtensionManager implementation and is not part of the Public TYPO3 API.
  */
 class ExtensionModelUtility
 {
@@ -61,7 +62,7 @@ class ExtensionModelUtility
     public function convertDependenciesToObjects($dependencies)
     {
         $dependenciesObject = new \SplObjectStorage();
-        $unserializedDependencies = unserialize($dependencies);
+        $unserializedDependencies = unserialize($dependencies, ['allowed_classes' => false]);
         if (!is_array($unserializedDependencies)) {
             return $dependenciesObject;
         }
@@ -79,7 +80,7 @@ class ExtensionModelUtility
                     } else {
                         $highest = '';
                     }
-                    /** @var $dependencyObject \TYPO3\CMS\Extensionmanager\Domain\Model\Dependency */
+                    /** @var \TYPO3\CMS\Extensionmanager\Domain\Model\Dependency $dependencyObject */
                     $dependencyObject = $this->objectManager->get(\TYPO3\CMS\Extensionmanager\Domain\Model\Dependency::class);
                     $dependencyObject->setType($dependencyType);
                     // dynamically migrate 'cms' dependency to 'core' dependency

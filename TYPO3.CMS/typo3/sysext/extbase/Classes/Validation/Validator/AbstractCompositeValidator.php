@@ -16,8 +16,6 @@ namespace TYPO3\CMS\Extbase\Validation\Validator;
 
 /**
  * An abstract composite validator consisting of other validators
- *
- * @api
  */
 abstract class AbstractCompositeValidator implements ObjectValidatorInterface, \Countable
 {
@@ -48,7 +46,6 @@ abstract class AbstractCompositeValidator implements ObjectValidatorInterface, \
      *
      * @param array $options Options for the validator
      * @throws \TYPO3\CMS\Extbase\Validation\Exception\InvalidValidationOptionsException
-     * @api
      */
     public function __construct(array $options = [])
     {
@@ -57,7 +54,7 @@ abstract class AbstractCompositeValidator implements ObjectValidatorInterface, \
             throw new \TYPO3\CMS\Extbase\Validation\Exception\InvalidValidationOptionsException('Unsupported validation option(s) found: ' . implode(', ', array_keys($unsupportedOptions)), 1339079804);
         }
 
-            // check for required options being set
+        // check for required options being set
         array_walk(
             $this->supportedOptions,
             function ($supportedOptionData, $supportedOptionName, $options) {
@@ -68,7 +65,7 @@ abstract class AbstractCompositeValidator implements ObjectValidatorInterface, \
             $options
         );
 
-            // merge with default values
+        // merge with default values
         $this->options = array_merge(
             array_map(
                 function ($value) {
@@ -85,7 +82,6 @@ abstract class AbstractCompositeValidator implements ObjectValidatorInterface, \
      * Adds a new validator to the conjunction.
      *
      * @param \TYPO3\CMS\Extbase\Validation\Validator\ValidatorInterface $validator The validator that should be added
-     * @api
      */
     public function addValidator(\TYPO3\CMS\Extbase\Validation\Validator\ValidatorInterface $validator)
     {
@@ -114,7 +110,6 @@ abstract class AbstractCompositeValidator implements ObjectValidatorInterface, \
      * Returns the number of validators contained in this conjunction.
      *
      * @return int The number of validators
-     * @api
      */
     public function count()
     {
@@ -145,7 +140,6 @@ abstract class AbstractCompositeValidator implements ObjectValidatorInterface, \
      * Allows to set a container to keep track of validated instances.
      *
      * @param \SplObjectStorage $validatedInstancesContainer A container to keep track of validated instances
-     * @api
      */
     public function setValidatedInstancesContainer(\SplObjectStorage $validatedInstancesContainer)
     {

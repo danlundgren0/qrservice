@@ -23,13 +23,12 @@ use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
-use TYPO3\CMS\Core\Messaging\FlashMessage;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Resource\ProcessedFile;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Type\Bitmask\Permission;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Render a single inline record relation.
@@ -174,6 +173,8 @@ class InlineRecordContainer extends AbstractContainer
             // If this record should be shown collapsed
             $class = $data['isInlineChildExpanded'] ? 'panel-visible' : 'panel-collapsed';
         }
+        $hiddenFieldHtml = implode(LF, $resultArray['additionalHiddenFields'] ?? []);
+
         if ($inlineConfig['renderFieldsOnly']) {
             // Render "body" part only
             $html = $html . $combinationHtml;
@@ -186,8 +187,14 @@ class InlineRecordContainer extends AbstractContainer
                 $class .= ' t3-form-field-container-inline-hidden';
             }
             $class .= ($isNewRecord ? ' inlineIsNewRecord' : '');
+            $tableUniqueOriginalValue = '';
+            if (isset($data['inlineData']['unique'][$domObjectId . '-' . $foreignTable]['used'][$record['uid']])) {
+                $uniqueValueValues = $data['inlineData']['unique'][$domObjectId . '-' . $foreignTable]['used'][$record['uid']];
+                // in case of site_language we don't have the full form engine options, so fallbacks need to be taken into account
+                $tableUniqueOriginalValue = ($uniqueValueValues['table'] ?? $foreignTable) . '_' . ($uniqueValueValues['uid'] ?? $uniqueValueValues);
+            }
             $html = '
-				<div class="panel panel-default panel-condensed ' . trim($class) . '" id="' . htmlspecialchars($objectId) . '_div">
+				<div class="panel panel-default panel-condensed ' . trim($class) . '" id="' . htmlspecialchars($objectId) . '_div" data-table-unique-original-value="' . htmlspecialchars($tableUniqueOriginalValue) . '">
 					<div class="panel-heading" data-toggle="formengine-inline" id="' . htmlspecialchars($objectId) . '_header" data-expandSingle="' . ($inlineConfig['appearance']['expandSingle'] ? 1 : 0) . '">
 						<div class="form-irre-header">
 							<div class="form-irre-header-cell form-irre-header-icon">
@@ -196,7 +203,7 @@ class InlineRecordContainer extends AbstractContainer
 							' . $this->renderForeignRecordHeader($data) . '
 						</div>
 					</div>
-					<div class="panel-collapse" id="' . htmlspecialchars($objectId) . '_fields" data-expandSingle="' . ($inlineConfig['appearance']['expandSingle'] ? 1 : 0) . '" data-returnURL="' . htmlspecialchars(GeneralUtility::getIndpEnv('REQUEST_URI')) . '">' . $html . $combinationHtml . '</div>
+					<div class="panel-collapse" id="' . htmlspecialchars($objectId) . '_fields">' . $html . $hiddenFieldHtml . $combinationHtml . '</div>
 				</div>';
         }
 
@@ -239,11 +246,18 @@ class InlineRecordContainer extends AbstractContainer
         $childData = $data['combinationChild'];
         $parentConfig = $data['inlineParentConfig'];
 
+        // If field is set to readOnly, set all fields of the relation to readOnly as well
+        if (isset($parentConfig['readOnly']) && $parentConfig['readOnly']) {
+            foreach ($childData['processedTca']['columns'] as $columnName => $columnConfiguration) {
+                $childData['processedTca']['columns'][$columnName]['config']['readOnly'] = true;
+            }
+        }
+
         $resultArray = $this->initializeResultArray();
 
         // Display Warning FlashMessage if it is not suppressed
         if (!isset($parentConfig['appearance']['suppressCombinationWarning']) || empty($parentConfig['appearance']['suppressCombinationWarning'])) {
-            $combinationWarningMessage = 'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:warning.inline_use_combination';
+            $combinationWarningMessage = 'LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:warning.inline_use_combination';
             if (!empty($parentConfig['appearance']['overwriteCombinationWarningMessage'])) {
                 $combinationWarningMessage = $parentConfig['appearance']['overwriteCombinationWarningMessage'];
             }
@@ -308,7 +322,7 @@ class InlineRecordContainer extends AbstractContainer
                 $recordTitle = BackendUtility::getRecordTitlePrep($recordTitle);
             }
         } else {
-            $recordTitle = '<em>[' . htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.no_title')) . ']</em>';
+            $recordTitle = '<em>[' . htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.no_title')) . ']</em>';
         }
 
         $altText = BackendUtility::getRecordIconAltText($rec, $foreignTable);
@@ -331,7 +345,7 @@ class InlineRecordContainer extends AbstractContainer
                 }
                 if ($fileObject && $fileObject->isMissing()) {
                     $thumbnail .= '<span class="label label-danger">'
-                        . htmlspecialchars(static::getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:warning.file_missing'))
+                        . htmlspecialchars(static::getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:warning.file_missing'))
                         . '</span>&nbsp;' . htmlspecialchars($fileObject->getName()) . '<br />';
                 } elseif ($fileObject) {
                     $imageSetup = $inlineConfig['appearance']['headerThumbnail'];
@@ -342,7 +356,7 @@ class InlineRecordContainer extends AbstractContainer
                     $imageSetup = array_merge(['width' => '45', 'height' => '45c'], $imageSetup);
 
                     if ($GLOBALS['TYPO3_CONF_VARS']['GFX']['thumbnails']
-                        && GeneralUtility::inList($GLOBALS['TYPO3_CONF_VARS']['GFX']['imagefile_ext'], $fileObject->getProperty('extension'))) {
+                        && GeneralUtility::inList($GLOBALS['TYPO3_CONF_VARS']['GFX']['imagefile_ext'], $fileObject->getExtension())) {
                         $processedImage = $fileObject->process(ProcessedFile::CONTEXT_IMAGEPREVIEW, $imageSetup);
                         // Only use a thumbnail if the processing process was successful by checking if image width is set
                         if ($processedImage->getProperty('width')) {
@@ -400,7 +414,8 @@ class InlineRecordContainer extends AbstractContainer
             'localize' => '',
             'locked' => '',
         ];
-        $isNewItem = substr($rec['uid'], 0, 3) === 'NEW';
+        $isNewItem = strpos($rec['uid'], 'NEW') === 0;
+        $isParentReadOnly = isset($inlineConfig['readOnly']) && $inlineConfig['readOnly'];
         $isParentExisting = MathUtility::canBeInterpretedAsInteger($data['inlineParentUid']);
         $tcaTableCtrl = $GLOBALS['TCA'][$foreignTable]['ctrl'];
         $tcaTableCols = $GLOBALS['TCA'][$foreignTable]['columns'];
@@ -411,7 +426,7 @@ class InlineRecordContainer extends AbstractContainer
         $nameObject = $this->inlineStackProcessor->getCurrentStructureDomObjectIdPrefix($data['inlineFirstPid']);
         $nameObjectFt = $nameObject . '-' . $foreignTable;
         $nameObjectFtId = $nameObjectFt . '-' . $rec['uid'];
-        $calcPerms = $backendUser->calcPerms(BackendUtility::readPageAccess($rec['pid'], $backendUser->getPagePermsClause(1)));
+        $calcPerms = $backendUser->calcPerms(BackendUtility::readPageAccess($rec['pid'], $backendUser->getPagePermsClause(Permission::PAGE_SHOW)));
         // If the listed table is 'pages' we have to request the permission settings for each page:
         $localCalcPerms = false;
         if ($isPagesTable) {
@@ -427,7 +442,7 @@ class InlineRecordContainer extends AbstractContainer
             $hookObj->renderForeignRecordHeaderControl_preProcess($data['inlineParentUid'], $foreignTable, $rec, $inlineConfig, $data['isInlineDefaultLanguageRecordInLocalizedParentContext'], $enabledControls);
         }
         if ($data['isInlineDefaultLanguageRecordInLocalizedParentContext']) {
-            $cells['localize'] = '<span title="' . htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_misc.xlf:localize.isLocalizable')) . '">
+            $cells['localize'] = '<span title="' . htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_misc.xlf:localize.isLocalizable')) . '">
                     ' . $this->iconFactory->getIcon('actions-edit-localize-status-low', Icon::SIZE_SMALL)->render() . '
                 </span>';
         }
@@ -445,13 +460,13 @@ class InlineRecordContainer extends AbstractContainer
                 $cells['info'] = '<span class="btn btn-default disabled">' . $this->iconFactory->getIcon('empty-empty', Icon::SIZE_SMALL)->render() . '</span>';
             } else {
                 $cells['info'] = '
-				<a class="btn btn-default" href="#" onclick="' . htmlspecialchars(('top.launchView(' . GeneralUtility::quoteJSvalue($table) . ', ' . GeneralUtility::quoteJSvalue($uid) . '); return false;')) . '" title="' . htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_mod_web_list.xlf:showInfo')) . '">
+				<a class="btn btn-default" href="#" onclick="' . htmlspecialchars('top.TYPO3.InfoWindow.showItem(' . GeneralUtility::quoteJSvalue($table) . ', ' . GeneralUtility::quoteJSvalue($uid) . '); return false;') . '" title="' . htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_mod_web_list.xlf:showInfo')) . '">
 					' . $this->iconFactory->getIcon('actions-document-info', Icon::SIZE_SMALL)->render() . '
 				</a>';
             }
         }
         // If the table is NOT a read-only table, then show these links:
-        if (!$tcaTableCtrl['readOnly'] && !$data['isInlineDefaultLanguageRecordInLocalizedParentContext']) {
+        if (!$isParentReadOnly && !$tcaTableCtrl['readOnly'] && !$data['isInlineDefaultLanguageRecordInLocalizedParentContext']) {
             // "New record after" link (ONLY if the records in the table are sorted by a "sortby"-row or if default values can depend on previous record):
             if ($enabledControls['new'] && ($enableManualSorting || $tcaTableCtrl['useColumnsForDefaultValues'])) {
                 if (!$isPagesTable && $calcPerms & Permission::CONTENT_EDIT || $isPagesTable && $calcPerms & Permission::PAGE_NEW) {
@@ -461,7 +476,7 @@ class InlineRecordContainer extends AbstractContainer
                         $style = ' style="' . $inlineConfig['inline']['inlineNewButtonStyle'] . '"';
                     }
                     $cells['new'] = '
-                        <a class="btn btn-default inlineNewButton ' . $this->inlineData['config'][$nameObject]['md5'] . '" href="#" onclick="' . htmlspecialchars($onClick) . '" title="' . htmlspecialchars($languageService->sL(('LLL:EXT:lang/Resources/Private/Language/locallang_mod_web_list.xlf:new' . ($isPagesTable ? 'Page' : 'Record')))) . '" ' . $style . '>
+                        <a class="btn btn-default inlineNewButton ' . $this->inlineData['config'][$nameObject]['md5'] . '" href="#" onclick="' . htmlspecialchars($onClick) . '" title="' . htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_mod_web_list.xlf:new' . ($isPagesTable ? 'Page' : 'Record'))) . '" ' . $style . '>
                             ' . $this->iconFactory->getIcon('actions-' . ($isPagesTable ? 'page-new' : 'add'), Icon::SIZE_SMALL)->render() . '
                         </a>';
                 }
@@ -477,7 +492,7 @@ class InlineRecordContainer extends AbstractContainer
                     $icon = 'empty-empty';
                 }
                 $cells['sort.up'] = '
-                    <a class="btn btn-default sortingUp' . $class . '" href="#" onclick="' . htmlspecialchars($onClick) . '" title="' . htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_mod_web_list.xlf:moveUp')) . '">
+                    <a class="btn btn-default sortingUp' . $class . '" href="#" onclick="' . htmlspecialchars($onClick) . '" title="' . htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_mod_web_list.xlf:moveUp')) . '">
                         ' . $this->iconFactory->getIcon($icon, Icon::SIZE_SMALL)->render() . '
                     </a>';
                 // Down
@@ -490,12 +505,12 @@ class InlineRecordContainer extends AbstractContainer
                 }
 
                 $cells['sort.down'] = '
-                    <a class="btn btn-default sortingDown' . $class . '" href="#" onclick="' . htmlspecialchars($onClick) . '" title="' . htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_mod_web_list.xlf:moveDown')) . '">
+                    <a class="btn btn-default sortingDown' . $class . '" href="#" onclick="' . htmlspecialchars($onClick) . '" title="' . htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_mod_web_list.xlf:moveDown')) . '">
                         ' . $this->iconFactory->getIcon($icon, Icon::SIZE_SMALL)->render() . '
                     </a>';
             }
             // "Edit" link:
-            if (($rec['table_local'] === 'sys_file') && !$isNewItem) {
+            if (($rec['table_local'] === 'sys_file') && !$isNewItem && $backendUser->check('tables_modify', 'sys_file_metadata')) {
                 $sys_language_uid = 0;
                 if (!empty($rec['sys_language_uid'])) {
                     $sys_language_uid = $rec['sys_language_uid'][0];
@@ -518,12 +533,13 @@ class InlineRecordContainer extends AbstractContainer
                     ->setMaxResults(1)
                     ->execute()
                     ->fetch();
-                if ($backendUser->check('tables_modify', 'sys_file_metadata')) {
-                    $url = BackendUtility::getModuleUrl('record_edit', [
+                if (!empty($recordInDatabase)) {
+                    $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
+                    $url = (string)$uriBuilder->buildUriFromRoute('record_edit', [
                         'edit[sys_file_metadata][' . (int)$recordInDatabase['uid'] . ']' => 'edit',
-                        'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI')
+                        'returnUrl' => $this->data['returnUrl']
                     ]);
-                    $title = $languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:cm.editMetadata');
+                    $title = $languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:cm.editMetadata');
                     $cells['edit'] = '
                         <a class="btn btn-default" href="' . htmlspecialchars($url) . '" title="' . htmlspecialchars($title) . '">
                             ' . $this->iconFactory->getIcon('actions-open', Icon::SIZE_SMALL)->render() . '
@@ -535,7 +551,7 @@ class InlineRecordContainer extends AbstractContainer
                     || !$isPagesTable && $calcPerms & Permission::CONTENT_EDIT
                     || $isSysFileReferenceTable && $calcPerms & Permission::PAGE_EDIT)
             ) {
-                $title = htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_mod_web_list.xlf:delete'));
+                $title = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_mod_web_list.xlf:delete'));
                 $icon = $this->iconFactory->getIcon('actions-edit-delete', Icon::SIZE_SMALL)->render();
                 $cells['delete'] = '<a href="#" class="btn btn-default t3js-editform-delete-inline-record" data-objectid="' . htmlspecialchars($nameObjectFtId) . '" title="' . $title . '">' . $icon . '</a>';
             }
@@ -547,14 +563,14 @@ class InlineRecordContainer extends AbstractContainer
                     GeneralUtility::quoteJSvalue($hiddenField) . ')';
                 $className = 't3js-' . $nameObjectFtId . '_disabled';
                 if ($rec[$hiddenField]) {
-                    $title = htmlspecialchars($languageService->sL(('LLL:EXT:lang/Resources/Private/Language/locallang_mod_web_list.xlf:unHide' . ($isPagesTable ? 'Page' : ''))));
+                    $title = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_mod_web_list.xlf:unHide' . ($isPagesTable ? 'Page' : '')));
                     $cells['hide'] = '
                         <a class="btn btn-default hiddenHandle ' . $className . '" href="#" onclick="
                             ' . htmlspecialchars($onClick) . '"' . 'title="' . $title . '">
                             ' . $this->iconFactory->getIcon('actions-edit-unhide', Icon::SIZE_SMALL)->render() . '
                         </a>';
                 } else {
-                    $title = htmlspecialchars($languageService->sL(('LLL:EXT:lang/Resources/Private/Language/locallang_mod_web_list.xlf:hide' . ($isPagesTable ? 'Page' : ''))));
+                    $title = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_mod_web_list.xlf:hide' . ($isPagesTable ? 'Page' : '')));
                     $cells['hide'] = '
                         <a class="btn btn-default hiddenHandle ' . $className . '" href="#" onclick="
                             ' . htmlspecialchars($onClick) . '"' . 'title="' . $title . '">
@@ -565,7 +581,7 @@ class InlineRecordContainer extends AbstractContainer
             // Drag&Drop Sorting: Sortable handler for script.aculo.us
             if ($enabledControls['dragdrop'] && $permsEdit && $enableManualSorting && $inlineConfig['appearance']['useSortable']) {
                 $cells['dragdrop'] = '
-                    <span class="btn btn-default sortableHandle" data-id="' . htmlspecialchars($rec['uid']) . '" title="' . htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.move')) . '">
+                    <span class="btn btn-default sortableHandle" data-id="' . htmlspecialchars($rec['uid']) . '" title="' . htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.move')) . '">
                         ' . $this->iconFactory->getIcon('actions-move-move', Icon::SIZE_SMALL)->render() . '
                     </span>';
             }
@@ -573,7 +589,7 @@ class InlineRecordContainer extends AbstractContainer
             if ($enabledControls['localize'] && $data['isInlineDefaultLanguageRecordInLocalizedParentContext']) {
                 $onClick = 'inline.synchronizeLocalizeRecords(' . GeneralUtility::quoteJSvalue($nameObjectFt) . ', ' . GeneralUtility::quoteJSvalue($rec['uid']) . ');';
                 $cells['localize'] = '
-                    <a class="btn btn-default" href="#" onclick="' . htmlspecialchars($onClick) . '" title="' . htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_misc.xlf:localize')) . '">
+                    <a class="btn btn-default" href="#" onclick="' . htmlspecialchars($onClick) . '" title="' . htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_misc.xlf:localize')) . '">
                         ' . $this->iconFactory->getIcon('actions-document-localize', Icon::SIZE_SMALL)->render() . '
                     </a>';
             }
@@ -582,7 +598,7 @@ class InlineRecordContainer extends AbstractContainer
         if ($lockInfo = BackendUtility::isRecordLocked($foreignTable, $rec['uid'])) {
             $cells['locked'] = '
 				<a class="btn btn-default" href="#" data-toggle="tooltip" data-title="' . htmlspecialchars($lockInfo['msg']) . '">
-					' . '<span title="' . htmlspecialchars($lockInfo['msg']) . '">' . $this->iconFactory->getIcon('status-warning-in-use', Icon::SIZE_SMALL)->render() . '</span>' . '
+					' . '<span title="' . htmlspecialchars($lockInfo['msg']) . '">' . $this->iconFactory->getIcon('warning-in-use', Icon::SIZE_SMALL)->render() . '</span>' . '
 				</a>';
         }
         // Hook: Post-processing of single controls for specific child records:
@@ -631,17 +647,12 @@ class InlineRecordContainer extends AbstractContainer
     protected function initHookObjects()
     {
         $this->hookObjects = [];
-        if (isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_tceforms_inline.php']['tceformsInlineHook'])) {
-            $tceformsInlineHook = &$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_tceforms_inline.php']['tceformsInlineHook'];
-            if (is_array($tceformsInlineHook)) {
-                foreach ($tceformsInlineHook as $classData) {
-                    $processObject = GeneralUtility::getUserObj($classData);
-                    if (!$processObject instanceof InlineElementHookInterface) {
-                        throw new \UnexpectedValueException($classData . ' must implement interface ' . InlineElementHookInterface::class, 1202072000);
-                    }
-                    $this->hookObjects[] = $processObject;
-                }
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_tceforms_inline.php']['tceformsInlineHook'] ?? [] as $className) {
+            $processObject = GeneralUtility::makeInstance($className);
+            if (!$processObject instanceof InlineElementHookInterface) {
+                throw new \UnexpectedValueException($className . ' must implement interface ' . InlineElementHookInterface::class, 1202072000);
             }
+            $this->hookObjects[] = $processObject;
         }
     }
 

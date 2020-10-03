@@ -17,7 +17,7 @@ namespace TYPO3\CMS\Extbase\Mvc\Exception;
 /**
  * An "Ambiguous command identifier" exception
  *
- * @license http://www.gnu.org/licenses/lgpl.html GNU Lesser General Public License, version 3 or later
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Use symfony/console commands instead.
  */
 class AmbiguousCommandIdentifierException extends \TYPO3\CMS\Extbase\Mvc\Exception\CommandException
 {
@@ -31,7 +31,7 @@ class AmbiguousCommandIdentifierException extends \TYPO3\CMS\Extbase\Mvc\Excepti
      *
      * @param string $message
      * @param int $code
-     * @param \Exception|NULL $previousException
+     * @param \Exception|null $previousException
      * @param array $matchingCommands <\TYPO3\CMS\Extbase\Mvc\Cli\Command> $matchingCommands Commands that matched the command identifier
      * @see Exception
      */

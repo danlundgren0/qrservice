@@ -87,7 +87,25 @@ class VimeoRenderer implements FileRendererInterface
      * @param bool $usedPathsRelativeToCurrentScript See $file->getPublicUrl()
      * @return string
      */
-    public function render(FileInterface $file, $width, $height, array $options = null, $usedPathsRelativeToCurrentScript = false)
+    public function render(FileInterface $file, $width, $height, array $options = [], $usedPathsRelativeToCurrentScript = false)
+    {
+        $options = $this->collectOptions($options, $file);
+        $src = $this->createVimeoUrl($options, $file);
+        $attributes = $this->collectIframeAttributes($width, $height, $options);
+
+        return sprintf(
+            '<iframe src="%s"%s></iframe>',
+            htmlspecialchars($src, ENT_QUOTES | ENT_HTML5),
+            empty($attributes) ? '' : ' ' . $this->implodeAttributes($attributes)
+        );
+    }
+
+    /**
+     * @param array $options
+     * @param FileInterface $file
+     * @return array
+     */
+    protected function collectOptions(array $options, FileInterface $file)
     {
         // Check for an autoplay option at the file reference itself, if not overridden yet.
         if (!isset($options['autoplay']) && $file instanceof FileReference) {
@@ -97,6 +115,25 @@ class VimeoRenderer implements FileRendererInterface
             }
         }
 
+        if (!isset($options['allow'])) {
+            $options['allow'] = 'fullscreen';
+            if (!empty($options['autoplay'])) {
+                $options['allow'] = 'autoplay; fullscreen';
+            }
+        }
+
+        return $options;
+    }
+
+    /**
+     * @param array $options
+     * @param FileInterface $file
+     * @return string
+     */
+    protected function createVimeoUrl(array $options, FileInterface $file)
+    {
+        $videoId = $this->getVideoIdFromFile($file);
+
         $urlParams = [];
         if (!empty($options['autoplay'])) {
             $urlParams[] = 'autoplay=1';
@@ -104,39 +141,86 @@ class VimeoRenderer implements FileRendererInterface
         if (!empty($options['loop'])) {
             $urlParams[] = 'loop=1';
         }
+        if (!empty($options['no-cookie'])) {
+            $urlParams[] = 'dnt=1';
+        }
         $urlParams[] = 'title=' . (int)!empty($options['showinfo']);
         $urlParams[] = 'byline=' . (int)!empty($options['showinfo']);
         $urlParams[] = 'portrait=0';
 
+        return sprintf('https://player.vimeo.com/video/%s?%s', $videoId, implode('&', $urlParams));
+    }
+
+    /**
+     * @param FileInterface $file
+     * @return string
+     */
+    protected function getVideoIdFromFile(FileInterface $file)
+    {
         if ($file instanceof FileReference) {
             $orgFile = $file->getOriginalFile();
         } else {
             $orgFile = $file;
         }
 
-        $videoId = $this->getOnlineMediaHelper($file)->getOnlineMediaId($orgFile);
-        $src = sprintf('https://player.vimeo.com/video/%s?%s', $videoId, implode('&amp;', $urlParams));
+        return $this->getOnlineMediaHelper($file)->getOnlineMediaId($orgFile);
+    }
 
-        $attributes = ['allowfullscreen'];
+    /**
+     * @param int|string $width
+     * @param int|string $height
+     * @param array $options
+     * @return array pairs of key/value; not yet html-escaped
+     */
+    protected function collectIframeAttributes($width, $height, array $options)
+    {
+        $attributes = [];
+        $attributes['allowfullscreen'] = true;
+
+        if (isset($options['additionalAttributes']) && is_array($options['additionalAttributes'])) {
+            $attributes = array_merge($attributes, $options['additionalAttributes']);
+        }
+        if (isset($options['data']) && is_array($options['data'])) {
+            array_walk(
+                $options['data'],
+                function (&$value, $key) use (&$attributes) {
+                    $attributes['data-' . $key] = $value;
+                }
+            );
+        }
         if ((int)$width > 0) {
-            $attributes[] = 'width="' . (int)$width . '"';
+            $attributes['width'] = (int)$width;
         }
         if ((int)$height > 0) {
-            $attributes[] = 'height="' . (int)$height . '"';
+            $attributes['height'] = (int)$height;
         }
-        if (is_object($GLOBALS['TSFE']) && $GLOBALS['TSFE']->config['config']['doctype'] !== 'html5') {
-            $attributes[] = 'frameborder="0"';
+        if (isset($GLOBALS['TSFE']) && is_object($GLOBALS['TSFE']) && (isset($GLOBALS['TSFE']->config['config']['doctype']) && $GLOBALS['TSFE']->config['config']['doctype'] !== 'html5')) {
+            $attributes['frameborder'] = 0;
         }
-        foreach (['class', 'dir', 'id', 'lang', 'style', 'title', 'accesskey', 'tabindex', 'onclick'] as $key) {
+        foreach (['class', 'dir', 'id', 'lang', 'style', 'title', 'accesskey', 'tabindex', 'onclick', 'allow'] as $key) {
             if (!empty($options[$key])) {
-                $attributes[] = $key . '="' . htmlspecialchars($options[$key]) . '"';
+                $attributes[$key] = $options[$key];
             }
         }
+        return $attributes;
+    }
 
-        return sprintf(
-            '<iframe src="%s"%s></iframe>',
-            $src,
-            empty($attributes) ? '' : ' ' . implode(' ', $attributes)
-        );
+    /**
+     * @internal
+     * @param array $attributes
+     * @return string
+     */
+    protected function implodeAttributes(array $attributes): string
+    {
+        $attributeList = [];
+        foreach ($attributes as $name => $value) {
+            $name = preg_replace('/[^\p{L}0-9_.-]/u', '', $name);
+            if ($value === true) {
+                $attributeList[] = $name;
+            } else {
+                $attributeList[] = $name . '="' . htmlspecialchars($value, ENT_QUOTES | ENT_HTML5) . '"';
+            }
+        }
+        return implode(' ', $attributeList);
     }
 }

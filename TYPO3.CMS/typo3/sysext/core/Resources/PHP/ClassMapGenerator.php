@@ -82,7 +82,7 @@ class ClassMapGenerator
                 continue;
             }
 
-            if ($blacklist && preg_match($blacklist, strtr($filePath, '\\', '/'))) {
+            if ($blacklist && preg_match($blacklist, str_replace('\\', '/', $filePath))) {
                 continue;
             }
 
@@ -96,7 +96,10 @@ class ClassMapGenerator
 
                 if (!isset($map[$class])) {
                     $map[$class] = $filePath;
-                } elseif ($io && $map[$class] !== $filePath && !preg_match('{/(test|fixture|example|stub)s?/}i', strtr($map[$class] . ' ' . $filePath, '\\', '/'))) {
+                } elseif ($io && $map[$class] !== $filePath && !preg_match(
+                    '{/(test|fixture|example|stub)s?/}i',
+                    str_replace('\\', '/', $map[$class] . ' ' . $filePath)
+                )) {
                     $io->writeError(
                         '<warning>Warning: Ambiguous class resolution, "' . $class . '"' .
                         ' was found in both "' . $map[$class] . '" and "' . $filePath . '", the first will be used.</warning>'
@@ -146,7 +149,7 @@ class ClassMapGenerator
         // strip strings
         $contents = preg_replace('{"[^"\\\\]*+(\\\\.[^"\\\\]*+)*+"|\'[^\'\\\\]*+(\\\\.[^\'\\\\]*+)*+\'}s', 'null', $contents);
         // strip leading non-php code if needed
-        if (substr($contents, 0, 2) !== '<?') {
+        if (strpos($contents, '<?') !== 0) {
             $contents = preg_replace('{^.+?<\?}s', '<?', $contents, 1, $replacements);
             if ($replacements === 0) {
                 return [];
@@ -170,7 +173,8 @@ class ClassMapGenerator
         $classes = [];
         $namespace = '';
 
-        for ($i = 0, $len = count($matches['type']); $i < $len; $i++) {
+        $typeCount = count($matches['type']);
+        for ($i = 0, $len = $typeCount; $i < $len; $i++) {
             if (!empty($matches['ns'][$i])) {
                 $namespace = str_replace([' ', "\t", "\r", "\n"], '', $matches['nsname'][$i]) . '\\';
             } else {

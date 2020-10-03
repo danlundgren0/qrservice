@@ -1,4 +1,4 @@
-﻿.. include:: Includes.txt
+.. include:: Includes.txt
 
 
 .. _start:
@@ -23,7 +23,7 @@ Workspaces and Versioning
       worspaces
 
 :Copyright:
-      2000-2017
+      2000-2020
 
 :Author:
       TYPO3 CMS Core Development Team

@@ -24,6 +24,7 @@
 				<th><f:translate key="extensionList.header.extensionKey"/></th>
 				<th><f:translate key="extensionList.header.extensionVersion"/></th>
 				<th><f:translate key="extensionList.header.extensionState"/></th>
+				<th><f:translate key="extensionList.header.extensionType"/></th>
 				<th><f:translate key="extensionList.header.extensionActions"/></th>
 			</tr>
 		</thead>
@@ -39,7 +40,7 @@
 				</f:if>
 				<td>
 					<f:if condition="{extension.updateAvailable}">
-						<f:if condition="{extension.state} == 'excludeFromUpdates'">
+						<f:if condition="{isComposerMode} || {settings.offlineMode} || {extension.state} == 'excludeFromUpdates'">
 							<f:then>
 								<span class="btn btn-default disabled" title="{f:translate(key:'extensionList.updateDisabled')}">
 									<core:icon identifier="actions-system-extension-update" />
@@ -51,7 +52,7 @@
 										additionalAttributes="{data-action:'update-extension'}"
 										format="json" controller="Download"
 										arguments="{extension:extension.key, integerVersionStart: extension.terObject.integerVersion, integerVersionStop: extension.updateToVersion.integerVersion}"
-										title="{f:translate(key:'extensionList.updateToVersion', arguments:{0:extension.updateToVersion.version})}"
+										title="{f:translate(key:'extensionList.updateToVersion', arguments:'{0:extension.updateToVersion.version}')}"
 									>
 										<core:icon identifier="actions-system-extension-update" />
 									</f:link.action>
@@ -64,9 +65,9 @@
 				</td>
 				<td>
 					<f:if condition="{extension.ext_icon}">
-						<img class="ext-icon" src="../{extension.siteRelPath}{extension.ext_icon}" alt="{extension.title}" />
+						<img class="ext-icon" src="../{extension.siteRelPath}{extension.ext_icon}" alt="" />
 					</f:if>
-					<em:configureExtension extension="{extension}" forceConfiguration="0" showDescription="1">{extension.title}</em:configureExtension>
+					<span title="{extension.description}">{extension.title}</span>
 				</td>
 				<td>
 					{extensionKey}
@@ -78,17 +79,18 @@
 					<span class="label label-{extension.state}">{extension.state}</span>
 				</td>
 				<td>
+					{extension.type}
+				</td>
+				<td>
 					<div class="btn-group">
 						<em:processAvailableActions extension="{extension}">
-							<em:configureExtension class="btn btn-default" extension="{extension}" title="{f:translate(key:'extensionList.configure')}">
-								<core:icon identifier="actions-system-extension-configure" />
-							</em:configureExtension>
 							<em:updateScript class="btn btn-default" extensionKey="{extension.key}" />
-							<em:removeExtension class="btn btn-default" extension="{extension}" />
+							<f:if condition="!{isComposerMode}">
+							  <em:removeExtension class="btn btn-default" extension="{extension}" />
+							</f:if>
 							<f:link.action action="downloadExtensionZip" controller="Action" arguments="{extension:extension.key}" title="{f:translate(key:'extensionList.downloadzip')}" class="btn btn-default">
 								<core:icon identifier="actions-system-extension-download" />
 							</f:link.action>
-							<em:downloadExtensionData class="btn btn-default" extension="{extension}" />
 							<em:reloadSqlData class="btn btn-default" extension="{extension}" />
 						</em:processAvailableActions>
 					</div>

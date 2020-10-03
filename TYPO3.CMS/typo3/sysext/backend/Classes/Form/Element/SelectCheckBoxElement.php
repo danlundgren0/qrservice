@@ -28,6 +28,17 @@ use TYPO3\CMS\Core\Utility\StringUtility;
 class SelectCheckBoxElement extends AbstractFormElement
 {
     /**
+     * Default field information enabled for this element.
+     *
+     * @var array
+     */
+    protected $defaultFieldInformation = [
+        'tcaDescription' => [
+            'renderType' => 'tcaDescription',
+        ],
+    ];
+
+    /**
      * Default field wizards enabled for this element.
      *
      * @var array
@@ -67,8 +78,14 @@ class SelectCheckBoxElement extends AbstractFormElement
 
         $selItems = $config['items'];
         if (!empty($selItems)) {
-            // Get values in an array (and make unique, which is fine because there can be no duplicates anyway):
-            $itemArray = array_flip($parameterArray['itemFormElValue']);
+            // Get values in an array (and make unique, which is fine because there can be no duplicates anyway)
+            // In case e.g. "l10n_display" is set to "defaultAsReadonly" only one value (as string) could be handed in
+            if (is_array($parameterArray['itemFormElValue'])) {
+                $itemArray = $parameterArray['itemFormElValue'];
+            } else {
+                $itemArray = [(string)$parameterArray['itemFormElValue']];
+            }
+            $itemArray = array_flip($itemArray);
 
             // Traverse the Array of selector box items:
             $groups = [];
@@ -92,7 +109,7 @@ class SelectCheckBoxElement extends AbstractFormElement
                         ];
                     } else {
                         // Check if some help text is available
-                        // Since TYPO3 4.5 help text is expected to be an associative array
+                        // Help text is expected to be an associative array
                         // with two key, "title" and "description"
                         // For the sake of backwards compatibility, we test if the help text
                         // is a string and use it as a description (this could happen if items
@@ -136,21 +153,16 @@ class SelectCheckBoxElement extends AbstractFormElement
                 }
             }
 
-            $legacyWizards = $this->renderWizards();
-            $legacyFieldWizardHtml = implode(LF, $legacyWizards['fieldWizard']);
-
             $fieldInformationResult = $this->renderFieldInformation();
             $fieldInformationHtml = $fieldInformationResult['html'];
             $resultArray = $this->mergeChildReturnIntoExistingResult($resultArray, $fieldInformationResult, false);
 
             $fieldWizardResult = $this->renderFieldWizard();
-            $fieldWizardHtml = $legacyFieldWizardHtml . $fieldWizardResult['html'];
+            $fieldWizardHtml = $fieldWizardResult['html'];
             $resultArray = $this->mergeChildReturnIntoExistingResult($resultArray, $fieldWizardResult, false);
 
             $html[] = '<div class="formengine-field-item t3js-formengine-field-item">';
-            if (!$disabled) {
-                $html[] = $fieldInformationHtml;
-            }
+            $html[] = $fieldInformationHtml;
             $html[] =   '<div class="form-wizards-wrap">';
             $html[] =       '<div class="form-wizards-element">';
 
@@ -189,7 +201,7 @@ class SelectCheckBoxElement extends AbstractFormElement
                         $tableRows[] =        '<label class="label-block" for="' . $item['id'] . '">' . $item['icon'] . '</label>';
                         $tableRows[] =    '</td>';
                         $tableRows[] =    '<td class="col-title">';
-                        $tableRows[] =        '<label class="label-block" for="' . $item['id'] . '">' . htmlspecialchars($item['title'], ENT_COMPAT, 'UTF-8', false) . '</label>';
+                        $tableRows[] =        '<label class="label-block nowrap-disabled" for="' . $item['id'] . '">' . htmlspecialchars($this->appendValueToLabelInDebugMode($item['title'], $item['value']), ENT_COMPAT, 'UTF-8', false) . '</label>';
                         $tableRows[] =    '</td>';
                         $tableRows[] =    '<td class="text-right">' . $item['help'] . '</td>';
                         $tableRows[] = '</tr>';
@@ -200,20 +212,20 @@ class SelectCheckBoxElement extends AbstractFormElement
                     $resetGroupBtn = '';
                     if (!empty($resetGroup)) {
                         $resetGroup[] = 'TYPO3.FormEngine.updateCheckboxState(this);';
-                        $title = htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.revertSelection'));
+                        $title = htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.revertSelection'));
                         $resetGroupBtn = '<a href="#" '
                             . 'class="btn btn-default btn-sm" '
                             . 'onclick="' . implode('', $resetGroup) . ' return false;" '
                             . 'title="' . $title . '">'
                             . $this->iconFactory->getIcon('actions-edit-undo', Icon::SIZE_SMALL)->render() . ' '
-                            . $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.revertSelection') . '</a>';
+                            . $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.revertSelection') . '</a>';
                     }
 
                     if (is_array($group['header'])) {
                         $html[] = '<div id="' . $groupId . '" class="panel-collapse collapse" role="tabpanel">';
                     }
                     $checkboxId = uniqid($groupId);
-                    $title = htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.toggleall'));
+                    $title = htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.toggleall'));
                     $html[] =    '<div class="table-responsive">';
                     $html[] =        '<table class="table table-transparent table-hover">';
                     $html[] =            '<thead>';
@@ -236,7 +248,7 @@ class SelectCheckBoxElement extends AbstractFormElement
             }
 
             $html[] =       '</div>';
-            if (!$disabled) {
+            if (!$disabled && !empty($fieldWizardHtml)) {
                 $html[] =   '<div class="form-wizards-items-bottom">';
                 $html[] =       $fieldWizardHtml;
                 $html[] =   '</div>';

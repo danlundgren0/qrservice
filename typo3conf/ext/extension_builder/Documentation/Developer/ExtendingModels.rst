@@ -1,8 +1,3 @@
-.. ==================================================
-.. FOR YOUR INFORMATION
-.. --------------------------------------------------
-.. -*- coding: utf-8 -*- with BOM.
-
 .. include:: ../Includes.txt
 
 Extending models or map to existing tables
@@ -29,7 +24,7 @@ the backend form and a new tab showing the properties that contains the new prop
 
 .. figure:: ../Images/Developer/Extend-Frontenduser.png
    :width: 200px
-   :align: center
+   :align: left
    :alt: Extend Frontend user
 
 
@@ -43,7 +38,7 @@ Often you want to store your models in an existing table, for example if there i
 
 .. figure:: ../Images/Developer/Map-to-tt_address.png
    :width: 400px
-   :align: center
+   :align: left
    :alt: Map to tt_address
 
 
@@ -51,14 +46,14 @@ Example: map to table tt_address
 
 .. figure:: ../Images/Developer/Database-Update.png
    :width: 500px
-   :align: center
+   :align: left
    :alt: DB update
 
 The resulting database updates
 
 .. figure:: ../Images/Developer/Backendform-Frontenduser.png
    :width: 500px
-   :align: center
+   :align: left
    :alt: Backend form
 
 The backend form for the extended frontend user

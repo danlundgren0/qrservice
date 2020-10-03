@@ -1,4 +1,4 @@
-﻿.. ==================================================
+.. ==================================================
 .. FOR YOUR INFORMATION
 .. --------------------------------------------------
 .. -*- coding: utf-8 -*- with BOM.
@@ -268,7 +268,7 @@ Declaring the task class
 
 As a last step, the task class must be declared so the Scheduler knows
 of its existence. The declaration must be placed in the
-:code:`ext\_localconf.php` file of the extension that provides the
+:code:`ext_localconf.php` file of the extension that provides the
 task. Let's look at one of the base classes declaration as an example:
 
 ::

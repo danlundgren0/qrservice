@@ -14,16 +14,33 @@ namespace TYPO3\CMS\Core\Cache\Frontend;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Cache\Backend\BackendInterface;
 use TYPO3\CMS\Core\Cache\Exception\InvalidDataException;
 
 /**
  * A cache frontend for strings. Nothing else.
  *
- * This file is a backport from FLOW3
- * @api
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0 - use VariableFrontend instead.
  */
 class StringFrontend extends AbstractFrontend
 {
+    /**
+     * @param string $identifier
+     * @param BackendInterface $backend
+     */
+    public function __construct($identifier, BackendInterface $backend)
+    {
+        trigger_error(
+            sprintf(
+                'Usage of class %s will be removed in TYPO3 v10.0, use %s instead',
+                static::class,
+                VariableFrontend::class
+            ),
+            E_USER_DEPRECATED
+        );
+        parent::__construct($identifier, $backend);
+    }
+
     /**
      * Saves the value of a PHP variable in the cache.
      *
@@ -33,7 +50,6 @@ class StringFrontend extends AbstractFrontend
      * @param int $lifetime Lifetime of this cache entry in seconds. If NULL is specified, the default lifetime is used. "0" means unlimited lifetime.
      * @throws \InvalidArgumentException if the identifier or tag is not valid
      * @throws InvalidDataException if the variable to cache is not of type string
-     * @api
      */
     public function set($entryIdentifier, $string, array $tags = [], $lifetime = null)
     {
@@ -57,7 +73,6 @@ class StringFrontend extends AbstractFrontend
      * @param string $entryIdentifier Identifier of the cache entry to fetch
      * @return string The value
      * @throws \InvalidArgumentException if the cache identifier is not valid
-     * @api
      */
     public function get($entryIdentifier)
     {
@@ -73,10 +88,11 @@ class StringFrontend extends AbstractFrontend
      * @param string $tag The tag to search for
      * @return array An array with the content of all matching entries. An empty array if no entries matched
      * @throws \InvalidArgumentException if the tag is not valid
-     * @api
+     * @deprecated since TYPO3 v9, Avoid using this method since it is not compliant to PSR-6
      */
     public function getByTag($tag)
     {
+        trigger_error('StringFrontend->getByTag() will be removed in TYPO3 v10.0. Avoid using this method since it is not compliant to PSR-6.', E_USER_DEPRECATED);
         if (!$this->isValidTag($tag)) {
             throw new \InvalidArgumentException('"' . $tag . '" is not a valid tag for a cache entry.', 1233057772);
         }

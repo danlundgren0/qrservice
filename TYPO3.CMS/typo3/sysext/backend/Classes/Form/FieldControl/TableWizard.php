@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Form\FieldControl;
 
 /*
@@ -16,9 +16,9 @@ namespace TYPO3\CMS\Backend\Form\FieldControl;
  */
 
 use TYPO3\CMS\Backend\Form\AbstractNode;
-use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
+use TYPO3\CMS\Core\Utility\StringUtility;
 
 /**
  * Renders the icon with link parameters to the table wizard,
@@ -43,7 +43,7 @@ class TableWizard extends AbstractNode
         }
 
         // Handle options and fallback
-        $title = $options['title'] ?? 'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.tableWizard';
+        $title = $options['title'] ?? 'LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.tableWizard';
         $xmlOutput = isset($options['xmlOutput']) ? (int)$options['xmlOutput'] : 0;
         $numNewRows = isset($options['numNewRows']) ? (int)$options['numNewRows'] : 5;
 
@@ -53,7 +53,7 @@ class TableWizard extends AbstractNode
             $flexFormPath = str_replace('][', '/', substr($itemName, strlen($prefixOfFormElName) + 1, -1));
         }
 
-        $urlParameters  = [
+        $urlParameters = [
             'P' => [
                 'params' => [
                     'xmlOutput' => $xmlOutput,
@@ -67,16 +67,19 @@ class TableWizard extends AbstractNode
             ],
         ];
 
-        $onClick = [];
-        $onClick[] = 'this.blur();';
-        $onClick[] = 'return !TBE_EDITOR.isFormChanged();';
+        $id = StringUtility::getUniqueId('t3js-formengine-fieldcontrol-');
 
+        /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
         return [
             'iconIdentifier' => 'content-table',
             'title' => $title,
             'linkAttributes' => [
-                'onClick' => implode('', $onClick),
-                'href' => BackendUtility::getModuleUrl('wizard_table', $urlParameters),
+                'id' => htmlspecialchars($id),
+                'href' => (string)$uriBuilder->buildUriFromRoute('wizard_table', $urlParameters),
+            ],
+            'requireJsModules' => [
+                ['TYPO3/CMS/Backend/FormEngine/FieldControl/TableWizard' => 'function(FieldControl) {new FieldControl(' . GeneralUtility::quoteJSvalue('#' . $id) . ');}'],
             ],
         ];
     }

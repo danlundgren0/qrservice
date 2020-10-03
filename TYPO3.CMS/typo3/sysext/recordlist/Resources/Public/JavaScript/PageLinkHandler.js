@@ -16,57 +16,63 @@
  * Page link interaction
  */
 define(['jquery', 'TYPO3/CMS/Recordlist/LinkBrowser'], function($, LinkBrowser) {
-	'use strict';
+  'use strict';
 
-	/**
-	 *
-	 * @type {{currentLink: string}}
-	 * @exports TYPO3/CMS/Recordlist/PageLinkHandler
-	 */
-	var PageLinkHandler = {
-		currentLink: ''
-	};
+  /**
+   *
+   * @type {{currentLink: string}}
+   * @exports TYPO3/CMS/Recordlist/PageLinkHandler
+   */
+  var PageLinkHandler = {
+    currentLink: ''
+  };
 
-	/**
-	 *
-	 * @param {Event} event
-	 */
-	PageLinkHandler.linkPage = function(event) {
-		event.preventDefault();
-		LinkBrowser.finalizeFunction($(this).attr('href'));
-	};
+  /**
+   *
+   * @param {Event} event
+   */
+  PageLinkHandler.linkPage = function(event) {
+    event.preventDefault();
+    LinkBrowser.finalizeFunction($(this).attr('href'));
+  };
 
-	/**
-	 *
-	 * @param {Event} event
-	 */
-	PageLinkHandler.linkPageByTextfield = function(event) {
-		event.preventDefault();
+  /**
+   *
+   * @param {Event} event
+   */
+  PageLinkHandler.linkPageByTextfield = function(event) {
+    event.preventDefault();
 
-		var value = $('#luid').val();
-		if (!value) {
-			return;
-		}
+    var value = $('#luid').val();
+    if (!value) {
+      return;
+    }
 
-		LinkBrowser.finalizeFunction(value);
-	};
+    // make sure we use proper link syntax if this is an integer only
+    var valueAsNumber = parseInt(value, 10);
+    if (!isNaN(valueAsNumber)) {
+      value = 't3://page?uid=' + valueAsNumber;
+    }
 
-	/**
-	 *
-	 * @param {Event} event
-	 */
-	PageLinkHandler.linkCurrent = function(event) {
-		event.preventDefault();
-		LinkBrowser.finalizeFunction(PageLinkHandler.currentLink);
-	};
+    LinkBrowser.finalizeFunction(value);
+  };
 
-	$(function() {
-		PageLinkHandler.currentLink = $('body').data('currentLink');
+  /**
+   *
+   * @param {Event} event
+   */
+  PageLinkHandler.linkCurrent = function(event) {
+    event.preventDefault();
+    LinkBrowser.finalizeFunction(PageLinkHandler.currentLink);
+  };
 
-		$('a.t3js-pageLink').on('click', PageLinkHandler.linkPage);
-		$('input.t3js-linkCurrent').on('click', PageLinkHandler.linkCurrent);
-		$('input.t3js-pageLink').on('click', PageLinkHandler.linkPageByTextfield);
-	});
+  $(function() {
+    PageLinkHandler.currentLink = $('body').data('currentLink');
 
-	return PageLinkHandler;
+    $('a.t3js-pageLink').on('click', PageLinkHandler.linkPage);
+    $('input.t3js-linkCurrent').on('click', PageLinkHandler.linkCurrent);
+    $('input.t3js-pageLink').on('click', PageLinkHandler.linkPageByTextfield);
+  });
+
+  return PageLinkHandler;
 });

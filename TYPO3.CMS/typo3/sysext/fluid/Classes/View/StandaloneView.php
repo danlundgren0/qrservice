@@ -27,15 +27,13 @@ use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
 /**
  * A standalone template view.
  * Should be used as view if you want to use Fluid without Extbase extensions
- *
- * @api
  */
 class StandaloneView extends AbstractTemplateView
 {
     /**
      * @var ObjectManager|null
      */
-    protected $objectManager = null;
+    protected $objectManager;
 
     /**
      * Constructor
@@ -73,19 +71,10 @@ class StandaloneView extends AbstractTemplateView
     }
 
     /**
-     * @param string $templateName
-     */
-    public function setTemplate($templateName)
-    {
-        $this->baseRenderingContext->setControllerAction($templateName);
-    }
-
-    /**
      * Sets the format of the current request (default format is "html")
      *
      * @param string $format
      * @throws \RuntimeException
-     * @api
      */
     public function setFormat($format)
     {
@@ -102,7 +91,6 @@ class StandaloneView extends AbstractTemplateView
      *
      * @return string $format
      * @throws \RuntimeException
-     * @api
      */
     public function getFormat()
     {
@@ -117,6 +105,7 @@ class StandaloneView extends AbstractTemplateView
      *
      * @return WebRequest
      * @throws \RuntimeException
+     * @internal
      */
     public function getRequest()
     {
@@ -127,17 +116,6 @@ class StandaloneView extends AbstractTemplateView
     }
 
     /**
-     * Sets the absolute path to a Fluid template file
-     *
-     * @param string $templatePathAndFilename Fluid template path
-     * @api
-     */
-    public function setTemplatePathAndFilename($templatePathAndFilename)
-    {
-        $this->baseRenderingContext->getTemplatePaths()->setTemplatePathAndFilename($templatePathAndFilename);
-    }
-
-    /**
      * Returns the absolute path to a Fluid template file if it was specified with setTemplatePathAndFilename() before.
      * If the template filename was never specified, Fluid attempts to resolve the file based on controller and action.
      *
@@ -145,7 +123,6 @@ class StandaloneView extends AbstractTemplateView
      * and return that template path and filename directly, instead of attempting to resolve it.
      *
      * @return string Fluid template path
-     * @api
      */
     public function getTemplatePathAndFilename()
     {
@@ -162,7 +139,6 @@ class StandaloneView extends AbstractTemplateView
      * You can use setTemplatePathAndFilename() alternatively if you only want to specify the template path
      *
      * @param string $templateSource Fluid template source code
-     * @api
      */
     public function setTemplateSource($templateSource)
     {
@@ -170,68 +146,9 @@ class StandaloneView extends AbstractTemplateView
     }
 
     /**
-     * Set the root path(s) to the templates.
-     *
-     * @param string[] $templateRootPaths Root paths to the templates.
-     * @api
-     */
-    public function setTemplateRootPaths(array $templateRootPaths)
-    {
-        $this->baseRenderingContext->getTemplatePaths()->setTemplateRootPaths($templateRootPaths);
-    }
-
-    /**
-     * Set the root path(s) to the layouts.
-     *
-     * @param string[] $layoutRootPaths Root path to the layouts
-     * @api
-     */
-    public function setLayoutRootPaths(array $layoutRootPaths)
-    {
-        $this->baseRenderingContext->getTemplatePaths()->setLayoutRootPaths($layoutRootPaths);
-    }
-
-    /**
-     * Resolves the layout root to be used inside other paths.
-     *
-     * @return array Fluid layout root paths
-     * @throws InvalidTemplateResourceException
-     * @api
-     */
-    public function getLayoutRootPaths()
-    {
-        return $this->baseRenderingContext->getTemplatePaths()->getLayoutRootPaths();
-    }
-
-    /**
-     * Set the root path(s) to the partials.
-     * If set, overrides the one determined from $this->partialRootPathPattern
-     *
-     * @param string[] $partialRootPaths Root paths to the partials. If set, overrides the one determined from $this->partialRootPathPattern
-     * @api
-     */
-    public function setPartialRootPaths(array $partialRootPaths)
-    {
-        $this->baseRenderingContext->getTemplatePaths()->setPartialRootPaths($partialRootPaths);
-    }
-
-    /**
-     * Returns the absolute path to the folder that contains Fluid partial files
-     *
-     * @return array Fluid partial root paths
-     * @throws InvalidTemplateResourceException
-     * @api
-     */
-    public function getPartialRootPaths()
-    {
-        return $this->baseRenderingContext->getTemplatePaths()->getPartialRootPaths();
-    }
-
-    /**
      * Checks whether a template can be resolved for the current request
      *
      * @return bool
-     * @api
      */
     public function hasTemplate()
     {

@@ -180,7 +180,6 @@ class DatabaseTreeDataProvider extends AbstractTableConfigurationTreeDataProvide
      * Gets the nodes
      *
      * @param \TYPO3\CMS\Backend\Tree\TreeNode $node
-     * @return \TYPO3\CMS\Backend\Tree\TreeNodeCollection
      */
     public function getNodes(\TYPO3\CMS\Backend\Tree\TreeNode $node)
     {
@@ -240,13 +239,13 @@ class DatabaseTreeDataProvider extends AbstractTableConfigurationTreeDataProvide
      * Builds a complete node including childs
      *
      * @param \TYPO3\CMS\Backend\Tree\TreeNode $basicNode
-     * @param NULL|\TYPO3\CMS\Core\Tree\TableConfiguration\DatabaseTreeNode $parent
+     * @param \TYPO3\CMS\Core\Tree\TableConfiguration\DatabaseTreeNode|null $parent
      * @param int $level
      * @return \TYPO3\CMS\Core\Tree\TableConfiguration\DatabaseTreeNode Node object
      */
     protected function buildRepresentationForNode(\TYPO3\CMS\Backend\Tree\TreeNode $basicNode, DatabaseTreeNode $parent = null, $level = 0)
     {
-        /** @var $node \TYPO3\CMS\Core\Tree\TableConfiguration\DatabaseTreeNode */
+        /** @var \TYPO3\CMS\Core\Tree\TableConfiguration\DatabaseTreeNode $node */
         $node = GeneralUtility::makeInstance(\TYPO3\CMS\Core\Tree\TableConfiguration\DatabaseTreeNode::class);
         $row = [];
         if ($basicNode->getId() == 0) {
@@ -267,7 +266,7 @@ class DatabaseTreeDataProvider extends AbstractTableConfigurationTreeDataProvide
         $node->setParentNode($parent);
         if ($basicNode->hasChildNodes()) {
             $node->setHasChildren(true);
-            /** @var $childNodes \TYPO3\CMS\Backend\Tree\SortedTreeNodeCollection */
+            /** @var \TYPO3\CMS\Backend\Tree\SortedTreeNodeCollection $childNodes */
             $childNodes = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Tree\SortedTreeNodeCollection::class);
             $tempNodes = [];
             foreach ($basicNode->getChildNodes() as $child) {
@@ -316,7 +315,7 @@ class DatabaseTreeDataProvider extends AbstractTableConfigurationTreeDataProvide
      *
      * @param \TYPO3\CMS\Backend\Tree\TreeNode $node
      * @param int $level
-     * @return NULL|\TYPO3\CMS\Backend\Tree\TreeNodeCollection
+     * @return \TYPO3\CMS\Backend\Tree\TreeNodeCollection|null
      */
     protected function getChildrenOf(\TYPO3\CMS\Backend\Tree\TreeNode $node, $level)
     {
@@ -346,7 +345,7 @@ class DatabaseTreeDataProvider extends AbstractTableConfigurationTreeDataProvide
         $storage = null;
         $children = $this->getRelatedRecords($nodeData);
         if (!empty($children)) {
-            /** @var $storage \TYPO3\CMS\Backend\Tree\TreeNodeCollection */
+            /** @var \TYPO3\CMS\Backend\Tree\TreeNodeCollection $storage */
             $storage = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Tree\TreeNodeCollection::class);
             foreach ($children as $child) {
                 $node = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Tree\TreeNode::class);
@@ -400,7 +399,7 @@ class DatabaseTreeDataProvider extends AbstractTableConfigurationTreeDataProvide
 
             case 'select':
                 if ($this->columnConfiguration['MM']) {
-                    /** @var $dbGroup \TYPO3\CMS\Core\Database\RelationHandler */
+                    /** @var \TYPO3\CMS\Core\Database\RelationHandler $dbGroup */
                     $dbGroup = GeneralUtility::makeInstance(\TYPO3\CMS\Core\Database\RelationHandler::class);
                     // Dummy field for setting "look from other site"
                     $this->columnConfiguration['MM_oppositeField'] = 'children';

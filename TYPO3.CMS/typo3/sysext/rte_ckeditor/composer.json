@@ -1,15 +1,22 @@
 {
 	"name": "typo3/cms-rte-ckeditor",
 	"type": "typo3-cms-framework",
-	"description": "CKEditor for the TYPO3 ecosystem",
+	"description": "Integration of CKEditor as Rich Text Editor.",
 	"homepage": "https://typo3.org",
-	"license": ["GPL-2.0+"],
-
-	"require": {
-		"typo3/cms-core": "*"
+	"license": ["GPL-2.0-or-later"],
+	"authors": [{
+		"name": "TYPO3 Core Team",
+		"email": "typo3cms@typo3.org",
+		"role": "Developer"
+	}],
+	"config": {
+		"sort-packages": true
 	},
-	"replace": {
-		"rte_ckeditor": "*"
+	"require": {
+		"typo3/cms-core": "9.5.21"
+	},
+	"conflict": {
+		"typo3/cms": "*"
 	},
 	"suggest": {
 		"typo3/cms-setup": "*"
@@ -18,7 +25,8 @@
 		"typo3/cms": {
 			"Package": {
 				"partOfFactoryDefault": true
-			}
+			},
+			"extension-key": "rte_ckeditor"
 		}
 	},
 	"autoload": {

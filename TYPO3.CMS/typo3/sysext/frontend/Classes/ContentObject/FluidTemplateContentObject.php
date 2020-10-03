@@ -21,6 +21,7 @@ use TYPO3\CMS\Extbase\Configuration\ConfigurationManager;
 use TYPO3\CMS\Extbase\Mvc\Web\RequestBuilder;
 use TYPO3\CMS\Extbase\Object\ObjectManager;
 use TYPO3\CMS\Fluid\View\StandaloneView;
+use TYPO3\CMS\Frontend\ContentObject\Exception\ContentRenderingException;
 
 /**
  * Contains FLUIDTEMPLATE class object
@@ -30,7 +31,7 @@ class FluidTemplateContentObject extends AbstractContentObject
     /**
      * @var StandaloneView
      */
-    protected $view = null;
+    protected $view;
 
     /**
      * @var ContentDataProcessor
@@ -156,20 +157,27 @@ class FluidTemplateContentObject extends AbstractContentObject
             $templateRootPaths = $this->applyStandardWrapToFluidPaths($conf['templateRootPaths.']);
             $this->view->setTemplateRootPaths($templateRootPaths);
             $templateName = isset($conf['templateName.'])
-                ? $this->cObj->stdWrap(isset($conf['templateName']) ? $conf['templateName'] : '', $conf['templateName.'])
+                ? $this->cObj->stdWrap($conf['templateName'] ?? '', $conf['templateName.'])
                 : $conf['templateName'];
             $this->view->setTemplate($templateName);
-        // Fetch the Fluid template by template cObject
         } elseif (!empty($conf['template']) && !empty($conf['template.'])) {
-            $templateSource = $this->cObj->cObjGetSingle($conf['template'], $conf['template.']);
+            // Fetch the Fluid template by template cObject
+            $templateSource = $this->cObj->cObjGetSingle($conf['template'], $conf['template.'], 'template');
+            if ($templateSource === '') {
+                throw new ContentRenderingException(
+                    'Could not find template source for ' . $conf['template'],
+                    1437420865
+                );
+            }
             $this->view->setTemplateSource($templateSource);
-        // Fetch the Fluid template by file stdWrap
         } else {
-            $file = isset($conf['file.']) ? $this->cObj->stdWrap($conf['file'], $conf['file.']) : $conf['file'];
-            /** @var $templateService \TYPO3\CMS\Core\TypoScript\TemplateService */
-            $templateService = $GLOBALS['TSFE']->tmpl;
-            $templatePathAndFilename = $templateService->getFileName($file);
-            $this->view->setTemplatePathAndFilename(PATH_site . $templatePathAndFilename);
+            // Fetch the Fluid template by file stdWrap
+            $file = isset($conf['file.'])
+                ? $this->cObj->stdWrap($conf['file'] ?? '', $conf['file.'])
+                : ($conf['file'] ?? '');
+            // Get the absolute file name
+            $templatePathAndFilename = GeneralUtility::getFileAbsFileName($file);
+            $this->view->setTemplatePathAndFilename($templatePathAndFilename);
         }
     }
 
@@ -225,7 +233,9 @@ class FluidTemplateContentObject extends AbstractContentObject
      */
     protected function setFormat(array $conf)
     {
-        $format = isset($conf['format.']) ? $this->cObj->stdWrap($conf['format'], $conf['format.']) : $conf['format'];
+        $format = isset($conf['format.'])
+            ? $this->cObj->stdWrap($conf['format'] ?? '', $conf['format.'])
+            : ($conf['format'] ?? '');
         if ($format) {
             $this->view->setFormat($format);
         }
@@ -238,20 +248,28 @@ class FluidTemplateContentObject extends AbstractContentObject
      */
     protected function setExtbaseVariables(array $conf)
     {
-        /** @var $request \TYPO3\CMS\Extbase\Mvc\Request */
-        $requestPluginName = isset($conf['extbase.']['pluginName.']) ? $this->cObj->stdWrap($conf['extbase.']['pluginName'], $conf['extbase.']['pluginName.']) : $conf['extbase.']['pluginName'];
+        /** @var \TYPO3\CMS\Extbase\Mvc\Request $request */
+        $requestPluginName = isset($conf['extbase.']['pluginName.'])
+            ? $this->cObj->stdWrap($conf['extbase.']['pluginName'] ?? '', $conf['extbase.']['pluginName.'])
+            : ($conf['extbase.']['pluginName'] ?? '');
         if ($requestPluginName) {
             $this->view->getRequest()->setPluginName($requestPluginName);
         }
-        $requestControllerExtensionName = isset($conf['extbase.']['controllerExtensionName.']) ? $this->cObj->stdWrap($conf['extbase.']['controllerExtensionName'], $conf['extbase.']['controllerExtensionName.']) : $conf['extbase.']['controllerExtensionName'];
+        $requestControllerExtensionName = isset($conf['extbase.']['controllerExtensionName.'])
+            ? $this->cObj->stdWrap($conf['extbase.']['controllerExtensionName'] ?? '', $conf['extbase.']['controllerExtensionName.'])
+            : ($conf['extbase.']['controllerExtensionName'] ?? '');
         if ($requestControllerExtensionName) {
             $this->view->getRequest()->setControllerExtensionName($requestControllerExtensionName);
         }
-        $requestControllerName = isset($conf['extbase.']['controllerName.']) ? $this->cObj->stdWrap($conf['extbase.']['controllerName'], $conf['extbase.']['controllerName.']) : $conf['extbase.']['controllerName'];
+        $requestControllerName = isset($conf['extbase.']['controllerName.'])
+            ? $this->cObj->stdWrap($conf['extbase.']['controllerName'] ?? '', $conf['extbase.']['controllerName.'])
+            : ($conf['extbase.']['controllerName'] ?? '');
         if ($requestControllerName) {
             $this->view->getRequest()->setControllerName($requestControllerName);
         }
-        $requestControllerActionName = isset($conf['extbase.']['controllerActionName.']) ? $this->cObj->stdWrap($conf['extbase.']['controllerActionName'], $conf['extbase.']['controllerActionName.']) : $conf['extbase.']['controllerActionName'];
+        $requestControllerActionName = isset($conf['extbase.']['controllerActionName.'])
+            ? $this->cObj->stdWrap($conf['extbase.']['controllerActionName'] ?? '', $conf['extbase.']['controllerActionName.'])
+            : ($conf['extbase.']['controllerActionName'] ?? '');
         if ($requestControllerActionName) {
             $this->view->getRequest()->setControllerActionName($requestControllerActionName);
         }
@@ -295,13 +313,13 @@ class FluidTemplateContentObject extends AbstractContentObject
         $variables = [];
         $reservedVariables = ['data', 'current'];
         // Accumulate the variables to be process and loop them through cObjGetSingle
-        $variablesToProcess = (array)$conf['variables.'];
+        $variablesToProcess = (array)($conf['variables.'] ?? []);
         foreach ($variablesToProcess as $variableName => $cObjType) {
             if (is_array($cObjType)) {
                 continue;
             }
             if (!in_array($variableName, $reservedVariables)) {
-                $variables[$variableName] = $this->cObj->cObjGetSingle($cObjType, $variablesToProcess[$variableName . '.']);
+                $variables[$variableName] = $this->cObj->cObjGetSingle($cObjType, $variablesToProcess[$variableName . '.'], 'variables.' . $variableName);
             } else {
                 throw new \InvalidArgumentException(
                     'Cannot use reserved name "' . $variableName . '" as variable name in FLUIDTEMPLATE.',
@@ -310,7 +328,7 @@ class FluidTemplateContentObject extends AbstractContentObject
             }
         }
         $variables['data'] = $this->cObj->data;
-        $variables['current'] = $this->cObj->data[$this->cObj->currentValKey];
+        $variables['current'] = $this->cObj->data[$this->cObj->currentValKey ?? null] ?? null;
         return $variables;
     }
 
@@ -323,7 +341,7 @@ class FluidTemplateContentObject extends AbstractContentObject
     protected function assignSettings(array $conf)
     {
         if (isset($conf['settings.'])) {
-            /** @var $typoScriptService TypoScriptService */
+            /** @var TypoScriptService $typoScriptService */
             $typoScriptService = GeneralUtility::makeInstance(TypoScriptService::class);
             $settings = $typoScriptService->convertTypoScriptArrayToPlainArray($conf['settings.']);
             $this->view->assign('settings', $settings);

@@ -1,4 +1,5 @@
 <?php
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Http;
 
 /*
@@ -16,10 +17,9 @@ namespace TYPO3\CMS\Backend\Http;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Server\RequestHandlerInterface as PsrRequestHandlerInterface;
 use TYPO3\CMS\Backend\Routing\Exception\InvalidRequestTokenException;
 use TYPO3\CMS\Backend\Routing\Exception\ResourceNotFoundException;
-use TYPO3\CMS\Core\Core\Bootstrap;
-use TYPO3\CMS\Core\FormProtection\FormProtectionFactory;
 use TYPO3\CMS\Core\Http\RequestHandlerInterface;
 use TYPO3\CMS\Core\Http\Response;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -27,134 +27,39 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 /**
  * AJAX dispatcher
  *
- * Main entry point for AJAX calls in the TYPO3 Backend. Based on ?ajaxId of the outside application.
- * Before doing the basic BE-related set up of this request (see the additional calls on $this->bootstrap inside
- * handleRequest()), some AJAX-calls can be made without a valid user, which is determined here.
- * See $GLOBALS['TYPO3_CONF_VARS']['BE']['AJAX'] and the Core APIs on how to register an AJAX call in the TYPO3 Backend.
+ * Main entry point for AJAX calls in the TYPO3 Backend. Based on ?route=/ajax/* of the outside application.
  *
- * Due to legacy reasons, the actual logic is in EXT:core/Http/AjaxRequestHandler which will eventually
- * be moved into this class.
+ * AJAX Requests are typically registered within EXT:myext/Configuration/Backend/AjaxRoutes.php
+ *
+ * @deprecated since TYPO3 v9.2, will be removed in TYPO3 v10.0
  */
-class AjaxRequestHandler implements RequestHandlerInterface
+class AjaxRequestHandler implements RequestHandlerInterface, PsrRequestHandlerInterface
 {
-    /**
-     * Instance of the current TYPO3 bootstrap
-     * @var Bootstrap
-     */
-    protected $bootstrap;
-
-    /**
-     * List of requests that don't need a valid BE user
-     * @var array
-     */
-    protected $publicAjaxIds = [
-        '/ajax/login',
-        '/ajax/logout',
-        '/ajax/login/refresh',
-        '/ajax/login/timedout',
-        '/ajax/rsa/publickey'
-    ];
-
-    /**
-     * Constructor handing over the bootstrap and the original request
-     *
-     * @param Bootstrap $bootstrap
-     */
-    public function __construct(Bootstrap $bootstrap)
-    {
-        $this->bootstrap = $bootstrap;
-    }
-
     /**
      * Handles any AJAX request in the TYPO3 Backend
      *
      * @param ServerRequestInterface $request
-     * @return NULL|\Psr\Http\Message\ResponseInterface
+     * @return ResponseInterface
      */
-    public function handleRequest(ServerRequestInterface $request)
+    public function handleRequest(ServerRequestInterface $request): ResponseInterface
     {
-        // First get the ajaxID
-        $ajaxID = isset($request->getParsedBody()['ajaxID']) ? $request->getParsedBody()['ajaxID'] : $request->getQueryParams()['ajaxID'];
-        $request = $request->withAttribute('routePath', $ajaxID);
-        $proceedIfNoUserIsLoggedIn = $this->isLoggedInBackendUserRequired($ajaxID);
-        $this->boot($proceedIfNoUserIsLoggedIn);
-
-        try {
-            // Backend Routing - check if a valid route is there, and dispatch
-            return $this->dispatch($request);
-        } catch (ResourceNotFoundException $e) {
-            // no Route found, fallback to the traditional AJAX request
-        }
-        return $this->dispatchTraditionalAjaxRequest($request);
+        trigger_error(self::class . ' will be removed in TYPO3 v10.0. Use the regular application dispatcher instead.', E_USER_DEPRECATED);
+        return $this->handle($request);
     }
 
     /**
-     * This request handler can handle any backend request having
-     * an ajaxID as parameter (see Application.php in EXT:backend)
+     * Handles any AJAX request in the TYPO3 Backend, after finishing running middlewares
      *
-     * @param ServerRequestInterface $request
-     * @return bool If the request is an AJAX backend request, TRUE otherwise FALSE
-     */
-    public function canHandleRequest(ServerRequestInterface $request)
-    {
-        return $request->getAttribute('isAjaxRequest', false);
-    }
-
-    /**
-     * Returns the priority - how eager the handler is to actually handle the request.
-     *
-     * @return int The priority of the request handler.
-     */
-    public function getPriority()
-    {
-        return 80;
-    }
-
-    /**
-     * Check if the user is required for the request
-     * If we're trying to do an ajax login, don't require a user
-     *
-     * @param string $ajaxId the Ajax ID to check against
-     * @return bool whether the request can proceed without a login required
-     */
-    protected function isLoggedInBackendUserRequired($ajaxId)
-    {
-        return in_array($ajaxId, $this->publicAjaxIds, true);
-    }
-
-    /**
-     * Start the Backend bootstrap part
-     *
-     * @param bool $proceedIfNoUserIsLoggedIn a flag if a backend user is required
-     */
-    protected function boot($proceedIfNoUserIsLoggedIn)
-    {
-        $this->bootstrap
-            ->checkLockedBackendAndRedirectOrDie($proceedIfNoUserIsLoggedIn)
-            ->checkBackendIpOrDie()
-            ->checkSslBackendAndRedirectIfNeeded()
-            ->initializeBackendRouter()
-            ->loadBaseTca()
-            ->loadExtTables()
-            ->initializeBackendUser()
-            ->initializeBackendAuthentication($proceedIfNoUserIsLoggedIn)
-            ->initializeLanguageObject()
-            ->initializeBackendTemplate()
-            ->endOutputBufferingAndCleanPreviousOutput()
-            ->initializeOutputCompression()
-            ->sendHttpHeaders();
-    }
-
-    /**
      * Creates a response object with JSON headers automatically, and then dispatches to the correct route
      *
      * @param ServerRequestInterface $request
-     * @return ResponseInterface $response
+     * @return ResponseInterface
      * @throws ResourceNotFoundException if no valid route was found
      * @throws InvalidRequestTokenException if the request could not be verified
      */
-    protected function dispatch(ServerRequestInterface $request)
+    public function handle(ServerRequestInterface $request): ResponseInterface
     {
+        trigger_error(self::class . ' will be removed in TYPO3 v10.0. Use the regular application dispatcher instead.', E_USER_DEPRECATED);
         /** @var Response $response */
         $response = GeneralUtility::makeInstance(Response::class, 'php://temp', 200, [
             'Content-Type' => 'application/json; charset=utf-8',
@@ -167,70 +72,27 @@ class AjaxRequestHandler implements RequestHandlerInterface
     }
 
     /**
-     * Calls the ajax callback method registered in TYPO3_CONF_VARS[BE][AJAX]
+     * This request handler can handle any backend request having
+     * an /ajax/ request
      *
      * @param ServerRequestInterface $request
-     * @return ResponseInterface
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
+     * @return bool If the request is an AJAX backend request, TRUE otherwise FALSE
      */
-    protected function dispatchTraditionalAjaxRequest($request)
+    public function canHandleRequest(ServerRequestInterface $request): bool
     {
-        GeneralUtility::deprecationLog('Using the traditional way for AJAX requests via $TYPO3_CONF_VARS[BE][AJAX] is discouraged. Use the Backend Routes logic instead.');
-        $ajaxID = $request->getAttribute('routePath');
-        // Finding the script path from the registry
-        $ajaxRegistryEntry = isset($GLOBALS['TYPO3_CONF_VARS']['BE']['AJAX'][$ajaxID]) ? $GLOBALS['TYPO3_CONF_VARS']['BE']['AJAX'][$ajaxID] : null;
-        $ajaxScript = null;
-        $csrfTokenCheck = false;
-        if ($ajaxRegistryEntry !== null && is_array($ajaxRegistryEntry) && isset($ajaxRegistryEntry['callbackMethod'])) {
-            $ajaxScript = $ajaxRegistryEntry['callbackMethod'];
-            $csrfTokenCheck = $ajaxRegistryEntry['csrfTokenCheck'];
-        }
-
-        // Instantiating the AJAX object
-        /** @var \TYPO3\CMS\Core\Http\AjaxRequestHandler $ajaxObj */
-        $ajaxObj = GeneralUtility::makeInstance(\TYPO3\CMS\Core\Http\AjaxRequestHandler::class, $ajaxID);
-        $ajaxParams = ['request' => $request];
-
-        // Evaluating the arguments and calling the AJAX method/function
-        if (empty($ajaxID)) {
-            $ajaxObj->setError('No valid ajaxID parameter given.');
-        } elseif (empty($ajaxScript)) {
-            $ajaxObj->setError('No backend function registered for ajaxID "' . $ajaxID . '".');
-        } elseif ($csrfTokenCheck && !$this->isValidRequest($request)) {
-            $ajaxObj->setError('Invalid CSRF token detected for ajaxID "' . $ajaxID . '", reload the backend of TYPO3');
-        } else {
-            $success = GeneralUtility::callUserFunction($ajaxScript, $ajaxParams, $ajaxObj, '', 1);
-            if ($success === false) {
-                $ajaxObj->setError('Registered backend function for ajaxID "' . $ajaxID . '" was not found.');
-            }
-        }
-
-        // Outputting the content (and setting the X-JSON-Header)
-        return $ajaxObj->render();
+        trigger_error(self::class . ' will be removed in TYPO3 v10.0. Use the regular application dispatcher instead.', E_USER_DEPRECATED);
+        $routePath = $request->getParsedBody()['route'] ?? $request->getQueryParams()['route'] ?? '';
+        return strpos($routePath, '/ajax/') === 0;
     }
 
     /**
-     * Wrapper method for static form protection utility
+     * Returns the priority - how eager the handler is to actually handle the request.
      *
-     * @return \TYPO3\CMS\Core\FormProtection\AbstractFormProtection
+     * @return int The priority of the request handler.
      */
-    protected function getFormProtection()
+    public function getPriority(): int
     {
-        return FormProtectionFactory::get();
-    }
-
-    /**
-     * Checks if the request token is valid. This is checked to see if the route is really
-     * created by the same instance. Should be called for all routes in the backend except
-     * for the ones that don't require a login.
-     *
-     * @param ServerRequestInterface $request
-     * @return bool
-     * @see \TYPO3\CMS\Backend\Routing\UriBuilder where the token is generated.
-     */
-    protected function isValidRequest(ServerRequestInterface $request)
-    {
-        $token = (string)(isset($request->getParsedBody()['ajaxToken']) ? $request->getParsedBody()['ajaxToken'] : $request->getQueryParams()['ajaxToken']);
-        return $this->getFormProtection()->validateToken($token, 'ajaxCall', $request->getAttribute('routePath'));
+        trigger_error(self::class . ' will be removed in TYPO3 v10.0. Use the regular application dispatcher instead.', E_USER_DEPRECATED);
+        return 80;
     }
 }

@@ -1,4 +1,7 @@
-{namespace belog=TYPO3\CMS\Belog\ViewHelpers}
+<html
+    xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers"
+    xmlns:belog="http://typo3.org/ns/TYPO3/CMS/Belog/ViewHelpers"
+    data-namespace-typo3-fluid="true">
 
 <f:comment>
 	This is an ugly workaround.
@@ -7,11 +10,11 @@
 	that is not extbase based to figure the permissions. Thus, we have to add
 	the page Id manually to hint the info module about that.
 </f:comment>
-<f:if condition="{constraint.isInPageContext}">
+<f:if condition="{isSubmoduleLayout}">
 	<input type="hidden" name="id" value="{constraint.pageId}" />
 </f:if>
 
-<f:form object="{constraint}" action="index" name="constraint" class="form-inline form-inline-spaced">
+<f:form object="{constraint}" action="list" name="constraint" class="form-inline form-inline-spaced">
 	<div class="form-group">
 		<label for="belog-users"><f:translate key="users" /></label>
 		<f:form.select
@@ -35,7 +38,7 @@
 		/>
 	</div>
 
-	<f:if condition="{belog:isExtensionLoaded(extensionKey:'workspaces')}">
+	<f:if condition="{workspacesExtensionLoaded}">
 		<f:if condition="{showWorkspaceSelector}">
 				<div class="form-group">
 					<label for="belog-workspaces"><f:translate key="workspace" /></label>
@@ -50,7 +53,7 @@
 		</f:if>
 	</f:if>
 
-	<f:if condition="{constraint.isInPageContext}">
+	<f:if condition="{isSubmoduleLayout}">
 		<div class="form-group">
 			<label for="belog-depth"><f:translate key="chLog_menuDepth" /></label>
 			<f:form.select
@@ -87,15 +90,17 @@
 		/>
 	</div>
 
-	<div class="form-group">
-		<label for="belog-group"><f:translate key="groupByPage" /></label>
-		<f:form.checkbox
-			property="groupByPage"
-			value="1"
-			additionalAttributes="{onchange : 'submit()'}"
-			id="belog-group"
-		/>
-	</div>
+	<f:if condition="{constraint.depth} > 0">
+		<div class="form-group">
+			<label for="belog-group"><f:translate key="groupByPage" /></label>
+			<f:form.checkbox
+				property="groupByPage"
+				value="1"
+				additionalAttributes="{onchange : 'submit()'}"
+				id="belog-group"
+			/>
+		</div>
+	</f:if>
 
 	<f:comment>
 		Date time fields for manual date selection
@@ -103,37 +108,42 @@
 
 
 	<f:if condition="{constraint.timeFrame} == 30">
+		<f:be.pageRenderer includeRequireJsModules="{0: 'TYPO3/CMS/Backend/DateTimePicker'}" />
 		<div class="form-group">
-			<label for="manualDateStart"><f:translate key="LLL:EXT:lang/Resources/Private/Language/locallang_common.xlf:from" /></label>
+			<label for="manualDateStart"><f:translate key="LLL:EXT:core/Resources/Private/Language/locallang_common.xlf:from" /></label>
 			<div class="input-group input-group-sm">
 				<f:form.textfield
 						name="manualDateStart"
-						value="{f:if(condition: constraint.startTimestamp, then: \"{f:format.date(format:'{settings.timeFormat} {settings.dateFormat}', date: '@{constraint.startTimestamp}')}\")}"
+						value="{f:if(condition: constraint.manualDateStart, then: \"{f:format.date(format:'{settings.timeFormat} {settings.dateFormat}', date: '{constraint.manualDateStart}')}\")}"
 						id="manualDateStart"
 						class="form-control input-sm t3js-datetimepicker t3js-clearable"
 						data="{date-type: 'datetime'}"
 						/>
-				<f:form.hidden property="startTimestamp" value="{constraint.startTimestamp}" />
+				<f:form.hidden
+						property="manualDateStart"
+						value="{f:if(condition: constraint.manualDateStart, then: \"{f:format.date(format:'c', date: '{constraint.manualDateStart}')}\")}"
+				/>
 				<span class="input-group-btn">
 					<label class="btn btn-default" for="manualDateStart">
 						<span class="fa fa-calendar"></span>
 					</label>
 				</span>
 			</div>
-
 		</div>
 
 		<div class="form-group">
-			<label for="manualDateStop"><f:translate key="LLL:EXT:lang/Resources/Private/Language/locallang_common.xlf:to" /></label>
+			<label for="manualDateStop"><f:translate key="LLL:EXT:core/Resources/Private/Language/locallang_common.xlf:to" /></label>
 			<div class="input-group input-group-sm">
 				<f:form.textfield
 						name="manualDateStop"
-						value="{f:format.date(format:'{settings.timeFormat} {settings.dateFormat}', date: '@{constraint.endTimestamp}')}"
+						value="{f:format.date(format:'{settings.timeFormat} {settings.dateFormat}', date: '{constraint.manualDateStop}')}"
 						id="manualDateStop"
 						class="form-control input-sm t3js-datetimepicker t3js-clearable"
 						data="{date-type: 'datetime'}"
 						/>
-				<f:form.hidden property="endTimestamp" />
+				<f:form.hidden property="manualDateStop"
+						value="{f:format.date(format:'c', date: '{constraint.manualDateStop}')}"
+				/>
 				<span class="input-group-btn">
 					<label class="btn btn-default" for="manualDateStop">
 						<span class="fa fa-calendar"></span>
@@ -141,9 +151,11 @@
 				</span>
 			</div>
 		</div>
-	</f:if>
 
-	<div class="form-group">
-		<f:form.submit id="submit-constraint" value="{f:translate(key: 'set')}" class="btn btn-default btn-sm" />
-	</div>
+		<div class="form-group">
+			<f:form.submit id="submit-constraint" value="{f:translate(key: 'set')}" class="btn btn-default btn-sm" />
+		</div>
+	</f:if>
 </f:form>
+
+</html>

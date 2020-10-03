@@ -14,9 +14,12 @@ namespace TYPO3\CMS\IndexedSearch;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Utility\CommandUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
+use TYPO3\CMS\Core\Utility\PathUtility;
 
 /**
  * External standard parsers for indexed_search
@@ -54,9 +57,14 @@ class FileContentParser
     public $pObj;
 
     /**
-     * @var \TYPO3\CMS\Lang\LanguageService|\TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController
+     * @var \TYPO3\CMS\Core\Localization\LanguageService|\TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController
      */
     protected $langObject;
+
+    /**
+     * @var string Backup for setLocaleForServerFileSystem()
+     */
+    protected $lastLocale;
 
     /**
      * Constructs this external parsers object
@@ -76,9 +84,9 @@ class FileContentParser
     public function initParser($extension)
     {
         // Then read indexer-config and set if appropriate:
-        $indexerConfig = unserialize($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['indexed_search'], ['allowed_classes' => false]);
+        $indexerConfig = GeneralUtility::makeInstance(ExtensionConfiguration::class)->get('indexed_search');
         // If windows, apply extension to tool name:
-        $exe = TYPO3_OS === 'WIN' ? '.exe' : '';
+        $exe = Environment::isWindows() ? '.exe' : '';
         // lg
         $extOK = false;
         $mainExtension = '';
@@ -94,7 +102,7 @@ class FileContentParser
                 // PDF
                 if ($indexerConfig['pdftools']) {
                     $pdfPath = rtrim($indexerConfig['pdftools'], '/') . '/';
-                    if (@is_file(($pdfPath . 'pdftotext' . $exe)) && @is_file(($pdfPath . 'pdfinfo' . $exe))) {
+                    if (@is_file($pdfPath . 'pdftotext' . $exe) && @is_file($pdfPath . 'pdfinfo' . $exe)) {
                         $this->app['pdfinfo'] = $pdfPath . 'pdfinfo' . $exe;
                         $this->app['pdftotext'] = $pdfPath . 'pdftotext' . $exe;
                         // PDF mode:
@@ -111,7 +119,7 @@ class FileContentParser
                 // Catdoc
                 if ($indexerConfig['catdoc']) {
                     $catdocPath = rtrim($indexerConfig['catdoc'], '/') . '/';
-                    if (@is_file(($catdocPath . 'catdoc' . $exe))) {
+                    if (@is_file($catdocPath . 'catdoc' . $exe)) {
                         $this->app['catdoc'] = $catdocPath . 'catdoc' . $exe;
                         $extOK = true;
                     } else {
@@ -127,7 +135,7 @@ class FileContentParser
                 // ppthtml
                 if ($indexerConfig['ppthtml']) {
                     $ppthtmlPath = rtrim($indexerConfig['ppthtml'], '/') . '/';
-                    if (@is_file(($ppthtmlPath . 'ppthtml' . $exe))) {
+                    if (@is_file($ppthtmlPath . 'ppthtml' . $exe)) {
                         $this->app['ppthtml'] = $ppthtmlPath . 'ppthtml' . $exe;
                         $extOK = true;
                     } else {
@@ -142,7 +150,7 @@ class FileContentParser
                 // Xlhtml
                 if ($indexerConfig['xlhtml']) {
                     $xlhtmlPath = rtrim($indexerConfig['xlhtml'], '/') . '/';
-                    if (@is_file(($xlhtmlPath . 'xlhtml' . $exe))) {
+                    if (@is_file($xlhtmlPath . 'xlhtml' . $exe)) {
                         $this->app['xlhtml'] = $xlhtmlPath . 'xlhtml' . $exe;
                         $extOK = true;
                     } else {
@@ -180,7 +188,7 @@ class FileContentParser
                 // Oasis OpenDocument Text
                 if ($indexerConfig['unzip']) {
                     $unzipPath = rtrim($indexerConfig['unzip'], '/') . '/';
-                    if (@is_file(($unzipPath . 'unzip' . $exe))) {
+                    if (@is_file($unzipPath . 'unzip' . $exe)) {
                         $this->app['unzip'] = $unzipPath . 'unzip' . $exe;
                         $extOK = true;
                     } else {
@@ -194,7 +202,7 @@ class FileContentParser
                 // Catdoc
                 if ($indexerConfig['unrtf']) {
                     $unrtfPath = rtrim($indexerConfig['unrtf'], '/') . '/';
-                    if (@is_file(($unrtfPath . 'unrtf' . $exe))) {
+                    if (@is_file($unrtfPath . 'unrtf' . $exe)) {
                         $this->app['unrtf'] = $unrtfPath . 'unrtf' . $exe;
                         $extOK = true;
                     } else {
@@ -274,7 +282,6 @@ class FileContentParser
             case 'tif':
                 // TIF images (EXIF comment)
                 return true;
-                break;
         }
         return false;
     }
@@ -288,7 +295,7 @@ class FileContentParser
     public function searchTypeMediaTitle($extension)
     {
         // Read indexer-config
-        $indexerConfig = unserialize($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['indexed_search'], ['allowed_classes' => false]);
+        $indexerConfig = GeneralUtility::makeInstance(ExtensionConfiguration::class)->get('indexed_search');
         // Ignore extensions
         $ignoreExtensions = GeneralUtility::trimExplode(',', strtolower($indexerConfig['ignoreExtensions']), true);
         if (in_array($extension, $ignoreExtensions)) {
@@ -389,25 +396,20 @@ class FileContentParser
             case 'jpg':
             case 'tif':
                 // PHP EXIF
-                return sprintf($this->sL('LLL:EXT:indexed_search/Resources/Private/Language/locallang_main.xlf:extension.Images'), $extension);
-                break;
+                return sprintf($this->sL('LLL:EXT:indexed_search/Resources/Private/Language/locallang_main.xlf:extension.images'), $extension);
             case 'html':
             case 'htm':
                 // PHP strip-tags()
                 return sprintf($this->sL('LLL:EXT:indexed_search/Resources/Private/Language/locallang_main.xlf:extension.HTML'), $extension);
-                break;
             case 'txt':
                 // Raw text
                 return sprintf($this->sL('LLL:EXT:indexed_search/Resources/Private/Language/locallang_main.xlf:extension.TXT'), $extension);
-                break;
             case 'csv':
                 // Raw text
                 return sprintf($this->sL('LLL:EXT:indexed_search/Resources/Private/Language/locallang_main.xlf:extension.CSV'), $extension);
-                break;
             case 'xml':
                 // PHP strip-tags()
                 return sprintf($this->sL('LLL:EXT:indexed_search/Resources/Private/Language/locallang_main.xlf:extension.XML'), $extension);
-                break;
             default:
                 // Do nothing
         }
@@ -426,7 +428,6 @@ class FileContentParser
         switch ((string)$extension) {
             case 'pdf':
                 return true;
-                break;
         }
         return false;
     }
@@ -519,7 +520,7 @@ class FileContentParser
                     unset($res);
                     $content = $this->pObj->convertHTMLToUtf8($content);
                     $contentArr = $this->pObj->splitHTMLContent($this->removeEndJunk($content));
-                    $contentArr['title'] = basename($absFile);
+                    $contentArr['title'] = PathUtility::basename($absFile);
                     $this->setLocaleForServerFileSystem(true);
                 }
                 break;
@@ -532,7 +533,7 @@ class FileContentParser
                     unset($res);
                     $content = $this->pObj->convertHTMLToUtf8($content);
                     $contentArr = $this->pObj->splitHTMLContent($this->removeEndJunk($content));
-                    $contentArr['title'] = basename($absFile);
+                    $contentArr['title'] = PathUtility::basename($absFile);
                     $this->setLocaleForServerFileSystem(true);
                 }
                 break;
@@ -569,7 +570,7 @@ class FileContentParser
                     $utf8_content = trim(strip_tags(str_replace('<', ' <', $content_xml)));
                     $contentArr = $this->pObj->splitRegularContent($utf8_content);
                     // Make sure the title doesn't expose the absolute path!
-                    $contentArr['title'] = basename($absFile);
+                    $contentArr['title'] = PathUtility::basename($absFile);
                     // Meta information
                     $cmd = $this->app['unzip'] . ' -p ' . escapeshellarg($absFile) . ' docProps/core.xml';
                     CommandUtility::exec($cmd, $res);
@@ -605,7 +606,7 @@ class FileContentParser
                     unset($res);
                     $utf8_content = trim(strip_tags(str_replace('<', ' <', $content_xml)));
                     $contentArr = $this->pObj->splitRegularContent($utf8_content);
-                    $contentArr['title'] = basename($absFile);
+                    $contentArr['title'] = PathUtility::basename($absFile);
                     // Make sure the title doesn't expose the absolute path!
                     // Meta information
                     $metaContent = GeneralUtility::xml2tree($meta_xml);
@@ -644,7 +645,7 @@ class FileContentParser
                 $contentCharset = 'utf-8';
                 $content = $this->pObj->convertHTMLToUtf8($content, $contentCharset);
                 $contentArr = $this->pObj->splitRegularContent($content);
-                $contentArr['title'] = basename($absFile);
+                $contentArr['title'] = PathUtility::basename($absFile);
                 // Make sure the title doesn't expose the absolute path!
                 $this->setLocaleForServerFileSystem(true);
                 break;
@@ -664,7 +665,7 @@ class FileContentParser
                 // Converting content:
                 $fileContent = $this->pObj->convertHTMLToUtf8(strip_tags(str_replace('<', ' <', $fileContent)), $charset);
                 $contentArr = $this->pObj->splitRegularContent($fileContent);
-                $contentArr['title'] = basename($absFile);
+                $contentArr['title'] = PathUtility::basename($absFile);
                 // Make sure the title doesn't expose the absolute path!
                 $this->setLocaleForServerFileSystem(true);
                 break;
@@ -684,7 +685,7 @@ class FileContentParser
                     $comment = '';
                 }
                 $contentArr = $this->pObj->splitRegularContent($comment);
-                $contentArr['title'] = basename($absFile);
+                $contentArr['title'] = PathUtility::basename($absFile);
                 // Make sure the title doesn't expose the absolute path!
                 $this->setLocaleForServerFileSystem(true);
                 break;
@@ -694,7 +695,7 @@ class FileContentParser
         // If no title (and why should there be...) then the file-name is set as title. This will raise the hits considerably if the search matches the document name.
         if (is_array($contentArr) && !$contentArr['title']) {
             // Substituting "_" for " " because many filenames may have this instead of a space char.
-            $contentArr['title'] = str_replace('_', ' ', basename($absFile));
+            $contentArr['title'] = str_replace('_', ' ', PathUtility::basename($absFile));
         }
         return $contentArr;
     }
@@ -711,22 +712,21 @@ class FileContentParser
      */
     protected function setLocaleForServerFileSystem($resetLocale = false)
     {
-        static $lastLocale = null;
         if (!$GLOBALS['TYPO3_CONF_VARS']['SYS']['UTF8filesystem']) {
             return;
         }
 
         if ($resetLocale) {
-            if ($lastLocale == null) {
+            if ($this->lastLocale == null) {
                 throw new \RuntimeException('Cannot reset locale to NULL.', 1357064326);
             }
-            setlocale(LC_CTYPE, $lastLocale);
-            $lastLocale = null;
+            setlocale(LC_CTYPE, $this->lastLocale);
+            $this->lastLocale = null;
         } else {
-            if ($lastLocale !== null) {
+            if ($this->lastLocale !== null) {
                 throw new \RuntimeException('Cannot set new locale as locale has already been changed before.', 1357064437);
             }
-            $lastLocale = setlocale(LC_CTYPE, 0);
+            $this->lastLocale = setlocale(LC_CTYPE, 0);
             setlocale(LC_CTYPE, $GLOBALS['TYPO3_CONF_VARS']['SYS']['systemLocale']);
         }
     }
@@ -779,7 +779,7 @@ class FileContentParser
      *
      * @param array $pdfInfoArray Array of PDF content, coming from the pdfinfo tool
      * @return array Result array
-     * @access private
+     * @internal
      * @see fileContentParts()
      */
     public function splitPdfInfo($pdfInfoArray)

@@ -16,7 +16,6 @@ namespace TYPO3\CMS\Core\Package;
 
 /**
  * Interface for a TYPO3 Package class
- * Adapted from FLOW for TYPO3 CMS
  */
 interface PackageInterface
 {
@@ -26,6 +25,7 @@ interface PackageInterface
 
     /**
      * @return array
+     * @internal
      */
     public function getPackageReplacementKeys();
 
@@ -34,6 +34,7 @@ interface PackageInterface
      * and therefor activated at first installation.
      *
      * @return bool
+     * @internal
      */
     public function isPartOfFactoryDefault();
 
@@ -43,6 +44,7 @@ interface PackageInterface
      * whatever reason.
      *
      * @return bool
+     * @internal
      */
     public function isPartOfMinimalUsableSystem();
 
@@ -50,8 +52,9 @@ interface PackageInterface
      * Returns contents of Composer manifest - or part there of if a key is given.
      *
      * @param string $key Optional. Only return the part of the manifest indexed by 'key'
-     * @return mixed|NULL
+     * @return mixed|null
      * @see json_decode for return values
+     * @internal
      */
     public function getValueFromComposerManifest($key = null);
 
@@ -59,6 +62,7 @@ interface PackageInterface
      * Returns the package meta object of this package.
      *
      * @return MetaData
+     * @internal
      */
     public function getPackageMetaData();
 
@@ -66,7 +70,6 @@ interface PackageInterface
      * Returns the package key of this package.
      *
      * @return string
-     * @api
      */
     public function getPackageKey();
 
@@ -74,7 +77,6 @@ interface PackageInterface
      * Tells if this package is protected and therefore cannot be deactivated or deleted
      *
      * @return bool
-     * @api
      */
     public function isProtected();
 
@@ -82,7 +84,6 @@ interface PackageInterface
      * Sets the protection flag of the package
      *
      * @param bool $protected TRUE if the package should be protected, otherwise FALSE
-     * @api
      */
     public function setProtected($protected);
 
@@ -90,7 +91,6 @@ interface PackageInterface
      * Returns the full path to this package's main directory
      *
      * @return string Path to this package's main directory
-     * @api
      */
     public function getPackagePath();
 }

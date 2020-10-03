@@ -1,12 +1,12 @@
 {namespace k=EBT\ExtensionBuilder\ViewHelpers}<?php
-namespace {extension.nameSpaceName}\Tests\Unit\Domain\Model;
+namespace {extension.namespaceName}\Tests\Unit\Domain\Model;
 
 /**
  * Test case.
 <f:if condition="{extension.persons}"> *
 <f:for each="{extension.persons}" as="person"> * @author {person.name} <f:if condition="{person.email}"><{person.email}></f:if>
 </f:for></f:if> */
-class {domainObject.name}Test extends \TYPO3\CMS\Core\Tests\UnitTestCase
+class {domainObject.name}Test extends \TYPO3\TestingFramework\Core\Unit\UnitTestCase
 {
     /**
      * @var {domainObject.fullQualifiedClassName}

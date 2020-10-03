@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Controller;
 
 /*
@@ -36,7 +36,7 @@ abstract class AbstractFormEngineAjaxController
      * @param array $result
      * @return array
      */
-    public function createExecutableStringRepresentationOfRegisteredRequireJsModules(array $result): array
+    protected function createExecutableStringRepresentationOfRegisteredRequireJsModules(array $result): array
     {
         if (empty($result['requireJsModules'])) {
             return [];
@@ -98,15 +98,10 @@ abstract class AbstractFormEngineAjaxController
      */
     protected function getLabelsFromLocalizationFile($file)
     {
-        /** @var $languageFactory LocalizationFactory */
+        /** @var LocalizationFactory $languageFactory */
         $languageFactory = GeneralUtility::makeInstance(LocalizationFactory::class);
         $language = $GLOBALS['LANG']->lang;
-        $localizationArray = $languageFactory->getParsedData(
-            $file,
-            $language,
-            'utf-8',
-            1
-        );
+        $localizationArray = $languageFactory->getParsedData($file, $language);
         if (is_array($localizationArray) && !empty($localizationArray)) {
             if (!empty($localizationArray[$language])) {
                 $xlfLabelArray = $localizationArray['default'];

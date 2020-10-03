@@ -132,17 +132,6 @@ extbaseModeling_wiringEditorLanguage.modules.push(
 								}
 							},
 							{
-								type: "boolean",
-								inputParams: {
-									name: "skipTypeConfiguration",
-									advancedMode: true,
-									label: TYPO3.settings.extensionBuilder._LOCAL_LANG.skipTypeConfiguration,
-									description: TYPO3.settings.extensionBuilder._LOCAL_LANG.descr_skipTypeConfiguration,
-									required: false,
-									value: false
-								}
-							},
-							{
 								type: "string",
 								inputParams: {
 									name: "parentClass",

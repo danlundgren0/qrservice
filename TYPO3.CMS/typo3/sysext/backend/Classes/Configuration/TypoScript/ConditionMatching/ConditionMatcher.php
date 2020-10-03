@@ -17,6 +17,7 @@ namespace TYPO3\CMS\Backend\Configuration\TypoScript\ConditionMatching;
 use TYPO3\CMS\Backend\Controller\EditDocumentController;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Configuration\TypoScript\ConditionMatching\AbstractConditionMatcher;
+use TYPO3\CMS\Core\Context\Context;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -28,10 +29,41 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 class ConditionMatcher extends AbstractConditionMatcher
 {
     /**
-     * Constructor for this class
+     * @var Context
      */
-    public function __construct()
+    protected $context;
+
+    public function __construct(Context $context = null)
     {
+        $this->context = $context ?? GeneralUtility::makeInstance(Context::class);
+        $this->rootline = $this->determineRootline() ?? [];
+        $this->initializeExpressionLanguageResolver();
+    }
+
+    protected function updateExpressionLanguageVariables(): void
+    {
+        $treeLevel = $this->rootline ? count($this->rootline) - 1 : 0;
+        if ($this->isNewPageWithPageId($this->pageId)) {
+            $treeLevel++;
+        }
+        $tree = new \stdClass();
+        $tree->level = $treeLevel;
+        $tree->rootLine = $this->rootline;
+        $tree->rootLineIds = array_column($this->rootline, 'uid');
+
+        $backendUserAspect = $this->context->getAspect('backend.user');
+        $backend = new \stdClass();
+        $backend->user = new \stdClass();
+        $backend->user->isAdmin = $backendUserAspect->get('isAdmin');
+        $backend->user->isLoggedIn = $backendUserAspect->get('isLoggedIn');
+        $backend->user->userId = $backendUserAspect->get('id');
+        $backend->user->userGroupList = implode(',', $backendUserAspect->get('groupIds'));
+
+        $this->expressionLanguageResolverVariables = [
+            'tree' => $tree,
+            'backend' => $backend,
+            'page' => BackendUtility::getRecord('pages', $this->pageId ?? $this->determinePageId()) ?: [],
+        ];
     }
 
     /**
@@ -40,15 +72,21 @@ class ConditionMatcher extends AbstractConditionMatcher
      * @param string $string The condition to match against its criteria.
      * @return bool Whether the condition matched
      * @see \TYPO3\CMS\Core\TypoScript\Parser\TypoScriptParser::parse()
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0.
      */
     protected function evaluateCondition($string)
     {
+        if ($this->strictSyntaxEnabled()) {
+            trigger_error('The old condition syntax will be removed in TYPO3 v10.0, use the new expression language. Used condition: [' . $string . '].', E_USER_DEPRECATED);
+        }
+
         list($key, $value) = GeneralUtility::trimExplode('=', $string, false, 2);
         $result = $this->evaluateConditionCommon($key, $value);
         if (is_bool($result)) {
             return $result;
-        } else {
-            switch ($key) {
+        }
+
+        switch ($key) {
                 case 'usergroup':
                     $groupList = $this->getGroupList();
                     $values = GeneralUtility::trimExplode(',', $value, true);
@@ -95,7 +133,7 @@ class ConditionMatcher extends AbstractConditionMatcher
                         return $conditionResult;
                     }
             }
-        }
+
         return false;
     }
 
@@ -104,7 +142,7 @@ class ConditionMatcher extends AbstractConditionMatcher
      *
      * @param string $var Identifier
      * @return mixed The value of the variable pointed to or NULL if variable did not exist
-     * @access private
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0.
      */
     protected function getVariable($var)
     {
@@ -116,6 +154,7 @@ class ConditionMatcher extends AbstractConditionMatcher
      * Get the usergroup list of the current user.
      *
      * @return string The usergroup list of the current user
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0.
      */
     protected function getGroupList()
     {
@@ -129,6 +168,7 @@ class ConditionMatcher extends AbstractConditionMatcher
      * the accordant conditions (e.g. PIDinRootline) will return "FALSE"
      *
      * @return int The determined page id or otherwise 0
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0.
      */
     protected function determinePageId()
     {
@@ -139,17 +179,22 @@ class ConditionMatcher extends AbstractConditionMatcher
         if ($id = (int)GeneralUtility::_GP('id')) {
             $pageId = $id;
         } elseif (is_array($editStatement)) {
-            list($table, $uidAndAction) = each($editStatement);
-            list($uid, $action) = each($uidAndAction);
+            $table = key($editStatement);
+            $uidAndAction = current($editStatement);
+            $uid = key($uidAndAction);
+            $action = current($uidAndAction);
             if ($action === 'edit') {
                 $pageId = $this->getPageIdByRecord($table, $uid);
             } elseif ($action === 'new') {
                 $pageId = $this->getPageIdByRecord($table, $uid, true);
             }
         } elseif (is_array($commandStatement)) {
-            list($table, $uidActionAndTarget) = each($commandStatement);
-            list($uid, $actionAndTarget) = each($uidActionAndTarget);
-            list($action, $target) = each($actionAndTarget);
+            $table = key($commandStatement);
+            $uidActionAndTarget = current($commandStatement);
+            $uid = key($uidActionAndTarget);
+            $actionAndTarget = current($uidActionAndTarget);
+            $action = key($actionAndTarget);
+            $target = current($actionAndTarget);
             if ($action === 'delete') {
                 $pageId = $this->getPageIdByRecord($table, $uid);
             } elseif ($action === 'copy' || $action === 'move') {
@@ -163,11 +208,12 @@ class ConditionMatcher extends AbstractConditionMatcher
      * Gets the properties for the current page.
      *
      * @return array The properties for the current page.
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0.
      */
     protected function getPage()
     {
-        $pageId = isset($this->pageId) ? $this->pageId : $this->determinePageId();
-        return BackendUtility::getRecord('pages', $pageId);
+        $pageId = $this->pageId ?? $this->determinePageId();
+        return BackendUtility::getRecord('pages', $pageId) ?? [];
     }
 
     /**
@@ -177,6 +223,7 @@ class ConditionMatcher extends AbstractConditionMatcher
      * @param int $id Id of the accordant record
      * @param bool $ignoreTable Whether to ignore the page, if TRUE a positive
      * @return int Id of the page the record is persisted on
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0.
      */
     protected function getPageIdByRecord($table, $id, $ignoreTable = false)
     {
@@ -199,6 +246,7 @@ class ConditionMatcher extends AbstractConditionMatcher
      *
      * @param int $pageId The pid the check for as parent page
      * @return bool TRUE if the is currently a new page record being edited with $pid as uid of the parent page
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0.
      */
     protected function isNewPageWithPageId($pageId)
     {
@@ -236,10 +284,11 @@ class ConditionMatcher extends AbstractConditionMatcher
      * Determines the rootline for the current page.
      *
      * @return array The rootline for the current page.
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0.
      */
     protected function determineRootline()
     {
-        $pageId = isset($this->pageId) ? $this->pageId : $this->determinePageId();
+        $pageId = $this->pageId ?? $this->determinePageId();
         return BackendUtility::BEgetRootLine($pageId, '', true);
     }
 
@@ -247,6 +296,7 @@ class ConditionMatcher extends AbstractConditionMatcher
      * Get the id of the current user.
      *
      * @return int The id of the current user
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0.
      */
     protected function getUserId()
     {
@@ -257,6 +307,7 @@ class ConditionMatcher extends AbstractConditionMatcher
      * Determines if a user is logged in.
      *
      * @return bool Determines if a user is logged in
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0.
      */
     protected function isUserLoggedIn()
     {
@@ -267,6 +318,7 @@ class ConditionMatcher extends AbstractConditionMatcher
      * Determines whether the current user is admin.
      *
      * @return bool Whether the current user is admin
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0.
      */
     protected function isAdminUser()
     {
@@ -274,22 +326,11 @@ class ConditionMatcher extends AbstractConditionMatcher
     }
 
     /**
-     * Set/write a log message.
-     *
-     * @param string $message The log message to set/write
-     */
-    protected function log($message)
-    {
-        if (is_object($this->getBackendUserAuthentication())) {
-            $this->getBackendUserAuthentication()->writelog(3, 0, 1, 0, $message, []);
-        }
-    }
-
-    /**
      * @return \TYPO3\CMS\Core\Authentication\BackendUserAuthentication
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0.
      */
     protected function getBackendUserAuthentication()
     {
-        return $GLOBALS['BE_USER'];
+        return $GLOBALS['BE_USER'] ?? null;
     }
 }

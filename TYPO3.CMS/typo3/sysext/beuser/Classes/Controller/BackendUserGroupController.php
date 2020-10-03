@@ -14,12 +14,13 @@ namespace TYPO3\CMS\Beuser\Controller;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Extbase\Mvc\Controller\ActionController;
 
 /**
  * Backend module user group administration controller
+ * @internal This class is a TYPO3 Backend implementation and is not considered part of the Public TYPO3 API.
  */
-class BackendUserGroupController extends BackendUserActionController
+class BackendUserGroupController extends ActionController
 {
     /**
      * @var \TYPO3\CMS\Beuser\Domain\Repository\BackendUserGroupRepository
@@ -35,36 +36,15 @@ class BackendUserGroupController extends BackendUserActionController
     }
 
     /**
-     * Initialize actions
-     *
-     * @throws \RuntimeException
-     */
-    public function initializeAction()
-    {
-        // @TODO: Extbase backend modules relies on frontend TypoScript for view, persistence
-        // and settings. Thus, we need a TypoScript root template, that then loads the
-        // ext_typoscript_setup.txt file of this module. This is nasty, but can not be
-        // circumvented until there is a better solution in extbase.
-        // For now we throw an exception if no settings are detected.
-        if (empty($this->settings)) {
-            throw new \RuntimeException('No settings detected. This module can not work then. This usually happens if there is no frontend TypoScript template with root flag set. ' . 'Please create a frontend page with a TypoScript root template.', 1460976089);
-        }
-    }
-
-    /**
      * Displays all BackendUserGroups
      */
     public function indexAction()
     {
-        $this->view->assign('backendUserGroups', $this->backendUserGroupRepository->findAll());
-        $this->view->assign('returnUrl', rawurlencode(BackendUtility::getModuleUrl(
-            'system_BeuserTxBeuser',
+        $this->view->assignMultiple(
             [
-                'tx_beuser_system_beusertxbeuser' => [
-                    'action' => 'index',
-                    'controller' => 'BackendUserGroup'
-                ]
+                'shortcutLabel' => 'backendUserGroupsMenu',
+                'backendUserGroups' => $this->backendUserGroupRepository->findAll(),
             ]
-        )));
+        );
     }
 }

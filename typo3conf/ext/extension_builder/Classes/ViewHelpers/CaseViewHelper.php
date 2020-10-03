@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\ViewHelpers;
 
 /*
@@ -14,40 +15,62 @@ namespace EBT\ExtensionBuilder\ViewHelpers;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
-use TYPO3\CMS\Fluid\Core\ViewHelper\Exception;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Exception;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 
 /**
  * Case view helper that is only usable within the SwitchViewHelper.
  * @see \TYPO3\CMS\Fluid\ViewHelpers\SwitchViewHelper
  *
  * @api
+ * @deprecated Use default `f:case` instead
  */
 class CaseViewHelper extends AbstractViewHelper
 {
+
     /**
-     * @param mixed $value The switch value. If it matches, the child will be rendered
-     * @param bool $default If this is set, this child will be rendered, if none else matches
+     * Arguments Initialization
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('value', 'mixed', 'The switch value. If it matches, the child will be rendered', false);
+        $this->registerArgument('default', 'boolean',
+            'If this is set, this child will be rendered, if none else matches', false);
+    }
+
+    /**
      *
      * @return string the contents of this view helper if $value equals the expression of the surrounding switch view helper, or $default is true. otherwise an empty string
-     * @throws \TYPO3\CMS\Fluid\Core\ViewHelper\Exception
+     * @throws Exception
      *
      * @api
      */
-    public function render($value = null, $default = false)
+    public function render()
     {
+        $default = false;
+        $value = null;
+        if ($this->hasArgument('default')) {
+            $default = $this->arguments['default'];
+        }
+        if ($this->hasArgument('value')) {
+            $value = $this->arguments['value'];
+        }
+
         $viewHelperVariableContainer = $this->renderingContext->getViewHelperVariableContainer();
-        if (!$viewHelperVariableContainer->exists('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper', 'switchExpression')) {
+        if (!$viewHelperVariableContainer->exists('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper',
+            'switchExpression')) {
             throw new Exception('The case View helper can only be used within a switch View helper', 1368112037);
         }
         if (is_null($value) && $default === false) {
             throw new Exception('The case View helper must have either value or default argument', 1382867521);
         }
-        $switchExpression = $viewHelperVariableContainer->get('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper', 'switchExpression');
+        $switchExpression = $viewHelperVariableContainer->get('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper',
+            'switchExpression');
 
         // non-type-safe comparison by intention
-        if ($default === true || $switchExpression == $value) {
-            $viewHelperVariableContainer->addOrUpdate('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper', 'break', true);
+        if ($default === true || $switchExpression == $this->arguments['value']) {
+            $viewHelperVariableContainer->addOrUpdate('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper', 'break',
+                true);
             return $this->renderChildren();
         }
         return '';

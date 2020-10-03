@@ -15,13 +15,17 @@ namespace TYPO3\CMS\Workspaces\Service;
  */
 
 use TYPO3\CMS\Backend\Backend\Avatar\Avatar;
+use TYPO3\CMS\Backend\History\RecordHistory;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Localization\LanguageService;
+use TYPO3\CMS\Core\SingletonInterface;
+use TYPO3\CMS\Core\Utility\DiffUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Service for history
  */
-class HistoryService implements \TYPO3\CMS\Core\SingletonInterface
+class HistoryService implements SingletonInterface
 {
     /**
      * @var array
@@ -31,10 +35,10 @@ class HistoryService implements \TYPO3\CMS\Core\SingletonInterface
     /**
      * @var array
      */
-    protected $historyObjects = [];
+    protected $historyEntries = [];
 
     /**
-     * @var \TYPO3\CMS\Core\Utility\DiffUtility
+     * @var DiffUtility
      */
     protected $differencesObject;
 
@@ -57,7 +61,7 @@ class HistoryService implements \TYPO3\CMS\Core\SingletonInterface
     {
         $history = [];
         $i = 0;
-        foreach ((array)$this->getHistoryObject($table, $id)->changeLog as $entry) {
+        foreach ((array)$this->getHistoryEntries($table, $id) as $entry) {
             if ($i++ > 20) {
                 break;
             }
@@ -82,13 +86,12 @@ class HistoryService implements \TYPO3\CMS\Core\SingletonInterface
             $differences = $this->getDifferences($entry);
         }
 
-        /** @var Avatar $avatar */
         $avatar = GeneralUtility::makeInstance(Avatar::class);
-        $beUserRecord = BackendUtility::getRecord('be_users', $entry['user']);
+        $beUserRecord = BackendUtility::getRecord('be_users', $entry['userid']);
 
         return [
             'datetime' => htmlspecialchars(BackendUtility::datetime($entry['tstamp'])),
-            'user' => htmlspecialchars($this->getUserName($entry['user'])),
+            'user' => htmlspecialchars($this->getUserName($entry['userid'])),
             'user_avatar' => $avatar->render($beUserRecord),
             'differences' => $differences
         ];
@@ -142,40 +145,37 @@ class HistoryService implements \TYPO3\CMS\Core\SingletonInterface
     }
 
     /**
-     * Gets an instance of the record history service.
+     * Gets an instance of the record history of a record.
      *
      * @param string $table Name of the table
      * @param int $id Uid of the record
-     * @return \TYPO3\CMS\Backend\History\RecordHistory
+     * @return array
      */
-    protected function getHistoryObject($table, $id)
+    protected function getHistoryEntries($table, $id)
     {
-        if (!isset($this->historyObjects[$table][$id])) {
-            /** @var $historyObject \TYPO3\CMS\Backend\History\RecordHistory */
-            $historyObject = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Backend\History\RecordHistory::class);
-            $historyObject->element = $table . ':' . $id;
-            $historyObject->createChangeLog();
-            $this->historyObjects[$table][$id] = $historyObject;
+        if (!isset($this->historyEntries[$table][$id])) {
+            $historyObject = GeneralUtility::makeInstance(RecordHistory::class);
+            $this->historyEntries[$table][$id] = $historyObject->getHistoryDataForRecord($table, $id);
         }
-        return $this->historyObjects[$table][$id];
+        return $this->historyEntries[$table][$id];
     }
 
     /**
      * Gets an instance of the record differences utility.
      *
-     * @return \TYPO3\CMS\Core\Utility\DiffUtility
+     * @return DiffUtility
      */
     protected function getDifferencesObject()
     {
         if (!isset($this->differencesObject)) {
-            $this->differencesObject = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Core\Utility\DiffUtility::class);
+            $this->differencesObject = GeneralUtility::makeInstance(DiffUtility::class);
             $this->differencesObject->stripTags = false;
         }
         return $this->differencesObject;
     }
 
     /**
-     * @return \TYPO3\CMS\Lang\LanguageService
+     * @return LanguageService
      */
     protected function getLanguageService()
     {

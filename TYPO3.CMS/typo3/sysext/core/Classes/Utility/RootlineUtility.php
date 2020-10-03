@@ -15,9 +15,18 @@ namespace TYPO3\CMS\Core\Utility;
  */
 
 use Doctrine\DBAL\DBALException;
+use Doctrine\DBAL\FetchMode;
+use TYPO3\CMS\Core\Context\Context;
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Database\Query\QueryBuilder;
 use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
 use TYPO3\CMS\Core\Database\Query\Restriction\HiddenRestriction;
+use TYPO3\CMS\Core\Exception\Page\BrokenRootLineException;
+use TYPO3\CMS\Core\Exception\Page\CircularRootLineException;
+use TYPO3\CMS\Core\Exception\Page\MountPointsDisabledException;
+use TYPO3\CMS\Core\Exception\Page\PageNotFoundException;
+use TYPO3\CMS\Core\Exception\Page\PagePropertyRelationNotFoundException;
+use TYPO3\CMS\Core\Versioning\VersionState;
 use TYPO3\CMS\Frontend\Page\PageRepository;
 
 /**
@@ -51,14 +60,9 @@ class RootlineUtility
     protected $workspaceUid = 0;
 
     /**
-     * @var bool
-     */
-    protected $versionPreview = false;
-
-    /**
      * @var \TYPO3\CMS\Core\Cache\Frontend\FrontendInterface
      */
-    protected static $cache = null;
+    protected static $cache;
 
     /**
      * @var array
@@ -99,9 +103,16 @@ class RootlineUtility
     /**
      * Rootline Context
      *
-     * @var \TYPO3\CMS\Frontend\Page\PageRepository
+     * @var PageRepository
      */
     protected $pageContext;
+
+    /**
+     * Query context
+     *
+     * @var Context
+     */
+    protected $context;
 
     /**
      * @var string
@@ -116,42 +127,38 @@ class RootlineUtility
     /**
      * @param int $uid
      * @param string $mountPointParameter
-     * @param \TYPO3\CMS\Frontend\Page\PageRepository $context
-     * @throws \RuntimeException
+     * @param PageRepository|Context $context - @deprecated PageRepository is used until TYPO3 v9.4, but now the third parameter should be a Context object
+     * @throws MountPointsDisabledException
      */
-    public function __construct($uid, $mountPointParameter = '', PageRepository $context = null)
+    public function __construct($uid, $mountPointParameter = '', $context = null)
     {
-        $this->pageUid = (int)$uid;
         $this->mountPointParameter = trim($mountPointParameter);
-        if ($context === null) {
-            if (isset($GLOBALS['TSFE']) && is_object($GLOBALS['TSFE']) && is_object($GLOBALS['TSFE']->sys_page)) {
-                $this->pageContext = $GLOBALS['TSFE']->sys_page;
-            } else {
-                $this->pageContext = GeneralUtility::makeInstance(\TYPO3\CMS\Frontend\Page\PageRepository::class);
-            }
-        } else {
+        if ($context instanceof PageRepository) {
+            trigger_error('Calling RootlineUtility with PageRepository as third parameter will be unsupported with TYPO3 v10.0. Use a Context object directly.', E_USER_DEPRECATED);
             $this->pageContext = $context;
+            $this->context = GeneralUtility::makeInstance(Context::class);
+        } else {
+            if (!($context instanceof Context)) {
+                $context = GeneralUtility::makeInstance(Context::class);
+            }
+            $this->context = $context;
+            $this->pageContext = GeneralUtility::makeInstance(PageRepository::class, $context);
         }
-        $this->initializeObject();
-    }
 
-    /**
-     * Initialize a state to work with
-     *
-     * @throws \RuntimeException
-     */
-    protected function initializeObject()
-    {
-        $this->languageUid = (int)$this->pageContext->sys_language_uid;
-        $this->workspaceUid = (int)$this->pageContext->versioningWorkspaceId;
-        $this->versionPreview = $this->pageContext->versioningPreview;
+        $this->languageUid = $this->context->getPropertyFromAspect('language', 'id', 0);
+        $this->workspaceUid = $this->context->getPropertyFromAspect('workspace', 'id', 0);
         if ($this->mountPointParameter !== '') {
             if (!$GLOBALS['TYPO3_CONF_VARS']['FE']['enable_mount_pids']) {
-                throw new \RuntimeException('Mount-Point Pages are disabled for this installation. Cannot resolve a Rootline for a page with Mount-Points', 1343462896);
-            } else {
-                $this->parseMountPointParameter();
+                throw new MountPointsDisabledException('Mount-Point Pages are disabled for this installation. Cannot resolve a Rootline for a page with Mount-Points', 1343462896);
             }
+            $this->parseMountPointParameter();
         }
+
+        $this->pageUid = $this->resolvePageId(
+            (int)$uid,
+            (int)$this->workspaceUid
+        );
+
         if (self::$cache === null) {
             self::$cache = GeneralUtility::makeInstance(\TYPO3\CMS\Core\Cache\CacheManager::class)->getCache('cache_rootline');
         }
@@ -164,7 +171,7 @@ class RootlineUtility
     /**
      * Purges all rootline caches.
      *
-     * Note: This function is intended to be used in unit tests only.
+     * @internal only used in EXT:core, no public API
      */
     public static function purgeCaches()
     {
@@ -189,18 +196,21 @@ class RootlineUtility
             $otherUid !== null ? (int)$otherUid : $this->pageUid,
             $mountPointParameter,
             $this->languageUid,
-            $this->workspaceUid,
-            $this->versionPreview ? 1 : 0
+            $this->workspaceUid
         ]);
     }
 
     /**
-     * Returns the actual rootline
+     * Returns the actual rootline without the tree root (uid=0), including the page with $this->pageUid
      *
      * @return array
      */
     public function get()
     {
+        if ($this->pageUid === 0) {
+            // pageUid 0 has no root line, return empty array right away
+            return [];
+        }
         if (!isset(static::$localCache[$this->cacheIdentifier])) {
             $entry = static::$cache->get($this->cacheIdentifier);
             if (!$entry) {
@@ -232,7 +242,7 @@ class RootlineUtility
      * Queries the database for the page record and returns it.
      *
      * @param int $uid Page id
-     * @throws \RuntimeException
+     * @throws PageNotFoundException
      * @return array
      */
     protected function getRecordArray($uid)
@@ -244,16 +254,12 @@ class RootlineUtility
             $row = $queryBuilder->select(...self::$rootlineFields)
                 ->from('pages')
                 ->where(
-                    $queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($uid, \PDO::PARAM_INT)),
-                    $queryBuilder->expr()->neq(
-                        'doktype',
-                        $queryBuilder->createNamedParameter(PageRepository::DOKTYPE_RECYCLER, \PDO::PARAM_INT)
-                    )
+                    $queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($uid, \PDO::PARAM_INT))
                 )
                 ->execute()
                 ->fetch();
             if (empty($row)) {
-                throw new \RuntimeException('Could not fetch page data for uid ' . $uid . '.', 1343589451);
+                throw new PageNotFoundException('Could not fetch page data for uid ' . $uid . '.', 1343589451);
             }
             $this->pageContext->versionOL('pages', $row, false, true);
             $this->pageContext->fixVersioningPid('pages', $row);
@@ -266,7 +272,7 @@ class RootlineUtility
             }
         }
         if (!is_array(self::$pageRecordCache[$currentCacheIdentifier])) {
-            throw new \RuntimeException('Broken rootline. Could not resolve page with uid ' . $uid . '.', 1343464101);
+            throw new PageNotFoundException('Broken rootline. Could not resolve page with uid ' . $uid . '.', 1343464101);
         }
         return self::$pageRecordCache[$currentCacheIdentifier];
     }
@@ -274,9 +280,9 @@ class RootlineUtility
     /**
      * Resolve relations as defined in TCA and add them to the provided $pageRecord array.
      *
-     * @param int $uid Either pages.uid or pages_language_overlay.uid if localized
+     * @param int $uid page ID
      * @param array $pageRecord Page record (possibly overlaid) to be extended with relations
-     * @throws \RuntimeException
+     * @throws PagePropertyRelationNotFoundException
      * @return array $pageRecord with additional relations
      */
     protected function enrichWithRelationFields($uid, array $pageRecord)
@@ -285,23 +291,22 @@ class RootlineUtility
 
         // @todo Remove this special interpretation of relations by consequently using RelationHandler
         foreach ($GLOBALS['TCA']['pages']['columns'] as $column => $configuration) {
-            if ($this->columnHasRelationToResolve($configuration)) {
+            // Ensure that only fields defined in $rootlineFields (and "addRootLineFields") are actually evaluated
+            if (array_key_exists($column, $pageRecord) && $this->columnHasRelationToResolve($configuration)) {
                 $configuration = $configuration['config'];
                 if ($configuration['MM']) {
-                    /** @var $loadDBGroup \TYPO3\CMS\Core\Database\RelationHandler */
+                    /** @var \TYPO3\CMS\Core\Database\RelationHandler $loadDBGroup */
                     $loadDBGroup = GeneralUtility::makeInstance(\TYPO3\CMS\Core\Database\RelationHandler::class);
                     $loadDBGroup->start(
                         $pageRecord[$column],
                         // @todo That depends on the type (group, select, inline)
-                        isset($configuration['allowed']) ? $configuration['allowed'] : $configuration['foreign_table'],
+                        $configuration['allowed'] ?? $configuration['foreign_table'],
                         $configuration['MM'],
                         $uid,
                         'pages',
                         $configuration
                     );
-                    $relatedUids = isset($loadDBGroup->tableArray[$configuration['foreign_table']])
-                        ? $loadDBGroup->tableArray[$configuration['foreign_table']]
-                        : [];
+                    $relatedUids = $loadDBGroup->tableArray[$configuration['foreign_table']] ?? [];
                 } else {
                     // @todo The assumption is wrong, since group can be used without "MM", but having "allowed"
                     $table = $configuration['foreign_table'];
@@ -337,7 +342,7 @@ class RootlineUtility
                             $queryBuilder->expr()->eq(
                                 trim($configuration['foreign_table_field']),
                                 $queryBuilder->createNamedParameter(
-                                    (int)$this->languageUid > 0 ? 'pages_language_overlay' : 'pages',
+                                    'pages',
                                     \PDO::PARAM_STR
                                 )
                             )
@@ -349,7 +354,7 @@ class RootlineUtility
                     try {
                         $statement = $queryBuilder->execute();
                     } catch (DBALException $e) {
-                        throw new \RuntimeException('Could to resolve related records for page ' . $uid . ' and foreign_table ' . htmlspecialchars($table), 1343589452);
+                        throw new PagePropertyRelationNotFoundException('Could to resolve related records for page ' . $uid . ' and foreign_table ' . htmlspecialchars($table), 1343589452);
                     }
                     $relatedUids = [];
                     while ($row = $statement->fetch()) {
@@ -371,7 +376,7 @@ class RootlineUtility
      */
     protected function columnHasRelationToResolve(array $configuration)
     {
-        $configuration = $configuration['config'];
+        $configuration = $configuration['config'] ?? null;
         if (!empty($configuration['MM']) && !empty($configuration['type']) && in_array($configuration['type'], ['select', 'inline', 'group'])) {
             return true;
         }
@@ -384,7 +389,7 @@ class RootlineUtility
     /**
      * Actual function to generate the rootline and cache it
      *
-     * @throws \RuntimeException
+     * @throws CircularRootLineException
      */
     protected function generateRootlineCache()
     {
@@ -403,14 +408,12 @@ class RootlineUtility
         if ($parentUid > 0) {
             // Get rootline of (and including) parent page
             $mountPointParameter = !empty($this->parsedMountPointParameters) ? $this->mountPointParameter : '';
-            /** @var $rootline \TYPO3\CMS\Core\Utility\RootlineUtility */
-            $rootline = GeneralUtility::makeInstance(\TYPO3\CMS\Core\Utility\RootlineUtility::class, $parentUid, $mountPointParameter, $this->pageContext);
-            $rootline = $rootline->get();
+            $rootline = GeneralUtility::makeInstance(self::class, $parentUid, $mountPointParameter, $this->context)->get();
             // retrieve cache tags of parent rootline
             foreach ($rootline as $entry) {
                 $cacheTags[] = 'pageId_' . $entry['uid'];
                 if ($entry['uid'] == $this->pageUid) {
-                    throw new \RuntimeException('Circular connection in rootline for page with uid ' . $this->pageUid . ' found. Check your mountpoint configuration.', 1343464103);
+                    throw new CircularRootLineException('Circular connection in rootline for page with uid ' . $this->pageUid . ' found. Check your mountpoint configuration.', 1343464103);
                 }
             }
         } else {
@@ -430,7 +433,7 @@ class RootlineUtility
      */
     public function isMountedPage()
     {
-        return in_array($this->pageUid, array_keys($this->parsedMountPointParameters));
+        return array_key_exists($this->pageUid, $this->parsedMountPointParameters);
     }
 
     /**
@@ -438,28 +441,31 @@ class RootlineUtility
      *
      * @param array $mountedPageData page record array of mounted page
      * @param array $mountPointPageData page record array of mount point page
-     * @throws \RuntimeException
+     * @throws BrokenRootLineException
      * @return array
      */
     protected function processMountedPage(array $mountedPageData, array $mountPointPageData)
     {
-        if ($mountPointPageData['mount_pid'] != $mountedPageData['uid']) {
-            throw new \RuntimeException('Broken rootline. Mountpoint parameter does not match the actual rootline. mount_pid (' . $mountPointPageData['mount_pid'] . ') does not match page uid (' . $mountedPageData['uid'] . ').', 1343464100);
+        $mountPid = $mountPointPageData['mount_pid'] ?? null;
+        $uid = $mountedPageData['uid'] ?? null;
+        if ($mountPid != $uid) {
+            throw new BrokenRootLineException('Broken rootline. Mountpoint parameter does not match the actual rootline. mount_pid (' . $mountPid . ') does not match page uid (' . $uid . ').', 1343464100);
         }
         // Current page replaces the original mount-page
-        if ($mountPointPageData['mount_pid_ol']) {
+        $mountUid = $mountPointPageData['uid'] ?? null;
+        if (!empty($mountPointPageData['mount_pid_ol'])) {
             $mountedPageData['_MOUNT_OL'] = true;
             $mountedPageData['_MOUNT_PAGE'] = [
-                'uid' => $mountPointPageData['uid'],
-                'pid' => $mountPointPageData['pid'],
-                'title' => $mountPointPageData['title']
+                'uid' => $mountUid,
+                'pid' => $mountPointPageData['pid'] ?? null,
+                'title' => $mountPointPageData['title'] ?? null
             ];
         } else {
             // The mount-page is not replaced, the mount-page itself has to be used
             $mountedPageData = $mountPointPageData;
         }
         $mountedPageData['_MOUNTED_FROM'] = $this->pageUid;
-        $mountedPageData['_MP_PARAM'] = $this->pageUid . '-' . $mountPointPageData['uid'];
+        $mountedPageData['_MP_PARAM'] = $this->pageUid . '-' . $mountUid;
         return $mountedPageData;
     }
 
@@ -475,5 +481,110 @@ class RootlineUtility
             list($mountedPageUid, $mountPageUid) = GeneralUtility::intExplode('-', $mP);
             $this->parsedMountPointParameters[$mountedPageUid] = $mountPageUid;
         }
+    }
+
+    /**
+     * @param int $pageId
+     * @param int $workspaceId
+     * @return int
+     */
+    protected function resolvePageId(int $pageId, int $workspaceId): int
+    {
+        if ($pageId === 0 || $workspaceId === 0) {
+            return $pageId;
+        }
+
+        $page = $this->resolvePageRecord(
+            $pageId,
+            ['uid', 't3ver_oid', 't3ver_state']
+        );
+        if (!VersionState::cast($page['t3ver_state'])
+            ->equals(VersionState::MOVE_POINTER)) {
+            return $pageId;
+        }
+
+        $movePlaceholder = $this->resolveMovePlaceHolder(
+            (int)$page['t3ver_oid'],
+            ['uid'],
+            $workspaceId
+        );
+        if (empty($movePlaceholder['uid'])) {
+            return $pageId;
+        }
+
+        return (int)$movePlaceholder['uid'];
+    }
+
+    /**
+     * @param int $pageId
+     * @param array $fieldNames
+     * @return array|null
+     */
+    protected function resolvePageRecord(int $pageId, array $fieldNames): ?array
+    {
+        $queryBuilder = $this->createQueryBuilder('pages');
+        $queryBuilder->getRestrictions()->removeAll()
+            ->add(GeneralUtility::makeInstance(DeletedRestriction::class));
+
+        $statement = $queryBuilder
+            ->from('pages')
+            ->select(...$fieldNames)
+            ->where(
+                $queryBuilder->expr()->eq(
+                    'uid',
+                    $queryBuilder->createNamedParameter($pageId, \PDO::PARAM_INT)
+                )
+            )
+            ->setMaxResults(1)
+            ->execute();
+
+        $record = $statement->fetch(FetchMode::ASSOCIATIVE);
+        return $record ?: null;
+    }
+
+    /**
+     * @param int $liveId
+     * @param array $fieldNames
+     * @param int $workspaceId
+     * @return array|null
+     */
+    protected function resolveMovePlaceHolder(int $liveId, array $fieldNames, int $workspaceId): ?array
+    {
+        $queryBuilder = $this->createQueryBuilder('pages');
+        $queryBuilder->getRestrictions()->removeAll()
+            ->add(GeneralUtility::makeInstance(DeletedRestriction::class));
+
+        $statement = $queryBuilder
+            ->from('pages')
+            ->select(...$fieldNames)
+            ->setMaxResults(1)
+            ->where(
+                $queryBuilder->expr()->eq(
+                    't3ver_wsid',
+                    $queryBuilder->createNamedParameter($workspaceId, \PDO::PARAM_INT)
+                ),
+                $queryBuilder->expr()->eq(
+                    't3ver_state',
+                    $queryBuilder->createNamedParameter(VersionState::MOVE_PLACEHOLDER, \PDO::PARAM_INT)
+                ),
+                $queryBuilder->expr()->eq(
+                    't3ver_move_id',
+                    $queryBuilder->createNamedParameter($liveId, \PDO::PARAM_INT)
+                )
+            )
+            ->execute();
+
+        $record = $statement->fetch(FetchMode::ASSOCIATIVE);
+        return $record ?: null;
+    }
+
+    /**
+     * @param string $tableName
+     * @return QueryBuilder
+     */
+    protected function createQueryBuilder(string $tableName): QueryBuilder
+    {
+        return GeneralUtility::makeInstance(ConnectionPool::class)
+            ->getQueryBuilderForTable($tableName);
     }
 }

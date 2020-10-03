@@ -24,6 +24,7 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Link handler for folder links
+ * @internal This class is a specific LinkHandler implementation and is not part of the TYPO3's Core API.
  */
 class FolderLinkHandler extends FileLinkHandler
 {
@@ -56,9 +57,8 @@ class FolderLinkHandler extends FileLinkHandler
             return [
                 'data-current-link' => GeneralUtility::makeInstance(LinkService::class)->asString(['type' => LinkService::TYPE_FOLDER, 'folder' => $this->linkParts['url']['folder']])
             ];
-        } else {
-            return [];
         }
+        return [];
     }
 
     /**

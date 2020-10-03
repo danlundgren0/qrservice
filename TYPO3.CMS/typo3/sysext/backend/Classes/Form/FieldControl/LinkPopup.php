@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Form\FieldControl;
 
 /*
@@ -16,7 +16,6 @@ namespace TYPO3\CMS\Backend\Form\FieldControl;
  */
 
 use TYPO3\CMS\Backend\Form\AbstractNode;
-use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -34,7 +33,7 @@ class LinkPopup extends AbstractNode
     {
         $options = $this->data['renderData']['fieldControlOptions'];
 
-        $title = $options['title'] ?? 'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.link';
+        $title = $options['title'] ?? 'LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.link';
 
         $parameterArray = $this->data['parameterArray'];
         $itemName = $parameterArray['itemFormElName'];
@@ -61,16 +60,18 @@ class LinkPopup extends AbstractNode
                 'itemName' => $itemName,
                 'hmac' => GeneralUtility::hmac('editform' . $itemName, 'wizard_js'),
                 'fieldChangeFunc' => $parameterArray['fieldChangeFunc'],
-                'fieldChangeFuncHash' => GeneralUtility::hmac(serialize($parameterArray['fieldChangeFunc'])),
+                'fieldChangeFuncHash' => GeneralUtility::hmac(serialize($parameterArray['fieldChangeFunc']), 'backend-link-browser'),
             ],
         ];
-        $url = BackendUtility::getModuleUrl('wizard_link', $urlParameters);
+        /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
+        $url = (string)$uriBuilder->buildUriFromRoute('wizard_link', $urlParameters);
         $onClick = [];
         $onClick[] = 'this.blur();';
         $onClick[] = 'vHWin=window.open(';
         $onClick[] =    GeneralUtility::quoteJSvalue($url);
         $onClick[] =    '+\'&P[currentValue]=\'+TBE_EDITOR.rawurlencode(';
-        $onClick[] =        'document.editform[' . GeneralUtility::quoteJSvalue($itemName) . '].value,300';
+        $onClick[] =        'document.editform[' . GeneralUtility::quoteJSvalue($itemName) . '].value';
         $onClick[] =    ')';
         $onClick[] =    '+\'&P[currentSelectedValues]=\'+TBE_EDITOR.curSelected(';
         $onClick[] =        GeneralUtility::quoteJSvalue($itemName);

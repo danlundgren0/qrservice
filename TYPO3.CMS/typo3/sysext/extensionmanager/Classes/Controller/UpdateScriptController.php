@@ -20,6 +20,7 @@ use TYPO3\CMS\Extbase\Mvc\View\ViewInterface;
 
 /**
  * Controller for configuration related actions.
+ * @internal This class is a specific controller implementation and is not considered part of the Public TYPO3 API.
  */
 class UpdateScriptController extends AbstractModuleController
 {
@@ -46,9 +47,7 @@ class UpdateScriptController extends AbstractModuleController
      */
     public function showAction($extensionKey)
     {
-        \TYPO3\CMS\Core\Utility\GeneralUtility::devLog('Request for update script', 'extensionmanager', 0, $extensionKey);
-
-        /** @var $updateScriptUtility \TYPO3\CMS\Extensionmanager\Utility\UpdateScriptUtility */
+        /** @var \TYPO3\CMS\Extensionmanager\Utility\UpdateScriptUtility $updateScriptUtility */
         $updateScriptUtility = $this->objectManager->get(\TYPO3\CMS\Extensionmanager\Utility\UpdateScriptUtility::class);
         $updateScriptResult = $updateScriptUtility->executeUpdateIfNeeded($extensionKey);
         $this->view

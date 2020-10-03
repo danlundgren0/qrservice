@@ -22,15 +22,15 @@ Instances will throw an exception or a fatal error using a cache with this backe
 Affected Installations
 ======================
 
-Instances that still use a configuration in `LocalConfiguration.php` or `AdditionalConfiguration.php` like:
+Instances that still use a configuration in :file:`LocalConfiguration.php` or :file:`AdditionalConfiguration.php` like:
 
 .. code-block:: php
 
-'SYS' => [
-	'caching' => [
-		'cacheConfigurations' => [
-			'aCache' => [
-				'backend' => 'TYPO3\\CMS\\Core\\Cache\\Backend\\XcacheBackend',
+    'SYS' => [
+        'caching' => [
+            'cacheConfigurations' => [
+                'aCache' => [
+                    'backend' => 'TYPO3\\CMS\\Core\\Cache\\Backend\\XcacheBackend',
 
 
 Migration

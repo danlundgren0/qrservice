@@ -14,12 +14,16 @@ namespace TYPO3\CMS\Backend\Search\LiveSearch;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Backend\Routing\UriBuilder;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Expression\CompositeExpression;
 use TYPO3\CMS\Core\Database\Query\QueryBuilder;
 use TYPO3\CMS\Core\Database\Query\QueryHelper;
+use TYPO3\CMS\Core\Database\Query\Restriction\EndTimeRestriction;
+use TYPO3\CMS\Core\Database\Query\Restriction\HiddenRestriction;
+use TYPO3\CMS\Core\Database\Query\Restriction\StartTimeRestriction;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
 use TYPO3\CMS\Core\Type\Bitmask\Permission;
@@ -28,6 +32,7 @@ use TYPO3\CMS\Core\Utility\MathUtility;
 
 /**
  * Class for handling backend live search.
+ * @internal This class is a specific Backend controller implementation and is not considered part of the Public TYPO3 API.
  */
 class LiveSearch
 {
@@ -72,17 +77,17 @@ class LiveSearch
     protected $userPermissions = '';
 
     /**
-     * @var \TYPO3\CMS\Backend\Search\LiveSearch\QueryParser
+     * @var QueryParser
      */
-    protected $queryParser = null;
+    protected $queryParser;
 
     /**
      * Initialize access settings
      */
     public function __construct()
     {
-        $this->userPermissions = $GLOBALS['BE_USER']->getPagePermsClause(1);
-        $this->queryParser = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Search\LiveSearch\QueryParser::class);
+        $this->userPermissions = $GLOBALS['BE_USER']->getPagePermsClause(Permission::PAGE_SHOW);
+        $this->queryParser = GeneralUtility::makeInstance(QueryParser::class);
     }
 
     /**
@@ -115,25 +120,9 @@ class LiveSearch
     }
 
     /**
-     * Retrieve the page record from given $id.
-     *
-     * @param int $id
-     * @return array
-     */
-    protected function findPageById($id)
-    {
-        $pageRecord = [];
-        $row = BackendUtility::getRecord(self::PAGE_JUMP_TABLE, $id);
-        if (is_array($row)) {
-            $pageRecord = $row;
-        }
-        return $pageRecord;
-    }
-
-    /**
      * Find records from all registered TCA table & column values.
      *
-     * @param string $pageIdList Comma separated list of page IDs
+     * @param array $pageIdList Comma separated list of page IDs
      * @return array Records found in the database matching the searchQuery
      */
     protected function findByGlobalTableList($pageIdList)
@@ -143,18 +132,19 @@ class LiveSearch
         foreach ($GLOBALS['TCA'] as $tableName => $value) {
             // if no access for the table (read or write) or table is hidden, skip this table
             if (
+                (isset($value['ctrl']['hideTable']) && $value['ctrl']['hideTable'])
+                ||
                 (
                     !$GLOBALS['BE_USER']->check('tables_select', $tableName) &&
                     !$GLOBALS['BE_USER']->check('tables_modify', $tableName)
-                ) ||
-                (isset($value['ctrl']['hideTable']) && $value['ctrl']['hideTable'])
+                )
             ) {
                 continue;
             }
             $recordArray = $this->findByTable($tableName, $pageIdList, 0, $limit);
             $recordCount = count($recordArray);
             if ($recordCount) {
-                $limit = $limit - $recordCount;
+                $limit -= $recordCount;
                 $getRecordArray[] = $recordArray;
                 if ($limit <= 0) {
                     break;
@@ -168,7 +158,7 @@ class LiveSearch
      * Find records by given table name.
      *
      * @param string $tableName Database table name
-     * @param string $pageIdList Comma separated list of page IDs
+     * @param array $pageIdList Comma separated list of page IDs
      * @param int $firstResult
      * @param int $maxResults
      * @return array Records found in the database matching the searchQuery
@@ -183,6 +173,10 @@ class LiveSearch
         if (!empty($fieldsToSearchWithin)) {
             $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
                 ->getQueryBuilderForTable($tableName);
+            $queryBuilder->getRestrictions()
+                ->removeByType(HiddenRestriction::class)
+                ->removeByType(StartTimeRestriction::class)
+                ->removeByType(EndTimeRestriction::class);
 
             $queryBuilder
                 ->select('*')
@@ -228,8 +222,13 @@ class LiveSearch
         $result = $queryBuilder->execute();
         $iconFactory = GeneralUtility::makeInstance(IconFactory::class);
         while ($row = $result->fetch()) {
+            BackendUtility::workspaceOL($tableName, $row);
+            if (!is_array($row)) {
+                continue;
+            }
+            $onlineUid = $row['t3ver_oid'] ?: $row['uid'];
             $title = 'id=' . $row['uid'] . ', pid=' . $row['pid'];
-            $collect[] = [
+            $collect[$onlineUid] = [
                 'id' => $tableName . ':' . $row['uid'],
                 'pageId' => $tableName === 'pages' ? $row['uid'] : $row['pid'],
                 'typeLabel' =>  htmlspecialchars($this->getTitleOfCurrentRecordType($tableName)),
@@ -262,8 +261,9 @@ class LiveSearch
         }
         // "Edit" link - Only if permissions to edit the page-record of the content of the parent page ($this->id)
         if ($permsEdit) {
-            $returnUrl = BackendUtility::getModuleUrl('web_list', ['id' => $row['pid']]);
-            $editLink = BackendUtility::getModuleUrl('record_edit', [
+            $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+            $returnUrl = (string)$uriBuilder->buildUriFromRoute('web_list', ['id' => $row['pid']]);
+            $editLink = (string)$uriBuilder->buildUriFromRoute('record_edit', [
                 'edit[' . $tableName . '][' . $row['uid'] . ']' => 'edit',
                 'returnUrl' => $returnUrl
             ]);
@@ -336,7 +336,7 @@ class LiveSearch
                     );
                 } elseif ($fieldType === 'text'
                     || $fieldType === 'flex'
-                    || ($fieldType === 'input' && (!$evalRules || !preg_match('/date|time|int/', $evalRules)))
+                    || ($fieldType === 'input' && (!$evalRules || !preg_match('/\b(?:date|time|int)\b/', $evalRules)))
                 ) {
                     // Otherwise and if the field makes sense to be searched, assemble a like condition
                     $constraints[] = $constraints[] = $queryBuilder->expr()->like(
@@ -363,7 +363,7 @@ class LiveSearch
                     $queryBuilder->expr()->comparison(
                         'LOWER(' . $queryBuilder->quoteIdentifier($fieldName) . ')',
                         'LIKE',
-                        $queryBuilder->createNamedParameter(strtolower($like), \PDO::PARAM_STR)
+                        $queryBuilder->createNamedParameter(mb_strtolower($like), \PDO::PARAM_STR)
                     )
                 );
 
@@ -387,7 +387,7 @@ class LiveSearch
                 // Assemble the search condition only if the field makes sense to be searched
                 if ($fieldType === 'text'
                     || $fieldType === 'flex'
-                    || $fieldType === 'input' && (!$evalRules || !preg_match('/date|time|int/', $evalRules))
+                    || ($fieldType === 'input' && (!$evalRules || !preg_match('/\b(?:date|time|int)\b/', $evalRules)))
                 ) {
                     if ($searchConstraint->count() !== 0) {
                         $constraints[] = $searchConstraint;
@@ -479,7 +479,6 @@ class LiveSearch
         $tree->ids[] = $id;
         // add workspace pid - workspace permissions are taken into account by where clause later
         $tree->ids[] = -1;
-        $idList = implode(',', $tree->ids);
-        return $idList;
+        return implode(',', $tree->ids);
     }
 }

@@ -17,23 +17,30 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Form;
 /**
  * Creates a submit button.
  *
- * = Examples =
+ * Examples
+ * ========
  *
- * <code title="Defaults">
- * <f:form.submit value="Send Mail" />
- * </code>
- * <output>
- * <input type="submit" />
- * </output>
+ * Defaults
+ * --------
  *
- * <code title="Dummy content for template preview">
- * <f:submit name="mySubmit" value="Send Mail"><button>dummy button</button></f:submit>
- * </code>
- * <output>
- * <input type="submit" name="mySubmit" value="Send Mail" />
- * </output>
+ * ::
  *
- * @api
+ *    <f:form.submit value="Send Mail" />
+ *
+ * Output::
+ *
+ *    <input type="submit" />
+ *
+ * Dummy content for template preview
+ * ----------------------------------
+ *
+ * ::
+ *
+ *    <f:form.submit name="mySubmit" value="Send Mail"><button>dummy button</button></f:form.submit>
+ *
+ * Output::
+ *
+ *    <input type="submit" name="mySubmit" value="Send Mail" />
  */
 class SubmitViewHelper extends \TYPO3\CMS\Fluid\ViewHelpers\Form\AbstractFormFieldViewHelper
 {
@@ -44,14 +51,14 @@ class SubmitViewHelper extends \TYPO3\CMS\Fluid\ViewHelpers\Form\AbstractFormFie
 
     /**
      * Initialize the arguments.
-     *
-     * @api
      */
     public function initializeArguments()
     {
         parent::initializeArguments();
         $this->registerTagAttribute(
-            'disabled', 'string', 'Specifies that the input element should be disabled when the page loads'
+            'disabled',
+            'string',
+            'Specifies that the input element should be disabled when the page loads'
         );
         $this->registerUniversalTagAttributes();
     }
@@ -60,7 +67,6 @@ class SubmitViewHelper extends \TYPO3\CMS\Fluid\ViewHelpers\Form\AbstractFormFie
      * Renders the submit button.
      *
      * @return string
-     * @api
      */
     public function render()
     {

@@ -16,52 +16,74 @@ namespace TYPO3\CMS\Fluid\ViewHelpers;
 
 use TYPO3\CMS\Core\Imaging\ImageManipulation\CropVariantCollection;
 use TYPO3\CMS\Core\Resource\Exception\ResourceDoesNotExistException;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractTagBasedViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Exception;
 
 /**
- * Resizes a given image (if required) and renders the respective img tag
+ * Resizes a given image (if required) and renders the respective img tag.
  *
- * = Examples =
+ * Examples
+ * ========
  *
- * <code title="Default">
- * <f:image src="EXT:myext/Resources/Public/typo3_logo.png" alt="alt text" />
- * </code>
- * <output>
- * <img alt="alt text" src="typo3conf/ext/myext/Resources/Public/typo3_logo.png" width="396" height="375" />
- * or (in BE mode):
- * <img alt="alt text" src="../typo3conf/ext/viewhelpertest/Resources/Public/typo3_logo.png" width="396" height="375" />
- * </output>
+ * Default
+ * -------
  *
- * <code title="Image Object">
- * <f:image image="{imageObject}" />
- * </code>
- * <output>
- * <img alt="alt set in image record" src="fileadmin/_processed_/323223424.png" width="396" height="375" />
- * </output>
+ * ::
  *
- * <code title="Inline notation">
- * {f:image(src: 'EXT:viewhelpertest/Resources/Public/typo3_logo.png', alt: 'alt text', minWidth: 30, maxWidth: 40)}
- * </code>
- * <output>
- * <img alt="alt text" src="../typo3temp/assets/images/f13d79a526.png" width="40" height="38" />
- * (depending on your TYPO3s encryption key)
- * </output>
+ *    <f:image src="EXT:myext/Resources/Public/typo3_logo.png" alt="alt text" />
  *
- * <code title="Other resource type (e.g. PDF)">
- * <f:image src="fileadmin/user_upload/example.pdf" alt="foo" />
- * </code>
- * <output>
- * If your graphics processing library is set up correctly then it will output a thumbnail of the first page of your PDF document.
- * <img src="fileadmin/_processed_/1/2/csm_example_aabbcc112233.gif" width="200" height="284" alt="foo">
- * </output>
+ * Output in frontend::
  *
- * <code title="Non-existent image">
- * <f:image src="NonExistingImage.png" alt="foo" />
- * </code>
- * <output>
- * Could not get image resource for "NonExistingImage.png".
- * </output>
+ *    <img alt="alt text" src="typo3conf/ext/myext/Resources/Public/typo3_logo.png" width="396" height="375" />
+ *
+ * or in backend::
+ *
+ *    <img alt="alt text" src="../typo3conf/ext/viewhelpertest/Resources/Public/typo3_logo.png" width="396" height="375" />
+ *
+ * Image Object
+ * ------------
+ *
+ * ::
+ *
+ *    <f:image image="{imageObject}" />
+ *
+ * Output::
+ *
+ *    <img alt="alt set in image record" src="fileadmin/_processed_/323223424.png" width="396" height="375" />
+ *
+ * Inline notation
+ * ---------------
+ *
+ * ::
+ *
+ *    {f:image(src: 'EXT:viewhelpertest/Resources/Public/typo3_logo.png', alt: 'alt text', minWidth: 30, maxWidth: 40)}
+ *
+ * Output::
+ *
+ *    <img alt="alt text" src="../typo3temp/assets/images/f13d79a526.png" width="40" height="38" />
+ *
+ * Depending on your TYPO3s encryption key.
+ *
+ * Other resource type (e.g. PDF)
+ * ------------------------------
+ *
+ * ::
+ *
+ *    <f:image src="fileadmin/user_upload/example.pdf" alt="foo" />
+ *
+ * If your graphics processing library is set up correctly then it will output a thumbnail of the first page of your PDF document:
+ * ``<img src="fileadmin/_processed_/1/2/csm_example_aabbcc112233.gif" width="200" height="284" alt="foo">``
+ *
+ * Non-existent image
+ * ------------------
+ *
+ * ::
+ *
+ *    <f:image src="NonExistingImage.png" alt="foo" />
+ *
+ * ``Could not get image resource for "NonExistingImage.png".``
  */
-class ImageViewHelper extends \TYPO3\CMS\Fluid\Core\ViewHelper\AbstractTagBasedViewHelper
+class ImageViewHelper extends AbstractTagBasedViewHelper
 {
     /**
      * @var string
@@ -102,9 +124,9 @@ class ImageViewHelper extends \TYPO3\CMS\Fluid\Core\ViewHelper\AbstractTagBasedV
         $this->registerArgument('width', 'string', 'width of the image. This can be a numeric value representing the fixed width of the image in pixels. But you can also perform simple calculations by adding "m" or "c" to the value. See imgResource.width for possible options.');
         $this->registerArgument('height', 'string', 'height of the image. This can be a numeric value representing the fixed height of the image in pixels. But you can also perform simple calculations by adding "m" or "c" to the value. See imgResource.width for possible options.');
         $this->registerArgument('minWidth', 'int', 'minimum width of the image');
-        $this->registerArgument('minHeight', 'int', 'minimum width of the image');
-        $this->registerArgument('maxWidth', 'int', 'minimum width of the image');
-        $this->registerArgument('maxHeight', 'int', 'minimum width of the image');
+        $this->registerArgument('minHeight', 'int', 'minimum height of the image');
+        $this->registerArgument('maxWidth', 'int', 'maximum width of the image');
+        $this->registerArgument('maxHeight', 'int', 'maximum height of the image');
         $this->registerArgument('absolute', 'bool', 'Force absolute URL', false, false);
     }
 
@@ -113,13 +135,13 @@ class ImageViewHelper extends \TYPO3\CMS\Fluid\Core\ViewHelper\AbstractTagBasedV
      *
      * @see https://docs.typo3.org/typo3cms/TyposcriptReference/ContentObjects/Image/
      *
-     * @throws \TYPO3\CMS\Fluid\Core\ViewHelper\Exception
+     * @throws Exception
      * @return string Rendered tag
      */
     public function render()
     {
-        if ((is_null($this->arguments['src']) && is_null($this->arguments['image'])) || (!is_null($this->arguments['src']) && !is_null($this->arguments['image']))) {
-            throw new \TYPO3\CMS\Fluid\Core\ViewHelper\Exception('You must either specify a string src or a File object.', 1382284106);
+        if (($this->arguments['src'] === null && $this->arguments['image'] === null) || ($this->arguments['src'] !== null && $this->arguments['image'] !== null)) {
+            throw new Exception('You must either specify a string src or a File object.', 1382284106);
         }
 
         try {
@@ -165,12 +187,16 @@ class ImageViewHelper extends \TYPO3\CMS\Fluid\Core\ViewHelper\AbstractTagBasedV
             }
         } catch (ResourceDoesNotExistException $e) {
             // thrown if file does not exist
+            throw new Exception($e->getMessage(), 1509741911, $e);
         } catch (\UnexpectedValueException $e) {
             // thrown if a file has been replaced with a folder
+            throw new Exception($e->getMessage(), 1509741912, $e);
         } catch (\RuntimeException $e) {
             // RuntimeException thrown if a file is outside of a storage
+            throw new Exception($e->getMessage(), 1509741913, $e);
         } catch (\InvalidArgumentException $e) {
             // thrown if file storage does not exist
+            throw new Exception($e->getMessage(), 1509741914, $e);
         }
 
         return $this->tag->render();

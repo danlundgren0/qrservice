@@ -1,27 +1,34 @@
 <?php
 namespace TYPO3\CMS\Core\Cache\Backend;
 
-/*                                                                        *
- * This script belongs to the FLOW3 framework.                            *
- *                                                                        *
- * It is free software; you can redistribute it and/or modify it under    *
- * the terms of the GNU Lesser General Public License, either version 3   *
- * of the License, or (at your option) any later version.                 *
- *                                                                        *
- * The TYPO3 project - inspiring people to share!                         *
- *                                                                        */
+/*
+ * This file is part of the TYPO3 CMS project.
+ *
+ * It is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License, either version 2
+ * of the License, or any later version.
+ *
+ * For the full copyright and license information, please read the
+ * LICENSE.txt file that was distributed with this source code.
+ *
+ * The TYPO3 project - inspiring people to share!
+ */
 
+use TYPO3\CMS\Core\Cache\Exception;
+use TYPO3\CMS\Core\Cache\Exception\InvalidDataException;
+use TYPO3\CMS\Core\Cache\Frontend\FrontendInterface;
+use TYPO3\CMS\Core\Cache\Frontend\PhpFrontend;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Service\OpcodeCacheService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\PathUtility;
 use TYPO3\CMS\Core\Utility\StringUtility;
 
 /**
  * A caching backend which stores cache entries in files, but does not support or
  * care about expiry times and tags.
- *
- * @api
  */
-class SimpleFileBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implements \TYPO3\CMS\Core\Cache\Backend\PhpCapableBackendInterface
+class SimpleFileBackend extends AbstractBackend implements PhpCapableBackendInterface
 {
     const SEPARATOR = '^';
     const EXPIRYTIME_FORMAT = 'YmdHis';
@@ -35,7 +42,6 @@ class SimpleFileBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend im
     protected $cacheDirectory = '';
 
     /**
-     * TYPO3 v4 note: This variable is only available in v5
      * Temporary path to cache directory before setCache() was called. It is
      * set by setCacheDirectory() and used in setCache() method which calls
      * the directory creation if needed. The variable is not used afterwards,
@@ -66,83 +72,78 @@ class SimpleFileBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend im
      * Sets a reference to the cache frontend which uses this backend and
      * initializes the default cache directory.
      *
-     * TYPO3 v4 note: This method is different between TYPO3 v4 and FLOW3
-     * because the Environment class to get the path to a temporary directory
-     * does not exist in v4.
-     *
-     * @param \TYPO3\CMS\Core\Cache\Frontend\FrontendInterface $cache The cache frontend
-     * @throws \TYPO3\CMS\Core\Cache\Exception
+     * @param FrontendInterface $cache The cache frontend
+     * @throws Exception
      */
-    public function setCache(\TYPO3\CMS\Core\Cache\Frontend\FrontendInterface $cache)
+    public function setCache(FrontendInterface $cache)
     {
         parent::setCache($cache);
         if (empty($this->temporaryCacheDirectory)) {
             // If no cache directory was given with cacheDirectory
-            // configuration option, set it to a path below typo3temp/var/
-            $temporaryCacheDirectory = PATH_site . 'typo3temp/var/';
+            // configuration option, set it to a path below var/ folder
+            $temporaryCacheDirectory = Environment::getVarPath() . '/';
         } else {
             $temporaryCacheDirectory = $this->temporaryCacheDirectory;
         }
-        $codeOrData = $cache instanceof \TYPO3\CMS\Core\Cache\Frontend\PhpFrontend ? 'Code' : 'Data';
-        $finalCacheDirectory = $temporaryCacheDirectory . 'Cache/' . $codeOrData . '/' . $this->cacheIdentifier . '/';
+        $codeOrData = $cache instanceof PhpFrontend ? 'code' : 'data';
+        $finalCacheDirectory = $temporaryCacheDirectory . 'cache/' . $codeOrData . '/' . $this->cacheIdentifier . '/';
         if (!is_dir($finalCacheDirectory)) {
             $this->createFinalCacheDirectory($finalCacheDirectory);
         }
         unset($this->temporaryCacheDirectory);
         $this->cacheDirectory = $finalCacheDirectory;
-        $this->cacheEntryFileExtension = $cache instanceof \TYPO3\CMS\Core\Cache\Frontend\PhpFrontend ? '.php' : '';
+        $this->cacheEntryFileExtension = $cache instanceof PhpFrontend ? '.php' : '';
         if (strlen($this->cacheDirectory) + 23 > PHP_MAXPATHLEN) {
-            throw new \TYPO3\CMS\Core\Cache\Exception('The length of the temporary cache file path "' . $this->cacheDirectory . '" exceeds the ' . 'maximum path length of ' . (PHP_MAXPATHLEN - 23) . '. Please consider ' . 'setting the temporaryDirectoryBase option to a shorter path.', 1248710426);
+            throw new Exception('The length of the temporary cache file path "' . $this->cacheDirectory . '" exceeds the ' . 'maximum path length of ' . (PHP_MAXPATHLEN - 23) . '. Please consider ' . 'setting the temporaryDirectoryBase option to a shorter path.', 1248710426);
         }
     }
 
     /**
      * Sets the directory where the cache files are stored. By default it is
-     * assumed that the directory is below the TYPO3_DOCUMENT_ROOT. However, an
+     * assumed that the directory is below TYPO3's Project Path. However, an
      * absolute path can be selected, too.
      *
-     * This method does not exist in FLOW3 anymore, but it is needed in
-     * TYPO3 v4 to enable a cache path outside of document root. The final
-     * cache path is checked and created in createFinalCachDirectory(),
+     * This method enables to use a cache path outside of TYPO3's Project Path. The final
+     * cache path is checked and created in createFinalCacheDirectory(),
      * called by setCache() method, which is done _after_ the cacheDirectory
      * option was handled.
      *
      * @param string $cacheDirectory The cache base directory. If a relative path
-     * @throws \TYPO3\CMS\Core\Cache\Exception if the directory is not within allowed
+     * @throws Exception if the directory is not within allowed
      */
     public function setCacheDirectory($cacheDirectory)
     {
         // Skip handling if directory is a stream ressource
-        // This is used by unit tests with vfs:// directoryies
+        // This is used by unit tests with vfs:// directories
         if (strpos($cacheDirectory, '://')) {
             $this->temporaryCacheDirectory = $cacheDirectory;
             return;
         }
-        $documentRoot = PATH_site;
+        $documentRoot = Environment::getProjectPath() . '/';
         if ($open_basedir = ini_get('open_basedir')) {
-            if (TYPO3_OS === 'WIN') {
+            if (Environment::isWindows()) {
                 $delimiter = ';';
                 $cacheDirectory = str_replace('\\', '/', $cacheDirectory);
                 if (!preg_match('/[A-Z]:/', substr($cacheDirectory, 0, 2))) {
-                    $cacheDirectory = PATH_site . $cacheDirectory;
+                    $cacheDirectory = Environment::getProjectPath() . $cacheDirectory;
                 }
             } else {
                 $delimiter = ':';
                 if ($cacheDirectory[0] !== '/') {
                     // relative path to cache directory.
-                    $cacheDirectory = PATH_site . $cacheDirectory;
+                    $cacheDirectory = Environment::getProjectPath() . $cacheDirectory;
                 }
             }
             $basedirs = explode($delimiter, $open_basedir);
             $cacheDirectoryInBaseDir = false;
             foreach ($basedirs as $basedir) {
-                if (TYPO3_OS === 'WIN') {
+                if (Environment::isWindows()) {
                     $basedir = str_replace('\\', '/', $basedir);
                 }
                 if ($basedir[strlen($basedir) - 1] !== '/') {
                     $basedir .= '/';
                 }
-                if (\TYPO3\CMS\Core\Utility\GeneralUtility::isFirstPartOfStr($cacheDirectory, $basedir)) {
+                if (GeneralUtility::isFirstPartOfStr($cacheDirectory, $basedir)) {
                     $documentRoot = $basedir;
                     $cacheDirectory = str_replace($basedir, '', $cacheDirectory);
                     $cacheDirectoryInBaseDir = true;
@@ -150,7 +151,7 @@ class SimpleFileBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend im
                 }
             }
             if (!$cacheDirectoryInBaseDir) {
-                throw new \TYPO3\CMS\Core\Cache\Exception(
+                throw new Exception(
                     'Open_basedir restriction in effect. The directory "' . $cacheDirectory . '" is not in an allowed path.',
                     1476045417
                 );
@@ -160,8 +161,8 @@ class SimpleFileBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend im
                 // Absolute path to cache directory.
                 $documentRoot = '';
             }
-            if (TYPO3_OS === 'WIN') {
-                if (substr($cacheDirectory, 0, strlen($documentRoot)) === $documentRoot) {
+            if (Environment::isWindows()) {
+                if (!empty($documentRoot) && strpos($cacheDirectory, $documentRoot) === 0) {
                     $documentRoot = '';
                 }
             }
@@ -170,25 +171,24 @@ class SimpleFileBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend im
         if ($cacheDirectory[strlen($cacheDirectory) - 1] !== '/') {
             $cacheDirectory .= '/';
         }
-        $this->temporaryCacheDirectory = $documentRoot . $cacheDirectory . $this->cacheIdentifier . '/';
+        $this->temporaryCacheDirectory = $documentRoot . $cacheDirectory;
     }
 
     /**
-     * Create the final cache directory if it does not exist. This method
-     * exists in TYPO3 v4 only.
+     * Create the final cache directory if it does not exist.
      *
      * @param string $finalCacheDirectory Absolute path to final cache directory
-     * @throws \TYPO3\CMS\Core\Cache\Exception If directory is not writable after creation
+     * @throws Exception If directory is not writable after creation
      */
     protected function createFinalCacheDirectory($finalCacheDirectory)
     {
         try {
-            \TYPO3\CMS\Core\Utility\GeneralUtility::mkdir_deep($finalCacheDirectory);
+            GeneralUtility::mkdir_deep($finalCacheDirectory);
         } catch (\RuntimeException $e) {
-            throw new \TYPO3\CMS\Core\Cache\Exception('The directory "' . $finalCacheDirectory . '" can not be created.', 1303669848, $e);
+            throw new Exception('The directory "' . $finalCacheDirectory . '" can not be created.', 1303669848, $e);
         }
         if (!is_writable($finalCacheDirectory)) {
-            throw new \TYPO3\CMS\Core\Cache\Exception('The directory "' . $finalCacheDirectory . '" is not writable.', 1203965200);
+            throw new Exception('The directory "' . $finalCacheDirectory . '" is not writable.', 1203965200);
         }
     }
 
@@ -196,7 +196,6 @@ class SimpleFileBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend im
      * Returns the directory where the cache files are stored
      *
      * @return string Full path of the cache directory
-     * @api
      */
     public function getCacheDirectory()
     {
@@ -210,17 +209,16 @@ class SimpleFileBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend im
      * @param string $data The data to be stored
      * @param array $tags Tags to associate with this cache entry
      * @param int $lifetime This cache backend does not support life times
-     * @throws \TYPO3\CMS\Core\Cache\Exception if the directory does not exist or is not writable or exceeds the maximum allowed path length, or if no cache frontend has been set.
-     * @throws \TYPO3\CMS\Core\Cache\Exception\InvalidDataException if the data to bes stored is not a string.
+     * @throws Exception if the directory does not exist or is not writable or exceeds the maximum allowed path length, or if no cache frontend has been set.
+     * @throws InvalidDataException if the data to bes stored is not a string.
      * @throws \InvalidArgumentException
-     * @api
      */
     public function set($entryIdentifier, $data, array $tags = [], $lifetime = null)
     {
         if (!is_string($data)) {
-            throw new \TYPO3\CMS\Core\Cache\Exception\InvalidDataException('The specified data is of type "' . gettype($data) . '" but a string is expected.', 1334756734);
+            throw new InvalidDataException('The specified data is of type "' . gettype($data) . '" but a string is expected.', 1334756734);
         }
-        if ($entryIdentifier !== basename($entryIdentifier)) {
+        if ($entryIdentifier !== PathUtility::basename($entryIdentifier)) {
             throw new \InvalidArgumentException('The specified entry identifier must not contain a path segment.', 1334756735);
         }
         if ($entryIdentifier === '') {
@@ -228,9 +226,9 @@ class SimpleFileBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend im
         }
         $temporaryCacheEntryPathAndFilename = $this->cacheDirectory . StringUtility::getUniqueId() . '.temp';
         $result = file_put_contents($temporaryCacheEntryPathAndFilename, $data);
-        \TYPO3\CMS\Core\Utility\GeneralUtility::fixPermissions($temporaryCacheEntryPathAndFilename);
+        GeneralUtility::fixPermissions($temporaryCacheEntryPathAndFilename);
         if ($result === false) {
-            throw new \TYPO3\CMS\Core\Cache\Exception('The temporary cache file "' . $temporaryCacheEntryPathAndFilename . '" could not be written.', 1334756737);
+            throw new Exception('The temporary cache file "' . $temporaryCacheEntryPathAndFilename . '" could not be written.', 1334756737);
         }
         $cacheEntryPathAndFilename = $this->cacheDirectory . $entryIdentifier . $this->cacheEntryFileExtension;
         rename($temporaryCacheEntryPathAndFilename, $cacheEntryPathAndFilename);
@@ -245,11 +243,10 @@ class SimpleFileBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend im
      * @param string $entryIdentifier An identifier which describes the cache entry to load
      * @return mixed The cache entry's content as a string or FALSE if the cache entry could not be loaded
      * @throws \InvalidArgumentException If identifier is invalid
-     * @api
      */
     public function get($entryIdentifier)
     {
-        if ($entryIdentifier !== basename($entryIdentifier)) {
+        if ($entryIdentifier !== PathUtility::basename($entryIdentifier)) {
             throw new \InvalidArgumentException('The specified entry identifier must not contain a path segment.', 1334756877);
         }
         $pathAndFilename = $this->cacheDirectory . $entryIdentifier . $this->cacheEntryFileExtension;
@@ -265,11 +262,10 @@ class SimpleFileBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend im
      * @param string $entryIdentifier
      * @return bool TRUE if such an entry exists, FALSE if not
      * @throws \InvalidArgumentException
-     * @api
      */
     public function has($entryIdentifier)
     {
-        if ($entryIdentifier !== basename($entryIdentifier)) {
+        if ($entryIdentifier !== PathUtility::basename($entryIdentifier)) {
             throw new \InvalidArgumentException('The specified entry identifier must not contain a path segment.', 1334756878);
         }
         return file_exists($this->cacheDirectory . $entryIdentifier . $this->cacheEntryFileExtension);
@@ -282,11 +278,10 @@ class SimpleFileBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend im
      * @param string $entryIdentifier Specifies the cache entry to remove
      * @return bool TRUE if (at least) an entry could be removed or FALSE if no entry was found
      * @throws \InvalidArgumentException
-     * @api
      */
     public function remove($entryIdentifier)
     {
-        if ($entryIdentifier !== basename($entryIdentifier)) {
+        if ($entryIdentifier !== PathUtility::basename($entryIdentifier)) {
             throw new \InvalidArgumentException('The specified entry identifier must not contain a path segment.', 1334756960);
         }
         if ($entryIdentifier === '') {
@@ -302,12 +297,10 @@ class SimpleFileBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend im
 
     /**
      * Removes all cache entries of this cache.
-     *
-     * @api
      */
     public function flush()
     {
-        \TYPO3\CMS\Core\Utility\GeneralUtility::flushDirectory($this->cacheDirectory, true);
+        GeneralUtility::flushDirectory($this->cacheDirectory, true);
     }
 
     /**
@@ -316,7 +309,6 @@ class SimpleFileBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend im
      *
      * @param string $cacheEntryPathAndFilename
      * @return bool
-     * @api
      */
     protected function isCacheFileExpired($cacheEntryPathAndFilename)
     {
@@ -325,8 +317,6 @@ class SimpleFileBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend im
 
     /**
      * Not necessary
-     *
-     * @api
      */
     public function collectGarbage()
     {
@@ -350,14 +340,29 @@ class SimpleFileBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend im
      * @param string $entryIdentifier An identifier which describes the cache entry to load
      * @return mixed Potential return value from the include operation
      * @throws \InvalidArgumentException
-     * @api
      */
     public function requireOnce($entryIdentifier)
     {
         $pathAndFilename = $this->cacheDirectory . $entryIdentifier . $this->cacheEntryFileExtension;
-        if ($entryIdentifier !== basename($entryIdentifier)) {
+        if ($entryIdentifier !== PathUtility::basename($entryIdentifier)) {
             throw new \InvalidArgumentException('The specified entry identifier must not contain a path segment.', 1282073037);
         }
         return file_exists($pathAndFilename) ? require_once $pathAndFilename : false;
+    }
+
+    /**
+     * Loads PHP code from the cache and require it right away.
+     *
+     * @param string $entryIdentifier An identifier which describes the cache entry to load
+     * @return mixed Potential return value from the include operation
+     * @throws \InvalidArgumentException
+     */
+    public function require(string $entryIdentifier)
+    {
+        $pathAndFilename = $this->cacheDirectory . $entryIdentifier . $this->cacheEntryFileExtension;
+        if ($entryIdentifier !== PathUtility::basename($entryIdentifier)) {
+            throw new \InvalidArgumentException('The specified entry identifier must not contain a path segment.', 1532528267);
+        }
+        return file_exists($pathAndFilename) ? require $pathAndFilename : false;
     }
 }

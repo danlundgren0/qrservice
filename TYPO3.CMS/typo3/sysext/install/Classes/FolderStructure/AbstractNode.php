@@ -14,10 +14,12 @@ namespace TYPO3\CMS\Install\FolderStructure;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Install\Status;
+use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Messaging\FlashMessage;
 
 /**
  * Abstract node implements common methods
+ * @internal This class is only meant to be used within EXT:install and is not part of the TYPO3 Core API.
  */
 abstract class AbstractNode
 {
@@ -27,14 +29,14 @@ abstract class AbstractNode
     protected $name = '';
 
     /**
-     * @var NULL|string Target permissions for unix, eg. '2775' or '0664' (4 characters string)
+     * @var string|null Target permissions for unix, eg. '2775' or '0664' (4 characters string)
      */
-    protected $targetPermission = null;
+    protected $targetPermission;
 
     /**
-     * @var NULL|NodeInterface Parent object of this structure node
+     * @var NodeInterface|null Parent object of this structure node
      */
-    protected $parent = null;
+    protected $parent;
 
     /**
      * @var array Directories and root may have children, files and link always empty array
@@ -89,7 +91,7 @@ abstract class AbstractNode
     /**
      * Get parent
      *
-     * @return NULL|NodeInterface
+     * @return NodeInterface|null
      */
     protected function getParent()
     {
@@ -127,18 +129,17 @@ abstract class AbstractNode
     {
         if (@is_link($this->getAbsolutePath())) {
             return true;
-        } else {
-            return @file_exists($this->getAbsolutePath());
         }
+        return @file_exists($this->getAbsolutePath());
     }
 
     /**
      * Fix permission if they are not equal to target permission
      *
      * @throws Exception
-     * @return \TYPO3\CMS\Install\Status\StatusInterface
+     * @return FlashMessage
      */
-    protected function fixPermission()
+    protected function fixPermission(): FlashMessage
     {
         if ($this->isPermissionCorrect()) {
             throw new Exception(
@@ -148,17 +149,17 @@ abstract class AbstractNode
         }
         $result = @chmod($this->getAbsolutePath(), octdec($this->getTargetPermission()));
         if ($result === true) {
-            $status = new Status\OkStatus();
-            $status->setTitle('Fixed permission on ' . $this->getRelativePathBelowSiteRoot() . '.');
-        } else {
-            $status = new Status\NoticeStatus();
-            $status->setTitle('Permission change on ' . $this->getRelativePathBelowSiteRoot() . ' not successful');
-            $status->setMessage(
-                'Permissions could not be changed to ' . $this->getTargetPermission() .
-                    '. This only is a problem if files and folders within this node cannot be written.'
+            return new FlashMessage(
+                '',
+                'Fixed permission on ' . $this->getRelativePathBelowSiteRoot() . '.'
             );
         }
-        return $status;
+        return new FlashMessage(
+            'Permissions could not be changed to ' . $this->getTargetPermission()
+                . '. This only is a problem if files and folders within this node cannot be written.',
+            'Permission change on ' . $this->getRelativePathBelowSiteRoot() . ' not successful',
+            FlashMessage::NOTICE
+        );
     }
 
     /**
@@ -173,9 +174,8 @@ abstract class AbstractNode
         }
         if ($this->getCurrentPermission() === $this->getTargetPermission()) {
             return true;
-        } else {
-            return false;
         }
+        return false;
     }
 
     /**
@@ -196,14 +196,11 @@ abstract class AbstractNode
      */
     protected function isWindowsOs()
     {
-        if (TYPO3_OS === 'WIN') {
-            return true;
-        }
-        return false;
+        return Environment::isWindows();
     }
 
     /**
-     * Cut off PATH_site from given path
+     * Cut off public web path from given path
      *
      * @param string $path Given path
      * @return string Relative path, but beginning with /
@@ -211,17 +208,17 @@ abstract class AbstractNode
      */
     protected function getRelativePathBelowSiteRoot($path = null)
     {
-        if (is_null($path)) {
+        if ($path === null) {
             $path = $this->getAbsolutePath();
         }
-        $pathSiteWithoutTrailingSlash = substr(PATH_site, 0, -1);
-        if (strpos($path, $pathSiteWithoutTrailingSlash, 0) !== 0) {
+        $publicPath = Environment::getPublicPath();
+        if (strpos($path, $publicPath, 0) !== 0) {
             throw new Exception\InvalidArgumentException(
-                'PATH_site is not first part of given path',
+                'Public path is not first part of given path',
                 1366398198
             );
         }
-        $relativePath = substr($path, strlen($pathSiteWithoutTrailingSlash), strlen($path));
+        $relativePath = substr($path, strlen($publicPath), strlen($path));
         // Add a forward slash again, so we don't end up with an empty string
         if ($relativePath === '') {
             $relativePath = '/';

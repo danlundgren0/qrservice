@@ -19,14 +19,10 @@ namespace TYPO3\CMS\Extensionmanager\Utility\Parser;
  *
  * Depends on PHP ext/xmlreader which should be available
  * with PHP >= 5.1.0.
+ * @internal This class is a specific ExtensionManager implementation and is not part of the Public TYPO3 API.
  */
 class MirrorXmlPullParser extends AbstractMirrorXmlParser
 {
-    /**
-     * Class constructor.
-     *
-     * @access public
-     */
     public function __construct()
     {
         $this->requiredPhpExtensions = 'xmlreader';

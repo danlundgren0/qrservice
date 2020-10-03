@@ -14,6 +14,7 @@ namespace TYPO3\CMS\Core\Cache\Backend;
  * The TYPO3 project - inspiring people to share!
  */
 
+use Doctrine\DBAL\FetchMode;
 use TYPO3\CMS\Core\Cache\Exception;
 use TYPO3\CMS\Core\Cache\Exception\InvalidDataException;
 use TYPO3\CMS\Core\Cache\Frontend\FrontendInterface;
@@ -24,7 +25,6 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * A caching backend which stores cache entries in database tables
- * @api
  */
 class Typo3DatabaseBackend extends AbstractBackend implements TaggableBackendInterface
 {
@@ -61,7 +61,6 @@ class Typo3DatabaseBackend extends AbstractBackend implements TaggableBackendInt
      * Set cache frontend instance and calculate data and tags table name
      *
      * @param FrontendInterface $cache The frontend for this backend
-     * @api
      */
     public function setCache(FrontendInterface $cache)
     {
@@ -90,7 +89,7 @@ class Typo3DatabaseBackend extends AbstractBackend implements TaggableBackendInt
                 1236518298
             );
         }
-        if (is_null($lifetime)) {
+        if ($lifetime === null) {
             $lifetime = $this->defaultLifetime;
         }
         if ($lifetime === 0 || $lifetime > $this->maximumLifetime) {
@@ -136,7 +135,7 @@ class Typo3DatabaseBackend extends AbstractBackend implements TaggableBackendInt
         $this->throwExceptionIfFrontendDoesNotExist();
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
             ->getQueryBuilderForTable($this->cacheTable);
-        $cacheRow =  $queryBuilder->select('content')
+        $cacheRow = $queryBuilder->select('content')
             ->from($this->cacheTable)
             ->where(
                 $queryBuilder->expr()->eq(
@@ -222,7 +221,6 @@ class Typo3DatabaseBackend extends AbstractBackend implements TaggableBackendInt
     public function findIdentifiersByTag($tag)
     {
         $this->throwExceptionIfFrontendDoesNotExist();
-        $cacheEntryIdentifiers = [];
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
             ->getQueryBuilderForTable($this->tagsTable);
         $result = $queryBuilder->select($this->cacheTable . '.identifier')
@@ -239,11 +237,10 @@ class Typo3DatabaseBackend extends AbstractBackend implements TaggableBackendInt
                     $queryBuilder->createNamedParameter($GLOBALS['EXEC_TIME'], \PDO::PARAM_INT)
                 )
             )
+            ->groupBy($this->cacheTable . '.identifier')
             ->execute();
-        while ($row = $result->fetch()) {
-            $cacheEntryIdentifiers[$row['identifier']] = $row['identifier'];
-        }
-        return $cacheEntryIdentifiers;
+        $identifiers = $result->fetchAll(FetchMode::COLUMN, 0);
+        return array_combine($identifiers, $identifiers);
     }
 
     /**
@@ -309,10 +306,7 @@ class Typo3DatabaseBackend extends AbstractBackend implements TaggableBackendInt
                 // group by is like DISTINCT and used here to suppress possible duplicate identifiers
                 ->groupBy('identifier')
                 ->execute();
-            $cacheEntryIdentifiers = [];
-            while ($row = $result->fetch()) {
-                $cacheEntryIdentifiers[] = $row['identifier'];
-            }
+            $cacheEntryIdentifiers = $result->fetchAll(FetchMode::COLUMN, 0);
             $quotedIdentifiers = $queryBuilder->createNamedParameter($cacheEntryIdentifiers, Connection::PARAM_STR_ARRAY);
             $queryBuilder->delete($this->cacheTable)
                 ->where($queryBuilder->expr()->in('identifier', $quotedIdentifiers))
@@ -360,10 +354,7 @@ class Typo3DatabaseBackend extends AbstractBackend implements TaggableBackendInt
                 // group by is like DISTINCT and used here to suppress possible duplicate identifiers
                 ->groupBy('identifier')
                 ->execute();
-            $cacheEntryIdentifiers = [];
-            while ($row = $result->fetch()) {
-                $cacheEntryIdentifiers[] = $row['identifier'];
-            }
+            $cacheEntryIdentifiers = $result->fetchAll(FetchMode::COLUMN, 0);
             $quotedIdentifiers = $queryBuilder->createNamedParameter($cacheEntryIdentifiers, Connection::PARAM_STR_ARRAY);
             $queryBuilder->delete($this->cacheTable)
                 ->where($queryBuilder->expr()->in('identifier', $quotedIdentifiers))
@@ -414,10 +405,7 @@ class Typo3DatabaseBackend extends AbstractBackend implements TaggableBackendInt
                 ->execute();
 
             // Get identifiers of expired cache entries
-            $cacheEntryIdentifiers = [];
-            while ($row = $result->fetch()) {
-                $cacheEntryIdentifiers[] = $row['identifier'];
-            }
+            $cacheEntryIdentifiers = $result->fetchAll(FetchMode::COLUMN, 0);
             if (!empty($cacheEntryIdentifiers)) {
                 // Delete tag rows connected to expired cache entries
                 $quotedIdentifiers = $queryBuilder->createNamedParameter($cacheEntryIdentifiers, Connection::PARAM_STR_ARRAY);
@@ -445,10 +433,8 @@ class Typo3DatabaseBackend extends AbstractBackend implements TaggableBackendInt
                 ->where($queryBuilder->expr()->isNull('cache.identifier'))
                 ->groupBy('tags.identifier')
                 ->execute();
-            $tagsEntryIdentifiers = [];
-            while ($row = $result->fetch()) {
-                $tagsEntryIdentifiers[] = $row['identifier'];
-            }
+            $tagsEntryIdentifiers = $result->fetchAll(FetchMode::COLUMN, 0);
+
             if (!empty($tagsEntryIdentifiers)) {
                 $quotedIdentifiers = $queryBuilder->createNamedParameter($tagsEntryIdentifiers, Connection::PARAM_STR_ARRAY);
                 $queryBuilder->delete($this->tagsTable)

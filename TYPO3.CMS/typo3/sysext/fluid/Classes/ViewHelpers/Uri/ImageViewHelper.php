@@ -19,48 +19,66 @@ use TYPO3\CMS\Core\Resource\Exception\ResourceDoesNotExistException;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Object\ObjectManager;
 use TYPO3\CMS\Extbase\Service\ImageService;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
-use TYPO3\CMS\Fluid\Core\ViewHelper\Exception;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Exception;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
  * Resizes a given image (if required) and returns its relative path.
  *
- * = Examples =
+ * Examples
+ * ========
  *
- * <code title="Default">
- * <f:uri.image src="EXT:myext/Resources/Public/typo3_logo.png" />
- * </code>
- * <output>
- * typo3conf/ext/myext/Resources/Public/typo3_logo.png
- * or (in BE mode):
- * ../typo3conf/ext/myext/Resources/Public/typo3_logo.png
- * </output>
+ * Default
+ * -------
  *
- * <code title="Image Object">
- * <f:uri.image image="{imageObject}" />
- * </code>
- * <output>
- * fileadmin/images/image.png
- * or (in BE mode):
- * fileadmin/images/image.png
- * </output>
+ * ::
  *
- * <code title="Inline notation">
- * {f:uri.image(src: 'EXT:myext/Resources/Public/typo3_logo.png', minWidth: 30, maxWidth: 40)}
- * </code>
- * <output>
- * typo3temp/assets/images/[b4c0e7ed5c].png
- * (depending on your TYPO3s encryption key)
- * </output>
+ *    <f:uri.image src="EXT:myext/Resources/Public/typo3_logo.png" />
  *
- * <code title="non existing image">
- * <f:uri.image src="NonExistingImage.png" />
- * </code>
- * <output>
- * Could not get image resource for "NonExistingImage.png".
- * </output>
+ * Results in the following output within TYPO3 frontend:
+ *
+ * ``typo3conf/ext/myext/Resources/Public/typo3_logo.png``
+ *
+ * and the following output inside TYPO3 backend:
+ *
+ * ``../typo3conf/ext/myext/Resources/Public/typo3_logo.png``
+ *
+ * Image Object
+ * ------------
+ *
+ * ::
+ *
+ *    <f:uri.image image="{imageObject}" />
+ *
+ * Results in the following output within TYPO3 frontend:
+ *
+ * ``fileadmin/images/image.png``
+ *
+ * and the following output inside TYPO3 backend:
+ *
+ * ``fileadmin/images/image.png``
+ *
+ * Inline notation
+ * ---------------
+ *
+ * ::
+ *
+ *    {f:uri.image(src: 'EXT:myext/Resources/Public/typo3_logo.png', minWidth: 30, maxWidth: 40)}
+ *
+ * ``typo3temp/assets/images/[b4c0e7ed5c].png``
+ *
+ * Depending on your TYPO3s encryption key.
+ *
+ * Non existing image
+ * ------------------
+ *
+ * ::
+ *
+ *    <f:uri.image src="NonExistingImage.png" />
+ *
+ * ``Could not get image resource for "NonExistingImage.png".``
  */
 class ImageViewHelper extends AbstractViewHelper
 {
@@ -71,7 +89,6 @@ class ImageViewHelper extends AbstractViewHelper
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('src', 'string', 'src');
         $this->registerArgument('treatIdAsReference', 'bool', 'given src argument is a sys_file_reference record', false, false);
         $this->registerArgument('image', 'object', 'image');
@@ -104,7 +121,7 @@ class ImageViewHelper extends AbstractViewHelper
         $cropString = $arguments['crop'];
         $absolute = $arguments['absolute'];
 
-        if ((is_null($src) && is_null($image)) || (!is_null($src) && !is_null($image))) {
+        if (($src === null && $image === null) || ($src !== null && $image !== null)) {
             throw new Exception('You must either specify a string src or a File object.', 1460976233);
         }
 
@@ -133,14 +150,17 @@ class ImageViewHelper extends AbstractViewHelper
             return $imageService->getImageUri($processedImage, $absolute);
         } catch (ResourceDoesNotExistException $e) {
             // thrown if file does not exist
+            throw new Exception($e->getMessage(), 1509741907, $e);
         } catch (\UnexpectedValueException $e) {
             // thrown if a file has been replaced with a folder
+            throw new Exception($e->getMessage(), 1509741908, $e);
         } catch (\RuntimeException $e) {
             // RuntimeException thrown if a file is outside of a storage
+            throw new Exception($e->getMessage(), 1509741909, $e);
         } catch (\InvalidArgumentException $e) {
             // thrown if file storage does not exist
+            throw new Exception($e->getMessage(), 1509741910, $e);
         }
-        return '';
     }
 
     /**

@@ -13,8 +13,9 @@ use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\ViewHelperNode;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContext;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
 use TYPO3Fluid\Fluid\Core\ViewHelper\ViewHelperResolver;
-use TYPO3Fluid\Fluid\ViewHelpers\SectionViewHelper;
 use TYPO3Fluid\Fluid\View\Exception\InvalidSectionException;
+use TYPO3Fluid\Fluid\View\Exception\InvalidTemplateResourceException;
+use TYPO3Fluid\Fluid\ViewHelpers\SectionViewHelper;
 
 /**
  * Abstract Fluid Template View.
@@ -230,6 +231,18 @@ abstract class AbstractTemplateView extends AbstractView
             $parsedTemplate = $this->getCurrentParsedTemplate();
         } catch (PassthroughSourceException $error) {
             return $error->getSource();
+        } catch (InvalidTemplateResourceException $error) {
+            if (!$ignoreUnknown) {
+                return $renderingContext->getErrorHandler()->handleViewError($error);
+            }
+            return '';
+        } catch (InvalidSectionException $error) {
+            if (!$ignoreUnknown) {
+                return $renderingContext->getErrorHandler()->handleViewError($error);
+            }
+            return '';
+        } catch (Exception $error) {
+            return $renderingContext->getErrorHandler()->handleViewError($error);
         }
 
         if ($parsedTemplate->isCompiled()) {
@@ -238,7 +251,9 @@ abstract class AbstractTemplateView extends AbstractView
                 if ($ignoreUnknown) {
                     return '';
                 } else {
-                    throw new InvalidSectionException('Section "' . $sectionName . '" does not exist.');
+                    return $renderingContext->getErrorHandler()->handleViewError(
+                        new InvalidSectionException('Section "' . $sectionName . '" does not exist.')
+                    );
                 }
             }
             $this->startRendering($renderingTypeOnNextLevel, $parsedTemplate, $renderingContext);
@@ -250,7 +265,9 @@ abstract class AbstractTemplateView extends AbstractView
                 if ($ignoreUnknown) {
                     return '';
                 }
-                throw new InvalidSectionException('Section "' . $sectionName . '" does not exist.');
+                return $renderingContext->getErrorHandler()->handleViewError(
+                    new InvalidSectionException('Section "' . $sectionName . '" does not exist.')
+                );
             }
             /** @var $section ViewHelperNode */
             $section = $sections[$sectionName];
@@ -281,8 +298,9 @@ abstract class AbstractTemplateView extends AbstractView
     public function renderPartial($partialName, $sectionName, array $variables, $ignoreUnknown = false)
     {
         $templatePaths = $this->baseRenderingContext->getTemplatePaths();
+        $renderingContext = clone $this->getCurrentRenderingContext();
         try {
-            $parsedPartial = $this->baseRenderingContext->getTemplateParser()->getOrParseAndStoreTemplate(
+            $parsedPartial = $renderingContext->getTemplateParser()->getOrParseAndStoreTemplate(
                 $templatePaths->getPartialIdentifier($partialName),
                 function ($parent, TemplatePaths $paths) use ($partialName) {
                     return $paths->getPartialSource($partialName);
@@ -290,8 +308,19 @@ abstract class AbstractTemplateView extends AbstractView
             );
         } catch (PassthroughSourceException $error) {
             return $error->getSource();
+        } catch (InvalidTemplateResourceException $error) {
+            if (!$ignoreUnknown) {
+                return $renderingContext->getErrorHandler()->handleViewError($error);
+            }
+            return '';
+        } catch (InvalidSectionException $error) {
+            if (!$ignoreUnknown) {
+                return $renderingContext->getErrorHandler()->handleViewError($error);
+            }
+            return '';
+        } catch (Exception $error) {
+            return $renderingContext->getErrorHandler()->handleViewError($error);
         }
-        $renderingContext = clone $this->getCurrentRenderingContext();
         $renderingContext->setVariableProvider($renderingContext->getVariableProvider()->getScopeCopy($variables));
         $this->startRendering(self::RENDERING_PARTIAL, $parsedPartial, $renderingContext);
         if ($sectionName !== null) {
@@ -336,7 +365,7 @@ abstract class AbstractTemplateView extends AbstractView
     protected function getCurrentRenderingType()
     {
         $currentRendering = end($this->renderingStack);
-        return $currentRendering['type'] ? $currentRendering['type'] : self::RENDERING_TEMPLATE;
+        return !empty($currentRendering['type']) ? $currentRendering['type'] : self::RENDERING_TEMPLATE;
     }
 
     /**
@@ -348,7 +377,7 @@ abstract class AbstractTemplateView extends AbstractView
     {
         $currentRendering = end($this->renderingStack);
         $renderingContext = $this->getCurrentRenderingContext();
-        $parsedTemplate = $currentRendering['parsedTemplate'] ? $currentRendering['parsedTemplate'] : $renderingContext->getTemplateCompiler()->getCurrentlyProcessingState();
+        $parsedTemplate = !empty($currentRendering['parsedTemplate']) ? $currentRendering['parsedTemplate'] : $renderingContext->getTemplateCompiler()->getCurrentlyProcessingState();
         if ($parsedTemplate) {
             return $parsedTemplate;
         }
@@ -358,7 +387,7 @@ abstract class AbstractTemplateView extends AbstractView
         $actionName = $renderingContext->getControllerAction();
         $parsedTemplate = $templateParser->getOrParseAndStoreTemplate(
             $templatePaths->getTemplateIdentifier($controllerName, $actionName),
-            function($parent, TemplatePaths $paths) use ($controllerName, $actionName) {
+            function($parent, TemplatePaths $paths) use ($controllerName, $actionName, $renderingContext) {
                 return $paths->getTemplateSource($controllerName, $actionName);
             }
         );
@@ -376,6 +405,6 @@ abstract class AbstractTemplateView extends AbstractView
     protected function getCurrentRenderingContext()
     {
         $currentRendering = end($this->renderingStack);
-        return $currentRendering['renderingContext'] ? $currentRendering['renderingContext'] : $this->baseRenderingContext;
+        return !empty($currentRendering['renderingContext']) ? $currentRendering['renderingContext'] : $this->baseRenderingContext;
     }
 }

@@ -15,7 +15,10 @@ namespace TYPO3\CMS\Backend\Tree\View;
  */
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
-use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Exception\SiteNotFoundException;
+use TYPO3\CMS\Core\Site\PseudoSiteFinder;
+use TYPO3\CMS\Core\Site\SiteFinder;
+use TYPO3\CMS\Core\Type\Bitmask\Permission;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -80,17 +83,19 @@ class BrowseTreeView extends AbstractTreeView
      */
     public function init($clause = '', $orderByFields = '')
     {
+        $backendUser = $this->getBackendUser();
         // This will hide records from display - it has nothing to do with user rights!!
         $clauseExcludePidList = '';
-        if ($pidList = $this->getBackendUser()->getTSConfigVal('options.hideRecords.pages')) {
+        $pidList = $backendUser->getTSConfig()['options.']['hideRecords.']['pages'] ?? '';
+        if (!empty($pidList)) {
             if ($pidList = implode(',', GeneralUtility::intExplode(',', $pidList))) {
                 $clauseExcludePidList = ' AND pages.uid NOT IN (' . $pidList . ')';
             }
         }
         // This is very important for making trees of pages: Filtering out deleted pages, pages with no access to and sorting them correctly:
-        parent::init(' AND ' . $this->getBackendUser()->getPagePermsClause(1) . ' ' . $clause . $clauseExcludePidList, 'sorting');
+        parent::init(' AND deleted=0 AND sys_language_uid=0 AND ' . $backendUser->getPagePermsClause(Permission::PAGE_SHOW) . ' ' . $clause . $clauseExcludePidList, 'sorting');
         $this->title = $GLOBALS['TYPO3_CONF_VARS']['SYS']['sitename'];
-        $this->MOUNTS = $this->getBackendUser()->returnWebmounts();
+        $this->MOUNTS = $backendUser->returnWebmounts();
         if ($pidList) {
             // Remove mountpoint if explicitly set in options.hideRecords.pages (see above)
             $hideList = explode(',', $pidList);
@@ -116,7 +121,7 @@ class BrowseTreeView extends AbstractTreeView
      * @param string $icon The image tag for the icon
      * @param array $row The row for the current element
      * @return string The processed icon input value.
-     * @access private
+     * @internal
      */
     public function wrapIcon($icon, $row)
     {
@@ -147,24 +152,24 @@ class BrowseTreeView extends AbstractTreeView
         } else {
             $title = parent::getTitleStr($row, $titleLen);
         }
-        if (!empty($row['is_siteroot']) && $this->getBackendUser()->getTSConfigVal('options.pageTree.showDomainNameWithTitle')) {
-            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_domain');
-            $row = $queryBuilder
-                ->select('domainName', 'sorting')
-                ->from('sys_domain')
-                ->where(
-                    $queryBuilder->expr()->eq(
-                        'pid',
-                        $queryBuilder->createNamedParameter($row['uid'], \PDO::PARAM_INT)
-                    )
-                )
-                ->orderBy('sorting')
-                ->setMaxResults(1)
-                ->execute()
-                ->fetch();
+        if (!empty($row['is_siteroot'])
+            && $this->getBackendUser()->getTSConfig()['options.']['pageTree.']['showDomainNameWithTitle'] ?? false
+        ) {
+            $pageId = (int)$row['uid'];
+            $siteFinder = GeneralUtility::makeInstance(SiteFinder::class);
+            try {
+                $site = $siteFinder->getSiteByRootPageId($pageId);
+                $title .= ' [' . (string)$site->getBase() . ']';
+            } catch (SiteNotFoundException $e) {
+                // No site found, let's see if it is a legacy-pseudo-site
+                $pseudoSiteFinder = GeneralUtility::makeInstance(PseudoSiteFinder::class);
 
-            if ($row !== false) {
-                $title = sprintf('%s [%s]', $title, htmlspecialchars($row['domainName']));
+                try {
+                    $site = $pseudoSiteFinder->getSiteByRootPageId($pageId);
+                    $title .= ' [' . trim((string)$site->getBase(), '/') . ']';
+                } catch (SiteNotFoundException $e) {
+                    // No pseudo-site found either
+                }
             }
         }
         return $title;

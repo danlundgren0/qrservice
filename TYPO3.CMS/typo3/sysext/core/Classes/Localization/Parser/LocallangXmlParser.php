@@ -21,6 +21,7 @@ use TYPO3\CMS\Core\Utility\PathUtility;
 
 /**
  * Parser for XML locallang file.
+ * @internal This class is a concrete implementation and is not part of the TYPO3 Core API.
  */
 class LocallangXmlParser extends AbstractXmlParser
 {
@@ -36,17 +37,16 @@ class LocallangXmlParser extends AbstractXmlParser
      *
      * @param string $sourcePath Source file path
      * @param string $languageKey Language key
-     * @param string $charset File charset, not in use anymore and deprecated since TYPO3 v8, will be removed in TYPO3 v9 as UTF-8 is expected for all language files
      * @return array
      */
-    public function getParsedData($sourcePath, $languageKey, $charset = '')
+    public function getParsedData($sourcePath, $languageKey)
     {
         $this->sourcePath = $sourcePath;
         $this->languageKey = $languageKey;
         // Parse source
         $parsedSource = $this->parseXmlFile();
         // Parse target
-        $localizedTargetPath = GeneralUtility::getFileAbsFileName(GeneralUtility::llXmlAutoFileName($this->sourcePath, $this->languageKey));
+        $localizedTargetPath = $this->getLocalizedFileName($this->sourcePath, $this->languageKey);
         $targetPath = $this->languageKey !== 'default' && @is_file($localizedTargetPath) ? $localizedTargetPath : $this->sourcePath;
         try {
             $parsedTarget = $this->getParsedTargetData($targetPath);

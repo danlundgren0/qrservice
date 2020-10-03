@@ -23,8 +23,7 @@ interface ClearCacheActionsHookInterface
      * Modifies CacheMenuItems array
      *
      * @param array $cacheActions Array of CacheMenuItems
-     * @param array $optionValues Array of AccessConfigurations-identifiers (typically  used by userTS with options.clearCache.identifier)
-     * @return
+     * @param array $optionValues Array of AccessConfigurations-identifiers (typically used by userTS with options.clearCache.identifier)
      */
     public function manipulateCacheActions(&$cacheActions, &$optionValues);
 }

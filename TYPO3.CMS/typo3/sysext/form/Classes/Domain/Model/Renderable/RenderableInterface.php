@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Model\Renderable;
 
 /*
@@ -30,7 +30,7 @@ interface RenderableInterface extends RootRenderableInterface
     /**
      * Return the parent renderable
      *
-     * @return null|CompositeRenderableInterface the parent renderable
+     * @return CompositeRenderableInterface|null the parent renderable
      * @internal
      */
     public function getParentRenderable();
@@ -58,7 +58,6 @@ interface RenderableInterface extends RootRenderableInterface
      * Get the index inside the parent renderable
      *
      * @return int
-     * @api
      */
     public function getIndex(): int;
 
@@ -73,15 +72,6 @@ interface RenderableInterface extends RootRenderableInterface
     public function onRemoveFromParentRenderable();
 
     /**
-     * This is a callback that is invoked by the Form Factory after the whole form has been built.
-     * It can be used to add new form elements as children for complex form elements.
-     *
-     * @api
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function onBuildingFinished();
-
-    /**
      * Register this element at the parent form, if there is a connection to the parent form.
      *
      * @internal
@@ -92,7 +82,13 @@ interface RenderableInterface extends RootRenderableInterface
      * Get the template name of the renderable
      *
      * @return string
-     * @api
      */
     public function getTemplateName(): string;
+
+    /**
+     * Returns whether this renderable is enabled
+     *
+     * @return bool
+     */
+    public function isEnabled(): bool;
 }

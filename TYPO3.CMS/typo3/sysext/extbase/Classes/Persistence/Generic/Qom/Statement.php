@@ -16,11 +16,12 @@ namespace TYPO3\CMS\Extbase\Persistence\Generic\Qom;
 
 /**
  * A statement acting as a constraint.
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 class Statement implements ConstraintInterface
 {
     /**
-     * @var string|\TYPO3\CMS\Core\Database\PreparedStatement|\Doctrine\DBAL\Statement|\TYPO3\CMS\Core\Database\Query\QueryBuilder
+     * @var string|\Doctrine\DBAL\Statement|\TYPO3\CMS\Core\Database\Query\QueryBuilder
      */
     protected $statement;
 
@@ -32,7 +33,7 @@ class Statement implements ConstraintInterface
     /**
      * Constructs the Statement instance
      *
-     * @param string|\TYPO3\CMS\Core\Database\PreparedStatement|\Doctrine\DBAL\Statement|\TYPO3\CMS\Core\Database\Query\QueryBuilder $statement The statement as sql string or an instance of  TYPO3\CMS\Core\Database\PreparedStatement, \Doctrine\DBAL\Statement or \TYPO3\CMS\Core\Database\Query\QueryBuilder
+     * @param string|\Doctrine\DBAL\Statement|\TYPO3\CMS\Core\Database\Query\QueryBuilder $statement The statement as sql string or an instance of \Doctrine\DBAL\Statement or \TYPO3\CMS\Core\Database\Query\QueryBuilder
      * @param array $boundVariables An array of variables to bind to the statement, only to be used with prepared statements
      */
     public function __construct($statement, array $boundVariables = [])
@@ -44,7 +45,7 @@ class Statement implements ConstraintInterface
     /**
      * Gets the statement.
      *
-     * @return string|\TYPO3\CMS\Core\Database\PreparedStatement|\Doctrine\DBAL\Statement|\TYPO3\CMS\Core\Database\Query\QueryBuilder the statement; non-null
+     * @return string|\Doctrine\DBAL\Statement|\TYPO3\CMS\Core\Database\Query\QueryBuilder the statement; non-null
      */
     public function getStatement()
     {

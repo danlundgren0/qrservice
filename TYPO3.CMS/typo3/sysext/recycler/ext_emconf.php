@@ -3,19 +3,21 @@ $EM_CONF[$_EXTKEY] = [
     'title' => 'Recycler',
     'description' => 'The recycler offers the possibility to restore deleted records or remove them from the database permanently. These actions can be applied to a single record, multiple records, and recursively to child records (ex. restoring a page can restore all content elements on that page). Filtering by page and by table provides a quick overview of deleted records before taking action on them.',
     'category' => 'module',
-    'author' => 'Julian Kleinhans',
-    'author_email' => 'typo3@kj187.de',
+    'author' => 'TYPO3 Core Team',
+    'author_email' => 'typo3cms@typo3.org',
     'state' => 'stable',
     'uploadfolder' => 0,
     'createDirs' => '',
     'clearCacheOnLoad' => 0,
     'author_company' => '',
-    'version' => '8.7.3',
+    'version' => '9.5.21',
     'constraints' => [
         'depends' => [
-            'typo3' => '8.7.0-8.7.3',
+            'typo3' => '9.5.21',
         ],
         'conflicts' => [],
-        'suggests' => [],
+        'suggests' => [
+            'scheduler' => ''
+        ],
     ],
 ];

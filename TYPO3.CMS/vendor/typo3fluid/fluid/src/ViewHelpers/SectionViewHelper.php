@@ -6,12 +6,12 @@ namespace TYPO3Fluid\Fluid\ViewHelpers;
  * See LICENSE.txt that was shipped with this package.
  */
 
-use TYPO3Fluid\Fluid\Core\Compiler\TemplateCompiler;
 use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\TextNode;
 use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\ViewHelperNode;
 use TYPO3Fluid\Fluid\Core\Variables\VariableProviderInterface;
 use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\ViewHelper\TemplateVariableContainer;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\ParserRuntimeOnly;
 
 /**
  * A ViewHelper to declare sections in templates for later use with e.g. the RenderViewHelper.
@@ -57,6 +57,7 @@ use TYPO3Fluid\Fluid\Core\ViewHelper\TemplateVariableContainer;
  */
 class SectionViewHelper extends AbstractViewHelper
 {
+    use ParserRuntimeOnly;
 
     /**
      * @var boolean
@@ -107,20 +108,5 @@ class SectionViewHelper extends AbstractViewHelper
             $content = $this->renderChildren();
         }
         return $content;
-    }
-
-    /**
-     * The inner contents of a section should not be rendered.
-     *
-     * @param string $argumentsName
-     * @param string $closureName
-     * @param string $initializationPhpCode
-     * @param ViewHelperNode $node
-     * @param TemplateCompiler $compiler
-     * @return string
-     */
-    public function compile($argumentsName, $closureName, &$initializationPhpCode, ViewHelperNode $node, TemplateCompiler $compiler)
-    {
-        return '\'\'';
     }
 }

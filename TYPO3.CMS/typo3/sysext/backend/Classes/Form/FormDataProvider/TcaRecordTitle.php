@@ -16,8 +16,9 @@ namespace TYPO3\CMS\Backend\Form\FormDataProvider;
 
 use TYPO3\CMS\Backend\Form\FormDataProviderInterface;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Database\Query\QueryHelper;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Determine the title of a record and write it to $result['recordTitle'].
@@ -49,9 +50,7 @@ class TcaRecordTitle implements FormDataProviderInterface
                 'row' => $result['databaseRow'],
                 'title' => '',
                 'isOnSymmetricSide' => $result['isOnSymmetricSide'],
-                'options' => isset($result['processedTca']['ctrl']['formattedLabel_userFunc_options'])
-                    ? $result['processedTca']['ctrl']['formattedLabel_userFunc_options']
-                    : [],
+                'options' => $result['processedTca']['ctrl']['formattedLabel_userFunc_options'] ?? [],
                 'parent' => [
                     'uid' => $result['databaseRow']['uid'],
                     'config' => $result['inlineParentConfig']
@@ -75,9 +74,7 @@ class TcaRecordTitle implements FormDataProviderInterface
                 'table' => $result['tableName'],
                 'row' => $result['databaseRow'],
                 'title' => '',
-                'options' => isset($result['processedTca']['ctrl']['label_userFunc_options'])
-                    ? $result['processedTca']['ctrl']['label_userFunc_options']
-                    : [],
+                'options' => $result['processedTca']['ctrl']['label_userFunc_options'] ?? [],
             ];
             $null = null;
             GeneralUtility::callUserFunction($result['processedTca']['ctrl']['label_userFunc'], $parameters, $null);
@@ -167,7 +164,7 @@ class TcaRecordTitle implements FormDataProviderInterface
                 $recordTitle = $this->getRecordTitleForSelectType($rawValue, $fieldConfig);
                 break;
             case 'group':
-                $recordTitle = $this->getRecordTitleForGroupType($rawValue, $fieldConfig);
+                $recordTitle = $this->getRecordTitleForGroupType($rawValue);
                 break;
             case 'check':
                 $recordTitle = $this->getRecordTitleForCheckboxType($rawValue, $fieldConfig);
@@ -237,10 +234,13 @@ class TcaRecordTitle implements FormDataProviderInterface
             return '';
         }
         $labelParts = [];
-        foreach ($value as $itemValue) {
-            $itemKey = array_search($itemValue, array_column($fieldConfig['items'], 1));
-            if ($itemKey !== false) {
-                $labelParts[] = $fieldConfig['items'][$itemKey][0];
+        if (!empty($fieldConfig['items'])) {
+            $listOfValues = array_column($fieldConfig['items'], 1);
+            foreach ($value as $itemValue) {
+                $itemKey = array_search($itemValue, $listOfValues);
+                if ($itemKey !== false) {
+                    $labelParts[] = $fieldConfig['items'][$itemKey][0];
+                }
             }
         }
         $title = implode(', ', $labelParts);
@@ -254,10 +254,9 @@ class TcaRecordTitle implements FormDataProviderInterface
      * Return the record title for database records
      *
      * @param mixed $value Current database value of this field
-     * @param array $fieldConfig TCA field configuration
      * @return string
      */
-    protected function getRecordTitleForGroupType($value, $fieldConfig)
+    protected function getRecordTitleForGroupType($value)
     {
         $labelParts = [];
         foreach ($value as $singleValue) {
@@ -284,8 +283,8 @@ class TcaRecordTitle implements FormDataProviderInterface
         $languageService = $this->getLanguageService();
         if (empty($fieldConfig['items']) || !is_array($fieldConfig['items'])) {
             $title = (bool)$value
-                ? $languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_common.xlf:yes')
-                : $languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_common.xlf:no');
+                ? $languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_common.xlf:yes')
+                : $languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_common.xlf:no');
         } else {
             $labelParts = [];
             foreach ($fieldConfig['items'] as $key => $val) {
@@ -310,10 +309,15 @@ class TcaRecordTitle implements FormDataProviderInterface
         if (!isset($value)) {
             return '';
         }
+        if (!isset($fieldConfig['eval'])) {
+            return $value;
+        }
         $title = $value;
+        $dateTimeFormats = QueryHelper::getDateTimeFormats();
         if (GeneralUtility::inList($fieldConfig['eval'], 'date')) {
+            // Handle native date field
             if (isset($fieldConfig['dbType']) && $fieldConfig['dbType'] === 'date') {
-                $value = $value === '0000-00-00' ? 0 : (int)strtotime($value);
+                $value = $value === $dateTimeFormats['date']['empty'] ? 0 : (int)strtotime($value);
             } else {
                 $value = (int)$value;
             }
@@ -324,24 +328,36 @@ class TcaRecordTitle implements FormDataProviderInterface
                     $ageDelta = $GLOBALS['EXEC_TIME'] - $value;
                     $calculatedAge = BackendUtility::calcAge(
                         abs($ageDelta),
-                        $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.minutesHoursDaysYears')
+                        $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.minutesHoursDaysYears')
                     );
                     $ageSuffix = ' (' . ($ageDelta > 0 ? '-' : '') . $calculatedAge . ')';
                 }
                 $title = BackendUtility::date($value) . $ageSuffix;
             }
         } elseif (GeneralUtility::inList($fieldConfig['eval'], 'time')) {
+            // Handle native time field
+            if (isset($fieldConfig['dbType']) && $fieldConfig['dbType'] === 'time') {
+                $value = $value === $dateTimeFormats['time']['empty'] ? 0 : (int)strtotime('1970-01-01 ' . $value);
+            } else {
+                $value = (int)$value;
+            }
             if (!empty($value)) {
                 $title = gmdate('H:i', (int)$value);
             }
         } elseif (GeneralUtility::inList($fieldConfig['eval'], 'timesec')) {
+            // Handle native time field
+            if (isset($fieldConfig['dbType']) && $fieldConfig['dbType'] === 'time') {
+                $value = $value === $dateTimeFormats['time']['empty'] ? 0 : (int)strtotime('1970-01-01 ' . $value);
+            } else {
+                $value = (int)$value;
+            }
             if (!empty($value)) {
                 $title = gmdate('H:i:s', (int)$value);
             }
         } elseif (GeneralUtility::inList($fieldConfig['eval'], 'datetime')) {
-            // Handle native date/time field
+            // Handle native datetime field
             if (isset($fieldConfig['dbType']) && $fieldConfig['dbType'] === 'datetime') {
-                $value = $value === '0000-00-00 00:00:00' ? 0 : (int)strtotime($value);
+                $value = $value === $dateTimeFormats['datetime']['empty'] ? 0 : (int)strtotime($value);
             } else {
                 $value = (int)$value;
             }

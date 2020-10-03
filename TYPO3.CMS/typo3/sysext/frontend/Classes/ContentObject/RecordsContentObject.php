@@ -18,6 +18,7 @@ use TYPO3\CMS\Core\Database\RelationHandler;
 use TYPO3\CMS\Core\TimeTracker\TimeTracker;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Frontend\Category\Collection\CategoryCollection;
+use TYPO3\CMS\Frontend\Page\PageRepository;
 
 /**
  * Contains RECORDS class object.
@@ -92,14 +93,10 @@ class RecordsContentObject extends AbstractContentObject
                     // Perform overlays if necessary (records coming from category collections are already overlaid)
                     if ($source) {
                         // Versioning preview
-                        $GLOBALS['TSFE']->sys_page->versionOL($val['table'], $row);
+                        $this->getPageRepository()->versionOL($val['table'], $row);
                         // Language overlay
-                        if (is_array($row) && $GLOBALS['TSFE']->sys_language_contentOL) {
-                            if ($val['table'] === 'pages') {
-                                $row = $GLOBALS['TSFE']->sys_page->getPageOverlay($row);
-                            } else {
-                                $row = $GLOBALS['TSFE']->sys_page->getRecordOverlay($val['table'], $row, $GLOBALS['TSFE']->sys_language_content, $GLOBALS['TSFE']->sys_language_contentOL);
-                            }
+                        if (is_array($row)) {
+                            $row = $this->getPageRepository()->getLanguageOverlay($val['table'], $row);
                         }
                     }
                     // Might be unset during the overlay process
@@ -153,7 +150,7 @@ class RecordsContentObject extends AbstractContentObject
         $loadDB->start($source, implode(',', $tables));
         foreach ($loadDB->tableArray as $table => $v) {
             if (isset($GLOBALS['TCA'][$table])) {
-                $loadDB->additionalWhere[$table] = $this->cObj->enableFields($table);
+                $loadDB->additionalWhere[$table] = $this->getPageRepository()->enableFields($table);
             }
         }
         $this->data = $loadDB->getFromDB();
@@ -229,5 +226,13 @@ class RecordsContentObject extends AbstractContentObject
     protected function getTimeTracker()
     {
         return GeneralUtility::makeInstance(TimeTracker::class);
+    }
+
+    /**
+     * @return PageRepository
+     */
+    protected function getPageRepository(): PageRepository
+    {
+        return $GLOBALS['TSFE']->sys_page ?: GeneralUtility::makeInstance(PageRepository::class);
     }
 }

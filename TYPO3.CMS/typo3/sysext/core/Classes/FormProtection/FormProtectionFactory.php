@@ -15,13 +15,13 @@ namespace TYPO3\CMS\Core\FormProtection;
  */
 
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Messaging\FlashMessage;
 use TYPO3\CMS\Core\Messaging\FlashMessageQueue;
 use TYPO3\CMS\Core\Messaging\FlashMessageService;
 use TYPO3\CMS\Core\Registry;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Frontend\Authentication\FrontendUserAuthentication;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * This class creates and manages instances of the various form protection
@@ -46,7 +46,7 @@ class FormProtectionFactory
     /**
      * created instances of form protections using the type as array key
      *
-     * @var array<AbstracFormtProtection>
+     * @var array<AbstractFormProtection>
      */
     protected static $instances = [];
 
@@ -165,7 +165,7 @@ class FormProtectionFactory
             /** @var FlashMessage $flashMessage */
             $flashMessage = GeneralUtility::makeInstance(
                 FlashMessage::class,
-                $languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:error.formProtection.tokenInvalid'),
+                $languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:error.formProtection.tokenInvalid'),
                 '',
                 FlashMessage::ERROR,
                 !$isAjaxCall
@@ -178,7 +178,7 @@ class FormProtectionFactory
      * Creates an instance for the requested class $className
      * and stores it internally.
      *
-     * @param array $className
+     * @param string $className
      * @param array<int, mixed> $constructorArguments
      * @throws \InvalidArgumentException
      * @return AbstractFormProtection
@@ -201,7 +201,7 @@ class FormProtectionFactory
      *
      * Note: This function is intended for testing purposes only.
      *
-     * @access private
+     * @internal
      * @param string $classNameOrType
      * @param AbstractFormProtection $instance
      */

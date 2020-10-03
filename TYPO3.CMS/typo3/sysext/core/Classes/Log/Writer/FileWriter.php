@@ -1,4 +1,5 @@
 <?php
+
 namespace TYPO3\CMS\Core\Log\Writer;
 
 /*
@@ -14,6 +15,7 @@ namespace TYPO3\CMS\Core\Log\Writer;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Log\Exception\InvalidLogWriterConfigurationException;
 use TYPO3\CMS\Core\Log\LogLevel;
 use TYPO3\CMS\Core\Log\LogRecord;
@@ -26,18 +28,23 @@ use TYPO3\CMS\Core\Utility\PathUtility;
 class FileWriter extends AbstractWriter
 {
     /**
-     * Log file path, relative to PATH_site
+     * Log file path, relative to TYPO3's base project folder
      *
      * @var string
      */
     protected $logFile = '';
 
     /**
+     * @var string
+     */
+    protected $logFileInfix = '';
+
+    /**
      * Default log file path
      *
      * @var string
      */
-    protected $defaultLogFileTemplate = 'typo3temp/var/logs/typo3_%s.log';
+    protected $defaultLogFileTemplate = '/log/typo3_%s.log';
 
     /**
      * Log file handle storage
@@ -51,10 +58,21 @@ class FileWriter extends AbstractWriter
     protected static $logFileHandles = [];
 
     /**
+     * Keep track of used file handles by different fileWriter instances
+     * As the logger gets instantiated by class name but the resources
+     * are shared via the static $logFileHandles we need to track usage
+     * of file handles to avoid closing handles that are still needed
+     * by different instances. Only if the count is zero may the file
+     * handle be closed.
+     *
+     * @var array
+     */
+    protected static $logFileHandlesCount = [];
+
+    /**
      * Constructor, opens the log file handle
      *
      * @param array $options
-     * @return FileWriter
      */
     public function __construct(array $options = [])
     {
@@ -70,13 +88,21 @@ class FileWriter extends AbstractWriter
      */
     public function __destruct()
     {
-        $this->closeLogFile();
+        self::$logFileHandlesCount[$this->logFile]--;
+        if (self::$logFileHandlesCount[$this->logFile] <= 0) {
+            $this->closeLogFile();
+        }
+    }
+
+    public function setLogFileInfix(string $infix)
+    {
+        $this->logFileInfix = $infix;
     }
 
     /**
      * Sets the path to the log file.
      *
-     * @param string $relativeLogFile path to the log file, relative to PATH_site
+     * @param string $relativeLogFile path to the log file, relative to public web dir
      * @return WriterInterface
      * @throws InvalidLogWriterConfigurationException
      */
@@ -86,8 +112,11 @@ class FileWriter extends AbstractWriter
         // Skip handling if logFile is a stream resource. This is used by unit tests with vfs:// directories
         if (false === strpos($logFile, '://') && !PathUtility::isAbsolutePath($logFile)) {
             $logFile = GeneralUtility::getFileAbsFileName($logFile);
-            if ($logFile === null) {
-                throw new InvalidLogWriterConfigurationException('Log file path "' . $relativeLogFile . '" is not valid!', 1444374805);
+            if (empty($logFile)) {
+                throw new InvalidLogWriterConfigurationException(
+                    'Log file path "' . $relativeLogFile . '" is not valid!',
+                    1444374805
+                );
             }
         }
         $this->logFile = $logFile;
@@ -125,7 +154,7 @@ class FileWriter extends AbstractWriter
             if (isset($recordData['exception']) && $recordData['exception'] instanceof \Exception) {
                 $recordData['exception'] = (string)$recordData['exception'];
             }
-            $data = '- ' . json_encode($recordData);
+            $data = '- ' . json_encode($recordData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
 
         $message = sprintf(
@@ -152,7 +181,12 @@ class FileWriter extends AbstractWriter
      */
     protected function openLogFile()
     {
-        if (is_resource(self::$logFileHandles[$this->logFile])) {
+        if (isset(self::$logFileHandlesCount[$this->logFile])) {
+            self::$logFileHandlesCount[$this->logFile]++;
+        } else {
+            self::$logFileHandlesCount[$this->logFile] = 1;
+        }
+        if (isset(self::$logFileHandles[$this->logFile]) && is_resource(self::$logFileHandles[$this->logFile] ?? false)) {
             return;
         }
 
@@ -168,7 +202,7 @@ class FileWriter extends AbstractWriter
      */
     protected function closeLogFile()
     {
-        if (is_resource(self::$logFileHandles[$this->logFile])) {
+        if (!empty(self::$logFileHandles[$this->logFile]) && is_resource(self::$logFileHandles[$this->logFile])) {
             fclose(self::$logFileHandles[$this->logFile]);
             unset(self::$logFileHandles[$this->logFile]);
         }
@@ -183,13 +217,19 @@ class FileWriter extends AbstractWriter
         if (file_exists($this->logFile)) {
             return;
         }
-        $logFileDirectory = dirname($this->logFile);
-        if (!@is_dir($logFileDirectory)) {
-            GeneralUtility::mkdir_deep($logFileDirectory);
-            // create .htaccess file if log file is within the site path
-            if (PathUtility::getCommonPrefix([PATH_site, $logFileDirectory]) === PATH_site) {
-                // only create .htaccess, if we created the directory on our own
-                $this->createHtaccessFile($logFileDirectory . '/.htaccess');
+
+        // skip mkdir if logFile refers to any scheme but vfs://, file:// or empty
+        $scheme = parse_url($this->logFile, PHP_URL_SCHEME);
+        if ($scheme === null || $scheme === 'file' || $scheme === 'vfs' || GeneralUtility::isAbsPath($this->logFile)) {
+            // remove file:/ before creating the directory
+            $logFileDirectory = PathUtility::dirname(preg_replace('#^file:/#', '', $this->logFile));
+            if (!@is_dir($logFileDirectory)) {
+                GeneralUtility::mkdir_deep($logFileDirectory);
+                // create .htaccess file if log file is within the site path
+                if (PathUtility::getCommonPrefix([Environment::getPublicPath() . '/', $logFileDirectory]) === (Environment::getPublicPath() . '/')) {
+                    // only create .htaccess, if we created the directory on our own
+                    $this->createHtaccessFile($logFileDirectory . '/.htaccess');
+                }
             }
         }
         // create the log file
@@ -224,7 +264,6 @@ class FileWriter extends AbstractWriter
 
     /**
      * Returns the path to the default log file.
-     *
      * Uses the defaultLogFileTemplate and replaces the %s placeholder with a short MD5 hash
      * based on a static string and the current encryption key.
      *
@@ -232,6 +271,10 @@ class FileWriter extends AbstractWriter
      */
     protected function getDefaultLogFileName()
     {
-        return sprintf($this->defaultLogFileTemplate, substr(GeneralUtility::hmac($this->defaultLogFileTemplate, 'defaultLogFile'), 0, 10));
+        $namePart = substr(GeneralUtility::hmac($this->defaultLogFileTemplate, 'defaultLogFile'), 0, 10);
+        if ($this->logFileInfix !== '') {
+            $namePart = $this->logFileInfix . '_' . $namePart;
+        }
+        return Environment::getVarPath() . sprintf($this->defaultLogFileTemplate, $namePart);
     }
 }

@@ -26,6 +26,7 @@ abstract class AbstractHierarchicalFilesystemDriver extends AbstractDriver
 {
     /**
      * @var CharsetConverter
+     * @deprecated instantiate CharsetConverter yourself in your driver implementation.
      */
     protected $charsetConversion;
 
@@ -33,9 +34,11 @@ abstract class AbstractHierarchicalFilesystemDriver extends AbstractDriver
      * Gets the charset conversion object.
      *
      * @return CharsetConverter
+     * @deprecated since TYPO3 v9.3, will be removed in TYPO3 v10.0.ß. Instantiate the CharsetConverter object yourself in your driver class.
      */
     protected function getCharsetConversion()
     {
+        trigger_error('Shorthand method "getCharsetConversion()" within the FAL driver method will be removed in TYPO3 v10.0, instantiate CharsetConverter yourself.', E_USER_DEPRECATED);
         if (!isset($this->charsetConversion)) {
             $this->charsetConversion = GeneralUtility::makeInstance(CharsetConverter::class);
         }
@@ -67,7 +70,7 @@ abstract class AbstractHierarchicalFilesystemDriver extends AbstractDriver
 
         // filePath must be valid
         // Special case is required by vfsStream in Unit Test context
-        if (!$this->isPathValid($filePath) && substr($filePath, 0, 6) !== 'vfs://') {
+        if (!$this->isPathValid($filePath) && strpos($filePath, 'vfs://') !== 0) {
             throw new InvalidPathException('File ' . $filePath . ' is not valid (".." and "//" is not allowed in path).', 1320286857);
         }
         return $filePath;
@@ -117,6 +120,6 @@ abstract class AbstractHierarchicalFilesystemDriver extends AbstractDriver
     public function getParentFolderIdentifierOfIdentifier($fileIdentifier)
     {
         $fileIdentifier = $this->canonicalizeAndCheckFileIdentifier($fileIdentifier);
-        return PathUtility::dirname($fileIdentifier) . '/';
+        return rtrim(GeneralUtility::fixWindowsFilePath(PathUtility::dirname($fileIdentifier)), '/') . '/';
     }
 }

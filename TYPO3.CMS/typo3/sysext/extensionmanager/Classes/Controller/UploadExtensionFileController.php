@@ -14,8 +14,10 @@ namespace TYPO3\CMS\Extensionmanager\Controller;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Core\Core\Bootstrap;
+use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Messaging\FlashMessage;
+use TYPO3\CMS\Core\Security\BlockSerializationTrait;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extensionmanager\Exception\DependencyConfigurationNotFoundException;
 use TYPO3\CMS\Extensionmanager\Exception\ExtensionManagerException;
@@ -23,13 +25,11 @@ use TYPO3\CMS\Extensionmanager\Exception\ExtensionManagerException;
 /**
  * Controller for handling upload of a local extension file
  * Handles .t3x or .zip files
+ * @internal This class is a specific controller implementation and is not considered part of the Public TYPO3 API.
  */
 class UploadExtensionFileController extends AbstractController
 {
-    /**
-     * @var \TYPO3\CMS\Extensionmanager\Utility\ConfigurationUtility
-     */
-    protected $configurationUtility;
+    use BlockSerializationTrait;
 
     /**
      * @var \TYPO3\CMS\Extensionmanager\Domain\Repository\ExtensionRepository
@@ -60,14 +60,6 @@ class UploadExtensionFileController extends AbstractController
      * @var bool
      */
     protected $removeFromOriginalPath = false;
-
-    /**
-     * @param \TYPO3\CMS\Extensionmanager\Utility\ConfigurationUtility $configurationUtility
-     */
-    public function injectConfigurationUtility(\TYPO3\CMS\Extensionmanager\Utility\ConfigurationUtility $configurationUtility)
-    {
-        $this->configurationUtility = $configurationUtility;
-    }
 
     /**
      * @param \TYPO3\CMS\Extensionmanager\Domain\Repository\ExtensionRepository $extensionRepository
@@ -114,7 +106,7 @@ class UploadExtensionFileController extends AbstractController
      */
     public function formAction()
     {
-        if (Bootstrap::usesComposerClassLoading()) {
+        if (Environment::isComposerMode()) {
             throw new ExtensionManagerException(
                 'Composer mode is active. You are not allowed to upload any extension file.',
                 1444725828
@@ -130,7 +122,7 @@ class UploadExtensionFileController extends AbstractController
      */
     public function extractAction($overwrite = false)
     {
-        if (Bootstrap::usesComposerClassLoading()) {
+        if (Environment::isComposerMode()) {
             throw new ExtensionManagerException(
                 'Composer mode is active. You are not allowed to upload any extension file.',
                 1444725853
@@ -150,8 +142,8 @@ class UploadExtensionFileController extends AbstractController
                 );
             }
             $extensionData = $this->extractExtensionFromFile($tempFile, $fileName, $overwrite);
-            $emConfiguration = $this->configurationUtility->getCurrentConfiguration('extensionmanager');
-            if (!$emConfiguration['automaticInstallation']['value']) {
+            $isAutomaticInstallationEnabled = (bool)GeneralUtility::makeInstance(ExtensionConfiguration::class)->get('extensionmanager', 'automaticInstallation');
+            if (!$isAutomaticInstallationEnabled) {
                 $this->addFlashMessage(
                     $this->translate('extensionList.uploadFlashMessage.message', [$extensionData['extKey']]),
                     $this->translate('extensionList.uploadFlashMessage.title'),
@@ -321,7 +313,7 @@ class UploadExtensionFileController extends AbstractController
      */
     protected function copyExtensionFolderToTempFolder($extensionKey)
     {
-        $this->extensionBackupPath = PATH_site . 'typo3temp/var/transient/' . $extensionKey . substr(sha1($extensionKey . microtime()), 0, 7) . '/';
+        $this->extensionBackupPath = Environment::getVarPath() . '/transient/' . $extensionKey . substr(sha1($extensionKey . microtime()), 0, 7) . '/';
         GeneralUtility::mkdir($this->extensionBackupPath);
         GeneralUtility::copyDirectory(
             $this->fileHandlingUtility->getExtensionDir($extensionKey),

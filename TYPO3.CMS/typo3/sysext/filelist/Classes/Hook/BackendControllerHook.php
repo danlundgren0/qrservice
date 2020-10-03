@@ -15,12 +15,12 @@ namespace TYPO3\CMS\Filelist\Hook;
  */
 
 use TYPO3\CMS\Backend\Controller\BackendController;
-use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Page\PageRenderer;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * This class adds Filelist related JavaScript to the backend
+ * @internal this is a concrete TYPO3 hook implementation and solely used for EXT:filelist and not part of TYPO3's Core API.
  */
 class BackendControllerHook
 {
@@ -33,10 +33,12 @@ class BackendControllerHook
     public function addJavaScript(array $configuration, BackendController $backendController)
     {
         $pageRenderer = GeneralUtility::makeInstance(PageRenderer::class);
-        $pageRenderer->addInlineSetting('FileRename', 'moduleUrl', BackendUtility::getModuleUrl('file_rename'));
-        $pageRenderer->addInlineSetting('FileEdit', 'moduleUrl', BackendUtility::getModuleUrl('file_edit'));
-        $pageRenderer->addInlineSetting('FileUpload', 'moduleUrl', BackendUtility::getModuleUrl('file_upload'));
-        $pageRenderer->addInlineSetting('FileCreate', 'moduleUrl', BackendUtility::getModuleUrl('file_newfolder'));
-        $pageRenderer->addInlineSetting('FileCommit', 'moduleUrl', BackendUtility::getModuleUrl('tce_file'));
+        /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
+        $pageRenderer->addInlineSetting('FileRename', 'moduleUrl', (string)$uriBuilder->buildUriFromRoute('file_rename'));
+        $pageRenderer->addInlineSetting('FileEdit', 'moduleUrl', (string)$uriBuilder->buildUriFromRoute('file_edit'));
+        $pageRenderer->addInlineSetting('FileUpload', 'moduleUrl', (string)$uriBuilder->buildUriFromRoute('file_upload'));
+        $pageRenderer->addInlineSetting('FileCreate', 'moduleUrl', (string)$uriBuilder->buildUriFromRoute('file_newfolder'));
+        $pageRenderer->addInlineSetting('FileCommit', 'moduleUrl', (string)$uriBuilder->buildUriFromRoute('tce_file'));
     }
 }

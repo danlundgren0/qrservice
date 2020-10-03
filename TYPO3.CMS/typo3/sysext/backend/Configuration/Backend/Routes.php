@@ -1,4 +1,5 @@
 <?php
+
 use TYPO3\CMS\Backend\Controller;
 
 /**
@@ -22,6 +23,7 @@ return [
     // Main backend rendering setup (previously called backend.php) for the TYPO3 Backend
     'main' => [
         'path' => '/main',
+        'referrer' => 'required,refresh-always',
         'target' => Controller\BackendController::class . '::mainAction'
     ],
 
@@ -34,17 +36,11 @@ return [
     // Register login frameset
     'login_frameset' => [
         'path' => '/login/frame',
-        'target' => Controller\LoginFramesetController::class . '::mainAction'
+        'access' => 'public',
+        'target' => Controller\LoginController::class . '::refreshAction'
     ],
 
     /** Wizards */
-    // Register colorpicker wizard
-    // @deprecated since TYPO3 v8, will be removed in TYPO3 v9.
-    'wizard_colorpicker' => [
-        'path' => '/wizard/colorpicker',
-        'target' => Controller\Wizard\ColorpickerController::class . '::mainAction'
-    ],
-
     // Register table wizard
     'wizard_table' => [
         'path' => '/wizard/table',
@@ -132,10 +128,28 @@ return [
         'target' => Controller\NewRecordController::class . '::mainAction'
     ],
 
-    // Register new content element module
+    // Register sort pages
+    'pages_sort' => [
+        'path' => '/pages/sort',
+        'target' => Controller\Page\SortSubPagesController::class . '::mainAction'
+    ],
+
+    // Register create multiple pages
+    'pages_new' => [
+        'path' => '/pages/new',
+        'target' => Controller\Page\NewMultiplePagesController::class . '::mainAction'
+    ],
+
+    // Register new content element module (as whole document)
     'new_content_element' => [
         'path' => '/record/content/new',
         'target' => Controller\ContentElement\NewContentElementController::class . '::mainAction'
+    ],
+
+    // Register new content element module (in modal)
+    'new_content_element_wizard' => [
+        'path' => '/record/content/wizard/new',
+        'target' => Controller\ContentElement\NewContentElementController::class . '::wizardAction'
     ],
 
     // Register move element module
@@ -151,6 +165,7 @@ return [
     ],
 
     // Register browser
+    // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
     'browser' => [
         'path' => '/record/browse',
         'target' => \TYPO3\CMS\Recordlist\Controller\ElementBrowserFramesetController::class . '::mainAction'
@@ -176,7 +191,7 @@ return [
 
     /**
      * Gateway for TCE (TYPO3 Core Engine) file-handling through POST forms.
-     * This script serves as the fileadministration part of the TYPO3 Core Engine.
+     * This script serves as the file administration part of the TYPO3 Core Engine.
      * Basically it includes two libraries which are used to manipulate files on the server.
      *
      * For syntax and API information, see the document 'TYPO3 Core APIs'
@@ -194,5 +209,11 @@ return [
     'record_edit' => [
         'path' => '/record/edit',
         'target' => Controller\EditDocumentController::class . '::mainAction'
+    ],
+
+    // Thumbnails
+    'thumbnails' => [
+        'path' => '/thumbnails',
+        'target' => Controller\File\ThumbnailController::class . '::render'
     ]
 ];

@@ -1,4 +1,5 @@
 <?php
+declare(strict_types = 1);
 namespace TYPO3\CMS\Rsaauth;
 
 /*
@@ -15,10 +16,10 @@ namespace TYPO3\CMS\Rsaauth;
  */
 
 use Psr\Http\Message\ResponseInterface;
-use Psr\Http\Message\ServerRequestInterface;
+use TYPO3\CMS\Core\Http\HtmlResponse;
+use TYPO3\CMS\Core\Http\Response;
 use TYPO3\CMS\Core\Page\PageRenderer;
 use TYPO3\CMS\Core\SingletonInterface;
-use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -34,7 +35,15 @@ class RsaEncryptionEncoder implements SingletonInterface
     /**
      * @var PageRenderer
      */
-    protected $pageRenderer = null;
+    protected $pageRenderer;
+
+    /**
+     * This method is called by the hook constructPostProcess
+     */
+    public function enableEncryptionFromBackendControllerPostConstructor()
+    {
+        $this->enableRsaEncryption(true);
+    }
 
     /**
      * Load all necessary Javascript files
@@ -55,7 +64,6 @@ class RsaEncryptionEncoder implements SingletonInterface
             // Register ajax handler url
             $code = 'var TYPO3RsaEncryptionPublicKeyUrl = ' . GeneralUtility::quoteJSvalue(GeneralUtility::getIndpEnv('TYPO3_SITE_PATH') . 'index.php?eID=RsaPublicKeyGenerationController') . ';';
             $pageRenderer->addJsInlineCode('TYPO3RsaEncryptionPublicKeyUrl', $code);
-            $javascriptPath = ExtensionManagementUtility::siteRelPath('rsaauth') . 'Resources/Public/JavaScript/';
             if (!$GLOBALS['TYPO3_CONF_VARS'][TYPO3_MODE]['debug']) {
                 $files = ['RsaEncryptionWithLib.min.js'];
             } else {
@@ -65,7 +73,7 @@ class RsaEncryptionEncoder implements SingletonInterface
                 ];
             }
             foreach ($files as $file) {
-                $pageRenderer->addJsFile($javascriptPath . $file);
+                $pageRenderer->addJsFile('EXT:rsaauth/Resources/Public/JavaScript/' . $file);
             }
         }
     }
@@ -81,12 +89,13 @@ class RsaEncryptionEncoder implements SingletonInterface
     /**
      * Gets RSA Public Key.
      *
-     * @return Keypair|NULL
+     * @return Keypair|null
      */
-    public function getRsaPublicKey()
+    public function getRsaPublicKey(): ?Keypair
     {
         $keyPair = null;
         $backend = Backend\BackendFactory::getBackend();
+
         if ($backend !== null) {
             $keyPair = $backend->createNewKeyPair();
             $storage = Storage\StorageFactory::getStorage();
@@ -100,24 +109,27 @@ class RsaEncryptionEncoder implements SingletonInterface
     /**
      * Ajax handler to return a RSA public key.
      *
-     * @param ServerRequestInterface $request
-     * @param ResponseInterface $response
      * @return ResponseInterface
+     *
+     * @deprecated since TYPO3 v9. Will be removed in TYPO3 v10.0.
      */
-    public function getRsaPublicKeyAjaxHandler(ServerRequestInterface $request, ResponseInterface $response)
+    public function getRsaPublicKeyAjaxHandler(): ResponseInterface
     {
+        trigger_error('Method getRsaPublicKeyAjaxHandler() will be removed in TYPO3 v10.0.', E_USER_DEPRECATED);
+
         $keyPair = $this->getRsaPublicKey();
         if ($keyPair !== null) {
-            $response->getBody()->write(implode('', [
-                'publicKeyModulus' => $keyPair->getPublicKeyModulus(),
-                'spacer' => ':',
-                'exponent' => sprintf('%x', $keyPair->getExponent())
-            ]));
-            $response = $response->withHeader('Content-Type', 'text/html; charset=utf-8');
-        } else {
-            $response->getBody()->write('No OpenSSL backend could be obtained for rsaauth.');
-            $response = $response->withStatus(500);
+            return new HtmlResponse(
+                implode('', [
+                    'publicKeyModulus' => $keyPair->getPublicKeyModulus(),
+                    'spacer' => ':',
+                    'exponent' => sprintf('%x', $keyPair->getExponent())
+                ])
+            );
         }
+
+        $response = new Response('php://temp', 500, ['Content-Type' => 'application/json; charset=utf-8']);
+        $response->getBody()->write('No OpenSSL backend could be obtained for rsaauth.');
         return $response;
     }
 }

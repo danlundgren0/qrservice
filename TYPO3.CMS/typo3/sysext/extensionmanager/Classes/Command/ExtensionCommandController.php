@@ -14,12 +14,14 @@ namespace TYPO3\CMS\Extensionmanager\Command;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Core\Core\Bootstrap;
 use TYPO3\CMS\Core\Core\ClassLoadingInformation;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Extbase\Mvc\Controller\CommandController;
 
 /**
  * CommandController for working with extension management through CLI/scheduler
+ *
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Use Symfony Command alternatives instead.
  */
 class ExtensionCommandController extends CommandController
 {
@@ -49,12 +51,14 @@ class ExtensionCommandController extends CommandController
      *
      * @param string $extensionKey
      * @cli
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Use the equivalent Symfony Command instead.
      */
     public function installCommand($extensionKey)
     {
+        trigger_error('Calling ExtensionCommandController->installCommand() will be removed in TYPO3 v10.0. Use the Symfony command "extension:activate" instead, to be called via the "typo3" CLI entrypoint.', E_USER_DEPRECATED);
         $this->emitPackagesMayHaveChangedSignal();
 
-        /** @var $service \TYPO3\CMS\Extensionmanager\Utility\InstallUtility */
+        /** @var \TYPO3\CMS\Extensionmanager\Utility\InstallUtility $service */
         $service = $this->objectManager->get(\TYPO3\CMS\Extensionmanager\Utility\InstallUtility::class);
         $service->install($extensionKey);
     }
@@ -67,10 +71,12 @@ class ExtensionCommandController extends CommandController
      *
      * @param string $extensionKey
      * @cli
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Use the equivalent Symfony Command instead.
      */
     public function uninstallCommand($extensionKey)
     {
-        /** @var $service \TYPO3\CMS\Extensionmanager\Utility\InstallUtility */
+        trigger_error('Calling ExtensionCommandController->uninstallCommand() will be removed in TYPO3 v10.0. Use the Symfony command "extension:deactivate" instead, to be called via the "typo3" CLI entrypoint.', E_USER_DEPRECATED);
+        /** @var \TYPO3\CMS\Extensionmanager\Utility\InstallUtility $service */
         $service = $this->objectManager->get(\TYPO3\CMS\Extensionmanager\Utility\InstallUtility::class);
         $service->uninstall($extensionKey);
     }
@@ -82,10 +88,12 @@ class ExtensionCommandController extends CommandController
      * creating or updating this info properly during extension (de-)activation.
      *
      * @cli
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Use the equivalent Symfony Command instead.
      */
     public function dumpClassLoadingInformationCommand()
     {
-        if (Bootstrap::usesComposerClassLoading()) {
+        trigger_error('Calling ExtensionCommandController->dumpClassLoadingInformationCommand() will be removed in TYPO3 v10.0. Use the Symfony command "dumpautoload" instead, to be called via the "typo3" CLI entrypoint.', E_USER_DEPRECATED);
+        if (Environment::isComposerMode()) {
             $this->output->outputLine('<error>Class loading information is managed by composer. Use "composer dump-autoload" command to update the information.</error>');
             $this->quit(1);
         } else {

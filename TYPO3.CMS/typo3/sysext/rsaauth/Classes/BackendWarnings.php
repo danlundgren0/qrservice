@@ -13,6 +13,9 @@ namespace TYPO3\CMS\Rsaauth;
  *
  * The TYPO3 project - inspiring people to share!
  */
+use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
+use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * This class contains a hook to the backend warnings collection. It checks
@@ -33,12 +36,11 @@ class BackendWarnings
             $lang = $this->getLanguageService();
             $warnings['rsaauth_cmdline'] = $lang->sL('LLL:EXT:rsaauth/Resources/Private/Language/locallang.xlf:hook_using_cmdline');
             // Check the path
-            $extconf = unserialize($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['rsaauth'], ['allowed_classes' => false]);
-            $path = trim($extconf['temporaryDirectory']);
+            $path = trim(GeneralUtility::makeInstance(ExtensionConfiguration::class)->get('rsaauth', 'temporaryDirectory'));
             if ($path == '') {
                 // Path is empty
                 $warnings['rsaauth'] = $lang->sL('LLL:EXT:rsaauth/Resources/Private/Language/locallang.xlf:hook_empty_directory');
-            } elseif (!\TYPO3\CMS\Core\Utility\GeneralUtility::isAbsPath($path)) {
+            } elseif (!GeneralUtility::isAbsPath($path)) {
                 // Path is not absolute
                 $warnings['rsaauth'] = $lang->sL('LLL:EXT:rsaauth/Resources/Private/Language/locallang.xlf:hook_directory_not_absolute');
             } elseif (!@is_dir($path)) {
@@ -47,7 +49,7 @@ class BackendWarnings
             } elseif (!@is_writable($path)) {
                 // Directory is not writable
                 $warnings['rsaauth'] = $lang->sL('LLL:EXT:rsaauth/Resources/Private/Language/locallang.xlf:hook_directory_not_writable');
-            } elseif (substr($path, 0, strlen(PATH_site)) == PATH_site) {
+            } elseif (strpos($path, Environment::getPublicPath()) === 0) {
                 // Directory is inside the site root
                 $warnings['rsaauth'] = $lang->sL('LLL:EXT:rsaauth/Resources/Private/Language/locallang.xlf:hook_directory_inside_siteroot');
             }
@@ -57,7 +59,7 @@ class BackendWarnings
     /**
      * Returns LanguageService
      *
-     * @return \TYPO3\CMS\Lang\LanguageService
+     * @return \TYPO3\CMS\Core\Localization\LanguageService
      */
     protected function getLanguageService()
     {

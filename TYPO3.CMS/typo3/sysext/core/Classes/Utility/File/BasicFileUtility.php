@@ -53,23 +53,17 @@ class BasicFileUtility
      * Allowed and denied file extensions
      * @var array
      */
-    protected $fileExtensionPermissions = [];
+    protected $fileExtensionPermissions = [
+        'allow' => '*',
+        'deny' => PHP_EXTENSIONS_DEFAULT
+
+    ];
 
     /**********************************
      *
      * Checking functions
      *
      **********************************/
-
-    /**
-     * Constructor,
-     * Initializes the internal array $this->fileExtensionPermissions based on TYPO3_CONF_VARS
-     */
-    public function __construct()
-    {
-        $this->fileExtensionPermissions['allow'] = GeneralUtility::uniqueList(strtolower($GLOBALS['TYPO3_CONF_VARS']['BE']['fileExtensions']['webspace']['allow']));
-        $this->fileExtensionPermissions['deny'] = GeneralUtility::uniqueList(strtolower($GLOBALS['TYPO3_CONF_VARS']['BE']['fileExtensions']['webspace']['deny']));
-    }
 
     /**
      * Sets the file permissions, used in DataHandler e.g.
@@ -181,7 +175,7 @@ class BasicFileUtility
             $theTempFileBody = preg_replace('/_[0-9][0-9]$/', '', $origFileInfo['filebody']);
             // This removes _xx if appended to the file
             $theOrigExt = $origFileInfo['realFileext'] ? '.' . $origFileInfo['realFileext'] : '';
-            for ($a = 1; $a < $this->maxNumber; $a++) {
+            for ($a = 1; $a <= $this->maxNumber + 1; $a++) {
                 if ($a <= $this->maxNumber) {
                     // First we try to append numbers
                     $insert = '_' . sprintf('%02d', $a);
@@ -222,7 +216,7 @@ class BasicFileUtility
             // allow ".", "-", 0-9, a-z, A-Z and everything beyond U+C0 (latin capital letter a with grave)
             $cleanFileName = preg_replace('/[' . self::UNSAFE_FILENAME_CHARACTER_EXPRESSION . ']/u', '_', trim($fileName));
         } else {
-            $fileName = GeneralUtility::makeInstance(CharsetConverter::class)->specCharsToASCII('utf-8', $fileName);
+            $fileName = GeneralUtility::makeInstance(CharsetConverter::class)->utf8_char_mapping($fileName);
             // Replace unwanted characters by underscores
             $cleanFileName = preg_replace('/[' . self::UNSAFE_FILENAME_CHARACTER_EXPRESSION . '\\xC0-\\xFF]/', '_', trim($fileName));
         }

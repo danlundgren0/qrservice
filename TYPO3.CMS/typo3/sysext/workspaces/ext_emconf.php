@@ -1,20 +1,19 @@
 <?php
 $EM_CONF[$_EXTKEY] = [
     'title' => 'Workspaces Management',
-    'description' => 'Adds workspaces functionality with custom stages to TYPO3.',
+    'description' => 'Adds versioning of records and workspaces functionality with custom stages to TYPO3.',
     'category' => 'be',
-    'author' => 'Workspaces Team',
-    'author_email' => '',
+    'author' => 'TYPO3 Core Team',
+    'author_email' => 'typo3cms@typo3.org',
     'author_company' => '',
     'state' => 'stable',
     'uploadfolder' => 0,
     'createDirs' => '',
     'clearCacheOnLoad' => 1,
-    'version' => '8.7.3',
+    'version' => '9.5.21',
     'constraints' => [
         'depends' => [
-            'typo3' => '8.7.0-8.7.3',
-            'version' => '8.7.3',
+            'typo3' => '9.5.21'
         ],
         'conflicts' => [],
         'suggests' => [],

@@ -15,12 +15,16 @@ namespace TYPO3\CMS\Core\Database;
  */
 
 use Doctrine\DBAL\DBALException;
+use Psr\Log\LoggerAwareInterface;
+use Psr\Log\LoggerAwareTrait;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Cache\CacheManager;
 use TYPO3\CMS\Core\Configuration\FlexForm\FlexFormTools;
+use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Database\Platform\PlatformInformation;
 use TYPO3\CMS\Core\DataHandling\DataHandler;
 use TYPO3\CMS\Core\Messaging\FlashMessage;
-use TYPO3\CMS\Core\Messaging\FlashMessageService;
+use TYPO3\CMS\Core\Messaging\FlashMessageRendererResolver;
 use TYPO3\CMS\Core\Registry;
 use TYPO3\CMS\Core\Resource\File;
 use TYPO3\CMS\Core\Resource\Folder;
@@ -33,7 +37,7 @@ use TYPO3\CMS\Extbase\SignalSlot\Dispatcher;
  * Reference index processing and relation extraction
  *
  * NOTICE: When the reference index is updated for an offline version the results may not be correct.
- * First, lets assumed that the reference update happens in LIVE workspace (ALWAYS update from Live workspace if you analyse whole database!)
+ * First, lets assumed that the reference update happens in LIVE workspace (ALWAYS update from Live workspace if you analyze whole database!)
  * Secondly, lets assume that in a Draft workspace you have changed the data structure of a parent page record - this is (in TemplaVoila) inherited by subpages.
  * When in the LIVE workspace the data structure for the records/pages in the offline workspace will not be evaluated to the right one simply because the data
  * structure is taken from a rootline traversal and in the Live workspace that will NOT include the changed DataStructure! Thus the evaluation will be based
@@ -42,8 +46,10 @@ use TYPO3\CMS\Extbase\SignalSlot\Dispatcher;
  * maintaining the index for workspace records. Or we can say that the index is precise for all Live elements while glitches might happen in an offline workspace?
  * Anyway, I just wanted to document this finding - I don't think we can find a solution for it. And its very TemplaVoila specific.
  */
-class ReferenceIndex
+class ReferenceIndex implements LoggerAwareInterface
 {
+    use LoggerAwareTrait;
+
     /**
      * Definition of tables to exclude from the ReferenceIndex
      *
@@ -142,9 +148,15 @@ class ReferenceIndex
     /**
      * Runtime Cache to store and retrieve data computed for a single request
      *
-     * @var \TYPO3\CMS\Core\Cache\Frontend\VariableFrontend
+     * @var \TYPO3\CMS\Core\Cache\Frontend\FrontendInterface
      */
-    protected $runtimeCache = null;
+    protected $runtimeCache;
+
+    /**
+     * Enables $runtimeCache and $recordCache
+     * @var bool
+     */
+    protected $useRuntimeCache = false;
 
     /**
      * Constructor
@@ -212,7 +224,7 @@ class ReferenceIndex
 
         // Fetch tableRelationFields and save them in cache if not there yet
         $cacheId = static::$cachePrefixTableRelationFields . $tableName;
-        if (!$this->runtimeCache->has($cacheId)) {
+        if (!$this->useRuntimeCache || !$this->runtimeCache->has($cacheId)) {
             $tableRelationFields = $this->fetchTableRelationFields($tableName);
             $this->runtimeCache->set($cacheId, $tableRelationFields);
         } else {
@@ -280,16 +292,22 @@ class ReferenceIndex
                 $result['deletedNodes'] = count($hashList);
                 $result['deletedNodes_hashList'] = implode(',', $hashList);
                 if (!$testOnly) {
-                    $queryBuilder = $connection->createQueryBuilder();
-                    $queryBuilder
-                        ->delete('sys_refindex')
-                        ->where(
-                            $queryBuilder->expr()->in(
-                                'hash',
-                                $queryBuilder->createNamedParameter($hashList, Connection::PARAM_STR_ARRAY)
+                    $maxBindParameters = PlatformInformation::getMaxBindParameters($connection->getDatabasePlatform());
+                    foreach (array_chunk($hashList, $maxBindParameters - 10, true) as $chunk) {
+                        if (empty($chunk)) {
+                            continue;
+                        }
+                        $queryBuilder = $connection->createQueryBuilder();
+                        $queryBuilder
+                            ->delete('sys_refindex')
+                            ->where(
+                                $queryBuilder->expr()->in(
+                                    'hash',
+                                    $queryBuilder->createNamedParameter($chunk, Connection::PARAM_STR_ARRAY)
+                                )
                             )
-                        )
-                        ->execute();
+                            ->execute();
+                    }
                 }
             }
         }
@@ -328,13 +346,41 @@ class ReferenceIndex
     }
 
     /**
+     * Returns the amount of references for the given record
+     *
+     * @param string $tableName
+     * @param int $uid
+     * @return int
+     */
+    public function getNumberOfReferencedRecords(string $tableName, int $uid): int
+    {
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_refindex');
+        return (int)$queryBuilder
+            ->count('*')->from('sys_refindex')
+            ->where(
+                $queryBuilder->expr()->eq(
+                    'ref_table',
+                    $queryBuilder->createNamedParameter($tableName, \PDO::PARAM_STR)
+                ),
+                $queryBuilder->expr()->eq(
+                    'ref_uid',
+                    $queryBuilder->createNamedParameter($uid, \PDO::PARAM_INT)
+                ),
+                $queryBuilder->expr()->eq(
+                    'deleted',
+                    $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT)
+                )
+            )->execute()->fetchColumn(0);
+    }
+
+    /**
      * Calculate the relations for a record of a given table
      *
      * @param string $tableName Table being processed
      * @param array $record Record from $tableName
      * @return array
      */
-    protected function generateDataUsingRecord(string $tableName, array $record) : array
+    protected function generateDataUsingRecord(string $tableName, array $record): array
     {
         $this->relations = [];
         $deleteField = $GLOBALS['TCA'][$tableName]['ctrl']['delete'];
@@ -397,9 +443,9 @@ class ReferenceIndex
      * @param string $field Fieldname of source record (where reference is located)
      * @param string $flexPointer Pointer to location inside FlexForm structure where reference is located in [field]
      * @param int $deleted Whether record is deleted-flagged or not
-     * @param string $ref_table For database references; the tablename the reference points to. Special keyword "_FILE" indicates that "ref_string" is a file reference either absolute or relative to PATH_site. Special keyword "_STRING" indicates some special usage (typ. softreference) where "ref_string" is used for the value.
+     * @param string $ref_table For database references; the tablename the reference points to. Special keyword "_FILE" indicates that "ref_string" is a file reference either absolute or relative to Environment::getPublicPath(). Special keyword "_STRING" indicates some special usage (typ. softreference) where "ref_string" is used for the value.
      * @param int $ref_uid For database references; The UID of the record (zero "ref_table" is "_FILE" or "_STRING")
-     * @param string $ref_string For "_FILE" or "_STRING" references: The filepath (relative to PATH_site or absolute) or other string.
+     * @param string $ref_string For "_FILE" or "_STRING" references: The filepath (relative to Environment::getPublicPath() or absolute) or other string.
      * @param int $sort The sorting order of references if many (the "group" or "select" TCA types). -1 if no sorting order is specified.
      * @param string $softref_key If the reference is a soft reference, this is the soft reference parser key. Otherwise empty.
      * @param string $softref_id Soft reference ID for key. Might be useful for replace operations.
@@ -436,7 +482,7 @@ class ReferenceIndex
      * @param int $deleted Whether record is deleted-flagged or not
      * @param string $referencedTable In database references the tablename the reference points to. Keyword "_FILE" indicates that $referenceString is a file reference, keyword "_STRING" indicates special usage (typ. SoftReference) in $referenceString
      * @param int $referencedUid In database references the UID of the record (zero $referencedTable is "_FILE" or "_STRING")
-     * @param string $referenceString For "_FILE" or "_STRING" references: The filepath (relative to PATH_site or absolute) or other string.
+     * @param string $referenceString For "_FILE" or "_STRING" references: The filepath (relative to Environment::getPublicPath() or absolute) or other string.
      * @param int $sort The sorting order of references if many (the "group" or "select" TCA types). -1 if no sorting order is specified.
      * @param string $softReferenceKey If the reference is a soft reference, this is the soft reference parser key. Otherwise empty.
      * @param string $softReferenceId Soft reference ID for key. Might be useful for replace operations.
@@ -507,7 +553,7 @@ class ReferenceIndex
     protected function createEntryDataForDatabaseRelationsUsingRecord(string $tableName, array $record, string $fieldName, string $flexPointer, int $deleted, array $items)
     {
         foreach ($items as $sort => $i) {
-            $this->relations[] = $this->createEntryDataUsingRecord($tableName, $record, $fieldName, $flexPointer, $deleted, $i['table'], $i['id'], '', $sort);
+            $this->relations[] = $this->createEntryDataUsingRecord($tableName, $record, $fieldName, $flexPointer, $deleted, $i['table'], (int)$i['id'], '', $sort);
         }
     }
 
@@ -551,7 +597,7 @@ class ReferenceIndex
     {
         foreach ($items as $sort => $i) {
             $filePath = $i['ID_absFile'];
-            if (GeneralUtility::isFirstPartOfStr($filePath, PATH_site)) {
+            if (GeneralUtility::isFirstPartOfStr($filePath, Environment::getPublicPath())) {
                 $filePath = PathUtility::stripPathSitePrefix($filePath);
             }
             $this->relations[] = $this->createEntryDataUsingRecord(
@@ -613,7 +659,7 @@ class ReferenceIndex
                         switch ((string)$el['subst']['type']) {
                             case 'db':
                                 list($referencedTable, $referencedUid) = explode(':', $el['subst']['recordRef']);
-                                $this->relations[] = $this->createEntryDataUsingRecord($tableName, $record, $fieldName, $flexPointer, $deleted, $referencedTable, $referencedUid, '', -1, $spKey, $subKey);
+                                $this->relations[] = $this->createEntryDataUsingRecord($tableName, $record, $fieldName, $flexPointer, $deleted, $referencedTable, (int)$referencedUid, '', -1, $spKey, $subKey);
                                 break;
                             case 'file_reference':
                                 // not used (see getRelations()), but fallback to file
@@ -832,6 +878,7 @@ class ReferenceIndex
      * @param array $conf Field configuration array of type "TCA/columns
      * @param int $uid Field uid
      * @return bool|array If field type is OK it will return an array with the files inside. Else FALSE
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Deprecation logged by TcaMigration class.
      */
     public function getRelations_procFiles($value, $conf, $uid)
     {
@@ -860,7 +907,7 @@ class ReferenceIndex
             if (trim($file)) {
                 $realFile = $destinationFolder . '/' . trim($file);
                 $newValueFile = [
-                    'filename' => basename($file),
+                    'filename' => PathUtility::basename($file),
                     'ID' => md5($realFile),
                     'ID_absFile' => $realFile
                 ];
@@ -899,13 +946,15 @@ class ReferenceIndex
         // Get IRRE relations
         if (empty($conf)) {
             return false;
-        } elseif ($conf['type'] === 'inline' && !empty($conf['foreign_table']) && empty($conf['MM'])) {
+        }
+        if ($conf['type'] === 'inline' && !empty($conf['foreign_table']) && empty($conf['MM'])) {
             $dbAnalysis = GeneralUtility::makeInstance(RelationHandler::class);
             $dbAnalysis->setUseLiveReferenceIds(false);
             $dbAnalysis->start($value, $conf['foreign_table'], '', $uid, $table, $conf);
             return $dbAnalysis->itemArray;
             // DB record lists:
-        } elseif ($this->isDbReferenceField($conf)) {
+        }
+        if ($this->isDbReferenceField($conf)) {
             $allowedTables = $conf['type'] === 'group' ? $conf['allowed'] : $conf['foreign_table'];
             if ($conf['MM_opposite_field']) {
                 return [];
@@ -1042,21 +1091,20 @@ class ReferenceIndex
                     // Data Array, now ready to be sent to DataHandler
                     if ($returnDataArray) {
                         return $dataArray;
-                    } else {
-                        // Execute CMD array:
-                        $dataHandler = GeneralUtility::makeInstance(DataHandler::class);
-                        $dataHandler->dontProcessTransformations = true;
-                        $dataHandler->bypassWorkspaceRestrictions = true;
-                        $dataHandler->bypassFileHandling = true;
-                        // Otherwise this cannot update things in deleted records...
-                        $dataHandler->bypassAccessCheckForRecords = true;
-                        // Check has been done previously that there is a backend user which is Admin and also in live workspace
-                        $dataHandler->start($dataArray, []);
-                        $dataHandler->process_datamap();
-                        // Return errors if any:
-                        if (!empty($dataHandler->errorLog)) {
-                            return LF . 'DataHandler:' . implode((LF . 'DataHandler:'), $dataHandler->errorLog);
-                        }
+                    }
+                    // Execute CMD array:
+                    $dataHandler = GeneralUtility::makeInstance(DataHandler::class);
+                    $dataHandler->dontProcessTransformations = true;
+                    $dataHandler->bypassWorkspaceRestrictions = true;
+                    $dataHandler->bypassFileHandling = true;
+                    // Otherwise this cannot update things in deleted records...
+                    $dataHandler->bypassAccessCheckForRecords = true;
+                    // Check has been done previously that there is a backend user which is Admin and also in live workspace
+                    $dataHandler->start($dataArray, []);
+                    $dataHandler->process_datamap();
+                    // Return errors if any:
+                    if (!empty($dataHandler->errorLog)) {
+                        return LF . 'DataHandler:' . implode(LF . 'DataHandler:', $dataHandler->errorLog);
                     }
                 }
             }
@@ -1142,7 +1190,7 @@ class ReferenceIndex
                 $dataArray[$refRec['tablename']][$refRec['recuid']][$refRec['field']] = implode(',', $saveValue);
             }
         } else {
-            return 'ERROR: either "' . $refRec['ref_table'] . '" was not "_FILE" or file PATH_site+"' . $refRec['ref_string'] . '" did not match that of the record ("' . $itemArray[$refRec['sorting']]['ID_absFile'] . '") in sorting index "' . $refRec['sorting'] . '"';
+            return 'ERROR: either "' . $refRec['ref_table'] . '" was not "_FILE" or file Environment::getPublicPath()+"' . $refRec['ref_string'] . '" did not match that of the record ("' . $itemArray[$refRec['sorting']]['ID_absFile'] . '") in sorting index "' . $refRec['sorting'] . '"';
         }
 
         return false;
@@ -1267,15 +1315,12 @@ class ReferenceIndex
     /**
      * Returns destination path to an upload folder given by $folder
      *
-     * @param string $folder Folder relative to PATH_site
-     * @return string Input folder prefixed with PATH_site. No checking for existence is done. Output must be a folder without trailing slash.
+     * @param string $folder Folder relative to TYPO3's public folder ("site path")
+     * @return string Input folder prefixed with Environment::getPublicPath(). No checking for existence is done. Output must be a folder without trailing slash.
      */
     public function destPathFromUploadFolder($folder)
     {
-        if (!$folder) {
-            return substr(PATH_site, 0, -1);
-        }
-        return PATH_site . $folder;
+        return Environment::getPublicPath() . ($folder ? '/' . $folder : '');
     }
 
     /**
@@ -1322,9 +1367,11 @@ class ReferenceIndex
                     ->from($tableName)
                     ->execute();
             } catch (DBALException $e) {
-                // Table exists in $TCA but does not exist in the database
-                // @todo: improve / change message and add actual sql error?
-                GeneralUtility::sysLog(sprintf('Table "%s" exists in $TCA but does not exist in the database. You should run the Database Analyzer in the Install Tool to fix this.', $tableName), 'core', GeneralUtility::SYSLOG_SEVERITY_ERROR);
+                // Table exists in TCA but does not exist in the database
+                $msg = 'Table "' .
+                        $tableName .
+                        '" exists in TCA but does not exist in the database. You should run the Database Analyzer in the Install Tool to fix this.';
+                $this->logger->error($msg, ['exception' => $e]);
                 continue;
             }
 
@@ -1348,14 +1395,7 @@ class ReferenceIndex
 
             // Subselect based queries only work on the same connection
             if ($refIndexConnectionName !== $tableConnectionName) {
-                GeneralUtility::sysLog(
-                    sprintf(
-                        'Not checking table "%s" for lost indexes, "sys_refindex" table uses a different connection',
-                        $tableName
-                    ),
-                    'core',
-                    GeneralUtility::SYSLOG_SEVERITY_ERROR
-                );
+                $this->logger->error('Not checking table "' . $tableName . '" for lost indexes, "sys_refindex" table uses a different connection');
                 continue;
             }
 
@@ -1449,12 +1489,9 @@ class ReferenceIndex
             $recordsCheckedString,
             $errorCount ? FlashMessage::ERROR : FlashMessage::OK
         );
-        /** @var $flashMessageService \TYPO3\CMS\Core\Messaging\FlashMessageService */
-        $flashMessageService = GeneralUtility::makeInstance(FlashMessageService::class);
-        /** @var $defaultFlashMessageQueue \TYPO3\CMS\Core\Messaging\FlashMessageQueue */
-        $defaultFlashMessageQueue = $flashMessageService->getMessageQueueByIdentifier();
-        $defaultFlashMessageQueue->enqueue($flashMessage);
-        $bodyContent = $defaultFlashMessageQueue->renderFlashMessages();
+
+        $flashMessageRenderer = GeneralUtility::makeInstance(FlashMessageRendererResolver::class)->resolve();
+        $bodyContent = $flashMessageRenderer->render([$flashMessage]);
         if ($cli_echo) {
             echo $recordsCheckedString . ($errorCount ? 'Updates: ' . $errorCount : 'Index Integrity was perfect!') . LF;
         }
@@ -1477,6 +1514,10 @@ class ReferenceIndex
      * - Relations may change during indexing, which is why only the origin record is cached and all relations are re-process even when repeating
      *   indexing of the same origin record
      *
+     * Please note that the cache is disabled by default but can be enabled using $this->enableRuntimeCaches()
+     * due to possible side-effects while handling references that were changed during one single
+     * request.
+     *
      * @param string $tableName
      * @param int $uid
      * @return array|false
@@ -1484,13 +1525,15 @@ class ReferenceIndex
     protected function getRecordRawCached(string $tableName, int $uid)
     {
         $recordCacheId = $tableName . ':' . $uid;
-        if (!isset($this->recordCache[$recordCacheId])) {
+        if (!$this->useRuntimeCache || !isset($this->recordCache[$recordCacheId])) {
 
             // Fetch fields of the table which might contain relations
             $cacheId = static::$cachePrefixTableRelationFields . $tableName;
-            if (!$this->runtimeCache->has($cacheId)) {
+            if (!$this->useRuntimeCache || !$this->runtimeCache->has($cacheId)) {
                 $tableRelationFields = $this->fetchTableRelationFields($tableName);
-                $this->runtimeCache->set($cacheId, $tableRelationFields);
+                if ($this->useRuntimeCache) {
+                    $this->runtimeCache->set($cacheId, $tableRelationFields);
+                }
             } else {
                 $tableRelationFields = $this->runtimeCache->get($cacheId);
             }
@@ -1577,6 +1620,24 @@ class ReferenceIndex
         }
 
         return true;
+    }
+
+    /**
+     * Enables the runtime-based caches
+     * Could lead to side effects, depending if the reference index instance is run multiple times
+     * while records would be changed.
+     */
+    public function enableRuntimeCache()
+    {
+        $this->useRuntimeCache = true;
+    }
+
+    /**
+     * Disables the runtime-based cache
+     */
+    public function disableRuntimeCache()
+    {
+        $this->useRuntimeCache = false;
     }
 
     /**

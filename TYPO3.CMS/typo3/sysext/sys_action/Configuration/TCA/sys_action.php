@@ -5,7 +5,7 @@ return [
         'descriptionColumn' => 'description',
         'tstamp' => 'tstamp',
         'sortby' => 'sorting',
-        'prependAtCopy' => 'LLL:EXT:lang/Resources/Private/Language/locallang_general.xlf:LGL.prependAtCopy',
+        'prependAtCopy' => 'LLL:EXT:core/Resources/Private/Language/locallang_general.xlf:LGL.prependAtCopy',
         'title' => 'LLL:EXT:sys_action/Resources/Private/Language/locallang_tca.xlf:sys_action',
         'crdate' => 'crdate',
         'cruser_id' => 'cruser_id',
@@ -18,14 +18,15 @@ return [
         'typeicon_classes' => [
             'default' => 'mimetypes-x-sys_action'
         ],
-        'type' => 'type'
+        'type' => 'type',
+        'searchFields' => 'title,description'
     ],
     'interface' => [
         'showRecordFieldList' => 'hidden,title,type,description,assign_to_groups'
     ],
     'columns' => [
         'title' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_general.xlf:LGL.title',
+            'label' => 'LLL:EXT:core/Resources/Private/Language/locallang_general.xlf:LGL.title',
             'config' => [
                 'type' => 'input',
                 'size' => 25,
@@ -34,7 +35,7 @@ return [
             ]
         ],
         'description' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_general.xlf:LGL.description',
+            'label' => 'LLL:EXT:core/Resources/Private/Language/locallang_general.xlf:LGL.description',
             'config' => [
                 'type' => 'text',
                 'rows' => 10,
@@ -42,13 +43,21 @@ return [
             ]
         ],
         'hidden' => [
-            'label' => 'LLL:EXT:sys_action/Resources/Private/Language/locallang_tca.xlf:sys_action.hidden',
+            'label' => 'LLL:EXT:core/Resources/Private/Language/locallang_general.xlf:LGL.enabled',
             'config' => [
-                'type' => 'check'
+                'type' => 'check',
+                'renderType' => 'checkboxToggle',
+                'items' => [
+                    [
+                        0 => '',
+                        1 => '',
+                        'invertStateDisplay' => true
+                    ]
+                ],
             ]
         ],
         'type' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_general.xlf:LGL.type',
+            'label' => 'LLL:EXT:core/Resources/Private/Language/locallang_general.xlf:LGL.type',
             'config' => [
                 'type' => 'select',
                 'renderType' => 'selectSingle',
@@ -81,7 +90,7 @@ return [
             'config' => [
                 'type' => 'input',
                 'size' => 25,
-                'max' => '10',
+                'max' => 10,
                 'eval' => 'trim'
             ]
         ],
@@ -98,9 +107,17 @@ return [
             ]
         ],
         't1_create_user_dir' => [
+            'exclude' => 1,
             'label' => 'LLL:EXT:sys_action/Resources/Private/Language/locallang_tca.xlf:sys_action.t1_create_user_dir',
             'config' => [
-                'type' => 'check'
+                'type' => 'check',
+                'renderType' => 'checkboxToggle',
+                'items' => [
+                    [
+                        0 => '',
+                        1 => '',
+                    ]
+                ],
             ]
         ],
         't1_copy_of_user' => [

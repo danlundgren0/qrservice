@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\ViewHelpers;
 
 /*
@@ -16,7 +17,7 @@ namespace EBT\ExtensionBuilder\ViewHelpers;
 
 use EBT\ExtensionBuilder\Utility\Inflector;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 
 /**
  * Pluralize a word
@@ -47,7 +48,6 @@ class SingularizeViewHelper extends AbstractViewHelper
      * Singularize a word
      *
      * @return string The pluralized string
-     * @author Sebastian Kurfürst <sbastian@typo3.org>
      */
     public function render()
     {

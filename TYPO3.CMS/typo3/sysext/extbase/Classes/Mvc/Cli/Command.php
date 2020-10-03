@@ -14,10 +14,12 @@ namespace TYPO3\CMS\Extbase\Mvc\Cli;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Extbase\Reflection\ClassSchema;
+
 /**
  * Represents a Command
  *
- * @license http://www.gnu.org/licenses/lgpl.html GNU Lesser General Public License, version 3 or later
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Use symfony/console commands instead.
  */
 class Command
 {
@@ -42,11 +44,6 @@ class Command
     protected $commandIdentifier;
 
     /**
-     * @var \TYPO3\CMS\Extbase\Reflection\MethodReflection
-     */
-    protected $commandMethodReflection;
-
-    /**
      * Name of the extension to which this command belongs
      *
      * @var string
@@ -57,6 +54,16 @@ class Command
      * @var \TYPO3\CMS\Extbase\Reflection\ReflectionService
      */
     protected $reflectionService;
+
+    /**
+     * @var ClassSchema
+     */
+    protected $classSchema;
+
+    /**
+     * @var string
+     */
+    protected $controllerCommandMethod;
 
     /**
      * @param \TYPO3\CMS\Extbase\Object\ObjectManagerInterface $objectManager
@@ -85,8 +92,8 @@ class Command
     {
         $this->controllerClassName = $controllerClassName;
         $this->controllerCommandName = $controllerCommandName;
-        $delimiter = strpos($controllerClassName, '\\') !== false ? '\\' : '_';
-        $classNameParts = explode($delimiter, $controllerClassName);
+        $this->controllerCommandMethod = $this->controllerCommandName . 'Command';
+        $classNameParts = explode('\\', $controllerClassName);
         if (isset($classNameParts[0]) && $classNameParts[0] === 'TYPO3' && isset($classNameParts[1]) && $classNameParts[1] === 'CMS') {
             $classNameParts[0] .= '\\' . $classNameParts[1];
             unset($classNameParts[1]);
@@ -109,6 +116,11 @@ class Command
         $this->extensionName = $classNameParts[1];
         $extensionKey = \TYPO3\CMS\Core\Utility\GeneralUtility::camelCaseToLowerCaseUnderscored($this->extensionName);
         $this->commandIdentifier = strtolower($extensionKey . ':' . substr($classNameParts[$numberOfClassNameParts - 1], 0, -17) . ':' . $controllerCommandName);
+    }
+
+    public function initializeObject()
+    {
+        $this->classSchema = $this->reflectionService->getClassSchema($this->controllerClassName);
     }
 
     /**
@@ -154,7 +166,7 @@ class Command
      */
     public function getShortDescription()
     {
-        $lines = explode(LF, $this->getCommandMethodReflection()->getDescription());
+        $lines = explode(LF, $this->classSchema->getMethod($this->controllerCommandMethod)['description']);
         return !empty($lines) ? trim($lines[0]) : '<no description available>';
     }
 
@@ -167,7 +179,7 @@ class Command
      */
     public function getDescription()
     {
-        $lines = explode(LF, $this->getCommandMethodReflection()->getDescription());
+        $lines = explode(LF, $this->classSchema->getMethod($this->controllerCommandMethod)['description']);
         array_shift($lines);
         $descriptionLines = [];
         foreach ($lines as $line) {
@@ -186,7 +198,7 @@ class Command
      */
     public function hasArguments()
     {
-        return !empty($this->getCommandMethodReflection()->getParameters());
+        return !empty($this->classSchema->getMethod($this->controllerCommandMethod)['params']);
     }
 
     /**
@@ -202,12 +214,11 @@ class Command
             return [];
         }
         $commandArgumentDefinitions = [];
-        $commandMethodReflection = $this->getCommandMethodReflection();
-        $annotations = $commandMethodReflection->getTagsValues();
-        $commandParameters = $this->reflectionService->getMethodParameters($this->controllerClassName, $this->controllerCommandName . 'Command');
+        $commandParameters = $this->classSchema->getMethod($this->controllerCommandMethod)['params'];
+        $commandParameterTags = $this->classSchema->getMethod($this->controllerCommandMethod)['tags']['param'];
         $i = 0;
         foreach ($commandParameters as $commandParameterName => $commandParameterDefinition) {
-            $explodedAnnotation = preg_split('/\s+/', $annotations['param'][$i], 3);
+            $explodedAnnotation = preg_split('/\s+/', $commandParameterTags[$i], 3);
             $description = !empty($explodedAnnotation[2]) ? $explodedAnnotation[2] : '';
             $required = $commandParameterDefinition['optional'] !== true;
             $commandArgumentDefinitions[] = $this->objectManager->get(\TYPO3\CMS\Extbase\Mvc\Cli\CommandArgumentDefinition::class, $commandParameterName, $required, $description);
@@ -225,7 +236,7 @@ class Command
      */
     public function isInternal()
     {
-        return $this->getCommandMethodReflection()->isTaggedWith('internal');
+        return isset($this->classSchema->getMethod($this->controllerCommandMethod)['tags']['internal']);
     }
 
     /**
@@ -235,7 +246,7 @@ class Command
      */
     public function isCliOnly()
     {
-        return $this->getCommandMethodReflection()->isTaggedWith('cli');
+        return isset($this->classSchema->getMethod($this->controllerCommandMethod)['tags']['cli']);
     }
 
     /**
@@ -244,10 +255,16 @@ class Command
      * Note that neither this method nor the @flushesCaches annotation is currently part of the official API.
      *
      * @return bool
+     *
+     * @deprecated will be removed in TYPO3 v10.0.
      */
     public function isFlushingCaches()
     {
-        return $this->getCommandMethodReflection()->isTaggedWith('flushesCaches');
+        trigger_error(
+            'Method isFlushingCaches() will be removed in TYPO3 v10.0. Do not call from other extension.',
+            E_USER_DEPRECATED
+        );
+        return isset($this->classSchema->getMethod($this->controllerCommandMethod)['tags']['flushesCaches']);
     }
 
     /**
@@ -258,27 +275,15 @@ class Command
      */
     public function getRelatedCommandIdentifiers()
     {
-        $commandMethodReflection = $this->getCommandMethodReflection();
-        if (!$commandMethodReflection->isTaggedWith('see')) {
+        if (!isset($this->classSchema->getMethod($this->controllerCommandMethod)['tags']['see'])) {
             return [];
         }
         $relatedCommandIdentifiers = [];
-        foreach ($commandMethodReflection->getTagValues('see') as $tagValue) {
+        foreach ($this->classSchema->getMethod($this->controllerCommandMethod)['tags']['see'] as $tagValue) {
             if (preg_match('/^[\\w\\d\\.]+:[\\w\\d]+:[\\w\\d]+$/', $tagValue) === 1) {
                 $relatedCommandIdentifiers[] = $tagValue;
             }
         }
         return $relatedCommandIdentifiers;
-    }
-
-    /**
-     * @return \TYPO3\CMS\Extbase\Reflection\MethodReflection
-     */
-    protected function getCommandMethodReflection()
-    {
-        if ($this->commandMethodReflection === null) {
-            $this->commandMethodReflection = $this->objectManager->get(\TYPO3\CMS\Extbase\Reflection\MethodReflection::class, $this->controllerClassName, $this->controllerCommandName . 'Command');
-        }
-        return $this->commandMethodReflection;
     }
 }

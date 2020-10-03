@@ -21,8 +21,6 @@ use TYPO3\CMS\Extbase\Mvc\Web\Request as WebRequest;
 
 /**
  * An abstract base class for Controllers
- *
- * @api
  */
 abstract class AbstractController implements ControllerInterface
 {
@@ -50,7 +48,6 @@ abstract class AbstractController implements ControllerInterface
      * Contains the settings of the current extension
      *
      * @var array
-     * @api
      */
     protected $settings;
 
@@ -58,7 +55,6 @@ abstract class AbstractController implements ControllerInterface
      * The current request.
      *
      * @var \TYPO3\CMS\Extbase\Mvc\RequestInterface
-     * @api
      */
     protected $request;
 
@@ -66,7 +62,6 @@ abstract class AbstractController implements ControllerInterface
      * The response which will be returned by this action controller
      *
      * @var \TYPO3\CMS\Extbase\Mvc\ResponseInterface
-     * @api
      */
     protected $response;
 
@@ -107,13 +102,11 @@ abstract class AbstractController implements ControllerInterface
 
     /**
      * @var \TYPO3\CMS\Extbase\Mvc\Controller\ControllerContext
-     * @api
      */
     protected $controllerContext;
 
     /**
      * @return ControllerContext
-     * @api
      */
     public function getControllerContext()
     {
@@ -130,17 +123,13 @@ abstract class AbstractController implements ControllerInterface
      */
     public function __construct()
     {
-        $className = get_class($this);
-        if (strpos($className, '\\') !== false) {
-            $classNameParts = explode('\\', $className, 4);
-            // Skip vendor and product name for core classes
-            if (strpos($className, 'TYPO3\\CMS\\') === 0) {
-                $this->extensionName = $classNameParts[2];
-            } else {
-                $this->extensionName = $classNameParts[1];
-            }
+        $className = static::class;
+        $classNameParts = explode('\\', $className, 4);
+        // Skip vendor and product name for core classes
+        if (strpos($className, 'TYPO3\\CMS\\') === 0) {
+            $this->extensionName = $classNameParts[2];
         } else {
-            list(, $this->extensionName) = explode('_', $className);
+            $this->extensionName = $classNameParts[1];
         }
     }
 
@@ -173,7 +162,6 @@ abstract class AbstractController implements ControllerInterface
      * @param bool $storeInSession Optional, defines whether the message should be stored in the session (default) or not
      * @throws \InvalidArgumentException if the message body is no string
      * @see \TYPO3\CMS\Core\Messaging\FlashMessage
-     * @api
      */
     public function addFlashMessage($messageBody, $messageTitle = '', $severity = \TYPO3\CMS\Core\Messaging\AbstractMessage::OK, $storeInSession = true)
     {
@@ -200,7 +188,6 @@ abstract class AbstractController implements ControllerInterface
      *
      * @param \TYPO3\CMS\Extbase\Mvc\RequestInterface $request The current request
      * @return bool TRUE if this request type is supported, otherwise FALSE
-     * @api
      */
     public function canProcessRequest(\TYPO3\CMS\Extbase\Mvc\RequestInterface $request)
     {
@@ -218,12 +205,11 @@ abstract class AbstractController implements ControllerInterface
      * @param \TYPO3\CMS\Extbase\Mvc\RequestInterface $request The request object
      * @param \TYPO3\CMS\Extbase\Mvc\ResponseInterface $response The response, modified by this handler
      * @throws UnsupportedRequestTypeException if the controller doesn't support the current request type
-     * @api
      */
     public function processRequest(\TYPO3\CMS\Extbase\Mvc\RequestInterface $request, \TYPO3\CMS\Extbase\Mvc\ResponseInterface $response)
     {
         if (!$this->canProcessRequest($request)) {
-            throw new UnsupportedRequestTypeException(get_class($this) . ' does not support requests of type "' . get_class($request) . '". Supported types are: ' . implode(' ', $this->supportedRequestTypes), 1187701132);
+            throw new UnsupportedRequestTypeException(static::class . ' does not support requests of type "' . get_class($request) . '". Supported types are: ' . implode(' ', $this->supportedRequestTypes), 1187701132);
         }
         if ($response instanceof \TYPO3\CMS\Extbase\Mvc\Web\Response && $request instanceof WebRequest) {
             $response->setRequest($request);
@@ -242,11 +228,10 @@ abstract class AbstractController implements ControllerInterface
      * Initialize the controller context
      *
      * @return \TYPO3\CMS\Extbase\Mvc\Controller\ControllerContext ControllerContext to be passed to the view
-     * @api
      */
     protected function buildControllerContext()
     {
-        /** @var $controllerContext \TYPO3\CMS\Extbase\Mvc\Controller\ControllerContext */
+        /** @var \TYPO3\CMS\Extbase\Mvc\Controller\ControllerContext $controllerContext */
         $controllerContext = $this->objectManager->get(\TYPO3\CMS\Extbase\Mvc\Controller\ControllerContext::class);
         $controllerContext->setRequest($this->request);
         $controllerContext->setResponse($this->response);
@@ -265,12 +250,11 @@ abstract class AbstractController implements ControllerInterface
      * without the need for a new request.
      *
      * @param string $actionName Name of the action to forward to
-     * @param string $controllerName Unqualified object name of the controller to forward to. If not specified, the current controller is used.
-     * @param string $extensionName Name of the extension containing the controller to forward to. If not specified, the current extension is assumed.
-     * @param array $arguments Arguments to pass to the target action
+     * @param string|null $controllerName Unqualified object name of the controller to forward to. If not specified, the current controller is used.
+     * @param string|null $extensionName Name of the extension containing the controller to forward to. If not specified, the current extension is assumed.
+     * @param array|null $arguments Arguments to pass to the target action
      * @throws StopActionException
      * @see redirect()
-     * @api
      */
     public function forward($actionName, $controllerName = null, $extensionName = null, array $arguments = null)
     {
@@ -299,16 +283,15 @@ abstract class AbstractController implements ControllerInterface
      * if used with other request types.
      *
      * @param string $actionName Name of the action to forward to
-     * @param string $controllerName Unqualified object name of the controller to forward to. If not specified, the current controller is used.
-     * @param string $extensionName Name of the extension containing the controller to forward to. If not specified, the current extension is assumed.
-     * @param array $arguments Arguments to pass to the target action
-     * @param int $pageUid Target page uid. If NULL, the current page uid is used
+     * @param string|null $controllerName Unqualified object name of the controller to forward to. If not specified, the current controller is used.
+     * @param string|null $extensionName Name of the extension containing the controller to forward to. If not specified, the current extension is assumed.
+     * @param array|null $arguments Arguments to pass to the target action
+     * @param int|null $pageUid Target page uid. If NULL, the current page uid is used
      * @param int $delay (optional) The delay in seconds. Default is no delay.
      * @param int $statusCode (optional) The HTTP status code for the redirect. Default is "303 See Other
      * @throws UnsupportedRequestTypeException If the request is not a web request
      * @throws StopActionException
      * @see forward()
-     * @api
      */
     protected function redirect($actionName, $controllerName = null, $extensionName = null, array $arguments = null, $pageUid = null, $delay = 0, $statusCode = 303)
     {
@@ -336,7 +319,6 @@ abstract class AbstractController implements ControllerInterface
      * @param int $statusCode (optional) The HTTP status code for the redirect. Default is "303 See Other
      * @throws UnsupportedRequestTypeException If the request is not a web request
      * @throws StopActionException
-     * @api
      */
     protected function redirectToUri($uri, $delay = 0, $statusCode = 303)
     {
@@ -353,6 +335,14 @@ abstract class AbstractController implements ControllerInterface
             $this->response->setStatus($statusCode);
             $this->response->setHeader('Location', (string)$uri);
         }
+        // Avoid caching the plugin when we issue a redirect response
+        // This means that even when an action is configured as cachable
+        // we avoid the plugin to be cached, but keep the page cache untouched
+        $contentObject = $this->configurationManager->getContentObject();
+        if ($contentObject->getUserObjectType() === \TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer::OBJECTTYPE_USER) {
+            $contentObject->convertToUserIntObject();
+        }
+
         throw new StopActionException('redirectToUri', 1476045828);
     }
 
@@ -377,7 +367,6 @@ abstract class AbstractController implements ControllerInterface
      * @param string $content Body content which further explains the status
      * @throws UnsupportedRequestTypeException If the request is not a web request
      * @throws StopActionException
-     * @api
      */
     public function throwStatus($statusCode, $statusMessage = null, $content = null)
     {

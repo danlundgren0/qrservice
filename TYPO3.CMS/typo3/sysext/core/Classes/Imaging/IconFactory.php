@@ -14,8 +14,6 @@ namespace TYPO3\CMS\Core\Imaging;
  * The TYPO3 project - inspiring people to share!
  */
 
-use Psr\Http\Message\ResponseInterface;
-use Psr\Http\Message\ServerRequestInterface;
 use TYPO3\CMS\Core\Resource\File;
 use TYPO3\CMS\Core\Resource\FolderInterface;
 use TYPO3\CMS\Core\Resource\InaccessibleFolder;
@@ -70,33 +68,6 @@ class IconFactory
     }
 
     /**
-     * @param ServerRequestInterface $request
-     * @param ResponseInterface $response
-     * @return string
-     * @internal
-     */
-    public function processAjaxRequest(ServerRequestInterface $request, ResponseInterface $response)
-    {
-        $parsedBody = $request->getParsedBody();
-        $queryParams = $request->getQueryParams();
-        $requestedIcon = json_decode(
-            isset($parsedBody['icon']) ? $parsedBody['icon'] : $queryParams['icon'],
-            true
-        );
-
-        list($identifier, $size, $overlayIdentifier, $iconState, $alternativeMarkupIdentifier) = $requestedIcon;
-        if (empty($overlayIdentifier)) {
-            $overlayIdentifier = null;
-        }
-        $iconState = IconState::cast($iconState);
-        $response->getBody()->write(
-            $this->getIcon($identifier, $size, $overlayIdentifier, $iconState)->render($alternativeMarkupIdentifier)
-        );
-        $response = $response->withHeader('Content-Type', 'text/html; charset=utf-8');
-        return $response;
-    }
-
-    /**
      * @param string $identifier
      * @param string $size "large", "small" or "default", see the constants of the Icon class
      * @param string $overlayIdentifier
@@ -109,7 +80,12 @@ class IconFactory
         if (!empty(static::$iconCache[$cacheIdentifier])) {
             return static::$iconCache[$cacheIdentifier];
         }
-        if (!$this->iconRegistry->isRegistered($identifier)) {
+
+        if (
+            !$this->iconRegistry->isDeprecated($identifier)
+            && !$this->iconRegistry->isRegistered($identifier)
+        ) {
+            // in case icon identifier is neither deprecated nor registered
             $identifier = $this->iconRegistry->getDefaultIconIdentifier();
         }
 
@@ -138,9 +114,6 @@ class IconFactory
     {
         $iconIdentifier = $this->mapRecordTypeToIconIdentifier($table, $row);
         $overlayIdentifier = $this->mapRecordTypeToOverlayIdentifier($table, $row);
-        if (empty($overlayIdentifier)) {
-            $overlayIdentifier = null;
-        }
         return $this->getIcon($iconIdentifier, $size, $overlayIdentifier);
     }
 
@@ -326,13 +299,10 @@ class IconFactory
         }
 
         // Hook to define an alternative iconName
-        if (!empty($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['overrideIconOverlay'])) {
-            $hookObjects = $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['overrideIconOverlay'];
-            foreach ($hookObjects as $classRef) {
-                $hookObject = GeneralUtility::getUserObj($classRef);
-                if (method_exists($hookObject, 'postOverlayPriorityLookup')) {
-                    $iconName = $hookObject->postOverlayPriorityLookup($table, $row, $status, $iconName);
-                }
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['overrideIconOverlay'] ?? [] as $className) {
+            $hookObject = GeneralUtility::makeInstance($className);
+            if (method_exists($hookObject, 'postOverlayPriorityLookup')) {
+                $iconName = $hookObject->postOverlayPriorityLookup($table, $row, $status, $iconName);
             }
         }
 
@@ -425,8 +395,6 @@ class IconFactory
                     $overlayIdentifier = 'overlay-locked';
                 }
             }
-
-        // File
         } elseif ($resource instanceof File) {
             $mimeTypeIcon = $this->iconRegistry->getIconIdentifierForMimeType($resource->getMimeType());
 
@@ -477,7 +445,7 @@ class IconFactory
         $icon->setIdentifier($identifier);
         $icon->setSize($size);
         $icon->setState($iconConfiguration['state'] ?: new IconState());
-        if ($overlayIdentifier !== null) {
+        if (!empty($overlayIdentifier)) {
             $icon->setOverlayIcon($this->getIcon($overlayIdentifier, Icon::SIZE_OVERLAY));
         }
         if (!empty($iconConfiguration['options']['spinning'])) {

@@ -22,6 +22,7 @@ interface ResourceStorageInterface
     const SIGNAL_SanitizeFileName = 'sanitizeFileName';
     const SIGNAL_PreFileAdd = 'preFileAdd';
     const SIGNAL_PostFileAdd = 'postFileAdd';
+    const SIGNAL_PreFileCreate = 'preFileCreate';
     const SIGNAL_PostFileCreate = 'postFileCreate';
     const SIGNAL_PreFileCopy = 'preFileCopy';
     const SIGNAL_PostFileCopy = 'postFileCopy';
@@ -33,6 +34,7 @@ interface ResourceStorageInterface
     const SIGNAL_PostFileRename = 'postFileRename';
     const SIGNAL_PreFileReplace = 'preFileReplace';
     const SIGNAL_PostFileReplace = 'postFileReplace';
+    const SIGNAL_PreFileSetContents = 'preFileSetContents';
     const SIGNAL_PostFileSetContents = 'postFileSetContents';
     const SIGNAL_PreFolderAdd = 'preFolderAdd';
     const SIGNAL_PostFolderAdd = 'postFolderAdd';
@@ -59,6 +61,10 @@ interface ResourceStorageInterface
      * general - this might also be further limited by configuration.
      */
     const CAPABILITY_WRITABLE = 4;
+    /**
+     * Whether identifiers contain hierarchy information (folder structure).
+     */
+    const CAPABILITY_HIERARCHICAL_IDENTIFIERS = 8;
     /**
      * Name of the default processing folder
      */

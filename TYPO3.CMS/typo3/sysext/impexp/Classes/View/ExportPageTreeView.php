@@ -18,10 +18,12 @@ use TYPO3\CMS\Backend\Tree\View\BrowseTreeView;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Type\Bitmask\Permission;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Extension of the page tree class. Used to get the tree of pages to export.
+ * @internal
  */
 class ExportPageTreeView extends BrowseTreeView
 {
@@ -41,11 +43,11 @@ class ExportPageTreeView extends BrowseTreeView
      * @param string $row Item record
      * @param int $bank Bank pointer (which mount point number)
      * @return string Wrapped title
-     * @access private
+     * @internal
      */
     public function wrapTitle($title, $row, $bank = 0)
     {
-        return trim($title) === '' ? '<em>[' . htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.no_title')) . ']</em>' : htmlspecialchars($title);
+        return trim($title) === '' ? '<em>[' . htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.no_title')) . ']</em>' : htmlspecialchars($title);
     }
 
     /**
@@ -84,7 +86,7 @@ class ExportPageTreeView extends BrowseTreeView
     public function ext_tree($pid, $clause = '')
     {
         // Initialize:
-        $this->init(' AND ' . $this->BE_USER->getPagePermsClause(1) . $clause);
+        $this->init(' AND ' . $this->BE_USER->getPagePermsClause(Permission::PAGE_SHOW) . $clause);
         // Get stored tree structure:
         $this->stored = unserialize($this->BE_USER->uc['browseTrees']['browsePages'], ['allowed_classes' => false]);
         $treeArr = [];

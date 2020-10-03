@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Factory;
 
 /*
@@ -18,7 +18,6 @@ namespace TYPO3\CMS\Form\Domain\Factory;
  */
 
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Extbase\Object\ObjectManager;
 use TYPO3\CMS\Form\Domain\Model\FormDefinition;
 
 /**
@@ -48,7 +47,6 @@ use TYPO3\CMS\Form\Domain\Model\FormDefinition;
  *
  * Scope: frontend / backend
  * **This class is meant to be sub classed by developers.**
- * @api
  */
 abstract class AbstractFormFactory implements FormFactoryInterface
 {
@@ -57,25 +55,16 @@ abstract class AbstractFormFactory implements FormFactoryInterface
      * hook on all form elements.
      *
      * @param FormDefinition $form
-     * @api
      */
     protected function triggerFormBuildingFinished(FormDefinition $form)
     {
         foreach ($form->getRenderablesRecursively() as $renderable) {
-            GeneralUtility::deprecationLog('EXT:form - calls for "onBuildingFinished" are deprecated since TYPO3 v8 and will be removed in TYPO3 v9');
-            $renderable->onBuildingFinished();
-
-            if (
-                isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/form']['afterBuildingFinished'])
-                && is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/form']['afterBuildingFinished'])
-            ) {
-                foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/form']['afterBuildingFinished'] as $className) {
-                    $hookObj = GeneralUtility::makeInstance($className);
-                    if (method_exists($hookObj, 'afterBuildingFinished')) {
-                        $hookObj->afterBuildingFinished(
-                            $renderable
-                        );
-                    }
+            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/form']['afterBuildingFinished'] ?? [] as $className) {
+                $hookObj = GeneralUtility::makeInstance($className);
+                if (method_exists($hookObj, 'afterBuildingFinished')) {
+                    $hookObj->afterBuildingFinished(
+                        $renderable
+                    );
                 }
             }
         }

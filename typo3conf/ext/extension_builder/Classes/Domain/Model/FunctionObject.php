@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Domain\Model;
 
 /*
@@ -123,11 +124,7 @@ class FunctionObject extends AbstractObject
      */
     public function getParameterByPosition($position)
     {
-        if (isset($this->parameters[$position])) {
-            return $this->parameters[$position];
-        } else {
-            return null;
-        }
+        return $this->parameters[$position] ?? null;
     }
 
     /**
@@ -178,9 +175,9 @@ class FunctionObject extends AbstractObject
             unset($this->parameters[$parameterPosition]);
             $this->updateParamTags();
             return true;
-        } else {
-            return false;
         }
+
+        return false;
     }
 
     /**
@@ -256,7 +253,8 @@ class FunctionObject extends AbstractObject
                 $varType = $parameter->getVarType();
             }
 
-            if (isset($existingParamTagValues[$paramPosition]) && strpos($existingParamTagValues[$paramPosition], '$' . $parameter->getName()) !== false) {
+            if (isset($existingParamTagValues[$paramPosition]) && strpos($existingParamTagValues[$paramPosition],
+                    '$' . $parameter->getName()) !== false) {
                 // param tag for this parameter was found
                 if (!empty($varType) && strpos($existingParamTagValues[$paramPosition], $varType) === false) {
                     $updatedParamTags[$position] = $varType . ' $' . $parameter->getName();

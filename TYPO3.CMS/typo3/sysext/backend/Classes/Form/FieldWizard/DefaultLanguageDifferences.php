@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Form\FieldWizard;
 
 /*
@@ -17,9 +17,9 @@ namespace TYPO3\CMS\Backend\Form\FieldWizard;
 
 use TYPO3\CMS\Backend\Form\AbstractNode;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Utility\DiffUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Renders the diff-view of default language record content compared with what the record was originally
@@ -69,7 +69,7 @@ class DefaultLanguageDifferences extends AbstractNode
             );
             $html[] = '<div class="t3-form-original-language-diff">';
             $html[] =   '<div class="t3-form-original-language-diffheader">';
-            $html[] =       htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.changeInOrig'));
+            $html[] =       htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.changeInOrig'));
             $html[] =   '</div>';
             $html[] =   '<div class="t3-form-original-language-diffcontent">';
             $html[] =       '<div class="diff">';

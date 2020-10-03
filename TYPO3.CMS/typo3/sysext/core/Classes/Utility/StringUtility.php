@@ -31,13 +31,13 @@ class StringUtility
     public static function beginsWith($haystack, $needle)
     {
         // Sanitize $haystack and $needle
-        if (is_object($haystack) || $haystack === null || (string)$haystack != $haystack) {
+        if (is_array($haystack) || is_object($haystack) || $haystack === null || (string)$haystack != $haystack) {
             throw new \InvalidArgumentException(
                 '$haystack can not be interpreted as string',
                 1347135546
             );
         }
-        if (is_object($needle) || (string)$needle != $needle || strlen($needle) < 1) {
+        if (is_array($needle) || is_object($needle) || (string)$needle != $needle || strlen($needle) < 1) {
             throw new \InvalidArgumentException(
                 '$needle can not be interpreted as string or has zero length',
                 1347135547
@@ -60,13 +60,13 @@ class StringUtility
     public static function endsWith($haystack, $needle)
     {
         // Sanitize $haystack and $needle
-        if (is_object($haystack) || $haystack === null || (string)$haystack != $haystack) {
+        if (is_array($haystack) || is_object($haystack) || $haystack === null || (string)$haystack != $haystack) {
             throw new \InvalidArgumentException(
                 '$haystack can not be interpreted as string',
                 1347135544
             );
         }
-        if (is_object($needle) || (string)$needle != $needle || strlen($needle) < 1) {
+        if (is_array($needle) || is_object($needle) || (string)$needle != $needle || strlen($needle) < 1) {
             throw new \InvalidArgumentException(
                 '$needle can not be interpreted as string or has no length',
                 1347135545
@@ -92,5 +92,61 @@ class StringUtility
     {
         $uniqueId = uniqid($prefix, true);
         return str_replace('.', '', $uniqueId);
+    }
+
+    /**
+     * Escape a CSS selector to be used for DOM queries
+     *
+     * This method takes care to escape any CSS selector meta character.
+     * The result may be used to query the DOM like $('#' + escapedSelector)
+     *
+     * @param string $selector
+     * @return string
+     */
+    public static function escapeCssSelector(string $selector): string
+    {
+        return preg_replace('/([#:.\\[\\],=@])/', '\\\\$1', $selector);
+    }
+
+    /**
+     * Removes the Byte Order Mark (BOM) from the input string. This method supports UTF-8 encoded strings only!
+     *
+     * @param string $input
+     * @return string
+     */
+    public static function removeByteOrderMark(string $input): string
+    {
+        if (strpos($input, "\xef\xbb\xbf") === 0) {
+            $input = substr($input, 3);
+        }
+
+        return $input;
+    }
+
+    /**
+     * Matching two strings against each other, supporting a "*" wildcard (match many) or a "?" wildcard (match one= or (if wrapped in "/") PCRE regular expressions
+     *
+     * @param string $haystack The string in which to find $needle.
+     * @param string $needle The string to find in $haystack
+     * @return bool Returns TRUE if $needle matches or is found in (according to wildcards) $haystack. E.g. if $haystack is "Netscape 6.5" and $needle is "Net*" or "Net*ape" then it returns TRUE.
+     */
+    public static function searchStringWildcard($haystack, $needle): bool
+    {
+        $result = false;
+        if ($haystack === $needle) {
+            $result = true;
+        } elseif ($needle) {
+            if (preg_match('/^\\/.+\\/$/', $needle)) {
+                // Regular expression, only "//" is allowed as delimiter
+                $regex = $needle;
+            } else {
+                $needle = str_replace(['*', '?'], ['%%%MANY%%%', '%%%ONE%%%'], $needle);
+                $regex = '/^' . preg_quote($needle, '/') . '$/';
+                // Replace the marker with .* to match anything (wildcard)
+                $regex = str_replace(['%%%MANY%%%', '%%%ONE%%%'], ['.*', '.'], $regex);
+            }
+            $result = (bool)preg_match($regex, $haystack);
+        }
+        return $result;
     }
 }

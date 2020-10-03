@@ -15,10 +15,13 @@ namespace TYPO3\CMS\Extbase\Persistence\Generic;
  */
 
 use TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface;
+use TYPO3\CMS\Extbase\Object\ObjectManagerInterface;
+use TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper;
 
 /**
  * A proxy that can replace any object and replaces itself in it's parent on
  * first access (call, get, set, isset, unset).
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 class LazyObjectStorage extends \TYPO3\CMS\Extbase\Persistence\ObjectStorage implements \TYPO3\CMS\Extbase\Persistence\Generic\LoadingStrategyInterface
 {
@@ -33,7 +36,7 @@ class LazyObjectStorage extends \TYPO3\CMS\Extbase\Persistence\ObjectStorage imp
     private $warning = 'You should never see this warning. If you do, you probably used PHP array functions like current() on the TYPO3\\CMS\\Extbase\\Persistence\\Generic\\LazyObjectStorage. To retrieve the first result, you can use the rewind() and current() methods.';
 
     /**
-     * @var \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper
+     * @var ?DataMapper
      */
     protected $dataMapper;
 
@@ -64,11 +67,16 @@ class LazyObjectStorage extends \TYPO3\CMS\Extbase\Persistence\ObjectStorage imp
     protected $isInitialized = false;
 
     /**
-     * @param \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper $dataMapper
+     * @var ObjectManagerInterface
      */
-    public function injectDataMapper(\TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper $dataMapper)
+    protected $objectManager;
+
+    /**
+     * @param ObjectManagerInterface $objectManager
+     */
+    public function injectObjectManager(ObjectManagerInterface $objectManager)
     {
-        $this->dataMapper = $dataMapper;
+        $this->objectManager = $objectManager;
     }
 
     /**
@@ -87,13 +95,25 @@ class LazyObjectStorage extends \TYPO3\CMS\Extbase\Persistence\ObjectStorage imp
      * @param DomainObjectInterface $parentObject The object instance this proxy is part of
      * @param string $propertyName The name of the proxied property in it's parent
      * @param mixed $fieldValue The raw field value.
+     * @param ?DataMapper $dataMapper
      */
-    public function __construct($parentObject, $propertyName, $fieldValue)
+    public function __construct($parentObject, $propertyName, $fieldValue, ?DataMapper $dataMapper = null)
     {
         $this->parentObject = $parentObject;
         $this->propertyName = $propertyName;
         $this->fieldValue = $fieldValue;
         reset($this->storage);
+        $this->dataMapper = $dataMapper;
+    }
+
+    /**
+     * Object initialization called when object is created with ObjectManager, after constructor
+     */
+    public function initializeObject()
+    {
+        if (!$this->dataMapper) {
+            $this->dataMapper = $this->objectManager->get(DataMapper::class);
+        }
     }
 
     /**
@@ -174,7 +194,7 @@ class LazyObjectStorage extends \TYPO3\CMS\Extbase\Persistence\ObjectStorage imp
             $this->initialize();
             $numberOfElements = count($this->storage);
         }
-        if (is_null($numberOfElements)) {
+        if ($numberOfElements === null) {
             throw new \TYPO3\CMS\Extbase\Persistence\Generic\Exception('The number of elements could not be determined.', 1252514486);
         }
         return $numberOfElements;
@@ -223,27 +243,27 @@ class LazyObjectStorage extends \TYPO3\CMS\Extbase\Persistence\ObjectStorage imp
     }
 
     /**
-     * @param object $object The object to look for.
+     * @param object $value The object to look for, or the key in the storage.
      * @return bool
      *
      * @see \TYPO3\CMS\Extbase\Persistence\ObjectStorage::offsetExists
      */
-    public function offsetExists($object)
+    public function offsetExists($value)
     {
         $this->initialize();
-        return parent::offsetExists($object);
+        return parent::offsetExists($value);
     }
 
     /**
-     * @param object $object The object to look for.
+     * @param object $value The object to look for, or its key in the storage.
      * @return mixed
      *
      * @see \TYPO3\CMS\Extbase\Persistence\ObjectStorage::offsetGet
      */
-    public function offsetGet($object)
+    public function offsetGet($value)
     {
         $this->initialize();
-        return parent::offsetGet($object);
+        return parent::offsetGet($value);
     }
 
     /**
@@ -259,14 +279,14 @@ class LazyObjectStorage extends \TYPO3\CMS\Extbase\Persistence\ObjectStorage imp
     }
 
     /**
-     * @param object $object The object to remove.
+     * @param object $value The object to remove, or its key in the storage.
      *
      * @see \TYPO3\CMS\Extbase\Persistence\ObjectStorage::offsetUnset
      */
-    public function offsetUnset($object)
+    public function offsetUnset($value)
     {
         $this->initialize();
-        parent::offsetUnset($object);
+        parent::offsetUnset($value);
     }
 
     /**
@@ -313,7 +333,7 @@ class LazyObjectStorage extends \TYPO3\CMS\Extbase\Persistence\ObjectStorage imp
 
     /**
      * @param mixed $object
-     * @return int|NULL
+     * @return int|null
      */
     public function getPosition($object)
     {

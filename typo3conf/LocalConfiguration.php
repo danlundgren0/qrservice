@@ -23,23 +23,61 @@ return [
     ],
     'EXT' => [
         'extConf' => [
-            'bootstrap_grids' => 'a:1:{s:19:"enableGridSimpleRow";s:1:"0";}',
-            'bsdist' => 'a:0:{}',
-            'dl_iponlyestate' => 'a:3:{s:22:"responsibleTechnicians";s:1:"2";s:7:"ftpUser";s:0:"";s:7:"ftpPass";s:0:"";}',
-            'dl_qrcodesgenerator' => 'a:0:{}',
+            'backend' => 'a:6:{s:9:"loginLogo";s:0:"";s:19:"loginHighlightColor";s:0:"";s:20:"loginBackgroundImage";s:0:"";s:13:"loginFootnote";s:0:"";s:11:"backendLogo";s:0:"";s:14:"backendFavicon";s:0:"";}',
+            'dl_iponlyestate' => 'a:3:{s:22:"responsibleTechnicians";s:1:"2";s:7:"ftpPass";s:0:"";s:7:"ftpUser";s:0:"";}',
             'extension_builder' => 'a:3:{s:15:"enableRoundtrip";s:1:"1";s:15:"backupExtension";s:1:"1";s:9:"backupDir";s:35:"uploads/tx_extensionbuilder/backups";}',
-            'gridelements' => 'a:2:{s:20:"additionalStylesheet";s:0:"";s:19:"nestingInListModule";s:1:"0";}',
-            'ke_search' => 'a:11:{s:20:"multiplyValueToTitle";s:1:"1";s:16:"searchWordLength";s:1:"4";s:16:"enablePartSearch";s:1:"1";s:17:"enableExplicitAnd";s:1:"0";s:18:"finishNotification";s:1:"0";s:21:"notificationRecipient";s:0:"";s:18:"notificationSender";s:19:"no_reply@domain.com";s:19:"notificationSubject";s:32:"[KE_SEARCH INDEXER NOTIFICATION]";s:13:"pathPdftotext";s:9:"/usr/bin/";s:11:"pathPdfinfo";s:9:"/usr/bin/";s:10:"pathCatdoc";s:9:"/usr/bin/";}',
-            'pdfviewhelpers' => 'a:0:{}',
-            'realurl' => 'a:7:{s:10:"configFile";s:26:"typo3conf/realurl_conf.php";s:14:"enableAutoConf";s:1:"1";s:14:"autoConfFormat";s:1:"0";s:17:"segTitleFieldList";s:0:"";s:12:"enableDevLog";s:1:"0";s:10:"moduleIcon";s:1:"0";s:19:"enableChashUrlDebug";s:1:"0";}',
+            'extensionmanager' => 'a:2:{s:21:"automaticInstallation";s:1:"1";s:11:"offlineMode";s:1:"0";}',
+            'gridelements' => 'a:6:{s:20:"additionalStylesheet";s:0:"";s:19:"nestingInListModule";s:1:"0";s:26:"overlayShortcutTranslation";s:1:"0";s:19:"disableDragInWizard";s:1:"0";s:25:"disableCopyFromPageButton";s:1:"0";s:38:"disableAutomaticUnusedColumnCorrection";s:1:"0";}',
             'rsaauth' => 'a:1:{s:18:"temporaryDirectory";s:0:"";}',
-            'saltedpasswords' => 'a:2:{s:3:"BE.";a:4:{s:21:"saltedPWHashingMethod";s:41:"TYPO3\\CMS\\Saltedpasswords\\Salt\\PhpassSalt";s:11:"forceSalted";i:0;s:15:"onlyAuthService";i:0;s:12:"updatePasswd";i:1;}s:3:"FE.";a:5:{s:7:"enabled";i:1;s:21:"saltedPWHashingMethod";s:41:"TYPO3\\CMS\\Saltedpasswords\\Salt\\PhpassSalt";s:11:"forceSalted";i:0;s:15:"onlyAuthService";i:0;s:12:"updatePasswd";i:1;}}',
-            'vhs' => 'a:0:{}',
+            'scheduler' => 'a:2:{s:11:"maxLifetime";s:4:"1440";s:15:"showSampleTasks";s:1:"1";}',
+            'vhs' => 'a:1:{s:20:"disableAssetHandling";s:1:"0";}',
         ],
     ],
     'EXTCONF' => [
         'lang' => [
             'availableLanguages' => [],
+        ],
+    ],
+    'EXTENSIONS' => [
+        'backend' => [
+            'backendFavicon' => '',
+            'backendLogo' => '',
+            'loginBackgroundImage' => '',
+            'loginFootnote' => '',
+            'loginHighlightColor' => '',
+            'loginLogo' => '',
+        ],
+        'dl_iponlyestate' => [
+            'ftpPass' => '',
+            'ftpUser' => '',
+            'responsibleTechnicians' => '2',
+        ],
+        'extension_builder' => [
+            'backupDir' => 'uploads/tx_extensionbuilder/backups',
+            'backupExtension' => '1',
+            'enableRoundtrip' => '1',
+        ],
+        'extensionmanager' => [
+            'automaticInstallation' => '1',
+            'offlineMode' => '0',
+        ],
+        'gridelements' => [
+            'additionalStylesheet' => '',
+            'disableAutomaticUnusedColumnCorrection' => '0',
+            'disableCopyFromPageButton' => '0',
+            'disableDragInWizard' => '0',
+            'nestingInListModule' => '0',
+            'overlayShortcutTranslation' => '0',
+        ],
+        'rsaauth' => [
+            'temporaryDirectory' => '',
+        ],
+        'scheduler' => [
+            'maxLifetime' => '1440',
+            'showSampleTasks' => '1',
+        ],
+        'vhs' => [
+            'disableAssetHandling' => '0',
         ],
     ],
     'FE' => [
@@ -51,12 +89,27 @@ return [
         'processor' => 'GraphicsMagick',
         'processor_allowTemporaryMasksAsPng' => '',
         'processor_colorspace' => 'RGB',
-        'processor_effects' => '-1',
+        'processor_effects' => false,
         'processor_enabled' => '1',
         'processor_path' => '/usr/bin/',
         'processor_path_lzw' => '/usr/bin/',
     ],
     'INSTALL' => [],
+    'LOG' => [
+        'TYPO3' => [
+            'CMS' => [
+                'deprecations' => [
+                    'writerConfiguration' => [
+                        5 => [
+                            'TYPO3\CMS\Core\Log\Writer\FileWriter' => [
+                                'disabled' => false,
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ],
+    ],
     'MAIL' => [
         'transport' => 'mail',
         'transport_sendmail_command' => '/usr/sbin/sendmail -t -i',
@@ -82,13 +135,9 @@ return [
         ],
         'devIPmask' => '*',
         'displayErrors' => 1,
-        'enableDeprecationLog' => 'file',
         'encryptionKey' => 'abbd72cf16ead6bc99ce5903d5c466adb3d704ee34f4acc8e950618f014e15c5eee86c78ddb63d03253a0198071e97e9',
-        'exceptionalErrors' => 28674,
-        'isInitialDatabaseImportDone' => true,
-        'isInitialInstallationInProgress' => false,
+        'exceptionalErrors' => 12290,
         'sitename' => 'IP-Only',
-        'sqlDebug' => 1,
         'systemLogLevel' => 0,
     ],
 ];

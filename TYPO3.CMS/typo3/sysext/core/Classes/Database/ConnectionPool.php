@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Database;
 
 /*
@@ -15,10 +15,13 @@ namespace TYPO3\CMS\Core\Database;
  * The TYPO3 project - inspiring people to share!
  */
 
-use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Events;
 use Doctrine\DBAL\Types\Type;
+use TYPO3\CMS\Core\Database\Driver\PDOMySql\Driver as PDOMySqlDriver;
+use TYPO3\CMS\Core\Database\Driver\PDOPgSql\Driver as PDOPgSqlDriver;
+use TYPO3\CMS\Core\Database\Driver\PDOSqlite\Driver as PDOSqliteDriver;
+use TYPO3\CMS\Core\Database\Driver\PDOSqlsrv\Driver as PDOSqlsrvDriver;
 use TYPO3\CMS\Core\Database\Query\QueryBuilder;
 use TYPO3\CMS\Core\Database\Schema\EventListener\SchemaAlterTableListener;
 use TYPO3\CMS\Core\Database\Schema\EventListener\SchemaColumnDefinitionListener;
@@ -58,6 +61,21 @@ class ConnectionPool
     ];
 
     /**
+     * List of custom drivers and their mappings to the driver classes.
+     *
+     * @var string[]
+     */
+    protected static $driverMap = [
+        'pdo_mysql' => PDOMySqlDriver::class,
+        'pdo_sqlite' => PDOSqliteDriver::class,
+        'pdo_pgsql' => PDOPgSqlDriver::class,
+        'pdo_sqlsrv' => PDOSqlsrvDriver::class,
+        // TODO: not supported yet, need to be checked later
+//        'pdo_oci' => PDOOCIDriver::class,
+//        'drizzle_pdo_mysql' => DrizzlePDOMySQLDriver::class,
+    ];
+
+    /**
      * Creates a connection object based on the specified table name.
      *
      * This is the official entry point to get a database connection to ensure
@@ -92,7 +110,6 @@ class ConnectionPool
      * @param string $connectionName
      * @return Connection
      * @throws \Doctrine\DBAL\DBALException
-     * @internal
      */
     public function getConnectionByName(string $connectionName): Connection
     {
@@ -107,16 +124,14 @@ class ConnectionPool
             return static::$connections[$connectionName];
         }
 
-        if (empty($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections'][$connectionName])
-            || !is_array($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections'][$connectionName])
-        ) {
+        $connectionParams = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections'][$connectionName] ?? [];
+        if (empty($connectionParams)) {
             throw new \RuntimeException(
                 'The requested database connection named "' . $connectionName . '" has not been configured.',
                 1459422492
             );
         }
 
-        $connectionParams = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections'][$connectionName];
         if (empty($connectionParams['wrapperClass'])) {
             $connectionParams['wrapperClass'] = Connection::class;
         }
@@ -135,6 +150,22 @@ class ConnectionPool
     }
 
     /**
+     * Map custom driver class for certain driver
+     *
+     * @param array $connectionParams
+     * @return array
+     */
+    protected function mapCustomDriver(array $connectionParams): array
+    {
+        // if no custom driver is provided, map TYPO3 specific drivers
+        if (!isset($connectionParams['driverClass']) && isset(static::$driverMap[$connectionParams['driver']])) {
+            $connectionParams['driverClass'] = static::$driverMap[$connectionParams['driver']];
+        }
+
+        return $connectionParams;
+    }
+
+    /**
      * Creates a connection object based on the specified parameters
      *
      * @param array $connectionParams
@@ -144,14 +175,10 @@ class ConnectionPool
     {
         // Default to UTF-8 connection charset
         if (empty($connectionParams['charset'])) {
-            $connectionParams['charset'] = 'utf-8';
+            $connectionParams['charset'] = 'utf8';
         }
 
-        // Force consistent handling of binary objects across datbase platforms
-        // MySQL returns strings by default, PostgreSQL streams.
-        if (strpos($connectionParams['driver'], 'pdo_') === 0) {
-            $connectionParams['driverOptions'][\PDO::ATTR_STRINGIFY_FETCHES] = true;
-        }
+        $connectionParams = $this->mapCustomDriver($connectionParams);
 
         /** @var Connection $conn */
         $conn = DriverManager::getConnection($connectionParams);
@@ -238,5 +265,15 @@ class ConnectionPool
     public function getCustomDoctrineTypes(): array
     {
         return $this->customDoctrineTypes;
+    }
+
+    /**
+     * Reset internal list of connections.
+     * Currently primarily used in functional tests to close connections and start
+     * new ones in between single tests.
+     */
+    public function resetConnections(): void
+    {
+        static::$connections = [];
     }
 }

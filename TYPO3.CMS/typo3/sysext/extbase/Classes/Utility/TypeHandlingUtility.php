@@ -13,13 +13,14 @@ namespace TYPO3\CMS\Extbase\Utility;
 
 /**
  * PHP type handling functions
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 class TypeHandlingUtility
 {
     /**
      * A property type parse pattern.
      */
-    const PARSE_TYPE_PATTERN = '/^\\\\?(?P<type>integer|int|float|double|boolean|bool|string|DateTime|Tx_[a-zA-Z0-9_]+|[A-Z][a-zA-Z0-9\\\\_]+|object|resource|array|ArrayObject|SplObjectStorage|TYPO3\\\\CMS\\\\Extbase\\\\Persistence\\\\ObjectStorage)(?:<\\\\?(?P<elementType>[a-zA-Z0-9\\\\_]+)>)?/';
+    const PARSE_TYPE_PATTERN = '/^\\\\?(?P<type>integer|int|float|double|boolean|bool|string|DateTimeImmutable|DateTime|[A-Z][a-zA-Z0-9\\\\]+|object|resource|array|ArrayObject|SplObjectStorage|TYPO3\\\\CMS\\\\Extbase\\\\Persistence\\\\ObjectStorage)(?:<\\\\?(?P<elementType>[a-zA-Z0-9\\\\]+)>)?/';
 
     /**
      * A type pattern to detect literal types.
@@ -54,9 +55,8 @@ class TypeHandlingUtility
                 'type' => $type,
                 'elementType' => $elementType
             ];
-        } else {
-            throw new \TYPO3\CMS\Extbase\Utility\Exception\InvalidTypeException('Found an invalid element type declaration in %s. A type "' . var_export($type, true) . '" does not exist.', 1264093630);
         }
+        throw new \TYPO3\CMS\Extbase\Utility\Exception\InvalidTypeException('Found an invalid element type declaration in %s. A type "' . var_export($type, true) . '" does not exist.', 1264093630);
     }
 
     /**
@@ -162,7 +162,7 @@ class TypeHandlingUtility
         $binaryData = '';
         $length = strlen($hexadecimalData);
         for ($i = 0; $i < $length; $i += 2) {
-            $binaryData .=  pack('C', hexdec(substr($hexadecimalData, $i, 2)));
+            $binaryData .= pack('C', hexdec(substr($hexadecimalData, $i, 2)));
         }
         return $binaryData;
     }

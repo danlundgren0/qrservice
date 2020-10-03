@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Database\Schema;
 
 /*
@@ -15,9 +15,9 @@ namespace TYPO3\CMS\Core\Database\Schema;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Package\PackageManager;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\SignalSlot\Dispatcher;
-use TYPO3\CMS\Install\Service\SqlExpectedSchemaService;
 
 /**
  * Helper methods to handle raw SQL input and transform it into individual statements
@@ -28,17 +28,24 @@ use TYPO3\CMS\Install\Service\SqlExpectedSchemaService;
 class SqlReader
 {
     /**
-     * @var \TYPO3\CMS\Extbase\SignalSlot\Dispatcher
+     * @var Dispatcher
      */
     protected $signalSlotDispatcher;
 
     /**
+     * @var PackageManager
+     */
+    protected $packageManager;
+
+    /**
      * @param Dispatcher $signalSlotDispatcher
+     * @param PackageManager $packageManager
      * @throws \InvalidArgumentException
      */
-    public function __construct(Dispatcher $signalSlotDispatcher = null)
+    public function __construct(Dispatcher $signalSlotDispatcher = null, PackageManager $packageManager = null)
     {
         $this->signalSlotDispatcher = $signalSlotDispatcher ?: GeneralUtility::makeInstance(Dispatcher::class);
+        $this->packageManager = $packageManager ?? GeneralUtility::makeInstance(PackageManager::class);
     }
 
     /**
@@ -55,15 +62,13 @@ class SqlReader
         $sqlString = [];
 
         // Find all ext_tables.sql of loaded extensions
-        foreach ((array)$GLOBALS['TYPO3_LOADED_EXT'] as $extensionConfiguration) {
-            if (!is_array($extensionConfiguration) && !$extensionConfiguration instanceof \ArrayAccess) {
-                continue;
+        foreach ($this->packageManager->getActivePackages() as $package) {
+            $packagePath = $package->getPackagePath();
+            if (@file_exists($packagePath . 'ext_tables.sql')) {
+                $sqlString[] = file_get_contents($packagePath . 'ext_tables.sql');
             }
-            if ($extensionConfiguration['ext_tables.sql']) {
-                $sqlString[] = file_get_contents($extensionConfiguration['ext_tables.sql']);
-            }
-            if ($withStatic && $extensionConfiguration['ext_tables_static+adt.sql']) {
-                $sqlString[] = file_get_contents($extensionConfiguration['ext_tables_static+adt.sql']);
+            if ($withStatic && @file_exists($packagePath . 'ext_tables_static+adt.sql')) {
+                $sqlString[] = file_get_contents($packagePath . 'ext_tables_static+adt.sql');
             }
         }
 
@@ -85,15 +90,25 @@ class SqlReader
     {
         $statementArray = [];
         $statementArrayPointer = 0;
+        $isInMultilineComment = false;
         foreach (explode(LF, $dumpContent) as $lineContent) {
             $lineContent = trim($lineContent);
 
             // Skip empty lines and comments
-            if ($lineContent === '' || $lineContent[0] === '#' || strpos($lineContent, '--') === 0) {
+            if ($lineContent === '' || $lineContent[0] === '#' || strpos($lineContent, '--') === 0 ||
+                strpos($lineContent, '/*') === 0 || substr($lineContent, -2) === '*/' || $isInMultilineComment
+            ) {
+                // skip c style multiline comments
+                if (strpos($lineContent, '/*') === 0 && substr($lineContent, -2) !== '*/') {
+                    $isInMultilineComment = true;
+                }
+                if (substr($lineContent, -2) === '*/') {
+                    $isInMultilineComment = false;
+                }
                 continue;
             }
 
-            $statementArray[$statementArrayPointer] .= $lineContent;
+            $statementArray[$statementArrayPointer] = ($statementArray[$statementArrayPointer] ?? '') . $lineContent;
 
             if (substr($lineContent, -1) === ';') {
                 $statement = trim($statementArray[$statementArrayPointer]);
@@ -144,7 +159,7 @@ class SqlReader
     {
         // Using the old class name from the install tool here to keep backwards compatibility.
         $signalReturn = $this->signalSlotDispatcher->dispatch(
-            SqlExpectedSchemaService::class,
+            'TYPO3\\CMS\\Install\\Service\\SqlExpectedSchemaService',
             'tablesDefinitionIsBeingBuilt',
             [$sqlString]
         );

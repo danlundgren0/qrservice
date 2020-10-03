@@ -255,7 +255,8 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
             $toCookieCPs = json_encode($allCps);
             setcookie('scanned_cps', $toCookieCPs, time() + 3600 * 12, '/');
         }
-        $rootLine1Uid = $GLOBALS['TSFE']->rootLine['3'][uid];
+
+        $rootLine1Uid = $GLOBALS['TSFE']->rootLine['3']['uid'];
         //Link to estate-Page
         $parentPid = $GLOBALS['TSFE']->page['pid'];
         $cpId = (int) $this->settings['ControlPoint'];
@@ -476,7 +477,7 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
      */
     public function uploadAction($arguments, $note, $estate)
     {
-        if (count($note->getImages()) > 0) {
+        if ($note && is_array($note->getImages()) &&  count($note->getImages()) > 0) {
             $imagesToRemove = $note->getImages();
             $note->removeImage($imagesToRemove);
             $this->noteRepository->update($note);
@@ -495,7 +496,7 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
         // Initializing:
         /** @var \TYPO3\CMS\Core\Utility\File\ExtendedFileUtility $fileProcessor */
         $fileProcessor = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Utility\\File\\ExtendedFileUtility');
-        $fileProcessor->init(array(), $GLOBALS['TYPO3_CONF_VARS']['BE']['fileExtensions']);
+        //$fileProcessor->init(array(), $GLOBALS['TYPO3_CONF_VARS']['BE']['fileExtensions']);
         $fileProcessor->setActionPermissions(array('addFile' => TRUE));
         $fileProcessor->setExistingFilesConflictMode(\TYPO3\CMS\Core\Resource\DuplicationBehavior::RENAME);
         //Changed to rename new file 2020-05-15
@@ -562,7 +563,8 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
             'uid_foreign' => $noteUid,
             'tablenames' => $tableNames,
             'fieldname' => $fieldName,
-            'table_local' => $tableLocal
+            'table_local' => $tableLocal,
+            'l10n_diffsource' => "",
         ));
     }
     

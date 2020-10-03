@@ -6,9 +6,7 @@ namespace TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\Expression;
  * See LICENSE.txt that was shipped with this package.
  */
 
-use TYPO3Fluid\Fluid\Core\Parser;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
-use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\Expression\ExpressionException;
 
 /**
  * Type Casting Node - allows the shorthand version
@@ -34,9 +32,9 @@ class CastingExpressionNode extends AbstractExpressionNode
 		(
 			{                                # Start of shorthand syntax
 				(?:                          # Math expression is composed of...
-					[a-zA-Z0-9.]+            # Template variable object access path
+					[_a-zA-Z0-9.]+            # Template variable object access path
 					[\s]+as[\s]+             # A single space, then "as", then a single space
-					[a-zA-Z0-9.\s]+          # Casting-to-type side
+					[_a-zA-Z0-9.\s]+          # Casting-to-type side
 				)
 			}                                # End of shorthand syntax
 		)/x';
@@ -58,8 +56,9 @@ class CastingExpressionNode extends AbstractExpressionNode
         if (!in_array($type, self::$validTypes)) {
             throw new ExpressionException(
                 sprintf(
-                    'Invalid target conversion type "%s" specified in casting expression',
-                    $type
+                    'Invalid target conversion type "%s" specified in casting expression "{%s}".',
+                    $type,
+                    $expression
                 )
             );
         }

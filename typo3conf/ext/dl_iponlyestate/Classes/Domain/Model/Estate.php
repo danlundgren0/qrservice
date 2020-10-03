@@ -140,7 +140,7 @@ class Estate extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     /**
      * controlPoints
      *
-     * @var \TYPO3\CMS\Extbase\Persistence\ObjectStorage<\DanLundgren\DlIponlyestate\Domain\Model\ControlPoint>
+     * @var \DanLundgren\DlIponlyestate\Domain\Model\ControlPoint
      */
     protected $controlPoints = null;
     
@@ -202,6 +202,9 @@ class Estate extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
      */
     public function getControlPoints()
     {
+        foreach($this->controlPoints as $controlPoint) {
+            return $controlPoint;
+        }
         return $this->controlPoints;
     }
     

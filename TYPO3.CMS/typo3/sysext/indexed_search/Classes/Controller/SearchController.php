@@ -14,21 +14,33 @@ namespace TYPO3\CMS\IndexedSearch\Controller;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Core\Charset\CharsetConverter;
+use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
+use TYPO3\CMS\Core\Context\Context;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Restriction\FrontendRestrictionContainer;
+use TYPO3\CMS\Core\Exception\Page\RootLineException;
+use TYPO3\CMS\Core\Exception\SiteNotFoundException;
 use TYPO3\CMS\Core\Html\HtmlParser;
+use TYPO3\CMS\Core\Site\PseudoSiteFinder;
+use TYPO3\CMS\Core\Site\SiteFinder;
+use TYPO3\CMS\Core\Type\File\ImageInfo;
 use TYPO3\CMS\Core\TypoScript\TypoScriptService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\IpAnonymizationUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
+use TYPO3\CMS\Core\Utility\PathUtility;
+use TYPO3\CMS\Core\Utility\RootlineUtility;
+use TYPO3\CMS\Extbase\Annotation as Extbase;
 use TYPO3\CMS\Extbase\Utility\LocalizationUtility;
+use TYPO3\CMS\Frontend\Page\PageRepository;
 
 /**
  * Index search frontend
  *
  * Creates a search form for indexed search. Indexing must be enabled
  * for this to make sense.
+ * @internal This class is a specific controller implementation and is not considered part of the Public TYPO3 API.
  */
 class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionController
 {
@@ -37,7 +49,7 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
      *
      * @var string
      */
-    protected $sword = null;
+    protected $sword = '';
 
     /**
      * @var array
@@ -75,7 +87,7 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
      *
      * @var \TYPO3\CMS\IndexedSearch\Domain\Repository\IndexSearchRepository
      */
-    protected $searchRepository = null;
+    protected $searchRepository;
 
     /**
      * Lexer object
@@ -133,7 +145,7 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
     protected $iconFileNameCache = [];
 
     /**
-     * Indexer configuration, coming from $GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['indexed_search']
+     * Indexer configuration, coming from TYPO3's system configuration for EXT:indexed_search
      *
      * @var array
      */
@@ -152,11 +164,6 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
     protected $typoScriptService;
 
     /**
-     * @var CharsetConverter
-     */
-    protected $charsetConverter;
-
-    /**
      * @param \TYPO3\CMS\Core\TypoScript\TypoScriptService $typoScriptService
      */
     public function injectTypoScriptService(\TYPO3\CMS\Core\TypoScript\TypoScriptService $typoScriptService)
@@ -172,7 +179,6 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
      */
     public function initialize($searchData = [])
     {
-        $this->charsetConverter = GeneralUtility::makeInstance(CharsetConverter::class);
         if (!is_array($searchData)) {
             $searchData = [];
         }
@@ -196,8 +202,13 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
         if (is_array($this->settings['defaultOptions'])) {
             $searchData = array_merge($this->settings['defaultOptions'], $searchData);
         }
+        // if "languageUid" was set to "current", take the current site language
+        if (($searchData['languageUid'] ?? '') === 'current') {
+            $searchData['languageUid'] = GeneralUtility::makeInstance(Context::class)->getPropertyFromAspect('language', 'id', 0);
+        }
+
         // Indexer configuration from Extension Manager interface:
-        $this->indexerConfig = unserialize($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['indexed_search'], ['allowed_classes' => false]);
+        $this->indexerConfig = GeneralUtility::makeInstance(ExtensionConfiguration::class)->get('indexed_search');
         $this->enableMetaphoneSearch = (bool)$this->indexerConfig['enableMetaphoneSearch'];
         $this->initializeExternalParsers();
         // If "_sections" is set, this value overrides any existing value.
@@ -244,7 +255,7 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
      * Performs the search, the display and writing stats
      *
      * @param array $search the search parameters, an associative array
-     * @ignorevalidation $search
+     * @Extbase\IgnoreValidation("search")
      */
     public function searchAction($search = [])
     {
@@ -257,6 +268,11 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
             // index configuration is disabled
             $freeIndexUid = -1;
         }
+
+        if (!empty($searchData['extendedSearch'])) {
+            $this->view->assignMultiple($this->processExtendedSearchParameters());
+        }
+
         $indexCfgs = GeneralUtility::intExplode(',', $freeIndexUid);
         $resultsets = [];
         foreach ($indexCfgs as $freeIndexUid) {
@@ -341,9 +357,14 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
             }
         }
         // Print a message telling which words in which sections we searched for
-        if (substr($this->searchData['sections'], 0, 2) === 'rl') {
+        if (strpos($this->searchData['sections'], 'rl') === 0) {
             $result['searchedInSectionInfo'] = LocalizationUtility::translate('result.inSection', 'IndexedSearch') . ' "' . $this->getPathFromPageId(substr($this->searchData['sections'], 4)) . '"';
         }
+
+        if ($hookObj = $this->hookRequest('getDisplayResults_postProc')) {
+            $result = $hookObj->getDisplayResults_postProc($result);
+        }
+
         return $result;
     }
 
@@ -353,7 +374,7 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
      *
      * @param array $resultRows Result rows
      * @param int $freeIndexUid Pointing to which indexing configuration you want to search in. -1 means no filtering. 0 means only regular indexed content.
-     * @return string HTML
+     * @return array the result rows with additional information
      */
     protected function compileResultRows($resultRows, $freeIndexUid = -1)
     {
@@ -383,7 +404,7 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
         $resultRows = $newResultRows;
         $this->resultSections = [];
         if ($freeIndexUid <= 0 && $this->searchData['group'] === 'sections') {
-            $rl2flag = substr($this->searchData['sections'], 0, 2) === 'rl';
+            $rl2flag = strpos($this->searchData['sections'], 'rl') === 0;
             $sections = [];
             foreach ($resultRows as $row) {
                 $id = $row['rl0'] . '-' . $row['rl1'] . ($rl2flag ? '-' . $row['rl2'] : '');
@@ -438,7 +459,7 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
      *
      * @param array $row Search result row
      * @param int $headerOnly 1=Display only header (for sub-rows!), 2=nothing at all
-     * @return string HTML code
+     * @return array the result row with additional information
      */
     protected function compileSingleResultRow($row, $headerOnly = 0)
     {
@@ -470,7 +491,10 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
                 // Suspicious, so linking to page instead...
                 $copiedRow = $row;
                 unset($copiedRow['cHashParams']);
-                $title = $this->linkPage($row['page_id'], htmlspecialchars($title), $copiedRow);
+                $title = $this->linkPageATagWrap(
+                    $title,
+                    $this->linkPage($row['page_id'], $copiedRow)
+                );
             }
         } else {
             // Else the page:
@@ -484,7 +508,10 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
                     $markUpSwParams['sword_list'][] = $d['sword'];
                 }
             }
-            $title = $this->linkPage($row['data_page_id'], htmlspecialchars($title), $row, $markUpSwParams);
+            $title = $this->linkPageATagWrap(
+                $title,
+                $this->linkPage($row['data_page_id'], $row, $markUpSwParams)
+            );
         }
         $resultData['title'] = $title;
         $resultData['icon'] = $this->makeItemTypeIcon($row['item_type'], '', $specRowConf);
@@ -504,21 +531,34 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
             if ($GLOBALS['TSFE']->config['config']['fileTarget']) {
                 $targetAttribute = ' target="' . htmlspecialchars($GLOBALS['TSFE']->config['config']['fileTarget']) . '"';
             }
+            $resultData['pathTitle'] = $row['data_filename'];
+            $resultData['pathUri'] = $row['data_filename'];
             $resultData['path'] = '<a href="' . htmlspecialchars($row['data_filename']) . '"' . $targetAttribute . '>' . htmlspecialchars($row['data_filename']) . '</a>';
         } else {
             $pathId = $row['data_page_id'] ?: $row['page_id'];
             $pathMP = $row['data_page_id'] ? $row['data_page_mp'] : '';
             $pathStr = $this->getPathFromPageId($pathId, $pathMP);
-            $resultData['path'] = $this->linkPage($pathId, $pathStr, [
-                'cHashParams' => $row['cHashParams'],
-                'data_page_type' => $row['data_page_type'],
-                'data_page_mp' => $pathMP,
-                'sys_language_uid' => $row['sys_language_uid']
-            ]);
+            $pathLinkData = $this->linkPage(
+                $pathId,
+                [
+                    'cHashParams' => $row['cHashParams'],
+                    'data_page_type' => $row['data_page_type'],
+                    'data_page_mp' => $pathMP,
+                    'sys_language_uid' => $row['sys_language_uid'],
+                    'static_page_arguments' => $row['static_page_arguments']
+                ]
+            );
+
+            $resultData['pathTitle'] = $pathStr;
+            $resultData['pathUri'] = $pathLinkData['uri'];
+            $resultData['path'] = $this->linkPageATagWrap($pathStr, $pathLinkData);
+
             // check if the access is restricted
             if (is_array($this->requiredFrontendUsergroups[$pathId]) && !empty($this->requiredFrontendUsergroups[$pathId])) {
-                $resultData['access'] = '<img src="' . \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::siteRelPath('indexed_search')
-                    . 'Resources/Public/Icons/FileTypes/locked.gif" width="12" height="15" vspace="5" title="'
+                $lockedIcon = GeneralUtility::getFileAbsFileName('EXT:indexed_search/Resources/Public/Icons/FileTypes/locked.gif');
+                $lockedIcon = PathUtility::getAbsoluteWebPath($lockedIcon);
+                $resultData['access'] = '<img src="' . htmlspecialchars($lockedIcon) . '"'
+                    . ' width="12" height="15" vspace="5" title="'
                     . sprintf(LocalizationUtility::translate('result.memberGroups', 'IndexedSearch'), implode(',', array_unique($this->requiredFrontendUsergroups[$pathId])))
                     . '" alt="" />';
             }
@@ -551,9 +591,9 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
     {
         $pathId = $row['data_page_id'] ?: $row['page_id'];
         $pathMP = $row['data_page_id'] ? $row['data_page_mp'] : '';
-        $rl = $GLOBALS['TSFE']->sys_page->getRootLine($pathId, $pathMP);
         $specConf = $this->settings['specialConfiguration']['0'];
-        if (is_array($rl)) {
+        try {
+            $rl = GeneralUtility::makeInstance(RootlineUtility::class, $pathId, $pathMP)->get();
             foreach ($rl as $dat) {
                 if (is_array($this->settings['specialConfiguration'][$dat['uid']])) {
                     $specConf = $this->settings['specialConfiguration'][$dat['uid']];
@@ -561,6 +601,8 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
                     break;
                 }
             }
+        } catch (RootLineException $e) {
+            // do nothing
         }
         return $specConf;
     }
@@ -577,10 +619,8 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
         switch ((string)$this->searchData['sortOrder']) {
             case 'rank_count':
                 return $row['order_val'] . ' ' . LocalizationUtility::translate('result.ratingMatches', 'IndexedSearch');
-                break;
             case 'rank_first':
-                return ceil(MathUtility::forceIntegerInRange((255 - $row['order_val']), 1, 255) / 255 * 100) . '%';
-                break;
+                return ceil(MathUtility::forceIntegerInRange(255 - $row['order_val'], 1, 255) / 255 * 100) . '%';
             case 'rank_flag':
                 if ($this->firstRow['order_val2']) {
                     // (3 MSB bit, 224 is highest value of order_val1 currently)
@@ -595,13 +635,10 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
                 $max = 10000;
                 $total = MathUtility::forceIntegerInRange($row['order_val'], 0, $max);
                 return ceil(log($total) / log($max) * 100) . '%';
-                break;
             case 'crdate':
                 return $GLOBALS['TSFE']->cObj->calcAge($GLOBALS['EXEC_TIME'] - $row['item_crdate'], 0);
-                break;
             case 'mtime':
                 return $GLOBALS['TSFE']->cObj->calcAge($GLOBALS['EXEC_TIME'] - $row['item_mtime'], 0);
-                break;
             default:
                 return ' ';
         }
@@ -657,7 +694,7 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
             } else {
                 // Default creation / finding of icon:
                 $icon = '';
-                if ($imageType === '0' || substr($imageType, 0, 2) === '0:') {
+                if ($imageType === '0' || strpos($imageType, '0:') === 0) {
                     if (is_array($specRowConf['pageIcon'])) {
                         $this->iconFileNameCache[$imageType] = $GLOBALS['TSFE']->cObj->cObjGetSingle('IMAGE', $specRowConf['pageIcon']);
                     } else {
@@ -669,9 +706,14 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
                 if ($icon) {
                     $fullPath = GeneralUtility::getFileAbsFileName($icon);
                     if ($fullPath) {
-                        $info = @getimagesize($fullPath);
-                        $iconPath = \TYPO3\CMS\Core\Utility\PathUtility::stripPathSitePrefix($fullPath);
-                        $this->iconFileNameCache[$imageType] = is_array($info) ? '<img src="' . $iconPath . '" ' . $info[3] . ' title="' . htmlspecialchars($alt) . '" alt="" />' : '';
+                        $imageInfo = GeneralUtility::makeInstance(ImageInfo::class, $fullPath);
+                        $iconPath = PathUtility::stripPathSitePrefix($fullPath);
+                        $this->iconFileNameCache[$imageType] = $imageInfo->getWidth()
+                            ? '<img src="' . $iconPath
+                              . '" width="' . $imageInfo->getWidth()
+                              . '" height="' . $imageInfo->getHeight()
+                              . '" title="' . htmlspecialchars($alt) . '" alt="" />'
+                            : '';
                     }
                 }
             }
@@ -769,11 +811,17 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
                 } elseif ($summaryLgd > $summaryMax || !isset($parts[$k + 1])) {
                     // In case summary length is exceed OR if there are no more entries at all:
                     if ($strLen > $postPreLgd) {
-                        $output[$k] = preg_replace('/[[:space:]][^[:space:]]+$/', '', GeneralUtility::fixed_lgd_cs($parts[$k], ($postPreLgd - $postPreLgd_offset))) . $divider;
+                        $output[$k] = preg_replace('/[[:space:]][^[:space:]]+$/', '', GeneralUtility::fixed_lgd_cs(
+                            $parts[$k],
+                            $postPreLgd - $postPreLgd_offset
+                        )) . $divider;
                     }
                 } else {
                     if ($strLen > $postPreLgd * 2) {
-                        $output[$k] = preg_replace('/[[:space:]][^[:space:]]+$/', '', GeneralUtility::fixed_lgd_cs($parts[$k], ($postPreLgd - $postPreLgd_offset))) . $divider . preg_replace('/^[^[:space:]]+[[:space:]]/', '', GeneralUtility::fixed_lgd_cs($parts[$k], -($postPreLgd - $postPreLgd_offset)));
+                        $output[$k] = preg_replace('/[[:space:]][^[:space:]]+$/', '', GeneralUtility::fixed_lgd_cs(
+                            $parts[$k],
+                            $postPreLgd - $postPreLgd_offset
+                        )) . $divider . preg_replace('/^[^[:space:]]+[[:space:]]/', '', GeneralUtility::fixed_lgd_cs($parts[$k], -($postPreLgd - $postPreLgd_offset)));
                     }
                 }
                 $summaryLgd += mb_strlen($output[$k], 'utf-8');
@@ -793,23 +841,34 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
     }
 
     /**
-     * Write statistics information to database for the search operation
+     * Write statistics information to database for the search operation if there was at least one search word.
      *
      * @param array $searchParams search params
      * @param array $searchWords Search Word array
      * @param int $count Number of hits
-     * @param int $pt Milliseconds the search took
+     * @param array $pt Milliseconds the search took (start time DB query + end time DB query + end time to compile results)
      */
     protected function writeSearchStat($searchParams, $searchWords, $count, $pt)
     {
+        $searchWord = $this->getSword();
+        if (empty($searchWord) && empty($searchWords)) {
+            return;
+        }
+
+        $ipAddress = '';
+        try {
+            $ipMask = isset($this->indexerConfig['trackIpInStatistic']) ? (int)$this->indexerConfig['trackIpInStatistic'] : 2;
+            $ipAddress = IpAnonymizationUtility::anonymizeIp(GeneralUtility::getIndpEnv('REMOTE_ADDR'), $ipMask);
+        } catch (\Exception $e) {
+        }
         $insertFields = [
-            'searchstring' => $this->getSword(),
+            'searchstring' => $searchWord,
             'searchoptions' => serialize([$searchParams, $searchWords, $pt]),
             'feuser_id' => (int)$GLOBALS['TSFE']->fe_user->user['uid'],
             // cookie as set or retrieved. If people has cookies disabled this will vary all the time
             'cookie' => $GLOBALS['TSFE']->fe_user->id,
             // Remote IP address
-            'IP' => GeneralUtility::getIndpEnv('REMOTE_ADDR'),
+            'IP' => $ipAddress,
             // Number of hits on the search
             'hits' => (int)$count,
             // Time stamp
@@ -856,9 +915,8 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
      */
     protected function getSearchWords($defaultOperator)
     {
-        // Shorten search-word string to max 200 bytes (does NOT take multibyte charsets into account - but never mind,
-        // shortening the string here is only a run-away feature!)
-        $searchWords = substr($this->getSword(), 0, 200);
+        // Shorten search-word string to max 200 bytes - shortening the string here is only a run-away feature!
+        $searchWords = mb_substr($this->getSword(), 0, 200);
         // Convert to UTF-8 + conv. entities (was also converted during indexing!)
         if ($GLOBALS['TSFE']->metaCharset && $GLOBALS['TSFE']->metaCharset !== 'utf-8') {
             $searchWords = mb_convert_encoding($searchWords, 'utf-8', $GLOBALS['TSFE']->metaCharset);
@@ -909,8 +967,8 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
     {
         $newSearchWords = [];
         // Init lexer (used to post-processing of search words)
-        $lexerObjRef = $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['lexer'] ?: \TYPO3\CMS\IndexedSearch\Lexer::class;
-        $this->lexerObj = GeneralUtility::getUserObj($lexerObjRef);
+        $lexerObjectClassName = $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['lexer'] ?: \TYPO3\CMS\IndexedSearch\Lexer::class;
+        $this->lexerObj = GeneralUtility::makeInstance($lexerObjectClassName);
         // Traverse the search word array
         foreach ($searchWords as $wordDef) {
             // No space in word (otherwise it might be a sentense in quotes like "there is").
@@ -935,7 +993,7 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
      * Sort options about the search form
      *
      * @param array $search The search data / params
-     * @ignorevalidation $search
+     * @Extbase\IgnoreValidation("search")
      */
     public function formAction($search = [])
     {
@@ -943,39 +1001,8 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
         // Adding search field value
         $this->view->assign('sword', $this->getSword());
         // Extended search
-        if ($search['extendedSearch']) {
-            // "Search for"
-            $allSearchTypes = $this->getAllAvailableSearchTypeOptions();
-            $this->view->assign('allSearchTypes', $allSearchTypes);
-            $allDefaultOperands = $this->getAllAvailableOperandsOptions();
-            $this->view->assign('allDefaultOperands', $allDefaultOperands);
-            $showTypeSearch = !empty($allSearchTypes) || !empty($allDefaultOperands);
-            $this->view->assign('showTypeSearch', $showTypeSearch);
-            // "Search in"
-            $allMediaTypes = $this->getAllAvailableMediaTypesOptions();
-            $this->view->assign('allMediaTypes', $allMediaTypes);
-            $allLanguageUids = $this->getAllAvailableLanguageOptions();
-            $this->view->assign('allLanguageUids', $allLanguageUids);
-            $showMediaAndLanguageSearch = !empty($allMediaTypes) || !empty($allLanguageUids);
-            $this->view->assign('showMediaAndLanguageSearch', $showMediaAndLanguageSearch);
-            // Sections
-            $allSections = $this->getAllAvailableSectionsOptions();
-            $this->view->assign('allSections', $allSections);
-            // Free Indexing Configurations
-            $allIndexConfigurations = $this->getAllAvailableIndexConfigurationsOptions();
-            $this->view->assign('allIndexConfigurations', $allIndexConfigurations);
-            // Sorting
-            $allSortOrders = $this->getAllAvailableSortOrderOptions();
-            $this->view->assign('allSortOrders', $allSortOrders);
-            $allSortDescendings = $this->getAllAvailableSortDescendingOptions();
-            $this->view->assign('allSortDescendings', $allSortDescendings);
-            $showSortOrders = !empty($allSortOrders) || !empty($allSortDescendings);
-            $this->view->assign('showSortOrders', $showSortOrders);
-            // Limits
-            $allNumberOfResults = $this->getAllAvailableNumberOfResultsOptions();
-            $this->view->assign('allNumberOfResults', $allNumberOfResults);
-            $allGroups = $this->getAllAvailableGroupOptions();
-            $this->view->assign('allGroups', $allGroups);
+        if (!empty($searchData['extendedSearch'])) {
+            $this->view->assignMultiple($this->processExtendedSearchParameters());
         }
         $this->view->assign('searchParams', $searchData);
     }
@@ -1079,23 +1106,23 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
     protected function getAllAvailableLanguageOptions()
     {
         $allOptions = [
-            '-1' => LocalizationUtility::translate('languageUids.-1', 'IndexedSearch'),
-            '0' => LocalizationUtility::translate('languageUids.0', 'IndexedSearch')
+            '-1' => LocalizationUtility::translate('languageUids.-1', 'IndexedSearch')
         ];
         $blindSettings = $this->settings['blind'];
         if (!$blindSettings['languageUid']) {
-            // Add search languages
-            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
-                ->getQueryBuilderForTable('sys_language');
-            $queryBuilder->setRestrictions(GeneralUtility::makeInstance(FrontendRestrictionContainer::class));
-            $result = $queryBuilder
-                ->select('uid', 'title')
-                ->from('sys_language')
-                ->execute();
+            try {
+                $site = GeneralUtility::makeInstance(SiteFinder::class)
+                    ->getSiteByPageId($GLOBALS['TSFE']->id);
 
-            while ($lang = $result->fetch()) {
-                $allOptions[$lang['uid']] = $lang['title'];
+                $languages = $site->getLanguages();
+                foreach ($languages as $language) {
+                    $allOptions[$language->getLanguageId()] = $language->getNavigationTitle() ?? $language->getTitle();
+                }
+            } catch (SiteNotFoundException $e) {
+                // No Site or pseudo site found, no options
+                $allOptions = [];
             }
+
             // disable single entries by TypoScript
             $allOptions = $this->removeOptionsFromOptionList($allOptions, $blindSettings['languageUid']);
         } else {
@@ -1186,7 +1213,7 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
                     ->execute();
 
                 while ($row = $result->fetch()) {
-                    $allOptions[$row['uid']]= $row['title'];
+                    $allOptions[$row['uid']] = $row['title'];
                 }
             }
             // disable single entries by TypoScript
@@ -1300,21 +1327,25 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
      * Links the $linkText to page $pageUid
      *
      * @param int $pageUid Page id
-     * @param string $linkText Title to link (must already be escaped for HTML output)
      * @param array $row Result row
      * @param array $markUpSwParams Additional parameters for marking up search words
-     * @return string <A> tag wrapped title string.
-     * @todo make use of the UriBuilder
+     * @return array
      */
-    protected function linkPage($pageUid, $linkText, $row = [], $markUpSwParams = [])
+    protected function linkPage($pageUid, $row = [], $markUpSwParams = [])
     {
+        $pageLanguage = GeneralUtility::makeInstance(Context::class)->getPropertyFromAspect('language', 'contentId', 0);
         // Parameters for link
         $urlParameters = (array)unserialize($row['cHashParams']);
+        if ($row['static_page_arguments'] !== null) {
+            $urlParameters = array_replace_recursive($urlParameters, json_decode($row['static_page_arguments'], true));
+        }
         // Add &type and &MP variable:
         if ($row['data_page_mp']) {
             $urlParameters['MP'] = $row['data_page_mp'];
         }
-        $urlParameters['L'] = (int)$row['sys_language_uid'];
+        if (($pageLanguage === 0 && $row['sys_language_uid'] > 0) || $pageLanguage > 0) {
+            $urlParameters['L'] = (int)$row['sys_language_uid'];
+        }
         // markup-GET vars:
         $urlParameters = array_merge($urlParameters, $markUpSwParams);
         // This will make sure that the path is retrieved if it hasn't been
@@ -1322,24 +1353,8 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
         if (!is_array($this->domainRecords[$pageUid])) {
             $this->getPathFromPageId($pageUid);
         }
-        $target = '';
-        // If external domain, then link to that:
-        if (!empty($this->domainRecords[$pageUid])) {
-            $scheme = GeneralUtility::getIndpEnv('TYPO3_SSL') ? 'https://' : 'http://';
-            $firstDomain = reset($this->domainRecords[$pageUid]);
-            $additionalParams = '';
-            if (is_array($urlParameters) && !empty($urlParameters)) {
-                $additionalParams = GeneralUtility::implodeArrayForUrl('', $urlParameters);
-            }
-            $uri = $scheme . $firstDomain . '/index.php?id=' . $pageUid . $additionalParams;
-            if ($target = $this->settings['detectDomainRecords.']['target']) {
-                $target = ' target="' . $target . '"';
-            }
-        } else {
-            $uriBuilder = $this->controllerContext->getUriBuilder();
-            $uri = $uriBuilder->setTargetPageUid($pageUid)->setTargetPageType($row['data_page_type'])->setUseCacheHash(true)->setArguments($urlParameters)->build();
-        }
-        return '<a href="' . htmlspecialchars($uri) . '"' . $target . '>' . $linkText . '</a>';
+
+        return $this->preparePageLink($pageUid, $row, $urlParameters);
     }
 
     /**
@@ -1350,29 +1365,11 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
      */
     protected function getMenuOfPages($pageUid)
     {
+        $pageRepository = GeneralUtility::makeInstance(PageRepository::class);
         if ($this->settings['displayLevelxAllTypes']) {
-            $menu = [];
-            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
-            $queryBuilder->setRestrictions(GeneralUtility::makeInstance(FrontendRestrictionContainer::class));
-            $result = $queryBuilder
-                ->select('uid', 'title')
-                ->from('pages')
-                ->where(
-                    $queryBuilder->expr()->eq(
-                        'pid',
-                        $queryBuilder->createNamedParameter($pageUid, \PDO::PARAM_INT)
-                    )
-                )
-                ->orderBy('sorting')
-                ->execute();
-
-            while ($row = $result->fetch()) {
-                $menu[$row['uid']] = $GLOBALS['TSFE']->sys_page->getPageOverlay($row);
-            }
-        } else {
-            $menu = $GLOBALS['TSFE']->sys_page->getMenu($pageUid);
+            return $pageRepository->getMenuForPages([$pageUid]);
         }
-        return $menu;
+        return $pageRepository->getMenu($pageUid);
     }
 
     /**
@@ -1388,35 +1385,47 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
         if (!isset($this->pathCache[$identStr])) {
             $this->requiredFrontendUsergroups[$id] = [];
             $this->domainRecords[$id] = [];
-            $rl = $GLOBALS['TSFE']->sys_page->getRootLine($id, $pathMP);
-            $path = '';
-            $pageCount = count($rl);
-            if (is_array($rl) && !empty($rl)) {
-                $breadcrumbWrap = isset($this->settings['breadcrumbWrap']) ? $this->settings['breadcrumbWrap'] : '/';
-                $breadcrumbWraps = GeneralUtility::makeInstance(TypoScriptService::class)
-                    ->explodeConfigurationForOptionSplit(['wrap' => $breadcrumbWrap], $pageCount);
-                foreach ($rl as $k => $v) {
-                    // Check fe_user
-                    if ($v['fe_group'] && ($v['uid'] == $id || $v['extendToSubpages'])) {
-                        $this->requiredFrontendUsergroups[$id][] = $v['fe_group'];
-                    }
-                    // Check sys_domain
-                    if ($this->settings['detectDomainRcords']) {
-                        $domainName = $this->getFirstSysDomainRecordForPage($v['uid']);
-                        if ($domainName) {
-                            $this->domainRecords[$id][] = $domainName;
-                            // Set path accordingly
-                            $path = $domainName . $path;
+            try {
+                $rl = GeneralUtility::makeInstance(RootlineUtility::class, $id, $pathMP)->get();
+                $path = '';
+                $pageCount = count($rl);
+                if (!empty($rl)) {
+                    $excludeDoktypesFromPath = GeneralUtility::trimExplode(
+                        ',',
+                        $this->settings['results']['pathExcludeDoktypes'] ?? '',
+                        true
+                    );
+                    $breadcrumbWrap = $this->settings['breadcrumbWrap'] ?? '/';
+                    $breadcrumbWraps = GeneralUtility::makeInstance(TypoScriptService::class)
+                        ->explodeConfigurationForOptionSplit(['wrap' => $breadcrumbWrap], $pageCount);
+                    foreach ($rl as $k => $v) {
+                        if (in_array($v['doktype'], $excludeDoktypesFromPath, false)) {
+                            continue;
+                        }
+                        // Check fe_user
+                        if ($v['fe_group'] && ($v['uid'] == $id || $v['extendToSubpages'])) {
+                            $this->requiredFrontendUsergroups[$id][] = $v['fe_group'];
+                        }
+                        // Check sys_domain
+                        if ($this->settings['detectDomainRecords']) {
+                            $domainName = $this->getFirstDomainForPage((int)$v['uid']);
+                            if ($domainName) {
+                                $this->domainRecords[$id][] = $domainName;
+                                // Set path accordingly
+                                $path = $domainName . $path;
+                                break;
+                            }
+                        }
+                        // Stop, if we find that the current id is the current root page.
+                        if ($v['uid'] == $GLOBALS['TSFE']->config['rootLine'][0]['uid']) {
+                            array_pop($breadcrumbWraps);
                             break;
                         }
+                        $path = $GLOBALS['TSFE']->cObj->wrap(htmlspecialchars($v['title']), array_pop($breadcrumbWraps)['wrap']) . $path;
                     }
-                    // Stop, if we find that the current id is the current root page.
-                    if ($v['uid'] == $GLOBALS['TSFE']->config['rootLine'][0]['uid']) {
-                        array_pop($breadcrumbWraps);
-                        break;
-                    }
-                    $path = $GLOBALS['TSFE']->cObj->wrap(htmlspecialchars($v['title']), array_pop($breadcrumbWraps)['wrap']) . $path;
                 }
+            } catch (RootLineException $e) {
+                $path = '';
             }
             $this->pathCache[$identStr] = $path;
         }
@@ -1424,30 +1433,28 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
     }
 
     /**
-     * Gets the first sys_domain record for the page, $id
+     * Gets the first domain for the page
      *
      * @param int $id Page id
      * @return string Domain name
      */
-    protected function getFirstSysDomainRecordForPage($id)
+    protected function getFirstDomainForPage(int $id): string
     {
-        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_domain');
-        $queryBuilder->setRestrictions(GeneralUtility::makeInstance(FrontendRestrictionContainer::class));
-        $row = $queryBuilder
-            ->select('domainName')
-            ->from('sys_domain')
-            ->where(
-                $queryBuilder->expr()->eq(
-                    'pid',
-                    $queryBuilder->createNamedParameter($id, \PDO::PARAM_INT)
-                )
-            )
-            ->orderBy('sorting')
-            ->setMaxResults(1)
-            ->execute()
-            ->fetch();
-
-        return rtrim($row['domainName'], '/');
+        $domain = '';
+        try {
+            $domain = GeneralUtility::makeInstance(SiteFinder::class)
+                ->getSiteByRootPageId($id)
+                ->getBase()
+                ->getHost();
+        } catch (SiteNotFoundException $e) {
+            $pseudoSiteFinder = GeneralUtility::makeInstance(PseudoSiteFinder::class);
+            try {
+                $domain = trim((string)$pseudoSiteFinder->getSiteByPageId($id)->getBase(), '/');
+            } catch (SiteNotFoundException $e) {
+                // site was not found, we return an empty string as default
+            }
+        }
+        return $domain;
     }
 
     /**
@@ -1457,13 +1464,11 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
     protected function initializeExternalParsers()
     {
         // Initialize external document parsers for icon display and other soft operations
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['external_parsers'])) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['external_parsers'] as $extension => $_objRef) {
-                $this->externalParsers[$extension] = GeneralUtility::getUserObj($_objRef);
-                // Init parser and if it returns FALSE, unset its entry again
-                if (!$this->externalParsers[$extension]->softInit($extension)) {
-                    unset($this->externalParsers[$extension]);
-                }
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['external_parsers'] ?? [] as $extension => $className) {
+            $this->externalParsers[$extension] = GeneralUtility::makeInstance($className);
+            // Init parser and if it returns FALSE, unset its entry again
+            if (!$this->externalParsers[$extension]->softInit($extension)) {
+                unset($this->externalParsers[$extension]);
             }
         }
     }
@@ -1472,13 +1477,13 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
      * Returns an object reference to the hook object if any
      *
      * @param string $functionName Name of the function you want to call / hook key
-     * @return object|NULL Hook object, if any. Otherwise NULL.
+     * @return object|null Hook object, if any. Otherwise NULL.
      */
     protected function hookRequest($functionName)
     {
         // Hook: menuConfig_preProcessModMenu
         if ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['pi1_hooks'][$functionName]) {
-            $hookObj = GeneralUtility::getUserObj($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['pi1_hooks'][$functionName]);
+            $hookObj = GeneralUtility::makeInstance($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['pi1_hooks'][$functionName]);
             if (method_exists($hookObj, $functionName)) {
                 $hookObj->pObj = $this;
                 return $hookObj;
@@ -1499,6 +1504,39 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
     }
 
     /**
+     * Process variables related to indexed_search extendedSearch needed by frontend view.
+     * Populate select boxes and setting some flags.
+     * The returned data can be passed directly into the view by assignMultiple()
+     *
+     * @return array Variables to pass into the view so they can be used in fluid template
+     */
+    protected function processExtendedSearchParameters()
+    {
+        $allSearchTypes = $this->getAllAvailableSearchTypeOptions();
+        $allDefaultOperands = $this->getAllAvailableOperandsOptions();
+        $allMediaTypes = $this->getAllAvailableMediaTypesOptions();
+        $allLanguageUids = $this->getAllAvailableLanguageOptions();
+        $allSortOrders = $this->getAllAvailableSortOrderOptions();
+        $allSortDescendings = $this->getAllAvailableSortDescendingOptions();
+
+        return [
+            'allSearchTypes' => $allSearchTypes,
+            'allDefaultOperands' => $allDefaultOperands,
+            'showTypeSearch' => !empty($allSearchTypes) || !empty($allDefaultOperands),
+            'allMediaTypes' => $allMediaTypes,
+            'allLanguageUids' => $allLanguageUids,
+            'showMediaAndLanguageSearch' => !empty($allMediaTypes) || !empty($allLanguageUids),
+            'allSections' => $this->getAllAvailableSectionsOptions(),
+            'allIndexConfigurations' => $this->getAllAvailableIndexConfigurationsOptions(),
+            'allSortOrders' => $allSortOrders,
+            'allSortDescendings' => $allSortDescendings,
+            'showSortOrders' => !empty($allSortOrders) || !empty($allSortDescendings),
+            'allNumberOfResults' => $this->getAllAvailableNumberOfResultsOptions(),
+            'allGroups' => $this->getAllAvailableGroupOptions()
+        ];
+    }
+
+    /**
      * Load settings and apply stdWrap to them
      */
     protected function loadSettings()
@@ -1510,30 +1548,42 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
 
         $this->settings['results.']['summaryCropAfter'] = MathUtility::forceIntegerInRange(
             $GLOBALS['TSFE']->cObj->stdWrap($typoScriptArray['summaryCropAfter'], $typoScriptArray['summaryCropAfter.']),
-            10, 5000, 180
+            10,
+            5000,
+            180
         );
         $this->settings['results.']['summaryCropSignifier'] = $GLOBALS['TSFE']->cObj->stdWrap($typoScriptArray['summaryCropSignifier'], $typoScriptArray['summaryCropSignifier.']);
         $this->settings['results.']['titleCropAfter'] = MathUtility::forceIntegerInRange(
             $GLOBALS['TSFE']->cObj->stdWrap($typoScriptArray['titleCropAfter'], $typoScriptArray['titleCropAfter.']),
-            10, 500, 50
+            10,
+            500,
+            50
         );
         $this->settings['results.']['titleCropSignifier'] = $GLOBALS['TSFE']->cObj->stdWrap($typoScriptArray['titleCropSignifier'], $typoScriptArray['titleCropSignifier.']);
         $this->settings['results.']['markupSW_summaryMax'] = MathUtility::forceIntegerInRange(
             $GLOBALS['TSFE']->cObj->stdWrap($typoScriptArray['markupSW_summaryMax'], $typoScriptArray['markupSW_summaryMax.']),
-            10, 5000, 300
+            10,
+            5000,
+            300
         );
         $this->settings['results.']['markupSW_postPreLgd'] = MathUtility::forceIntegerInRange(
             $GLOBALS['TSFE']->cObj->stdWrap($typoScriptArray['markupSW_postPreLgd'], $typoScriptArray['markupSW_postPreLgd.']),
-            1, 500, 60
+            1,
+            500,
+            60
         );
         $this->settings['results.']['markupSW_postPreLgd_offset'] = MathUtility::forceIntegerInRange(
             $GLOBALS['TSFE']->cObj->stdWrap($typoScriptArray['markupSW_postPreLgd_offset'], $typoScriptArray['markupSW_postPreLgd_offset.']),
-            1, 50, 5
+            1,
+            50,
+            5
         );
         $this->settings['results.']['markupSW_divider'] = $GLOBALS['TSFE']->cObj->stdWrap($typoScriptArray['markupSW_divider'], $typoScriptArray['markupSW_divider.']);
         $this->settings['results.']['hrefInSummaryCropAfter'] = MathUtility::forceIntegerInRange(
             $GLOBALS['TSFE']->cObj->stdWrap($typoScriptArray['hrefInSummaryCropAfter'], $typoScriptArray['hrefInSummaryCropAfter.']),
-            10, 400, 60
+            10,
+            400,
+            60
         );
         $this->settings['results.']['hrefInSummaryCropSignifier'] = $GLOBALS['TSFE']->cObj->stdWrap($typoScriptArray['hrefInSummaryCropSignifier'], $typoScriptArray['hrefInSummaryCropSignifier.']);
     }
@@ -1548,8 +1598,60 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
     {
         $numberOfResults = (int)$numberOfResults;
 
-        return (in_array($numberOfResults, $this->availableResultsNumbers)) ?
+        return in_array($numberOfResults, $this->availableResultsNumbers) ?
             $numberOfResults : $this->defaultResultNumber;
+    }
+
+    /**
+     * Internal method to build the page uri and link target.
+     * @todo make use of the UriBuilder
+     *
+     * @param int $pageUid
+     * @param array $row
+     * @param array $urlParameters
+     * @return array
+     */
+    protected function preparePageLink(int $pageUid, array $row, array $urlParameters): array
+    {
+        $target = '';
+        $uri = $this->controllerContext->getUriBuilder()
+                ->setTargetPageUid($pageUid)
+                ->setTargetPageType($row['data_page_type'])
+                ->setUseCacheHash(true)
+                ->setArguments($urlParameters)
+                ->build();
+
+        // If external domain, then link to that:
+        if (!empty($this->domainRecords[$pageUid])) {
+            $scheme = GeneralUtility::getIndpEnv('TYPO3_SSL') ? 'https://' : 'http://';
+            $firstDomain = reset($this->domainRecords[$pageUid]);
+            $uri = $scheme . $firstDomain . $uri;
+            $target = $this->settings['detectDomainRecords.']['target'];
+        }
+
+        return ['uri' => $uri, 'target' => $target];
+    }
+
+    /**
+     * Create a tag for "path" key in search result
+     *
+     * @param string $linkText Link text (nodeValue)
+     * @param array $linkData
+     * @return string <A> tag wrapped title string.
+     */
+    protected function linkPageATagWrap(string $linkText, array $linkData): string
+    {
+        $attributes = [
+            'href' => $linkData['uri']
+        ];
+        if (!empty($linkData['target'])) {
+            $attributes['target'] = $linkData['target'];
+        }
+        return sprintf(
+            '<a %s>%s</a>',
+            GeneralUtility::implodeAttributes($attributes, true),
+            htmlspecialchars($linkText, ENT_QUOTES | ENT_HTML5)
+        );
     }
 
     /**
@@ -1558,7 +1660,7 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
      */
     public function setSword($sword)
     {
-        $this->sword = $sword;
+        $this->sword = (string)$sword;
     }
 
     /**
@@ -1567,6 +1669,6 @@ class SearchController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
      */
     public function getSword()
     {
-        return $this->sword;
+        return (string)$this->sword;
     }
 }

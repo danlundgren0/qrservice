@@ -69,7 +69,7 @@ class MarkerBasedTemplateService
      *
      * @param string $content Content with subpart wrapped in fx. "###CONTENT_PART###" inside.
      * @param string $marker Marker string, eg. "###CONTENT_PART###
-     * @param array $subpartContent If $subpartContent happens to be an array, it's [0] and [1] elements are wrapped around the content of the subpart (fetched by getSubpart())
+     * @param string|array $subpartContent If $subpartContent happens to be an array, it's [0] and [1] elements are wrapped around the content of the subpart (fetched by getSubpart())
      * @param bool $recursive If $recursive is set, the function calls itself with the content set to the remaining part of the content after the second marker. This means that proceding subparts are ALSO substituted!
      * @param bool $keepMarker If set, the marker around the subpart is not removed, but kept in the output
      *
@@ -204,7 +204,7 @@ class MarkerBasedTemplateService
                     // use strtr instead of strtoupper to avoid locale problems with Turkish
                     $marker = strtr($marker, 'abcdefghijklmnopqrstuvwxyz', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
                 }
-                if (!empty($wrapArr)) {
+                if (isset($wrapArr[0], $wrapArr[1])) {
                     $marker = $wrapArr[0] . $marker . $wrapArr[1];
                 }
                 $search[] = $marker;
@@ -279,7 +279,7 @@ class MarkerBasedTemplateService
                 // Use strtr instead of strtoupper to avoid locale problems with Turkish
                 $subpartMarker = strtr($subpartMarker, 'abcdefghijklmnopqrstuvwxyz', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
             }
-            if (!empty($wraps)) {
+            if (isset($wraps[0], $wraps[1])) {
                 $subpartMarker = $wraps[0] . $subpartMarker . $wraps[1];
             }
             $subTemplates[$subpartMarker] = $this->getSubpart($content, $subpartMarker);
@@ -291,13 +291,19 @@ class MarkerBasedTemplateService
                 // use strtr instead of strtoupper to avoid locale problems with Turkish
                 $completeMarker = strtr($completeMarker, 'abcdefghijklmnopqrstuvwxyz', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
             }
-            if (!empty($wraps)) {
+            if (isset($wraps[0], $wraps[1])) {
                 $completeMarker = $wraps[0] . $completeMarker . $wraps[1];
             }
             if (!empty($markersAndSubparts[$subpartMarker])) {
+                $subpartSubstitutes[$completeMarker] = '';
                 foreach ($markersAndSubparts[$subpartMarker] as $partialMarkersAndSubparts) {
-                    $subpartSubstitutes[$completeMarker] .= $this->substituteMarkerAndSubpartArrayRecursive($subTemplates[$completeMarker],
-                        $partialMarkersAndSubparts, $wrap, $uppercase, $deleteUnused);
+                    $subpartSubstitutes[$completeMarker] .= $this->substituteMarkerAndSubpartArrayRecursive(
+                        $subTemplates[$completeMarker],
+                        $partialMarkersAndSubparts,
+                        $wrap,
+                        $uppercase,
+                        $deleteUnused
+                    );
                 }
             } else {
                 $subpartSubstitutes[$completeMarker] = '';
@@ -346,15 +352,15 @@ class MarkerBasedTemplateService
     {
         $runtimeCache = $this->getRuntimeCache();
         // If not arrays then set them
-        if (is_null($markContentArray)) {
+        if ($markContentArray === null) {
             // Plain markers
             $markContentArray = [];
         }
-        if (is_null($subpartContentArray)) {
+        if ($subpartContentArray === null) {
             // Subparts being directly substituted
             $subpartContentArray = [];
         }
-        if (is_null($wrappedSubpartContentArray)) {
+        if ($wrappedSubpartContentArray === null) {
             // Subparts being wrapped
             $wrappedSubpartContentArray = [];
         }

@@ -19,7 +19,7 @@ use TYPO3\CMS\Core\Resource\Folder;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
- * SlideShare helper class
+ * Youtube helper class
  */
 class YouTubeHelper extends AbstractOEmbedHelper
 {
@@ -28,12 +28,12 @@ class YouTubeHelper extends AbstractOEmbedHelper
      *
      * @param File $file
      * @param bool $relativeToCurrentScript
-     * @return string|NULL
+     * @return string|null
      */
     public function getPublicUrl(File $file, $relativeToCurrentScript = false)
     {
         $videoId = $this->getOnlineMediaId($file);
-        return sprintf('https://www.youtube.com/watch?v=%s', $videoId);
+        return sprintf('https://www.youtube.com/watch?v=%s', rawurlencode($videoId));
     }
 
     /**
@@ -48,7 +48,7 @@ class YouTubeHelper extends AbstractOEmbedHelper
         $temporaryFileName = $this->getTempFolderPath() . 'youtube_' . md5($videoId) . '.jpg';
 
         if (!file_exists($temporaryFileName)) {
-            $tryNames = ['maxresdefault.jpg', '0.jpg'];
+            $tryNames = ['maxresdefault.jpg', 'mqdefault.jpg', '0.jpg'];
             foreach ($tryNames as $tryName) {
                 $previewImage = GeneralUtility::getUrl(
                     sprintf('https://img.youtube.com/vi/%s/%s', $videoId, $tryName)
@@ -69,7 +69,7 @@ class YouTubeHelper extends AbstractOEmbedHelper
      *
      * @param string $url
      * @param Folder $targetFolder
-     * @return File|NULL
+     * @return File|null
      */
     public function transformUrlToFile($url, Folder $targetFolder)
     {
@@ -99,8 +99,9 @@ class YouTubeHelper extends AbstractOEmbedHelper
      */
     protected function getOEmbedUrl($mediaId, $format = 'json')
     {
-        return sprintf('https://www.youtube.com/oembed?url=%s&format=%s',
-            urlencode(sprintf('https://www.youtube.com/watch?v=%s', $mediaId)),
+        return sprintf(
+            'https://www.youtube.com/oembed?url=%s&format=%s',
+            rawurlencode(sprintf('https://www.youtube.com/watch?v=%s', rawurlencode($mediaId))),
             rawurlencode($format)
         );
     }

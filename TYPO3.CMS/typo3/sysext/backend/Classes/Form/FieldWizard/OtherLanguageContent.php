@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Form\FieldWizard;
 
 /*
@@ -68,8 +68,9 @@ class OtherLanguageContent extends AbstractNode
             $defaultLanguageRow['pid']
         );
         if ($defaultLanguageValue !== '') {
+            $iconIdentifier = $this->data['systemLanguageRows'][0]['flagIconIdentifier'] ?: 'flags-multiple';
             $html[] = '<div class="t3-form-original-language">';
-            $html[] =   $iconFactory->getIcon($this->data['systemLanguageRows'][0]['flagIconIdentifier'], Icon::SIZE_SMALL)->render();
+            $html[] =   $iconFactory->getIcon($iconIdentifier, Icon::SIZE_SMALL)->render();
             $html[] =   $this->previewFieldValue($defaultLanguageValue, $fieldConfig, $fieldName);
             $html[] = '</div>';
         }
@@ -103,6 +104,7 @@ class OtherLanguageContent extends AbstractNode
      */
     protected function previewFieldValue($value, $config, $field = '')
     {
+        // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Deprecation logged by TcaMigration class.
         $value = (string)$value;
         if ($config['config']['type'] === 'group'
             && ($config['config']['internal_type'] === 'file' || $config['config']['internal_type'] === 'file_reference')
@@ -137,15 +139,16 @@ class OtherLanguageContent extends AbstractNode
                         $field,
                         '',
                         '',
-                        $config['config']['uploadfolder'], 0, ' align="middle"'
+                        $config['config']['uploadfolder'],
+                        0,
+                        ' align="middle"'
                     ) .
-                    ($absFilePath ? BackendUtility::wrapClickMenuOnIcon($fileIcon, $absFilePath, 0) : $fileIcon) .
+                    ($absFilePath ? BackendUtility::wrapClickMenuOnIcon($fileIcon, $absFilePath) : $fileIcon) .
                     $imgPath .
                     '</span>';
             }
             return implode('<br />', $imgs);
-        } else {
-            return nl2br(htmlspecialchars($value));
         }
+        return nl2br(htmlspecialchars($value));
     }
 }

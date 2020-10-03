@@ -32,9 +32,9 @@ class TreeDataProviderFactory
      */
     public static function getDataProvider(array $tcaConfiguration, $table, $field, $currentValue)
     {
-        /** @var $dataProvider \TYPO3\CMS\Core\Tree\TableConfiguration\DatabaseTreeDataProvider */
+        /** @var \TYPO3\CMS\Core\Tree\TableConfiguration\DatabaseTreeDataProvider $dataProvider */
         $dataProvider = null;
-        if (!isset($tcaConfiguration['treeConfig']) | !is_array($tcaConfiguration['treeConfig'])) {
+        if (!isset($tcaConfiguration['treeConfig']) || !is_array($tcaConfiguration['treeConfig'])) {
             throw new \InvalidArgumentException('TCA Tree configuration is invalid: "treeConfig" array is missing', 1288215890);
         }
 
@@ -53,7 +53,7 @@ class TreeDataProviderFactory
                 $dataProvider->setTableName($tableName);
                 if ($tableName == $table) {
                     // The uid of the currently opened row can not be selected in a table relation to "self"
-                    $unselectableUids = [ $currentValue['uid'] ];
+                    $unselectableUids = [$currentValue['uid']];
                     $dataProvider->setItemUnselectableList($unselectableUids);
                 }
             } else {
@@ -62,7 +62,7 @@ class TreeDataProviderFactory
             if (isset($tcaConfiguration['foreign_label'])) {
                 $dataProvider->setLabelField($tcaConfiguration['foreign_label']);
             } else {
-                $dataProvider->setLabelField($GLOBALS['TCA'][$tableName]['ctrl']['label']);
+                $dataProvider->setLabelField($GLOBALS['TCA'][$tableName]['ctrl']['label'] ?? '');
             }
             $dataProvider->setTreeId(md5($table . '|' . $field));
 
@@ -91,7 +91,7 @@ class TreeDataProviderFactory
                 throw new \InvalidArgumentException('TCA Tree configuration is invalid: neither "childrenField" nor "parentField" is set', 1288215889);
             }
         } elseif ($tcaConfiguration['internal_type'] === 'file' && $dataProvider === null) {
-            // @todo Not implemented yet
+            // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Deprecation logged by TcaMigration class.
             throw new \InvalidArgumentException('TCA Tree configuration is invalid: tree for "internal_type=file" not implemented yet', 1288215891);
         } elseif ($dataProvider === null) {
             throw new \InvalidArgumentException('TCA Tree configuration is invalid: tree for "internal_type=' . $tcaConfiguration['internal_type'] . '" not implemented yet', 1288215892);

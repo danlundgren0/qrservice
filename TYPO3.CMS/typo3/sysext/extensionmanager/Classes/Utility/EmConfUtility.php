@@ -14,21 +14,25 @@ namespace TYPO3\CMS\Extensionmanager\Utility;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\SingletonInterface;
+
 /**
  * Utility for dealing with ext_emconf
+ * @internal This class is a specific ExtensionManager implementation and is not part of the Public TYPO3 API.
  */
-class EmConfUtility implements \TYPO3\CMS\Core\SingletonInterface
+class EmConfUtility implements SingletonInterface
 {
     /**
      * Returns the $EM_CONF array from an extensions ext_emconf.php file
      *
      * @param array $extension Extension information array
-     * @return array EMconf array values.
+     * @return array|bool EMconf array values or false if no ext_emconf.php found.
      */
     public function includeEmConf(array $extension)
     {
         $_EXTKEY = $extension['key'];
-        $path = PATH_site . $extension['siteRelPath'] . 'ext_emconf.php';
+        $path = Environment::getPublicPath() . '/' . $extension['siteRelPath'] . 'ext_emconf.php';
         $EM_CONF = null;
         if (file_exists($path)) {
             include $path;
@@ -51,7 +55,7 @@ class EmConfUtility implements \TYPO3\CMS\Core\SingletonInterface
     public function constructEmConf(array $extensionData, \TYPO3\CMS\Extensionmanager\Domain\Model\Extension $extension = null)
     {
         if (is_object($extension) && empty($extensionData['EM_CONF']['constraints'])) {
-            $extensionData['EM_CONF']['constraints'] = unserialize($extension->getSerializedDependencies());
+            $extensionData['EM_CONF']['constraints'] = unserialize($extension->getSerializedDependencies(), ['allowed_classes' => false]);
         }
         $emConf = $this->fixEmConf($extensionData['EM_CONF']);
         $emConf = var_export($emConf, true);
@@ -86,16 +90,16 @@ $EM_CONF[$_EXTKEY] = ' . $emConf . ';
             || !isset($emConf['constraints']['conflicts']) || !isset($emConf['constraints']['suggests'])
         ) {
             if (!isset($emConf['constraints']) || !isset($emConf['constraints']['depends'])) {
-                $emConf['constraints']['depends'] = $this->stringToDependency($emConf['dependencies']);
-                if ((string)$emConf['PHP_version'] !== '') {
+                $emConf['constraints']['depends'] = $this->stringToDependency($emConf['dependencies'] ?? '');
+                if (isset($emConf['PHP_version']) && (string)$emConf['PHP_version'] !== '') {
                     $emConf['constraints']['depends']['php'] = $emConf['PHP_version'];
                 }
-                if ((string)$emConf['TYPO3_version'] !== '') {
+                if (isset($emConf['TYPO3_version']) && (string)$emConf['TYPO3_version'] !== '') {
                     $emConf['constraints']['depends']['typo3'] = $emConf['TYPO3_version'];
                 }
             }
             if (!isset($emConf['constraints']) || !isset($emConf['constraints']['conflicts'])) {
-                $emConf['constraints']['conflicts'] = $this->stringToDependency($emConf['conflicts']);
+                $emConf['constraints']['conflicts'] = $this->stringToDependency($emConf['conflicts'] ?? '');
             }
             if (!isset($emConf['constraints']) || !isset($emConf['constraints']['suggests'])) {
                 $emConf['constraints']['suggests'] = [];
@@ -132,7 +136,7 @@ $EM_CONF[$_EXTKEY] = ' . $emConf . ';
      * as they are implicit and of no interest without the version number.
      *
      * @param mixed $dependency Either a string or an array listing dependencies.
-     * @return string A simple dependency list for display
+     * @return array A simple dependency list for display
      */
     public function stringToDependency($dependency)
     {

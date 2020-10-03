@@ -1,4 +1,5 @@
 <?php
+
 use TYPO3\CMS\Backend\Controller;
 
 /**
@@ -52,6 +53,24 @@ return [
         'target' => Controller\FormInlineAjaxController::class . '::expandOrCollapseAction'
     ],
 
+    // Site configuration inline create route
+    'site_configuration_inline_create' => [
+        'path' => '/siteconfiguration/inline/create',
+        'target' => Controller\SiteInlineAjaxController::class . '::newInlineChildAction'
+    ],
+
+    // Validate slug input
+    'record_slug_suggest' => [
+        'path' => '/record/slug/suggest',
+        'target' => Controller\FormSlugAjaxController::class . '::suggestAction'
+    ],
+
+    // Site configuration inline open existing "record" route
+    'site_configuration_inline_details' => [
+        'path' => '/siteconfiguration/inline/details',
+        'target' => Controller\SiteInlineAjaxController::class . '::openInlineChildAction'
+    ],
+
     // Add a flex form section container
     'record_flex_container_add' => [
         'path' => '/record/flex/containeradd',
@@ -70,40 +89,67 @@ return [
         'target' => Controller\FormSelectTreeAjaxController::class . '::fetchDataAction'
     ],
 
+    // Get data for page tree
+    'page_tree_data' => [
+        'path' => '/page/tree/fetchData',
+        'target' => Controller\Page\TreeController::class . '::fetchDataAction'
+    ],
+
+    // Get data for page tree
+    'page_tree_filter' => [
+        'path' => '/page/tree/filterData',
+        'target' => Controller\Page\TreeController::class . '::filterDataAction'
+    ],
+
+    // Get page tree configuration
+    'page_tree_configuration' => [
+        'path' => '/page/tree/fetchConfiguration',
+        'target' => Controller\Page\TreeController::class . '::fetchConfigurationAction'
+    ],
+
+    // Set temporary mount point
+    'page_tree_set_temporary_mount_point' => [
+        'path' => '/page/tree/setTemporaryMountPoint',
+        'target' => Controller\Page\TreeController::class . '::setTemporaryMountPointAction'
+    ],
+
     // Get shortcut edit form
     'shortcut_editform' => [
         'path' => '/shortcut/editform',
-        'target' => \TYPO3\CMS\Backend\Backend\ToolbarItems\ShortcutToolbarItem::class . '::editFormAction'
+        'target' => Controller\ShortcutController::class . '::showEditFormAction'
     ],
 
     // Save edited shortcut
     'shortcut_saveform' => [
         'path' => '/shortcut/saveform',
-        'target' => \TYPO3\CMS\Backend\Backend\ToolbarItems\ShortcutToolbarItem::class . '::saveFormAction'
+        'target' => Controller\ShortcutController::class . '::updateAction'
     ],
 
     // Render shortcut toolbar item
     'shortcut_list' => [
         'path' => '/shortcut/list',
-        'target' => \TYPO3\CMS\Backend\Backend\ToolbarItems\ShortcutToolbarItem::class . '::menuAction'
+        'target' => Controller\ShortcutController::class . '::menuAction'
     ],
 
     // Delete a shortcut
     'shortcut_remove' => [
         'path' => '/shortcut/remove',
-        'target' => \TYPO3\CMS\Backend\Backend\ToolbarItems\ShortcutToolbarItem::class . '::removeShortcutAction'
+        'target' => Controller\ShortcutController::class . '::removeAction'
     ],
 
     // Create a new shortcut
     'shortcut_create' => [
         'path' => '/shortcut/create',
-        'target' => \TYPO3\CMS\Backend\Backend\ToolbarItems\ShortcutToolbarItem::class . '::createShortcutAction'
+        'target' => Controller\ShortcutController::class . '::addAction'
     ],
 
     // Render systeminformtion toolbar item
     'systeminformation_render' => [
         'path' => '/system-information/render',
-        'target' => \TYPO3\CMS\Backend\Backend\ToolbarItems\SystemInformationToolbarItem::class . '::renderMenuAction'
+        'target' => \TYPO3\CMS\Backend\Controller\SystemInformationController::class . '::renderMenuAction',
+        'parameters' => [
+            'skipSessionUpdate' => 1
+        ]
     ],
 
     // Reload the module menu
@@ -119,47 +165,37 @@ return [
     // Log in into backend
     'login' => [
         'path' => '/login',
-        'target' => \TYPO3\CMS\Backend\AjaxLoginHandler::class . '::loginAction',
+        'target' => \TYPO3\CMS\Backend\Controller\AjaxLoginController::class . '::loginAction',
         'access' => 'public'
     ],
 
     // Log out from backend
     'logout' => [
         'path' => '/logout',
-        'target' => \TYPO3\CMS\Backend\AjaxLoginHandler::class . '::logoutAction',
+        'target' => \TYPO3\CMS\Backend\Controller\AjaxLoginController::class . '::logoutAction',
         'access' => 'public'
     ],
 
     // Refresh login of backend
     'login_refresh' => [
         'path' => '/login/refresh',
-        'target' => \TYPO3\CMS\Backend\AjaxLoginHandler::class . '::refreshAction',
+        'target' => \TYPO3\CMS\Backend\Controller\AjaxLoginController::class . '::refreshAction',
     ],
 
     // Check if backend session has timed out
     'login_timedout' => [
         'path' => '/login/timedout',
-        'target' => \TYPO3\CMS\Backend\AjaxLoginHandler::class . '::isTimedOutAction',
-        'access' => 'public'
-    ],
-
-    // ExtDirect routing
-    'ext_direct_route' => [
-        'path' => '/ext-direct/route',
-        'target' => \TYPO3\CMS\Core\ExtDirect\ExtDirectRouter::class . '::routeAction',
-        'access' => 'public'
-    ],
-
-    // ExtDirect API
-    'ext_direct_api' => [
-        'path' => '/ext-direct/api',
-        'target' => \TYPO3\CMS\Core\ExtDirect\ExtDirectApi::class . '::getAPI'
+        'target' => \TYPO3\CMS\Backend\Controller\AjaxLoginController::class . '::isTimedOutAction',
+        'access' => 'public',
+        'parameters' => [
+            'skipSessionUpdate' => 1
+        ]
     ],
 
     // Render flash messages
     'flashmessages_render' => [
         'path' => '/flashmessages/render',
-        'target' => \TYPO3\CMS\Backend\Template\DocumentTemplate::class . '::renderQueuedFlashMessages'
+        'target' => \TYPO3\CMS\Backend\Controller\FlashMessageController::class . '::getQueuedFlashMessagesAction'
     ],
 
     // Load context menu for
@@ -189,7 +225,7 @@ return [
     // Open the image manipulation wizard
     'wizard_image_manipulation' => [
         'path' => '/wizard/image-manipulation',
-        'target' => \TYPO3\CMS\Backend\Form\Wizard\ImageManipulationWizard::class . '::getWizardAction'
+        'target' => \TYPO3\CMS\Backend\Controller\Wizard\ImageManipulationController::class . '::getWizardContent'
     ],
 
     // Save a newly added online media
@@ -207,7 +243,13 @@ return [
     // Get icon from IconFactory
     'icons' => [
         'path' => '/icons',
-        'target' => \TYPO3\CMS\Core\Imaging\IconFactory::class . '::processAjaxRequest'
+        'target' => \TYPO3\CMS\Core\Controller\IconController::class . '::getIcon'
+    ],
+
+    // Get icon cache identifier
+    'icons_cache' => [
+        'path' => '/icons/cache',
+        'target' => \TYPO3\CMS\Core\Controller\IconController::class . '::getCacheIdentifier'
     ],
 
     // Encode typolink parts on demand
@@ -216,10 +258,10 @@ return [
         'target' => \TYPO3\CMS\Backend\Controller\LinkBrowserController::class . '::encodeTypoLink',
     ],
 
-    // Get languages in page and colPos
-    'languages_page_colpos' => [
+    // Get languages in page
+    'page_languages' => [
         'path' => '/records/localize/get-languages',
-        'target' => Controller\Page\LocalizationController::class . '::getUsedLanguagesInPageAndColumn'
+        'target' => Controller\Page\LocalizationController::class . '::getUsedLanguagesInPage'
     ],
 
     // Get summary of records to localize
@@ -232,5 +274,11 @@ return [
     'records_localize' => [
         'path' => '/records/localize',
         'target' => Controller\Page\LocalizationController::class . '::localizeRecords'
+    ],
+
+    // context help
+    'context_help' => [
+        'path' => '/context-help',
+        'target' => \TYPO3\CMS\Backend\Controller\ContextHelpAjaxController::class . '::getHelpAction'
     ]
 ];

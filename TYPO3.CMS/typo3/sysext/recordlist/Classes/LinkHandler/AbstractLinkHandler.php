@@ -16,14 +16,14 @@ namespace TYPO3\CMS\Recordlist\LinkHandler;
 
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 use TYPO3\CMS\Recordlist\Controller\AbstractLinkBrowserController;
 
 /**
  * Base class for link handlers
  *
- * NOTE: This class should only be used internally. Extensions must implement the LinkHandlerInterface.
+ * @internal This class should only be used internally. Extensions must implement the LinkHandlerInterface.
  */
 abstract class AbstractLinkHandler
 {
@@ -34,7 +34,7 @@ abstract class AbstractLinkHandler
      *
      * @var string[]
      */
-    protected $linkAttributes = [ 'target', 'title', 'class', 'params', 'rel' ];
+    protected $linkAttributes = ['target', 'title', 'class', 'params', 'rel'];
 
     /**
      * @var bool
@@ -122,20 +122,8 @@ abstract class AbstractLinkHandler
         if (isset($tmpMount)) {
             $backendUser->setAndSaveSessionData('pageTree_temporaryMountPoint', (int)$tmpMount);
         }
-        // Set temporary DB mounts
-        $alternativeWebmountPoint = (int)$backendUser->getSessionData('pageTree_temporaryMountPoint');
-        if ($alternativeWebmountPoint) {
-            $alternativeWebmountPoint = GeneralUtility::intExplode(',', $alternativeWebmountPoint);
-            $backendUser->setWebmounts($alternativeWebmountPoint);
-        } else {
-            // Setting alternative browsing mounts (ONLY local to browse_links.php this script so they stay "read-only")
-            $alternativeWebmountPoints = trim($backendUser->getTSConfigVal('options.pageTree.altElementBrowserMountPoints'));
-            $appendAlternativeWebmountPoints = $backendUser->getTSConfigVal('options.pageTree.altElementBrowserMountPoints.append');
-            if ($alternativeWebmountPoints) {
-                $alternativeWebmountPoints = GeneralUtility::intExplode(',', $alternativeWebmountPoints);
-                $this->getBackendUser()->setWebmounts($alternativeWebmountPoints, $appendAlternativeWebmountPoints);
-            }
-        }
+
+        $backendUser->initializeWebmountsForElementBrowser();
     }
 
     /**

@@ -7,11 +7,18 @@ namespace VENDOR\Package\Controller;
 class MyController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionController
 {
 
+
     /**
-     * @var \TYPO3\CMS\Extbase\Persistence\Repository
-     * @inject
+     * @var \VENDOR\Package\Domain\Repository\DomainObjectRepository
      */
     protected $domainObjectRepository = null;
+
+    /**
+     * @param \VENDOR\Package\Domain\Repository\DomainObjectRepository
+     */
+    public function injectDomainObjectRepository(VENDOR\Package\Domain\Repository\DomainObjectRepository $domainObjectRepository) {
+        $this->domainObjectRepository = $domainObjectRepository;
+    }
 
     /**
      * action list

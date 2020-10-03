@@ -14,18 +14,29 @@ namespace TYPO3\CMS\Core\Resource\Service;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Messaging\FlashMessage;
 use TYPO3\CMS\Core\Messaging\FlashMessageQueue;
 use TYPO3\CMS\Core\Messaging\FlashMessageService;
+use TYPO3\CMS\Core\Resource\Exception\InvalidPathException;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Utility class to render capabilities of the storage.
+ *
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
  */
 class UserStorageCapabilityService
 {
+    /**
+     * Constructor logs deprecation
+     */
+    public function __construct()
+    {
+        trigger_error('This class will be removed in TYPO3 v10.0.', E_USER_DEPRECATED);
+    }
+
     /**
      * UserFunc function for rendering field "is_public".
      * There are some edge cases where "is_public" can never be marked as true in the BE,
@@ -42,25 +53,34 @@ class UserStorageCapabilityService
 
         // Makes sure the storage object can be retrieved which is not the case when new storage.
         if ((int)$propertyArray['row']['uid'] > 0) {
-            $storage = ResourceFactory::getInstance()->getStorageObject($fileRecord['uid']);
-            $storageRecord = $storage->getStorageRecord();
-            $isPublic = $storage->isPublic() && $storageRecord['is_public'];
+            /** @var LanguageService $lang */
+            $lang = $GLOBALS['LANG'];
+            /** @var FlashMessageService $flashMessageService */
+            $flashMessageService = GeneralUtility::makeInstance(FlashMessageService::class);
+            /** @var FlashMessageQueue $defaultFlashMessageQueue */
+            $defaultFlashMessageQueue = $flashMessageService->getMessageQueueByIdentifier();
+            try {
+                $storage = ResourceFactory::getInstance()->getStorageObject($fileRecord['uid']);
+                $storageRecord = $storage->getStorageRecord();
+                $isPublic = $storage->isPublic() && $storageRecord['is_public'];
+            } catch (InvalidPathException $e) {
+                $message = GeneralUtility::makeInstance(
+                    FlashMessage::class,
+                    $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:filestorage.invalidpathexception.message'),
+                    $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:filestorage.invalidpathexception.title'),
+                    FlashMessage::ERROR
+                );
+                $defaultFlashMessageQueue->enqueue($message);
+            }
 
             // Display a warning to the BE User in case settings is not inline with storage capability.
             if ($storageRecord['is_public'] && !$storage->isPublic()) {
-                /** @var LanguageService $lang */
-                $lang = $GLOBALS['LANG'];
                 $message = GeneralUtility::makeInstance(
                     FlashMessage::class,
-                    $lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:warning.message.storage_is_no_public'),
-                    $lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:warning.header.storage_is_no_public'),
+                    $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:warning.message.storage_is_no_public'),
+                    $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:warning.header.storage_is_no_public'),
                     FlashMessage::WARNING
                 );
-
-                /** @var $flashMessageService FlashMessageService */
-                $flashMessageService = GeneralUtility::makeInstance(FlashMessageService::class);
-                /** @var $defaultFlashMessageQueue FlashMessageQueue */
-                $defaultFlashMessageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $defaultFlashMessageQueue->enqueue($message);
             }
         }
@@ -78,16 +98,17 @@ class UserStorageCapabilityService
     protected function renderFileInformationContent(array $fileRecord, $isPublic)
     {
         $template = '
-		<div class="t3-form-field-item">
-			<div class="checkbox">
-				<label>
-					<input name="data[sys_file_storage][{uid}][is_public]" value="0" type="hidden">
-					<input class="checkbox" value="1" name="data[sys_file_storage][{uid}][is_public]_0" type="checkbox" %s>
-				</label>
-			</div>
-		</div>';
+        <div class="checkbox checkbox-type-toggle">
+                <input type="checkbox" id="filestorage-ispublic" onclick="document.editform[\'data[sys_file_storage][{uid}][is_public]\'].value=this.checked?(document.editform[\'data[sys_file_storage][{uid}][is_public]\'].value|1):(document.editform[\'data[sys_file_storage][{uid}][is_public]\'].value&0);TBE_EDITOR.fieldChanged(\'sys_file_storage\',\'{uid}\',\'is_public\',\'data[sys_file_storage][{uid}][is_public]\');" class="checkbox-input" value="1" name="data[sys_file_storage][{uid}][is_public]_0" %s />
+                <label class="checkbox-label" for="filestorage-ispublic">
+                    <span class="checkbox-label-text">&nbsp;</span>
+                </label>
+                <input type="hidden" name="data[sys_file_storage][{uid}][is_public]" value="1">
+            </div>
+        ';
 
-        $content = sprintf($template,
+        $content = sprintf(
+            $template,
             $isPublic ? 'checked="checked"' : ''
         );
 

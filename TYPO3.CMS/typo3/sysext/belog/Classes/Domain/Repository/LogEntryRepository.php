@@ -15,10 +15,12 @@ namespace TYPO3\CMS\Belog\Domain\Repository;
  */
 use TYPO3\CMS\Belog\Domain\Model\LogEntry;
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Type\Bitmask\Permission;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Sys log entry repository
+ * @internal This class is a TYPO3 Backend implementation and is not considered part of the Public TYPO3 API.
  */
 class LogEntryRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 {
@@ -35,7 +37,7 @@ class LogEntryRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
     public function initializeObject()
     {
         $this->beUserList = $this->getBackendUsers();
-        /** @var $defaultQuerySettings \TYPO3\CMS\Extbase\Persistence\Generic\QuerySettingsInterface */
+        /** @var \TYPO3\CMS\Extbase\Persistence\Generic\QuerySettingsInterface $defaultQuerySettings */
         $defaultQuerySettings = $this->objectManager->get(\TYPO3\CMS\Extbase\Persistence\Generic\QuerySettingsInterface::class);
         $defaultQuerySettings->setRespectStoragePage(false);
         $this->setDefaultQuerySettings($defaultQuerySettings);
@@ -100,22 +102,23 @@ class LogEntryRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
      */
     protected function addPageTreeConstraintsToQuery(\TYPO3\CMS\Belog\Domain\Model\Constraint $constraint, \TYPO3\CMS\Extbase\Persistence\QueryInterface $query, array &$queryConstraints)
     {
-        if (!$constraint->getIsInPageContext()) {
-            return;
-        }
         $pageIds = [];
         // Check if we should get a whole tree of pages and not only a single page
         if ($constraint->getDepth() > 0) {
-            /** @var $pageTree \TYPO3\CMS\Backend\Tree\View\PageTreeView */
+            /** @var \TYPO3\CMS\Backend\Tree\View\PageTreeView $pageTree */
             $pageTree = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Tree\View\PageTreeView::class);
-            $pageTree->init('AND ' . $GLOBALS['BE_USER']->getPagePermsClause(1));
+            $pageTree->init('AND ' . $GLOBALS['BE_USER']->getPagePermsClause(Permission::PAGE_SHOW));
             $pageTree->makeHTML = 0;
             $pageTree->fieldArray = ['uid'];
             $pageTree->getTree($constraint->getPageId(), $constraint->getDepth());
             $pageIds = $pageTree->ids;
         }
-        $pageIds[] = $constraint->getPageId();
-        $queryConstraints[] = $query->in('eventPid', $pageIds);
+        if (!empty($constraint->getPageId())) {
+            $pageIds[] = $constraint->getPageId();
+        }
+        if (!empty($pageIds)) {
+            $queryConstraints[] = $query->in('eventPid', $pageIds);
+        }
     }
 
     /**
@@ -132,7 +135,7 @@ class LogEntryRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             return;
         }
         // Constraint for a group
-        if (substr($userOrGroup, 0, 3) === 'gr-') {
+        if (strpos($userOrGroup, 'gr-') === 0) {
             $groupId = (int)substr($userOrGroup, 3);
             $userIds = [];
             foreach ($this->beUserList as $userId => $userData) {
@@ -146,7 +149,7 @@ class LogEntryRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 // If there are no group members -> use -1 as constraint to not find anything
                 $queryConstraints[] = $query->in('userid', [-1]);
             }
-        } elseif (substr($userOrGroup, 0, 3) === 'us-') {
+        } elseif (strpos($userOrGroup, 'us-') === 0) {
             $queryConstraints[] = $query->equals('userid', (int)substr($userOrGroup, 3));
         } elseif ($userOrGroup === '-1') {
             $queryConstraints[] = $query->equals('userid', (int)$GLOBALS['BE_USER']->user['uid']);

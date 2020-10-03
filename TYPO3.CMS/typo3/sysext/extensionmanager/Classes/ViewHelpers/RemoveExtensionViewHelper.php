@@ -17,12 +17,13 @@ namespace TYPO3\CMS\Extensionmanager\ViewHelpers;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Fluid\ViewHelpers\Link\ActionViewHelper;
 
 /**
- * view helper for displaying a remove extension link
+ * ViewHelper for displaying a remove extension link
  * @internal
  */
-class RemoveExtensionViewHelper extends Link\ActionViewHelper
+class RemoveExtensionViewHelper extends ActionViewHelper
 {
     /**
      * Initialize arguments
@@ -53,7 +54,7 @@ class RemoveExtensionViewHelper extends Link\ActionViewHelper
         ) {
             return '<span class="btn btn-default disabled">' . $iconFactory->getIcon('empty-empty', Icon::SIZE_SMALL)->render() . '</span>';
         }
-        $uriBuilder = $this->controllerContext->getUriBuilder();
+        $uriBuilder = $this->renderingContext->getControllerContext()->getUriBuilder();
         $action = 'removeExtension';
         $uriBuilder->reset();
         $uriBuilder->setFormat('json');

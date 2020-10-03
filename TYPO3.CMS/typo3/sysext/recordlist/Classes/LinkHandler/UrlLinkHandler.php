@@ -20,6 +20,7 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Link handler for external URLs
+ * @internal This class is a specific LinkHandler implementation and is not part of the TYPO3's Core API.
  */
 class UrlLinkHandler extends AbstractLinkHandler implements LinkHandlerInterface
 {
@@ -88,7 +89,7 @@ class UrlLinkHandler extends AbstractLinkHandler implements LinkHandlerInterface
     {
         GeneralUtility::makeInstance(PageRenderer::class)->loadRequireJsModule('TYPO3/CMS/Recordlist/UrlLinkHandler');
 
-        $this->view->assign('url', !empty($this->linkParts) ? $this->linkParts['url'] : 'http://');
+        $this->view->assign('url', !empty($this->linkParts) ? $this->linkParts['url'] : '');
         return $this->view->render('Url');
     }
 

@@ -14,7 +14,9 @@ namespace TYPO3\CMS\Extensionmanager\Utility;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Package\PackageInterface;
+use TYPO3\CMS\Core\Type\File\ImageInfo;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\VersionNumberUtility;
@@ -27,6 +29,7 @@ use TYPO3\CMS\Extensionmanager\Domain\Model\Extension;
  * - The methods depend on each other, they take each others result, that could be done internally
  * - There is no good wording to distinguish existing and loaded extensions
  * - The name 'listUtility' is not good, the methods could be moved to some 'extensionInformationUtility', or a repository?
+ * @internal This class is a specific ExtensionManager implementation and is not part of the Public TYPO3 API.
  */
 class ListUtility implements \TYPO3\CMS\Core\SingletonInterface
 {
@@ -58,7 +61,7 @@ class ListUtility implements \TYPO3\CMS\Core\SingletonInterface
     /**
      * @var array
      */
-    protected $availableExtensions = null;
+    protected $availableExtensions;
 
     /**
      * @param \TYPO3\CMS\Extensionmanager\Utility\EmConfUtility $emConfUtility
@@ -113,7 +116,7 @@ class ListUtility implements \TYPO3\CMS\Core\SingletonInterface
             foreach ($this->packageManager->getAvailablePackages() as $package) {
                 $installationType = $this->getInstallTypeForPackage($package);
                 $this->availableExtensions[$package->getPackageKey()] = [
-                    'siteRelPath' => str_replace(PATH_site, '', $package->getPackagePath()),
+                    'siteRelPath' => str_replace(Environment::getPublicPath() . '/', '', $package->getPackagePath()),
                     'type' => $installationType,
                     'key' => $package->getPackageKey(),
                     'ext_icon' => ExtensionManagementUtility::getExtensionIcon($package->getPackagePath()),
@@ -213,7 +216,7 @@ class ListUtility implements \TYPO3\CMS\Core\SingletonInterface
     {
         $extensions = $this->enrichExtensionsWithEmConfInformation($extensions);
         foreach ($extensions as $extensionKey => $properties) {
-            $terObject = $this->getExtensionTerData($extensionKey, $extensions[$extensionKey]['version']);
+            $terObject = $this->getExtensionTerData($extensionKey, $extensions[$extensionKey]['version'] ?? '');
             if ($terObject !== null) {
                 $extensions[$extensionKey]['terObject'] = $terObject;
                 $extensions[$extensionKey]['updateAvailable'] = false;
@@ -235,7 +238,7 @@ class ListUtility implements \TYPO3\CMS\Core\SingletonInterface
      *
      * @param string $extensionKey Key of the extension
      * @param string $version String representation of version number
-     * @return Extension|NULL Extension TER object or NULL if nothing found
+     * @return Extension|null Extension TER object or NULL if nothing found
      */
     protected function getExtensionTerData($extensionKey, $version)
     {
@@ -268,10 +271,11 @@ class ListUtility implements \TYPO3\CMS\Core\SingletonInterface
     public function enrichExtensionsWithIconInformation(array $extensions)
     {
         foreach ($extensions as &$properties) {
-            $iInfo = @getimagesize(PATH_site . $properties['siteRelPath'] . $properties['ext_icon']);
-            if ($iInfo !== false) {
-                $properties['ext_icon_width'] = $iInfo[0];
-                $properties['ext_icon_height'] = $iInfo[1];
+            $extIconPath = Environment::getPublicPath() . '/' . $properties['siteRelPath'] . $properties['ext_icon'];
+            if (@is_file($extIconPath)) {
+                $imageInfo = GeneralUtility::makeInstance(ImageInfo::class, $extIconPath);
+                $properties['ext_icon_width'] = $imageInfo->getWidth();
+                $properties['ext_icon_height'] = $imageInfo->getHeight();
             } else {
                 $properties['ext_icon_width'] = 0;
                 $properties['ext_icon_height'] = 0;

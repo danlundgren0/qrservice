@@ -26,6 +26,17 @@ use TYPO3\CMS\Core\Utility\StringUtility;
 class SelectSingleBoxElement extends AbstractFormElement
 {
     /**
+     * Default field information enabled for this element.
+     *
+     * @var array
+     */
+    protected $defaultFieldInformation = [
+        'tcaDescription' => [
+            'renderType' => 'tcaDescription',
+        ],
+    ];
+
+    /**
      * Default field controls for this element.
      *
      * @var array
@@ -98,27 +109,21 @@ class SelectSingleBoxElement extends AbstractFormElement
 
         $selectElement = $this->renderSelectElement($optionElements, $parameterArray, $config);
 
-        $legacyWizards = $this->renderWizards();
-        $legacyFieldControlHtml = implode(LF, $legacyWizards['fieldControl']);
-        $legacyFieldWizardHtml = implode(LF, $legacyWizards['fieldWizard']);
-
         $fieldInformationResult = $this->renderFieldInformation();
         $fieldInformationHtml = $fieldInformationResult['html'];
         $resultArray = $this->mergeChildReturnIntoExistingResult($resultArray, $fieldInformationResult, false);
 
         $fieldControlResult = $this->renderFieldControl();
-        $fieldControlHtml = $legacyFieldControlHtml . $fieldControlResult['html'];
+        $fieldControlHtml = $fieldControlResult['html'];
         $resultArray = $this->mergeChildReturnIntoExistingResult($resultArray, $fieldControlResult, false);
 
         $fieldWizardResult = $this->renderFieldWizard();
-        $fieldWizardHtml = $legacyFieldWizardHtml . $fieldWizardResult['html'];
+        $fieldWizardHtml = $fieldWizardResult['html'];
         $resultArray = $this->mergeChildReturnIntoExistingResult($resultArray, $fieldWizardResult, false);
 
         $html = [];
         $html[] = '<div class="formengine-field-item t3js-formengine-field-item">';
-        if (!$disabled) {
-            $html[] = $fieldInformationHtml;
-        }
+        $html[] = $fieldInformationHtml;
         $html[] =   '<div class="form-control-wrap" style="max-width: ' . $width . 'px">';
         $html[] =       '<div class="form-wizards-wrap form-wizards-aside">';
         $html[] =           '<div class="form-wizards-element">';
@@ -129,17 +134,20 @@ class SelectSingleBoxElement extends AbstractFormElement
         $html[] =               $selectElement;
         $html[] =           '</div>';
         if (!$disabled) {
-            $html[] =       '<div class="form-wizards-items-aside">';
-            $html[] =           $fieldControlHtml;
-            $html[] =       '</div>';
-            $html[] =   '</div>';
-
+            if (!empty($fieldControlHtml)) {
+                $html[] =       '<div class="form-wizards-items-aside">';
+                $html[] =           $fieldControlHtml;
+                $html[] =       '</div>';
+                $html[] =   '</div>';
+            }
             $html[] =   '<p>';
-            $html[] =       '<em>' . htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.holdDownCTRL')) . '</em>';
+            $html[] =       '<em>' . htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.holdDownCTRL')) . '</em>';
             $html[] =   '</p>';
-            $html[] =   '<div class="form-wizards-items-bottom">';
-            $html[] =       $fieldWizardHtml;
-            $html[] =   '</div>';
+            if (!empty($fieldWizardHtml)) {
+                $html[] = '<div class="form-wizards-items-bottom">';
+                $html[] = $fieldWizardHtml;
+                $html[] = '</div>';
+            }
         }
         $html[] =   '</div>';
         $html[] = '</div>';
@@ -184,10 +192,6 @@ class SelectSingleBoxElement extends AbstractFormElement
         if ($config['readOnly']) {
             $attributes['disabled'] = 'disabled';
         }
-        if (isset($config['itemListStyle'])) {
-            GeneralUtility::deprecationLog('TCA property itemListStyle is deprecated since TYPO3 v8 and will be removed in v9');
-            $attributes['style'] = $config['itemListStyle'];
-        }
 
         $html = [];
         $html[] = '<select ' . GeneralUtility::implodeAttributes($attributes, true) . '>';
@@ -210,7 +214,7 @@ class SelectSingleBoxElement extends AbstractFormElement
         $attributes['value'] = $value;
         $html = [
             '<option ' . GeneralUtility::implodeAttributes($attributes, true) . '>',
-                htmlspecialchars($label, ENT_COMPAT, 'UTF-8', false),
+                htmlspecialchars($this->appendValueToLabelInDebugMode($label, $value), ENT_COMPAT, 'UTF-8', false),
             '</option>'
 
         ];

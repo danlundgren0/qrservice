@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain;
 
 /*
@@ -19,8 +19,6 @@ use TYPO3\CMS\Form\Exception as FormException;
 
 /**
  * A generic Form domain Exception
- *
- * @api
  */
 class Exception extends FormException
 {

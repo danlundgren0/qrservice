@@ -21,18 +21,19 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  * A general purpose configuration manager used in frontend mode.
  *
  * Should NOT be singleton, as a new configuration manager is needed per plugin.
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 class FrontendConfigurationManager extends \TYPO3\CMS\Extbase\Configuration\AbstractConfigurationManager
 {
     /**
-     * @var \TYPO3\CMS\Extbase\Service\FlexFormService
+     * @var \TYPO3\CMS\Core\Service\FlexFormService
      */
     protected $flexFormService;
 
     /**
-     * @param \TYPO3\CMS\Extbase\Service\FlexFormService $flexFormService
+     * @param \TYPO3\CMS\Core\Service\FlexFormService $flexFormService
      */
-    public function injectFlexFormService(\TYPO3\CMS\Extbase\Service\FlexFormService $flexFormService)
+    public function injectFlexFormService(\TYPO3\CMS\Core\Service\FlexFormService $flexFormService)
     {
         $this->flexFormService = $flexFormService;
     }
@@ -59,12 +60,12 @@ class FrontendConfigurationManager extends \TYPO3\CMS\Extbase\Configuration\Abst
     {
         $setup = $this->getTypoScriptSetup();
         $pluginConfiguration = [];
-        if (is_array($setup['plugin.']['tx_' . strtolower($extensionName) . '.'])) {
+        if (isset($setup['plugin.']['tx_' . strtolower($extensionName) . '.']) && is_array($setup['plugin.']['tx_' . strtolower($extensionName) . '.'])) {
             $pluginConfiguration = $this->typoScriptService->convertTypoScriptArrayToPlainArray($setup['plugin.']['tx_' . strtolower($extensionName) . '.']);
         }
         if ($pluginName !== null) {
             $pluginSignature = strtolower($extensionName . '_' . $pluginName);
-            if (is_array($setup['plugin.']['tx_' . $pluginSignature . '.'])) {
+            if (isset($setup['plugin.']['tx_' . $pluginSignature . '.']) && is_array($setup['plugin.']['tx_' . $pluginSignature . '.'])) {
                 ArrayUtility::mergeRecursiveWithOverrule(
                     $pluginConfiguration,
                     $this->typoScriptService->convertTypoScriptArrayToPlainArray($setup['plugin.']['tx_' . $pluginSignature . '.'])
@@ -87,7 +88,7 @@ class FrontendConfigurationManager extends \TYPO3\CMS\Extbase\Configuration\Abst
      */
     protected function getSwitchableControllerActions($extensionName, $pluginName)
     {
-        $switchableControllerActions = $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['extensions'][$extensionName]['plugins'][$pluginName]['controllers'];
+        $switchableControllerActions = $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['extensions'][$extensionName]['plugins'][$pluginName]['controllers'] ?? [];
         if (!is_array($switchableControllerActions)) {
             $switchableControllerActions = [];
         }
@@ -199,8 +200,8 @@ class FrontendConfigurationManager extends \TYPO3\CMS\Extbase\Configuration\Abst
      */
     protected function mergeConfigurationIntoFrameworkConfiguration(array $frameworkConfiguration, array $configuration, $configurationPartName)
     {
-        if (is_array($configuration[$configurationPartName])) {
-            if (is_array($frameworkConfiguration[$configurationPartName])) {
+        if (isset($configuration[$configurationPartName]) && is_array($configuration[$configurationPartName])) {
+            if (isset($frameworkConfiguration[$configurationPartName]) && is_array($frameworkConfiguration[$configurationPartName])) {
                 ArrayUtility::mergeRecursiveWithOverrule($frameworkConfiguration[$configurationPartName], $configuration[$configurationPartName]);
             } else {
                 $frameworkConfiguration[$configurationPartName] = $configuration[$configurationPartName];

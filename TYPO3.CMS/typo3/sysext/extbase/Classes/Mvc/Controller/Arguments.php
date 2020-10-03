@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Extbase\Mvc\Controller;
 
 /**
  * A composite of controller arguments
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 class Arguments extends \ArrayObject
 {
@@ -138,7 +139,7 @@ class Arguments extends \ArrayObject
      */
     public function addNewArgument($name, $dataType = 'Text', $isRequired = false, $defaultValue = null)
     {
-        /** @var $argument Argument */
+        /** @var Argument $argument */
         $argument = $this->objectManager->get(\TYPO3\CMS\Extbase\Mvc\Controller\Argument::class, $name, $dataType);
         $argument->setRequired($isRequired);
         $argument->setDefaultValue($defaultValue);
@@ -222,7 +223,7 @@ class Arguments extends \ArrayObject
      */
     public function __call($methodName, array $arguments)
     {
-        if (substr($methodName, 0, 3) !== 'set') {
+        if (strpos($methodName, 'set') !== 0) {
             throw new \LogicException('Unknown method "' . $methodName . '".', 1210858451);
         }
         $firstLowerCaseArgumentName = $this->translateToLongArgumentName(strtolower($methodName[3]) . substr($methodName, 4));
@@ -275,13 +276,27 @@ class Arguments extends \ArrayObject
      * Get all property mapping / validation errors
      *
      * @return \TYPO3\CMS\Extbase\Error\Result
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
      */
     public function getValidationResults()
+    {
+        trigger_error(
+            'Method ' . __METHOD__ . ' is deprecated and will be removed in TYPO3 v10.0.',
+            E_USER_DEPRECATED
+        );
+
+        return $this->validate();
+    }
+
+    /**
+     * @return \TYPO3\CMS\Extbase\Error\Result
+     */
+    public function validate(): \TYPO3\CMS\Extbase\Error\Result
     {
         $results = new \TYPO3\CMS\Extbase\Error\Result();
         /** @var Argument $argument */
         foreach ($this as $argument) {
-            $argumentValidationResults = $argument->getValidationResults();
+            $argumentValidationResults = $argument->validate();
             if ($argumentValidationResults === null) {
                 continue;
             }

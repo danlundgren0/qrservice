@@ -1,4 +1,5 @@
 <?php
+declare(strict_types = 1);
 namespace TYPO3\CMS\SysNote\Controller;
 
 /*
@@ -14,51 +15,52 @@ namespace TYPO3\CMS\SysNote\Controller;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Fluid\View\StandaloneView;
+use TYPO3\CMS\SysNote\Domain\Repository\SysNoteRepository;
+
 /**
- * Note controller
+ * Renders notes for the current backend user
+ *
+ * @internal
  */
-class NoteController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionController
+class NoteController
 {
     /**
-     * @var \TYPO3\CMS\SysNote\Domain\Repository\SysNoteRepository
+     * @var SysNoteRepository
      */
-    protected $sysNoteRepository;
+    protected $notesRepository;
 
-    /**
-     * @var \TYPO3\CMS\Extbase\Domain\Repository\BackendUserRepository
-     */
-    protected $backendUserRepository;
-
-    /**
-     * @param \TYPO3\CMS\SysNote\Domain\Repository\SysNoteRepository $sysNoteRepository
-     */
-    public function injectSysNoteRepository(\TYPO3\CMS\SysNote\Domain\Repository\SysNoteRepository $sysNoteRepository)
+    public function __construct()
     {
-        $this->sysNoteRepository = $sysNoteRepository;
-    }
-
-    /**
-     * @param \TYPO3\CMS\Extbase\Domain\Repository\BackendUserRepository $backendUserRepository
-     */
-    public function injectBackendUserRepository(\TYPO3\CMS\Extbase\Domain\Repository\BackendUserRepository $backendUserRepository)
-    {
-        $this->backendUserRepository = $backendUserRepository;
+        $this->notesRepository = GeneralUtility::makeInstance(SysNoteRepository::class);
     }
 
     /**
      * Render notes by single PID or PID list
      *
      * @param string $pids Single PID or comma separated list of PIDs
+     * @param int|null $position null for no restriction, integer for defined position
      * @return string
-     * @ignorevalidation $pids
      */
-    public function listAction($pids)
+    public function listAction($pids, int $position = null): string
     {
         if (empty($pids) || empty($GLOBALS['BE_USER']->user['uid'])) {
             return '';
         }
-        $author = $this->backendUserRepository->findByUid($GLOBALS['BE_USER']->user['uid']);
-        $notes = $this->sysNoteRepository->findByPidsAndAuthor($pids, $author);
-        $this->view->assign('notes', $notes);
+
+        $notes = $this->notesRepository->findByPidsAndAuthorId($pids, (int)$GLOBALS['BE_USER']->user['uid'], $position);
+        if ($notes) {
+            $view = GeneralUtility::makeInstance(StandaloneView::class);
+            $view->setTemplatePathAndFilename(GeneralUtility::getFileAbsFileName(
+                'EXT:sys_note/Resources/Private/Templates/Note/List.html'
+            ));
+            $view->setLayoutRootPaths(['EXT:sys_note/Resources/Private/Layouts']);
+            $view->getRequest()->setControllerExtensionName('SysNote');
+            $view->assign('notes', $notes);
+            return $view->render();
+        }
+
+        return '';
     }
 }

@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Tests;
 
 /*
@@ -20,7 +21,7 @@ use EBT\ExtensionBuilder\Domain\Model\Extension;
 use EBT\ExtensionBuilder\Service\ClassBuilder;
 use EBT\ExtensionBuilder\Service\FileGenerator;
 use EBT\ExtensionBuilder\Service\LocalizationService;
-use EBT\ExtensionBuilder\Service\Parser;
+use EBT\ExtensionBuilder\Service\ParserService;
 use EBT\ExtensionBuilder\Service\Printer;
 use EBT\ExtensionBuilder\Service\RoundTrip;
 use EBT\ExtensionBuilder\Utility\SpycYAMLParser;
@@ -29,7 +30,7 @@ use PhpParser\Lexer;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Object\ObjectManager;
 use TYPO3\CMS\Extbase\Object\UnknownClassException;
-use TYPO3\TestingFramework\Core\Functional\FunctionalTestCase;
+use Nimut\TestingFramework\TestCase\FunctionalTestCase;
 
 abstract class BaseFunctionalTest extends FunctionalTestCase
 {
@@ -55,7 +56,7 @@ abstract class BaseFunctionalTest extends FunctionalTestCase
      */
     protected $fixturesPath = '';
     /**
-     * @var \EBT\ExtensionBuilder\Service\Parser
+     * @var \EBT\ExtensionBuilder\Service\ParserService
      */
     protected $parserService = null;
     /**
@@ -86,7 +87,7 @@ abstract class BaseFunctionalTest extends FunctionalTestCase
     /**
      * @var \org\bovigo\vfs\vfsStreamDirectory
      */
-     protected $testDir = NULL;
+    protected $testDir = null;
 
     protected $testExtensionsToLoad = ['typo3conf/ext/extension_builder'];
 
@@ -95,9 +96,6 @@ abstract class BaseFunctionalTest extends FunctionalTestCase
         parent::setUp();
 
         $this->objectManager = GeneralUtility::makeInstance(ObjectManager::class);
-        if (!class_exists('PhpParser\Parser')) {
-            throw new UnknownClassException('PhpParser not found!!');
-        }
         $this->fixturesPath = __DIR__ . '/Fixtures/';
 
         $rootDir = vfsStream::setup('root');
@@ -107,7 +105,7 @@ abstract class BaseFunctionalTest extends FunctionalTestCase
         $fixturesDir = vfsStream::newDirectory('Fixtures');
         $rootDir->addChild($fixturesDir);
 
-        vfsStream::copyFromFileSystem($this->fixturesPath, $fixturesDir, 1024*1024);
+        vfsStream::copyFromFileSystem($this->fixturesPath, $fixturesDir, 1024 * 1024);
 
         $yamlParser = new SpycYAMLParser();
         $settings = $yamlParser->YAMLLoadString(file_get_contents($this->fixturesPath . 'Settings/settings1.yaml'));
@@ -123,7 +121,7 @@ abstract class BaseFunctionalTest extends FunctionalTestCase
             ->method('getExtensionDir')
             ->will(self::returnValue($dummyExtensionDir));
         if (is_dir($dummyExtensionDir)) {
-           GeneralUtility::mkdir($dummyExtensionDir, true);
+            GeneralUtility::mkdir($dummyExtensionDir, true);
         }
 
         $this->extension->setSettings($settings);
@@ -131,7 +129,7 @@ abstract class BaseFunctionalTest extends FunctionalTestCase
         // get instances to inject in Mocks
         $configurationManager = $this->objectManager->get(ExtensionBuilderConfigurationManager::class);
 
-        $this->parserService = new Parser(new Lexer());
+        $this->parserService = new ParserService();
         $this->printerService = $this->objectManager->get(Printer::class);
         $localizationService = $this->objectManager->get(LocalizationService::class);
 
@@ -144,7 +142,6 @@ abstract class BaseFunctionalTest extends FunctionalTestCase
         $this->roundTripService->initialize($this->extension);
 
         $this->fileGenerator = $this->getAccessibleMock(FileGenerator::class, ['dummy']);
-        $this->inject($this->fileGenerator, 'objectManager', $this->objectManager);
         $this->inject($this->fileGenerator, 'printerService', $this->printerService);
         $this->inject($this->fileGenerator, 'localizationService', $localizationService);
         $this->inject($this->fileGenerator, 'classBuilder', $this->classBuilder);
@@ -164,8 +161,10 @@ abstract class BaseFunctionalTest extends FunctionalTestCase
             ]
         );
         // needed when sub routines in file generator are called without an initial setup
-        $this->fileGenerator->_set('codeTemplateRootPaths', [PATH_typo3conf . 'ext/extension_builder/Resources/Private/CodeTemplates/Extbase/']);
-        $this->fileGenerator->_set('codeTemplatePartialPaths', [PATH_typo3conf . 'ext/extension_builder/Resources/Private/CodeTemplates/Extbase/Partials']);
+        $this->fileGenerator->_set('codeTemplateRootPaths',
+            [PATH_typo3conf . 'ext/extension_builder/Resources/Private/CodeTemplates/Extbase/']);
+        $this->fileGenerator->_set('codeTemplatePartialPaths',
+            [PATH_typo3conf . 'ext/extension_builder/Resources/Private/CodeTemplates/Extbase/Partials']);
         $this->fileGenerator->_set('enableRoundtrip', true);
         $this->fileGenerator->_set('extension', $this->extension);
     }
@@ -238,7 +237,8 @@ abstract class BaseFunctionalTest extends FunctionalTestCase
         if (@file_exists($this->extension->getExtensionDir() . $this->modelClassDir . $modelName . '.php')) {
             unlink($this->extension->getExtensionDir() . $this->modelClassDir . $modelName . '.php');
         }
-        self::assertFalse(file_exists($this->extension->getExtensionDir() . $this->modelClassDir . $modelName . '.php'), 'Dummy files could not be removed:' . $this->extension->getExtensionDir() . $this->modelClassDir . $modelName . '.php');
+        self::assertFalse(file_exists($this->extension->getExtensionDir() . $this->modelClassDir . $modelName . '.php'),
+            'Dummy files could not be removed:' . $this->extension->getExtensionDir() . $this->modelClassDir . $modelName . '.php');
     }
 
 }

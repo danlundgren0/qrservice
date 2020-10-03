@@ -222,7 +222,10 @@ class ExtensionManagementService implements \TYPO3\CMS\Core\SingletonInterface
         // Attach extension to install queue
         $this->downloadQueue->addExtensionToInstallQueue($extension);
         $installQueue += $this->downloadQueue->resetExtensionInstallStorage();
-        $installedDependencies = $this->installDependencies($installQueue);
+        $installedDependencies = [];
+        if ($this->automaticInstallationEnabled) {
+            $installedDependencies = $this->installDependencies($installQueue);
+        }
 
         return array_merge($downloadedDependencies, $updatedDependencies, $installedDependencies);
     }
@@ -354,14 +357,15 @@ class ExtensionManagementService implements \TYPO3\CMS\Core\SingletonInterface
      */
     protected function installDependencies(array $installQueue)
     {
-        if (!empty($installQueue)) {
-            $this->emitWillInstallExtensionsSignal($installQueue);
+        if (empty($installQueue)) {
+            return [];
         }
+        $this->emitWillInstallExtensionsSignal($installQueue);
         $resolvedDependencies = [];
+        $this->installUtility->install(...array_keys($installQueue));
         foreach ($installQueue as $extensionKey => $_) {
-            $this->installUtility->install($extensionKey);
             $this->emitHasInstalledExtensionSignal($extensionKey);
-            if (!is_array($resolvedDependencies['installed'])) {
+            if (!isset($resolvedDependencies['installed']) || !is_array($resolvedDependencies['installed'])) {
                 $resolvedDependencies['installed'] = [];
             }
             $resolvedDependencies['installed'][$extensionKey] = $extensionKey;
@@ -431,6 +435,7 @@ class ExtensionManagementService implements \TYPO3\CMS\Core\SingletonInterface
 
     /**
      * @param string $extensionKey
+     * @deprecated since TYPO3 v9, will be removed with TYPO3v10
      */
     protected function emitHasInstalledExtensionSignal($extensionKey)
     {

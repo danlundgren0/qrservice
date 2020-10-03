@@ -15,15 +15,15 @@ namespace TYPO3\CMS\FluidStyledContent\ViewHelpers\Link;
  */
 
 use TYPO3\CMS\Core\Resource\FileInterface;
-use TYPO3\CMS\Core\Resource\FileReference;
 use TYPO3\CMS\Core\TypoScript\TypoScriptService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
- * A view helper for creating a link for an image popup.
+ * A ViewHelper for creating a link for an image popup.
  *
  * = Example =
  *
@@ -34,9 +34,13 @@ use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
  * <output>
  * <a href="url" onclick="javascript" target="thePicture"><img src=""></a>
  * </output>
+ *
+ * @internal this is not part of TYPO3 Core API.
  */
 class ClickEnlargeViewHelper extends AbstractViewHelper
 {
+    use CompileWithRenderStatic;
+
     /**
      * @var bool
      */
@@ -47,26 +51,12 @@ class ClickEnlargeViewHelper extends AbstractViewHelper
      */
     public function initializeArguments()
     {
-        $this->registerArgument('image', FileReference::class, 'The original image file', true);
+        $this->registerArgument('image', FileInterface::class, 'The original image file', true);
         $this->registerArgument(
             'configuration',
             'mixed',
             'String, \TYPO3\CMS\Core\Resource\File or \TYPO3\CMS\Core\Resource\FileReference with link configuration',
             true
-        );
-    }
-
-    /**
-     * Render the view helper
-     *
-     * @return string
-     */
-    public function render()
-    {
-        return self::renderStatic(
-            $this->arguments,
-            $this->buildRenderChildrenClosure(),
-            $this->renderingContext
         );
     }
 
@@ -100,12 +90,8 @@ class ClickEnlargeViewHelper extends AbstractViewHelper
     /**
      * @return TypoScriptService
      */
-    protected static function getTypoScriptService()
+    protected static function getTypoScriptService(): TypoScriptService
     {
-        static $typoScriptService;
-        if ($typoScriptService === null) {
-            $typoScriptService = GeneralUtility::makeInstance(TypoScriptService::class);
-        }
-        return $typoScriptService;
+        return GeneralUtility::makeInstance(TypoScriptService::class);
     }
 }

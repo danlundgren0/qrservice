@@ -16,8 +16,6 @@ namespace TYPO3\CMS\Extbase\Validation\Validator;
 
 /**
  * Validator for general numbers.
- *
- * @api
  */
 class NumberValidator extends AbstractValidator
 {
@@ -30,10 +28,12 @@ class NumberValidator extends AbstractValidator
     {
         if (!is_numeric($value)) {
             $this->addError(
-            $this->translateErrorMessage(
-                'validator.number.notvalid',
-                'extbase'
-            ), 1221563685);
+                $this->translateErrorMessage(
+                    'validator.number.notvalid',
+                    'extbase'
+                ),
+                1221563685
+            );
         }
     }
 }

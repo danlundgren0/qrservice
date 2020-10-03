@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Domain\Model\DomainObject;
 
 /*
@@ -30,78 +31,98 @@ abstract class AbstractProperty
      * @var string
      */
     protected $uniqueIdentifier = '';
+
     /**
      * name of the property
      *
      * @var string
      */
     protected $name = '';
+
     /**
      * description of property
      *
      * @var string
      */
     protected $description = '';
+
     /**
      * whether the property is required
      *
      * @var bool
      */
     protected $required = false;
+
     /**
      * property's default value
      *
      * @var mixed
      */
     protected $defaultValue = null;
+
     /**
      * @var mixed
      */
     protected $value = null;
+
     /**
      * Is an upload folder required for this property
      *
      * @var bool
      */
     protected $needsUploadFolder = false;
+
     /**
      * The domain object this property belongs to.
      *
      * @var \EBT\ExtensionBuilder\Domain\Model\DomainObject
      */
     protected $class = null;
+
     /**
      * is set to true, if this property was new added
      *
      * @var bool
      */
     protected $new = true;
+
     /**
      * use RTE in Backend
      *
      * @var bool
      */
     protected $useRTE = false;
+
     /**
      * @var string the property type of this property
      */
     protected $type = '';
+
     /**
      * @var \EBT\ExtensionBuilder\Domain\Model\DomainObject
      */
     protected $domainObject = null;
+
     /**
      * @var bool
      */
     protected $excludeField = false;
+
     /**
      * @var bool
      */
     protected $l10nModeExclude = false;
+
     /**
      * @var bool
      */
     protected $cascadeRemove = false;
+
+    /**
+     * @var bool
+     */
+    protected $searchable = false;
+
     /**
      *
      * @param string $propertyName
@@ -212,6 +233,7 @@ abstract class AbstractProperty
 
     /**
      * @return bool true (if property is of type relation any to many)
+     * @deprecated Use `!instanceof ZeroToManyRelation` instead
      */
     public function isZeroToManyRelation()
     {
@@ -243,9 +265,9 @@ abstract class AbstractProperty
     {
         if ($this->description) {
             return $this->description;
-        } else {
-            return $this->getName();
         }
+
+        return $this->getName();
     }
 
     /**
@@ -368,7 +390,6 @@ abstract class AbstractProperty
     }
 
     /**
-
      * Get the validate annotation to be used in the domain model for this property.
      *
      * @return string
@@ -376,7 +397,7 @@ abstract class AbstractProperty
     public function getValidateAnnotation()
     {
         if ($this->required) {
-            return '@validate NotEmpty';
+            return '@TYPO3\CMS\Extbase\Annotation\Validate("NotEmpty")';
         }
         return '';
     }
@@ -387,7 +408,7 @@ abstract class AbstractProperty
     public function getCascadeRemoveAnnotation()
     {
         if ($this->cascadeRemove) {
-            return '@cascade remove';
+            return '@TYPO3\CMS\Extbase\Annotation\ORM\Cascade("remove")';
         }
         return '';
     }
@@ -461,9 +482,9 @@ abstract class AbstractProperty
     {
         if ($this->getFieldName() != GeneralUtility::camelCaseToLowerCaseUnderscored($this->name)) {
             return $this->getFieldName() . '.mapOnProperty = ' . $this->name;
-        } else {
-            return null;
         }
+
+        return null;
     }
 
     /**
@@ -510,9 +531,9 @@ abstract class AbstractProperty
         $type = $this->getTypeForComment();
         if (substr($type, 0, 1) === chr(92)) {
             return substr($type, 1);
-        } else {
-            return $type;
         }
+
+        return $type;
     }
 
     /**
@@ -553,5 +574,13 @@ abstract class AbstractProperty
     public function isFileReference()
     {
         return in_array($this->type, ['Image', 'File']);
+    }
+
+    /**
+     * @return bool
+     */
+    public function isSearchable()
+    {
+        return $this->searchable;
     }
 }

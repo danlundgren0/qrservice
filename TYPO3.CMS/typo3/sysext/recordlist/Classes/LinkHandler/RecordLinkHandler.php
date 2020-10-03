@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Recordlist\LinkHandler;
 
 /*
@@ -28,6 +28,7 @@ use TYPO3\CMS\Recordlist\Tree\View\RecordBrowserPageTreeView;
 
 /**
  * Link handler for arbitrary database records
+ * @internal This class is a specific LinkHandler implementation and is not part of the TYPO3's Core API.
  */
 class RecordLinkHandler extends AbstractLinkHandler implements LinkHandlerInterface, LinkParameterProviderInterface
 {
@@ -81,7 +82,7 @@ class RecordLinkHandler extends AbstractLinkHandler implements LinkHandlerInterf
      */
     public function canHandleLink(array $linkParts): bool
     {
-        if (!$linkParts['url'] || !isset($linkParts['url']['identifier'])) {
+        if (!$linkParts['url'] || !isset($linkParts['url']['identifier']) || $linkParts['url']['identifier'] !== $this->identifier) {
             return false;
         }
 
@@ -137,6 +138,7 @@ class RecordLinkHandler extends AbstractLinkHandler implements LinkHandlerInterf
         } elseif (isset($this->linkParts['pid'])) {
             $this->expandPage = (int)$this->linkParts['pid'];
         }
+        $this->setTemporaryDbMounts();
 
         $databaseBrowser = GeneralUtility::makeInstance(RecordBrowser::class);
 
@@ -164,14 +166,14 @@ class RecordLinkHandler extends AbstractLinkHandler implements LinkHandlerInterf
      */
     protected function renderPageTree(): string
     {
-        $backendUser = $this->getBackendUser();
+        $userTsConfig = $this->getBackendUser()->getTSConfig();
 
         /** @var RecordBrowserPageTreeView $pageTree */
         $pageTree = GeneralUtility::makeInstance(RecordBrowserPageTreeView::class);
         $pageTree->setLinkParameterProvider($this);
-        $pageTree->ext_showPageId = (bool)$backendUser->getTSConfigVal('options.pageTree.showPageIdWithTitle');
-        $pageTree->ext_showNavTitle = (bool)$backendUser->getTSConfigVal('options.pageTree.showNavTitle');
-        $pageTree->ext_showPathAboveMounts = (bool)$backendUser->getTSConfigVal('options.pageTree.showPathAboveMounts');
+        $pageTree->ext_showPageId = (bool)($userTsConfig['options.']['pageTree.']['showPageIdWithTitle'] ?? false);
+        $pageTree->ext_showNavTitle = (bool)($userTsConfig['options.']['pageTree.']['showNavTitle'] ?? false);
+        $pageTree->ext_showPathAboveMounts = (bool)($userTsConfig['options.']['pageTree.']['showPathAboveMounts'] ?? false);
         $pageTree->addField('nav_title');
 
         // Load the mount points, if any

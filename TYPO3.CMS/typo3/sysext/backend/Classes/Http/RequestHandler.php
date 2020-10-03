@@ -1,4 +1,5 @@
 <?php
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Http;
 
 /*
@@ -16,15 +17,15 @@ namespace TYPO3\CMS\Backend\Http;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Server\RequestHandlerInterface as PsrRequestHandlerInterface;
 use TYPO3\CMS\Backend\Routing\Exception\InvalidRequestTokenException;
-use TYPO3\CMS\Core\Core\Bootstrap;
+use TYPO3\CMS\Core\Http\RedirectResponse;
 use TYPO3\CMS\Core\Http\RequestHandlerInterface;
 use TYPO3\CMS\Core\Http\Response;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
- * General RequestHandler for the TYPO3 Backend. This is used for all Backend requests except for CLI
- * or AJAX calls.
+ * General RequestHandler for the TYPO3 Backend. This is used for all Backend requests, including AJAX routes.
  *
  * If a get/post parameter "route" is set, the Backend Routing is called and searches for a
  * matching route inside the Router. The corresponding controller / action is called then which returns the response.
@@ -33,83 +34,59 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  *   - route
  *   - token
  */
-class RequestHandler implements RequestHandlerInterface
+class RequestHandler implements RequestHandlerInterface, PsrRequestHandlerInterface
 {
-    /**
-     * Instance of the current TYPO3 bootstrap
-     * @var Bootstrap
-     */
-    protected $bootstrap;
-
-    /**
-     * Constructor handing over the bootstrap and the original request
-     *
-     * @param Bootstrap $bootstrap
-     */
-    public function __construct(Bootstrap $bootstrap)
-    {
-        $this->bootstrap = $bootstrap;
-    }
-
     /**
      * Handles any backend request
      *
      * @param ServerRequestInterface $request
      * @return ResponseInterface
      */
-    public function handleRequest(ServerRequestInterface $request)
+    public function handleRequest(ServerRequestInterface $request): ResponseInterface
     {
-        // Allow the login page to be displayed if routing is not used and on index.php
-        $pathToRoute = (string)$request->getQueryParams()['route'] ?: '/login';
-        $request = $request->withAttribute('routePath', $pathToRoute);
+        return $this->handle($request);
+    }
 
-        // skip the BE user check on the login page
-        // should be handled differently in the future by checking the Bootstrap directly
-        $this->boot($pathToRoute === '/login');
-
-        // Check if the router has the available route and dispatch.
+    /**
+     * Handles a backend request, after finishing running middlewares
+     * Dispatch the request to the appropriate controller through the
+     * Backend Dispatcher which resolves the routing
+     *
+     * @param ServerRequestInterface $request
+     * @return ResponseInterface
+     */
+    public function handle(ServerRequestInterface $request): ResponseInterface
+    {
+        // Use a custom pre-created response for AJAX calls
+        // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0: No prepared $response to RouteDispatcher any longer
+        if (TYPO3_REQUESTTYPE & TYPO3_REQUESTTYPE_AJAX) {
+            $response = new Response('php://temp', 200, [
+                'Content-Type' => 'application/json; charset=utf-8',
+                'X-JSON' => 'true'
+            ]);
+        } else {
+            $response = new Response();
+        }
         try {
-            return $this->dispatch($request);
-
-        // When token was invalid redirect to login
+            // Check if the router has the available route and dispatch.
+            $dispatcher = GeneralUtility::makeInstance(RouteDispatcher::class);
+            return $dispatcher->dispatch($request, $response);
         } catch (InvalidRequestTokenException $e) {
+            // When token was invalid redirect to login
             $url = GeneralUtility::getIndpEnv('TYPO3_SITE_URL') . TYPO3_mainDir;
-            \TYPO3\CMS\Core\Utility\HttpUtility::redirect($url);
+            return new RedirectResponse($url);
         }
     }
 
     /**
-     * Does the main work for setting up the backend environment for any Backend request
-     *
-     * @param bool $proceedIfNoUserIsLoggedIn option to allow to render the request even if no user is logged in
-     */
-    protected function boot($proceedIfNoUserIsLoggedIn)
-    {
-        $this->bootstrap
-            ->checkLockedBackendAndRedirectOrDie()
-            ->checkBackendIpOrDie()
-            ->checkSslBackendAndRedirectIfNeeded()
-            ->initializeBackendRouter()
-            ->loadBaseTca()
-            ->loadExtTables()
-            ->initializeBackendUser()
-            ->initializeBackendAuthentication($proceedIfNoUserIsLoggedIn)
-            ->initializeLanguageObject()
-            ->initializeBackendTemplate()
-            ->endOutputBufferingAndCleanPreviousOutput()
-            ->initializeOutputCompression()
-            ->sendHttpHeaders();
-    }
-
-    /**
-     * This request handler can handle any backend request (but not CLI).
+     * This request handler can handle any backend request.
      *
      * @param ServerRequestInterface $request
-     * @return bool If the request is not a CLI script, TRUE otherwise FALSE
+     * @return bool If the request is BE request TRUE otherwise FALSE
      */
-    public function canHandleRequest(ServerRequestInterface $request)
+    public function canHandleRequest(ServerRequestInterface $request): bool
     {
-        return TYPO3_REQUESTTYPE & TYPO3_REQUESTTYPE_BE && !(TYPO3_REQUESTTYPE & TYPO3_REQUESTTYPE_CLI);
+        return (bool)(TYPO3_REQUESTTYPE & TYPO3_REQUESTTYPE_BE);
     }
 
     /**
@@ -118,25 +95,8 @@ class RequestHandler implements RequestHandlerInterface
      *
      * @return int The priority of the request handler.
      */
-    public function getPriority()
+    public function getPriority(): int
     {
         return 50;
-    }
-
-    /**
-     * Dispatch the request to the appropriate controller through the Backend Dispatcher which resolves the routing
-     *
-     * @param ServerRequestInterface $request
-     * @return ResponseInterface
-     * @throws InvalidRequestTokenException if the request could not be verified
-     * @throws \InvalidArgumentException when a route is found but the target of the route cannot be called
-     */
-    protected function dispatch($request)
-    {
-        /** @var Response $response */
-        $response = GeneralUtility::makeInstance(Response::class);
-        /** @var RouteDispatcher $dispatcher */
-        $dispatcher = GeneralUtility::makeInstance(RouteDispatcher::class);
-        return $dispatcher->dispatch($request, $response);
     }
 }

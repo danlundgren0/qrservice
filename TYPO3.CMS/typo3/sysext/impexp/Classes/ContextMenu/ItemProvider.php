@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Impexp\ContextMenu;
 
 /*
@@ -19,6 +19,7 @@ use TYPO3\CMS\Backend\ContextMenu\ItemProviders\AbstractProvider;
 
 /**
  * Context menu item provider adding export and import items
+ * @internal this is a internal TYPO3 hook implementation and solely used for EXT:impexp and not part of TYPO3's Core API.
  */
 class ItemProvider extends AbstractProvider
 {
@@ -117,12 +118,7 @@ class ItemProvider extends AbstractProvider
      */
     protected function isImportEnabled(): bool
     {
-        if (!$this->backendUser->isAdmin()) {
-            $isEnabledForNonAdmin = $this->backendUser->getTSConfig('options.impexp.enableImportForNonAdminUser');
-            if (empty($isEnabledForNonAdmin['value'])) {
-                return false;
-            }
-        }
-        return true;
+        return $this->backendUser->isAdmin()
+            || !$this->backendUser->isAdmin() && (bool)($this->backendUser->getTSConfig()['options.']['impexp.']['enableImportForNonAdminUser'] ?? false);
     }
 }

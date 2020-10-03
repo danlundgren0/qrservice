@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Model\FormElements;
 
 /*
@@ -17,11 +17,11 @@ namespace TYPO3\CMS\Form\Domain\Model\FormElements;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Validation\Validator\NotEmptyValidator;
 use TYPO3\CMS\Form\Domain\Exception\IdentifierNotValidException;
 use TYPO3\CMS\Form\Domain\Model\Renderable\AbstractRenderable;
-use TYPO3\CMS\Form\Domain\Runtime\FormRuntime;
 
 /**
  * A base form element, which is the starting point for creating custom (PHP-based)
@@ -56,7 +56,6 @@ abstract class AbstractFormElement extends AbstractRenderable implements FormEle
      * @param string $identifier The FormElement's identifier
      * @param string $type The Form Element Type
      * @throws IdentifierNotValidException
-     * @api
      */
     public function __construct(string $identifier, string $type)
     {
@@ -69,22 +68,15 @@ abstract class AbstractFormElement extends AbstractRenderable implements FormEle
 
     /**
      * Override this method in your custom FormElements if needed
-     *
-     * @api
      */
     public function initializeFormElement()
     {
-        if (
-            isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/form']['initializeFormElement'])
-            && is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/form']['initializeFormElement'])
-        ) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/form']['initializeFormElement'] as $className) {
-                $hookObj = GeneralUtility::makeInstance($className);
-                if (method_exists($hookObj, 'initializeFormElement')) {
-                    $hookObj->initializeFormElement(
-                        $this
-                    );
-                }
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/form']['initializeFormElement'] ?? [] as $className) {
+            $hookObj = GeneralUtility::makeInstance($className);
+            if (method_exists($hookObj, 'initializeFormElement')) {
+                $hookObj->initializeFormElement(
+                    $this
+                );
             }
         }
     }
@@ -93,7 +85,6 @@ abstract class AbstractFormElement extends AbstractRenderable implements FormEle
      * Get the global unique identifier of the element
      *
      * @return string
-     * @api
      */
     public function getUniqueIdentifier(): string
     {
@@ -107,7 +98,6 @@ abstract class AbstractFormElement extends AbstractRenderable implements FormEle
      * Get the default value of the element
      *
      * @return mixed
-     * @api
      */
     public function getDefaultValue()
     {
@@ -119,11 +109,15 @@ abstract class AbstractFormElement extends AbstractRenderable implements FormEle
      * Set the default value of the element
      *
      * @param mixed $defaultValue
-     * @api
      */
     public function setDefaultValue($defaultValue)
     {
         $formDefinition = $this->getRootForm();
+        $currentDefaultValue = $formDefinition->getElementDefaultValueByIdentifier($this->identifier);
+        if (is_array($currentDefaultValue) && is_array($defaultValue)) {
+            ArrayUtility::mergeRecursiveWithOverrule($currentDefaultValue, $defaultValue);
+            $defaultValue = ArrayUtility::removeNullValuesRecursive($currentDefaultValue);
+        }
         $formDefinition->addElementDefaultValue($this->identifier, $defaultValue);
     }
 
@@ -131,7 +125,6 @@ abstract class AbstractFormElement extends AbstractRenderable implements FormEle
      * Check if the element is required
      *
      * @return bool
-     * @api
      */
     public function isRequired(): bool
     {
@@ -148,35 +141,26 @@ abstract class AbstractFormElement extends AbstractRenderable implements FormEle
      *
      * @param string $key
      * @param mixed $value
-     * @api
      */
     public function setProperty(string $key, $value)
     {
-        $this->properties[$key] = $value;
+        if (is_array($value) && isset($this->properties[$key]) && is_array($this->properties[$key])) {
+            ArrayUtility::mergeRecursiveWithOverrule($this->properties[$key], $value);
+            $this->properties[$key] = ArrayUtility::removeNullValuesRecursive($this->properties[$key]);
+        } elseif ($value === null) {
+            unset($this->properties[$key]);
+        } else {
+            $this->properties[$key] = $value;
+        }
     }
 
     /**
      * Get all properties
      *
      * @return array
-     * @api
      */
     public function getProperties(): array
     {
         return $this->properties;
-    }
-
-    /**
-     * Override this method in your custom FormElements if needed
-     *
-     * @param FormRuntime $formRuntime
-     * @param mixed $elementValue
-     * @param array $requestArguments submitted raw request values
-     * @api
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function onSubmit(FormRuntime $formRuntime, &$elementValue, array $requestArguments = [])
-    {
-        GeneralUtility::logDeprecatedFunction();
     }
 }

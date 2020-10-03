@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\ViewHelpers\Format;
 
 /*
@@ -14,7 +15,7 @@ namespace EBT\ExtensionBuilder\ViewHelpers\Format;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 
 /**
  * Indentation ViewHelper
@@ -25,15 +26,22 @@ class IndentViewHelper extends AbstractViewHelper
     protected $escapeOutput = false;
 
     /**
-     * @param int $indentation
+     * Arguments Initialization
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('indentation', 'integer', 'number of spaces to indent', true);
+    }
+
+    /**
      * @return bool true or false
      */
-    public function render($indentation)
+    public function render()
     {
         $outputToIndent = $this->renderChildren();
         $lineArray = explode(chr(10), $outputToIndent);
         $indentString = '';
-        for ($i = 0; $i < $indentation; $i++) {
+        for ($i = 0; $i < $this->arguments['indentation']; $i++) {
             $indentString .= '    ';
         }
         return implode(chr(10) . $indentString, $lineArray);

@@ -1,4 +1,4 @@
-﻿.. include:: ../../Includes.txt
+.. include:: ../../Includes.txt
 
 
 .. _custom-workspace:
@@ -13,6 +13,10 @@ anyone can start using the features described in this document.
 By default a custom workspace contains three stages, which represent
 steps in the validation process: "editing", "ready to publish" and
 "publishing execute". Additional stages can be added.
+
+To reach the following element you need to go to the root page
+(the one with the TYPO3 icon in the page browser), click on
+'Create new record' and create a System Record of type 'Workspace'.
 
 This chapter describes all properties of a workspace, as they
 appear in the editing form, grouped by tab.

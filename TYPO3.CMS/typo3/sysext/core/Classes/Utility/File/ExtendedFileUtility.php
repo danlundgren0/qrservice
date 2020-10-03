@@ -18,6 +18,7 @@ use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Messaging\FlashMessage;
 use TYPO3\CMS\Core\Messaging\FlashMessageService;
 use TYPO3\CMS\Core\Resource\DuplicationBehavior;
@@ -39,8 +40,8 @@ use TYPO3\CMS\Core\Resource\Folder;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Resource\ResourceStorage;
 use TYPO3\CMS\Core\Type\Exception\InvalidEnumerationValueException;
+use TYPO3\CMS\Core\Utility\Exception\NotImplementedMethodException;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Contains functions for performing file operations like copying, pasting, uploading, moving,
@@ -202,7 +203,8 @@ class ExtendedFileUtility extends BasicFileUtility
                 $uploads = $this->fileCmdMap['upload'];
                 foreach ($uploads as $upload) {
                     if (empty($_FILES['upload_' . $upload['data']]['name'])
-                        || (is_array($_FILES['upload_' . $upload['data']]['name'])
+                        || (
+                            is_array($_FILES['upload_' . $upload['data']]['name'])
                             && empty($_FILES['upload_' . $upload['data']]['name'][0])
                         )
                     ) {
@@ -267,40 +269,18 @@ class ExtendedFileUtility extends BasicFileUtility
                                 break;
                         }
                         // Hook for post-processing the action
-                        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_extfilefunc.php']['processData'])) {
-                            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_extfilefunc.php']['processData'] as $classRef) {
-                                $hookObject = GeneralUtility::getUserObj($classRef);
-                                if (!$hookObject instanceof ExtendedFileUtilityProcessDataHookInterface) {
-                                    throw new \UnexpectedValueException($classRef . ' must implement interface ' . ExtendedFileUtilityProcessDataHookInterface::class, 1279719168);
-                                }
-                                $hookObject->processData_postProcessAction($action, $cmdArr, $result[$action], $this);
+                        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_extfilefunc.php']['processData'] ?? [] as $className) {
+                            $hookObject = GeneralUtility::makeInstance($className);
+                            if (!$hookObject instanceof ExtendedFileUtilityProcessDataHookInterface) {
+                                throw new \UnexpectedValueException($className . ' must implement interface ' . ExtendedFileUtilityProcessDataHookInterface::class, 1279719168);
                             }
+                            $hookObject->processData_postProcessAction($action, $cmdArr, $result[$action], $this);
                         }
                     }
                 }
             }
         }
         return $result;
-    }
-
-    /**
-     * Adds all log error messages from the operations of this script instance to the FlashMessageQueue
-     *
-     * @deprecated since TYPO3 CMS 8, will be removed in TYPO3 CMS 9
-     */
-    public function pushErrorMessagesToFlashMessageQueue()
-    {
-        GeneralUtility::logDeprecatedFunction();
-        foreach ($this->getErrorMessages() as $msg) {
-            $flashMessage = GeneralUtility::makeInstance(
-                FlashMessage::class,
-                $msg,
-                '',
-                FlashMessage::ERROR,
-                true
-            );
-            $this->addFlashMessage($flashMessage);
-        }
     }
 
     /**
@@ -379,10 +359,10 @@ class ExtendedFileUtility extends BasicFileUtility
             $flashMessage = GeneralUtility::makeInstance(
                 FlashMessage::class,
                 sprintf(
-                    $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:message.description.fileNotFound'),
+                    $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:message.description.fileNotFound'),
                     $cmds['data']
                 ),
-                $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:message.header.fileNotFound'),
+                $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:message.header.fileNotFound'),
                 FlashMessage::ERROR,
                 true
             );
@@ -434,14 +414,16 @@ class ExtendedFileUtility extends BasicFileUtility
                         } else {
                             $brokenReferences[] = $fileReferenceRow['ref_uid'];
                         }
+                    } else {
+                        $shortcutContent[] = '[record:' . $fileReferenceRow['tablename'] . ':' . $fileReferenceRow['recuid'] . ']';
                     }
                 }
                 if (!empty($brokenReferences)) {
                     // render a message that the file has broken references
                     $flashMessage = GeneralUtility::makeInstance(
                         FlashMessage::class,
-                        sprintf($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:message.description.fileHasBrokenReferences'), count($brokenReferences)),
-                        $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:message.header.fileHasBrokenReferences'),
+                        sprintf($this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:message.description.fileHasBrokenReferences'), count($brokenReferences)),
+                        $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:message.header.fileHasBrokenReferences'),
                         FlashMessage::INFO,
                         true
                     );
@@ -451,8 +433,8 @@ class ExtendedFileUtility extends BasicFileUtility
                     // render a message that the file could not be deleted
                     $flashMessage = GeneralUtility::makeInstance(
                         FlashMessage::class,
-                        sprintf($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:message.description.fileNotDeletedHasReferences'), $fileObject->getName()) . ' ' . implode(', ', $shortcutContent),
-                        $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:message.header.fileNotDeletedHasReferences'),
+                        sprintf($this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:message.description.fileNotDeletedHasReferences'), $fileObject->getName()) . ' ' . implode(', ', $shortcutContent),
+                        $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:message.header.fileNotDeletedHasReferences'),
                         FlashMessage::WARNING,
                         true
                     );
@@ -468,8 +450,8 @@ class ExtendedFileUtility extends BasicFileUtility
                     // show the user that the file was deleted
                     $flashMessage = GeneralUtility::makeInstance(
                         FlashMessage::class,
-                        sprintf($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:message.description.fileDeleted'), $fileObject->getName()),
-                        $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:message.header.fileDeleted'),
+                        sprintf($this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:message.description.fileDeleted'), $fileObject->getName()),
+                        $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:message.header.fileDeleted'),
                         FlashMessage::OK,
                         true
                     );
@@ -497,8 +479,8 @@ class ExtendedFileUtility extends BasicFileUtility
                         /** @var FlashMessage $flashMessage */
                         $flashMessage = GeneralUtility::makeInstance(
                             FlashMessage::class,
-                            sprintf($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:message.description.folderDeleted'), $fileObject->getName()),
-                            $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:message.header.folderDeleted'),
+                            sprintf($this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:message.description.folderDeleted'), $fileObject->getName()),
+                            $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:message.header.folderDeleted'),
                             FlashMessage::OK,
                             true
                         );
@@ -575,8 +557,8 @@ class ExtendedFileUtility extends BasicFileUtility
             /** @var FlashMessage $flashMessage */
             $flashMessage = GeneralUtility::makeInstance(
                 FlashMessage::class,
-                $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:message.description.folderNotDeletedHasFilesWithReferences'),
-                $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:message.header.folderNotDeletedHasFilesWithReferences'),
+                $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:message.description.folderNotDeletedHasFilesWithReferences'),
+                $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:message.header.folderNotDeletedHasFilesWithReferences'),
                 FlashMessage::WARNING,
                 true
             );
@@ -650,12 +632,12 @@ class ExtendedFileUtility extends BasicFileUtility
      * $cmds['altName'] (string): Use an alternative name if the target already exists
      *
      * @param array $cmds Command details as described above
-     * @return \TYPO3\CMS\Core\Resource\File
+     * @return \TYPO3\CMS\Core\Resource\File|false
      */
     protected function func_copy($cmds)
     {
         $sourceFileObject = $this->getFileObject($cmds['data']);
-        /** @var $targetFolderObject \TYPO3\CMS\Core\Resource\Folder */
+        /** @var \TYPO3\CMS\Core\Resource\Folder $targetFolderObject */
         $targetFolderObject = $this->getFileObject($cmds['target']);
         // Basic check
         if (!$targetFolderObject instanceof Folder) {
@@ -683,7 +665,7 @@ class ExtendedFileUtility extends BasicFileUtility
             } catch (ExistingTargetFileNameException $e) {
                 $this->writeLog(2, 1, 112, 'File "%s" already exists in folder "%s"!', [$sourceFileObject->getIdentifier(), $targetFolderObject->getIdentifier()]);
                 $this->addMessageToFlashMessageQueue('FileUtility.FileAlreadyExistsInFolder', [$sourceFileObject->getIdentifier(), $targetFolderObject->getIdentifier()]);
-            } catch (\BadMethodCallException $e) {
+            } catch (NotImplementedMethodException $e) {
                 $this->writeLog(3, 1, 128, 'The function to copy a file between storages is not yet implemented', []);
                 $this->addMessageToFlashMessageQueue('FileUtility.TheFunctionToCopyAFileBetweenStoragesIsNotYetImplemented');
             } catch (\RuntimeException $e) {
@@ -714,7 +696,7 @@ class ExtendedFileUtility extends BasicFileUtility
             } catch (ExistingTargetFolderException $e) {
                 $this->writeLog(2, 1, 123, 'Target "%s" already exists!', [$targetFolderObject->getIdentifier()]);
                 $this->addMessageToFlashMessageQueue('FileUtility.TargetAlreadyExists', [$targetFolderObject->getIdentifier()]);
-            } catch (\BadMethodCallException $e) {
+            } catch (NotImplementedMethodException $e) {
                 $this->writeLog(3, 1, 129, 'The function to copy a folder between storages is not yet implemented', []);
                 $this->addMessageToFlashMessageQueue('FileUtility.TheFunctionToCopyAFolderBetweenStoragesIsNotYetImplemented');
             } catch (\RuntimeException $e) {
@@ -740,7 +722,7 @@ class ExtendedFileUtility extends BasicFileUtility
      * $cmds['altName'] (string): Use an alternative name if the target already exists
      *
      * @param array $cmds Command details as described above
-     * @return \TYPO3\CMS\Core\Resource\File
+     * @return \TYPO3\CMS\Core\Resource\File|false
      */
     protected function func_move($cmds)
     {
@@ -778,7 +760,7 @@ class ExtendedFileUtility extends BasicFileUtility
             } catch (ExistingTargetFileNameException $e) {
                 $this->writeLog(3, 1, 112, 'File "%s" already exists in folder "%s"!', [$sourceFileObject->getIdentifier(), $targetFolderObject->getIdentifier()]);
                 $this->addMessageToFlashMessageQueue('FileUtility.FileAlreadyExistsInFolder', [$sourceFileObject->getIdentifier(), $targetFolderObject->getIdentifier()]);
-            } catch (\BadMethodCallException $e) {
+            } catch (NotImplementedMethodException $e) {
                 $this->writeLog(3, 1, 126, 'The function to move a file between storages is not yet implemented', []);
                 $this->addMessageToFlashMessageQueue('FileUtility.TheFunctionToMoveAFileBetweenStoragesIsNotYetImplemented');
             } catch (\RuntimeException $e) {
@@ -813,7 +795,7 @@ class ExtendedFileUtility extends BasicFileUtility
             } catch (ExistingTargetFolderException $e) {
                 $this->writeLog(3, 1, 123, 'Target "%s" already exists!', [$targetFolderObject->getIdentifier()]);
                 $this->addMessageToFlashMessageQueue('FileUtility.TargetAlreadyExists', [$targetFolderObject->getIdentifier()]);
-            } catch (\BadMethodCallException $e) {
+            } catch (NotImplementedMethodException $e) {
                 $this->writeLog(3, 1, 127, 'The function to move a folder between storages is not yet implemented', []);
                 $this->addMessageToFlashMessageQueue('FileUtility.TheFunctionToMoveAFolderBetweenStoragesIsNotYetImplemented', []);
             } catch (\RuntimeException $e) {
@@ -845,8 +827,13 @@ class ExtendedFileUtility extends BasicFileUtility
             try {
                 // Try to rename the File
                 $resultObject = $sourceFileObject->rename($targetFile, $this->existingFilesConflictMode);
-                $this->writeLog(5, 0, 1, 'File renamed from "%s" to "%s"', [$sourceFile, $targetFile]);
-                if ($sourceFile === $targetFile) {
+                if ($resultObject->getName() !== $targetFile) {
+                    $this->writeLog(5, 1, 1, 'File renamed from "%s" to "%s". Filename had to be sanitized!', [$sourceFile, $targetFile]);
+                    $this->addMessageToFlashMessageQueue('FileUtility.FileNameSanitized', [$targetFile, $resultObject->getName()], FlashMessage::WARNING);
+                } else {
+                    $this->writeLog(5, 0, 1, 'File renamed from "%s" to "%s"', [$sourceFile, $targetFile]);
+                }
+                if ($sourceFile === $resultObject->getName()) {
                     $this->addMessageToFlashMessageQueue('FileUtility.FileRenamedSameName', [$sourceFile], FlashMessage::INFO);
                 } else {
                     $this->addMessageToFlashMessageQueue('FileUtility.FileRenamedFromTo', [$sourceFile, $resultObject->getName()], FlashMessage::OK);
@@ -872,11 +859,16 @@ class ExtendedFileUtility extends BasicFileUtility
             try {
                 // Try to rename the Folder
                 $resultObject = $sourceFileObject->rename($targetFile);
+                $newFolderName = $resultObject->getName();
                 $this->writeLog(5, 0, 2, 'Directory renamed from "%s" to "%s"', [$sourceFile, $targetFile]);
-                if ($sourceFile === $targetFile) {
+                if ($sourceFile === $newFolderName) {
                     $this->addMessageToFlashMessageQueue('FileUtility.DirectoryRenamedSameName', [$sourceFile], FlashMessage::INFO);
                 } else {
-                    $this->addMessageToFlashMessageQueue('FileUtility.DirectoryRenamedFromTo', [$sourceFile, $targetFile], FlashMessage::OK);
+                    if ($newFolderName === $targetFile) {
+                        $this->addMessageToFlashMessageQueue('FileUtility.DirectoryRenamedFromTo', [$sourceFile, $newFolderName], FlashMessage::OK);
+                    } else {
+                        $this->addMessageToFlashMessageQueue('FileUtility.DirectoryRenamedFromToCharReplaced', [$sourceFile, $newFolderName], FlashMessage::WARNING);
+                    }
                 }
             } catch (InsufficientUserPermissionsException $e) {
                 $this->writeLog(5, 1, 111, 'You are not allowed to rename directories!', []);
@@ -903,7 +895,7 @@ class ExtendedFileUtility extends BasicFileUtility
      * + example "2:targetpath/targetfolder/"
      *
      * @param array $cmds Command details as described above
-     * @return \TYPO3\CMS\Core\Resource\Folder Returns the new foldername upon success
+     * @return \TYPO3\CMS\Core\Resource\Folder|false Returns the new foldername upon success
      */
     public function func_newfolder($cmds)
     {
@@ -913,7 +905,6 @@ class ExtendedFileUtility extends BasicFileUtility
             $this->addMessageToFlashMessageQueue('FileUtility.DestinationWasNotADirectory', [$cmds['target']]);
             return false;
         }
-        $resultObject = null;
         $folderName = $cmds['data'];
         try {
             $resultObject = $targetFolderObject->createFolder($folderName);
@@ -960,7 +951,10 @@ class ExtendedFileUtility extends BasicFileUtility
         try {
             $resultObject = $targetFolderObject->createFile($fileName);
             $this->writeLog(8, 0, 1, 'File created: "%s"', [$fileName]);
-            $this->addMessageToFlashMessageQueue('FileUtility.FileCreated', [$fileName], FlashMessage::OK);
+            if ($resultObject->getName() !== $fileName) {
+                $this->addMessageToFlashMessageQueue('FileUtility.FileNameSanitized', [$fileName, $resultObject->getName()], FlashMessage::WARNING);
+            }
+            $this->addMessageToFlashMessageQueue('FileUtility.FileCreated', [$resultObject->getName()], FlashMessage::OK);
         } catch (IllegalFileExtensionException $e) {
             $this->writeLog(8, 1, 106, 'Extension of file "%s" was not allowed!', [$fileName]);
             $this->addMessageToFlashMessageQueue('FileUtility.ExtensionOfFileWasNotAllowed', [$fileName]);
@@ -1023,6 +1017,10 @@ class ExtendedFileUtility extends BasicFileUtility
             $this->addMessageToFlashMessageQueue('FileUtility.FileWasNotSaved', [$fileObject->getIdentifier()]);
             return false;
         } catch (IllegalFileExtensionException $e) {
+            $this->writeLog(9, 1, 100, 'File "%s" was not saved! File extension rejected!', [$fileObject->getIdentifier()]);
+            $this->addMessageToFlashMessageQueue('FileUtility.FileWasNotSaved', [$fileObject->getIdentifier()]);
+            return false;
+        } catch (\RuntimeException $e) {
             $this->writeLog(9, 1, 100, 'File "%s" was not saved! File extension rejected!', [$fileObject->getIdentifier()]);
             $this->addMessageToFlashMessageQueue('FileUtility.FileWasNotSaved', [$fileObject->getIdentifier()]);
             return false;
@@ -1090,7 +1088,7 @@ class ExtendedFileUtility extends BasicFileUtility
                 'size' => $uploadedFileData['size'][$i]
             ];
             try {
-                /** @var $fileObject File */
+                /** @var File $fileObject */
                 $fileObject = $targetFolderObject->addUploadedFile($fileInfo, (string)$this->existingFilesConflictMode);
                 $fileObject = ResourceFactory::getInstance()->getFileObjectByStorageAndIdentifier($targetFolderObject->getStorage()->getUid(), $fileObject->getIdentifier());
                 if ($this->existingFilesConflictMode->equals(DuplicationBehavior::REPLACE)) {
@@ -1098,6 +1096,9 @@ class ExtendedFileUtility extends BasicFileUtility
                 }
                 $resultObjects[] = $fileObject;
                 $this->internalUploadMap[$uploadPosition] = $fileObject->getCombinedIdentifier();
+                if ($fileObject->getName() !== $fileInfo['name']) {
+                    $this->addMessageToFlashMessageQueue('FileUtility.FileNameSanitized', [$fileInfo['name'], $fileObject->getName()], FlashMessage::WARNING);
+                }
                 $this->writeLog(1, 0, 1, 'Uploading file "%s" to "%s"', [$fileInfo['name'], $targetFolderObject->getIdentifier()]);
                 $this->addMessageToFlashMessageQueue('FileUtility.UploadingFileTo', [$fileInfo['name'], $targetFolderObject->getIdentifier()], FlashMessage::OK);
             } catch (InsufficientFileWritePermissionsException $e) {
@@ -1208,10 +1209,10 @@ class ExtendedFileUtility extends BasicFileUtility
      */
     protected function addFlashMessage(FlashMessage $flashMessage)
     {
-        /** @var $flashMessageService FlashMessageService */
+        /** @var FlashMessageService $flashMessageService */
         $flashMessageService = GeneralUtility::makeInstance(FlashMessageService::class);
 
-        /** @var $defaultFlashMessageQueue \TYPO3\CMS\Core\Messaging\FlashMessageQueue */
+        /** @var \TYPO3\CMS\Core\Messaging\FlashMessageQueue $defaultFlashMessageQueue */
         $defaultFlashMessageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $defaultFlashMessageQueue->enqueue($flashMessage);
     }

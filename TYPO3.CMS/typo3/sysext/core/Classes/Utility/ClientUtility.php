@@ -24,25 +24,24 @@ class ClientUtility
      *
      * @param string $userAgent The useragent string, \TYPO3\CMS\Core\Utility\GeneralUtility::getIndpEnv('HTTP_USER_AGENT')
      * @return array Contains keys "browser", "version", "system
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
      */
     public static function getBrowserInfo($userAgent)
     {
+        trigger_error('ClientUtility::getBrowserInfo() will be removed with TYPO3 v10.0.', E_USER_DEPRECATED);
         // Hook: $TYPO3_CONF_VARS['SC_OPTIONS']['t3lib/div/class.t3lib_utility_client.php']['getBrowserInfo']:
-        $getBrowserInfoHooks = &$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/div/class.t3lib_utility_client.php']['getBrowserInfo'];
-        if (is_array($getBrowserInfoHooks)) {
-            foreach ($getBrowserInfoHooks as $hookFunction) {
-                $returnResult = true;
-                $hookParameters = [
-                    'userAgent' => &$userAgent,
-                    'returnResult' => &$returnResult
-                ];
-                // need reference for third parameter in \TYPO3\CMS\Core\Utility\GeneralUtility::callUserFunction,
-                // so create a reference to NULL
-                $null = null;
-                $hookResult = GeneralUtility::callUserFunction($hookFunction, $hookParameters, $null);
-                if ($returnResult && is_array($hookResult) && !empty($hookResult)) {
-                    return $hookResult;
-                }
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/div/class.t3lib_utility_client.php']['getBrowserInfo'] ?? [] as $hookFunction) {
+            $returnResult = true;
+            $hookParameters = [
+                'userAgent' => &$userAgent,
+                'returnResult' => &$returnResult
+            ];
+            // need reference for third parameter in \TYPO3\CMS\Core\Utility\GeneralUtility::callUserFunction,
+            // so create a reference to NULL
+            $null = null;
+            $hookResult = GeneralUtility::callUserFunction($hookFunction, $hookParameters, $null);
+            if ($returnResult && is_array($hookResult) && !empty($hookResult)) {
+                return $hookResult;
             }
         }
         $userAgent = trim($userAgent);
@@ -172,62 +171,13 @@ class ClientUtility
      * Returns the version of a browser; Basically getting float value of the input string,
      * stripping of any non-numeric values in the beginning of the string first.
      *
-     * @param string $version A string with version number, eg. "/7.32 blablabla
-     * @return float Returns double value, eg. "7.32
+     * @param string $version A string with version number, eg. '/7.32 some text'
+     * @return float Returns double value, eg. 7.32
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
      */
     public static function getVersion($version)
     {
+        trigger_error('ClientUtility::getVersion() will be removed with TYPO3 v10.0.', E_USER_DEPRECATED);
         return (float)preg_replace('/^[^0-9]*/', '', $version);
-    }
-
-    /**
-     * Gets a code for a browsing device based on the input useragent string.
-     *
-     * @param string $userAgent The useragent string, \TYPO3\CMS\Core\Utility\GeneralUtility::getIndpEnv('HTTP_USER_AGENT')
-     * @return string Code for the specific device type
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public static function getDeviceType($userAgent)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        // Hook: $TYPO3_CONF_VARS['SC_OPTIONS']['t3lib/div/class.t3lib_utility_client.php']['getDeviceType']:
-        $getDeviceTypeHooks = &$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/div/class.t3lib_utility_client.php']['getDeviceType'];
-        if (is_array($getDeviceTypeHooks)) {
-            foreach ($getDeviceTypeHooks as $hookFunction) {
-                $returnResult = true;
-                $hookParameters = [
-                    'userAgent' => &$userAgent,
-                    'returnResult' => &$returnResult
-                ];
-                // need reference for third parameter in \TYPO3\CMS\Core\Utility\GeneralUtility::callUserFunction,
-                // so create a reference to NULL
-                $null = null;
-                $hookResult = \TYPO3\CMS\Core\Utility\GeneralUtility::callUserFunction($hookFunction, $hookParameters, $null);
-                if ($returnResult && is_string($hookResult) && !empty($hookResult)) {
-                    return $hookResult;
-                }
-            }
-        }
-        $userAgent = strtolower(trim($userAgent));
-        $deviceType = '';
-        // pda
-        if (strstr($userAgent, 'avantgo')) {
-            $deviceType = 'pda';
-        }
-        // wap
-        $browser = substr($userAgent, 0, 4);
-        $wapviwer = substr(stristr($userAgent, 'wap'), 0, 3);
-        if ($wapviwer === 'wap' || $browser === 'noki' || $browser === 'eric' || $browser == 'r380' || $browser === 'up.b' || $browser === 'winw' || $browser === 'wapa') {
-            $deviceType = 'wap';
-        }
-        // grabber
-        if (strstr($userAgent, 'g.r.a.b.') || strstr($userAgent, 'utilmind httpget') || strstr($userAgent, 'webcapture') || strstr($userAgent, 'teleport') || strstr($userAgent, 'webcopier')) {
-            $deviceType = 'grabber';
-        }
-        // robots
-        if (strstr($userAgent, 'crawler') || strstr($userAgent, 'spider') || strstr($userAgent, 'googlebot') || strstr($userAgent, 'searchbot') || strstr($userAgent, 'infoseek') || strstr($userAgent, 'altavista') || strstr($userAgent, 'diibot')) {
-            $deviceType = 'robot';
-        }
-        return $deviceType;
     }
 }

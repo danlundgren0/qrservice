@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Model\FormElements;
 
 /*
@@ -19,7 +19,6 @@ namespace TYPO3\CMS\Form\Domain\Model\FormElements;
 
 use TYPO3\CMS\Extbase\Validation\Validator\ValidatorInterface;
 use TYPO3\CMS\Form\Domain\Model\Renderable\RenderableInterface;
-use TYPO3\CMS\Form\Domain\Runtime\FormRuntime;
 
 /**
  * A base form element interface, which can be the starting point for creating
@@ -50,7 +49,6 @@ interface FormElementInterface extends RenderableInterface
      * this includes the identifier of the form itself, making it "globally" unique
      *
      * @return string the "globally" unique identifier of this element
-     * @api
      */
     public function getUniqueIdentifier(): string;
 
@@ -59,7 +57,6 @@ interface FormElementInterface extends RenderableInterface
      * during display.
      *
      * @return mixed the default value for this Form Element
-     * @api
      */
     public function getDefaultValue();
 
@@ -68,7 +65,6 @@ interface FormElementInterface extends RenderableInterface
      * during display.
      *
      * @param mixed $defaultValue the default value for this Form Element
-     * @api
      */
     public function setDefaultValue($defaultValue);
 
@@ -77,7 +73,6 @@ interface FormElementInterface extends RenderableInterface
      *
      * @param string $key
      * @param mixed $value
-     * @api
      */
     public function setProperty(string $key, $value);
 
@@ -85,7 +80,6 @@ interface FormElementInterface extends RenderableInterface
      * Get all element-specific configuration properties
      *
      * @return array
-     * @api
      */
     public function getProperties(): array;
 
@@ -94,7 +88,6 @@ interface FormElementInterface extends RenderableInterface
      *
      * @param string $key
      * @param mixed $value
-     * @api
      */
     public function setRenderingOption(string $key, $value);
 
@@ -110,7 +103,6 @@ interface FormElementInterface extends RenderableInterface
      * Registers a validator for this element
      *
      * @param ValidatorInterface $validator
-     * @api
      */
     public function addValidator(ValidatorInterface $validator);
 
@@ -118,7 +110,6 @@ interface FormElementInterface extends RenderableInterface
      * Set the target data type for this element
      *
      * @param string $dataType the target data type
-     * @api
      */
     public function setDataType(string $dataType);
 
@@ -126,20 +117,6 @@ interface FormElementInterface extends RenderableInterface
      * Whether or not this element is required
      *
      * @return bool
-     * @api
      */
     public function isRequired(): bool;
-
-    /**
-     * This callback is invoked by the FormRuntime whenever values are mapped and validated
-     * (after a form page was submitted)
-     *
-     * @param FormRuntime $formRuntime
-     * @param mixed $elementValue submitted value of the element *before post processing*
-     * @param array $requestArguments submitted raw request values
-     * @see FormRuntime::mapAndValidate()
-     * @api
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function onSubmit(FormRuntime $formRuntime, &$elementValue, array $requestArguments = []);
 }

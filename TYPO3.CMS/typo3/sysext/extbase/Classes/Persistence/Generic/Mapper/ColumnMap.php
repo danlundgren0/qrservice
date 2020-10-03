@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Extbase\Persistence\Generic\Mapper;
 
 /**
  * A column map to map a column configured in $TCA on a property of a domain object.
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 class ColumnMap
 {
@@ -151,7 +152,7 @@ class ColumnMap
     /**
      * Alternative format for storing DataTime formats
      * (instead of using unix-time stamps). Allowed values
-     * are 'date' and 'datetime'
+     * are 'date', 'datetime' and 'time'
      *
      * @var string
      */
@@ -172,7 +173,6 @@ class ColumnMap
      *
      * @param string $columnName The column name
      * @param string $propertyName The property name
-     * @return \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\ColumnMap
      */
     public function __construct($columnName, $propertyName)
     {

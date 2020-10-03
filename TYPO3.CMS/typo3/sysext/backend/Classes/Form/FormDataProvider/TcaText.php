@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Form\FormDataProvider;
 
 /*
@@ -48,6 +48,8 @@ class TcaText implements FormDataProviderInterface
                     (string)$result['recordTypeValue'],
                     $fieldConfig['config']
                 );
+                // remember RTE preset name
+                $result['processedTca']['columns'][$fieldName]['config']['richtextConfigurationName'] = $fieldConfig['config']['richtextConfiguration'] ?? '';
                 // Add final resolved configuration to TCA array
                 $result['processedTca']['columns'][$fieldName]['config']['richtextConfiguration'] = $richtextConfiguration;
 

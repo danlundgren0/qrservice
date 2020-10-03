@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Model\Exception;
 
 /*
@@ -20,8 +20,6 @@ use TYPO3\CMS\Form\Domain\Model\Exception;
 /**
  * This exception is thrown if two Form Elements with the same Identifier are added
  * to a form.
- *
- * @api
  */
 class DuplicateFormElementException extends Exception
 {

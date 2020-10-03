@@ -1,15 +1,22 @@
 {
 	"name": "typo3/cms-filelist",
 	"type": "typo3-cms-framework",
-	"description": "TYPO3 Core",
+	"description": "Listing of files in the directory",
 	"homepage": "https://typo3.org",
-	"license": ["GPL-2.0+"],
-
-	"require": {
-		"typo3/cms-core": "*"
+	"license": ["GPL-2.0-or-later"],
+	"authors": [{
+		"name": "TYPO3 Core Team",
+		"email": "typo3cms@typo3.org",
+		"role": "Developer"
+	}],
+	"config": {
+		"sort-packages": true
 	},
-	"replace": {
-		"filelist": "*"
+	"require": {
+		"typo3/cms-core": "9.5.21"
+	},
+	"conflict": {
+		"typo3/cms": "*"
 	},
 	"extra": {
 		"typo3/cms": {
@@ -17,7 +24,8 @@
 				"protected": true,
 				"partOfFactoryDefault": true,
 				"partOfMinimalUsableSystem": true
-			}
+			},
+			"extension-key": "filelist"
 		}
 	},
 	"autoload": {

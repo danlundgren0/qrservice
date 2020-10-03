@@ -13,6 +13,8 @@ namespace TYPO3\CMS\Core\Utility;
  *
  * The TYPO3 project - inspiring people to share!
  */
+
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Extbase\Utility\DebuggerUtility;
 
 /**
@@ -39,21 +41,21 @@ class DebugUtility
      * @param string $header
      * @param string $group
      */
-    public static function debug($var = '', $header = '', $group = 'Debug')
+    public static function debug($var = '', $header = 'Debug', $group = 'Debug')
     {
         // buffer the output of debug if no buffering started before
         if (ob_get_level() === 0) {
             ob_start();
         }
-        if (TYPO3_MODE === 'BE' && !self::isCommandLine()) {
-            $tabHeader = $header ?: 'Debug';
+
+        if (TYPO3_MODE === 'BE' && !Environment::isCli()) {
             $debug = self::renderDump($var);
             $debugPlain = PHP_EOL . self::renderDump($var, '', true, false);
             $script = '
 				(function debug() {
 					var message = ' . GeneralUtility::quoteJSvalue($debug) . ',
 						messagePlain = ' . GeneralUtility::quoteJSvalue($debugPlain) . ',
-						header = ' . GeneralUtility::quoteJSvalue($tabHeader) . ',
+						header = ' . GeneralUtility::quoteJSvalue($header) . ',
 						group = ' . GeneralUtility::quoteJSvalue($group) . ';
 					if (top.TYPO3 && top.TYPO3.DebugConsole) {
 						top.TYPO3.DebugConsole.add(message, header, group);
@@ -67,7 +69,7 @@ class DebugUtility
 			';
             echo GeneralUtility::wrapJS($script);
         } else {
-            echo self::renderDump($var);
+            echo self::renderDump($var, $header);
         }
     }
 
@@ -219,19 +221,9 @@ class DebugUtility
      */
     protected static function renderDump($variable, $title = '', $plainText = null, $ansiColors = null)
     {
-        $plainText = $plainText === null ? self::isCommandLine() && self::$plainTextOutput : $plainText;
-        $ansiColors = $ansiColors === null ? self::isCommandLine() && self::$ansiColorUsage : $ansiColors;
+        $plainText = $plainText ?? Environment::isCli() && self::$plainTextOutput;
+        $ansiColors = $ansiColors ?? Environment::isCli() && self::$ansiColorUsage;
         return trim(DebuggerUtility::var_dump($variable, $title, 8, $plainText, $ansiColors, true));
-    }
-
-    /**
-     * Checks some constants to determine if we are in CLI context
-     *
-     * @return bool
-     */
-    protected static function isCommandLine()
-    {
-        return (TYPO3_REQUESTTYPE & TYPO3_REQUESTTYPE_CLI) || PHP_SAPI === 'cli';
     }
 
     /**

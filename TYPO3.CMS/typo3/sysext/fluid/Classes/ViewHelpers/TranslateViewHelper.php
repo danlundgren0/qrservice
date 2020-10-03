@@ -13,63 +13,72 @@ namespace TYPO3\CMS\Fluid\ViewHelpers;
  *
  * The TYPO3 project - inspiring people to share!
  */
-use TYPO3\CMS\Core\Utility\GeneralUtility;
+
 use TYPO3\CMS\Extbase\Utility\LocalizationUtility;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
-use TYPO3\CMS\Fluid\Core\ViewHelper\Exception\InvalidVariableException;
+use TYPO3Fluid\Fluid\Core\Exception;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
  * Translate a key from locallang. The files are loaded from the folder
- * "Resources/Private/Language/".
+ * :file:`Resources/Private/Language/`.
  *
- * == Examples ==
+ * Examples
+ * ========
  *
- * <code title="Translate key">
- * <f:translate key="key1" />
- * </code>
- * <output>
- * value of key "key1" in the current website language
- * </output>
+ * Translate key
+ * -------------
  *
- * <code title="Keep HTML tags">
- * <f:format.raw><f:translate key="htmlKey" /></f:format.raw>
- * </code>
- * <output>
- * value of key "htmlKey" in the current website language, no htmlspecialchars applied
- * </output>
+ * ::
  *
- * <code title="Translate key from custom locallang file">
- * <f:translate key="LLL:EXT:myext/Resources/Private/Language/locallang.xlf:key1" />
- * </code>
- * <output>
- * value of key "key1" in the current website language
- * </output>
+ *    <f:translate key="key1" />
  *
- * <code title="Inline notation with arguments and default value">
- * {f:translate(key: 'argumentsKey', arguments: {0: 'dog', 1: 'fox'}, default: 'default value')}
- * </code>
- * <output>
- * value of key "argumentsKey" in the current website language
- * with "%1" and "%2" are replaced by "dog" and "fox" (printf)
- * if the key is not found, the output is "default value"
- * </output>
+ * Value of key ``key1`` in the current website language. Alternatively id can
+ * be used instead of key::
  *
- * <code title="Inline notation with extension name">
- * {f:translate(key: 'someKey', extensionName: 'SomeExtensionName')}
- * </code>
- * <output>
- * value of key "someKey" in the current website language
- * the locallang file of extension "some_extension_name" will be used
- * </output>
+ *    <f:translate id="key1" />
  *
- * <code title="Translate id as in TYPO3 Flow">
- * <f:translate id="key1" />
- * </code>
- * <output>
- * value of id "key1" in the current website language
- * </output>
+ * This will output the same as above. If both id and key are set, id will take precedence.
+ *
+ * Keep HTML tags
+ * --------------
+ *
+ * ::
+ *
+ *    <f:format.raw><f:translate key="htmlKey" /></f:format.raw>
+ *
+ * Value of key ``htmlKey`` in the current website language, no :php:`htmlspecialchars()` applied.
+ *
+ * Translate key from custom locallang file
+ * ----------------------------------------
+ *
+ * ::
+ *
+ *    <f:translate key="LLL:EXT:myext/Resources/Private/Language/locallang.xlf:key1" />
+ *
+ * Value of key ``key1`` in the current website language.
+ *
+ * Inline notation with arguments and default value
+ * ------------------------------------------------
+ *
+ * ::
+ *
+ *    {f:translate(key: 'argumentsKey', arguments: {0: 'dog', 1: 'fox'}, default: 'default value')}
+ *
+ * Value of key ``argumentsKey`` in the current website language
+ * with ``%1`` and ``%2`` are replaced by "dog" and "fox" (:php:`printf()`).
+ * If the key is not found, the output is "default value".
+ *
+ * Inline notation with extension name
+ * -----------------------------------
+ *
+ * ::
+ *
+ *    {f:translate(key: 'someKey', extensionName: 'SomeExtensionName')}
+ *
+ * Value of key ``someKey`` in the current website language.
+ * The locallang file of extension "some_extension_name" will be used.
  */
 class TranslateViewHelper extends AbstractViewHelper
 {
@@ -89,13 +98,13 @@ class TranslateViewHelper extends AbstractViewHelper
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('key', 'string', 'Translation Key');
-        $this->registerArgument('id', 'string', 'Translation Key compatible to TYPO3 Flow');
+        $this->registerArgument('id', 'string', 'Translation ID. Same as key.');
         $this->registerArgument('default', 'string', 'If the given locallang key could not be found, this value is used. If this argument is not set, child nodes will be used to render the default');
-        $this->registerArgument('htmlEscape', 'bool', 'TRUE if the result should be htmlescaped. This won\'t have an effect for the default value');
         $this->registerArgument('arguments', 'array', 'Arguments to be replaced in the resulting string');
         $this->registerArgument('extensionName', 'string', 'UpperCamelCased extension key (for example BlogExample)');
+        $this->registerArgument('languageKey', 'string', 'Language key ("dk" for example) or "default" to use for this translation. If this argument is empty, we use the current language');
+        $this->registerArgument('alternativeLanguageKeys', 'array', 'Alternative language keys if no translation does exist');
     }
 
     /**
@@ -104,7 +113,7 @@ class TranslateViewHelper extends AbstractViewHelper
      * @param array $arguments
      * @param \Closure $renderChildrenClosure
      * @param RenderingContextInterface $renderingContext
-     * @throws InvalidVariableException
+     * @throws Exception
      * @return string
      */
     public static function renderStatic(array $arguments, \Closure $renderChildrenClosure, RenderingContextInterface $renderingContext)
@@ -112,34 +121,29 @@ class TranslateViewHelper extends AbstractViewHelper
         $key = $arguments['key'];
         $id = $arguments['id'];
         $default = $arguments['default'];
-        $htmlEscape = $arguments['htmlEscape'];
         $extensionName = $arguments['extensionName'];
-        $arguments = $arguments['arguments'];
+        $translateArguments = $arguments['arguments'];
 
-        if ($htmlEscape !== null) {
-            GeneralUtility::logDeprecatedViewHelperAttribute(
-                'htmlEscape',
-                $renderingContext,
-                'Please wrap the view helper in <f:format.raw> if you want to disable HTML escaping, which is enabled by default now.'
-            );
-        }
-
-        // Wrapper including a compatibility layer for TYPO3 Flow Translation
+        // Use key if id is empty.
         if ($id === null) {
             $id = $key;
         }
 
         if ((string)$id === '') {
-            throw new InvalidVariableException('An argument "key" or "id" has to be provided', 1351584844);
+            throw new Exception('An argument "key" or "id" has to be provided', 1351584844);
         }
 
         $request = $renderingContext->getControllerContext()->getRequest();
-        $extensionName = $extensionName === null ? $request->getControllerExtensionName() : $extensionName;
-        $value = static::translate($id, $extensionName, $arguments);
+        $extensionName = $extensionName ?? $request->getControllerExtensionName();
+        try {
+            $value = static::translate($id, $extensionName, $translateArguments, $arguments['languageKey'], $arguments['alternativeLanguageKeys']);
+        } catch (\InvalidArgumentException $e) {
+            $value = null;
+        }
         if ($value === null) {
-            $value = $default !== null ? $default : $renderChildrenClosure();
-            if (!empty($arguments)) {
-                $value = vsprintf($value, $arguments);
+            $value = $default ?? $renderChildrenClosure();
+            if (!empty($translateArguments)) {
+                $value = vsprintf($value, $translateArguments);
             }
         }
         return $value;
@@ -148,14 +152,16 @@ class TranslateViewHelper extends AbstractViewHelper
     /**
      * Wrapper call to static LocalizationUtility
      *
-     * @param string $id Translation Key compatible to TYPO3 Flow
+     * @param string $id Translation Key
      * @param string $extensionName UpperCamelCased extension key (for example BlogExample)
      * @param array $arguments Arguments to be replaced in the resulting string
+     * @param string $languageKey Language key to use for this translation
+     * @param string[] $alternativeLanguageKeys Alternative language keys if no translation does exist
      *
-     * @return NULL|string
+     * @return string|null
      */
-    protected static function translate($id, $extensionName, $arguments)
+    protected static function translate($id, $extensionName, $arguments, $languageKey, $alternativeLanguageKeys)
     {
-        return LocalizationUtility::translate($id, $extensionName, $arguments);
+        return LocalizationUtility::translate($id, $extensionName, $arguments, $languageKey, $alternativeLanguageKeys);
     }
 }

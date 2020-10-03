@@ -38,7 +38,7 @@ class ServerRequestFactory
         $serverParameters = $_SERVER;
         $headers = static::prepareHeaders($serverParameters);
 
-        $method = isset($serverParameters['REQUEST_METHOD']) ? $serverParameters['REQUEST_METHOD'] : 'GET';
+        $method = $serverParameters['REQUEST_METHOD'] ?? 'GET';
         $uri = new Uri(GeneralUtility::getIndpEnv('TYPO3_REQUEST_URL'));
 
         $request = new ServerRequest(
@@ -84,8 +84,8 @@ class ServerRequestFactory
             }
             if (!empty($value)) {
                 if (strpos($key, 'HTTP_') === 0) {
-                    $name = strtr(substr($key, 5), '_', ' ');
-                    $name = strtr(ucwords(strtolower($name)), ' ', '-');
+                    $name = str_replace('_', ' ', substr($key, 5));
+                    $name = str_replace(' ', '-', ucwords(strtolower($name)));
                     $name = strtolower($name);
                     $headers[$name] = $value;
                 } elseif (strpos($key, 'CONTENT_') === 0) {
@@ -137,7 +137,7 @@ class ServerRequestFactory
      * recursively resolve uploaded files.
      *
      * @param array $value $_FILES structure
-     * @return UploadedFileInterface[]|UploadedFileInterface|NULL
+     * @return UploadedFileInterface[]|UploadedFileInterface|null
      */
     protected static function createUploadedFile(array $value)
     {
@@ -157,7 +157,8 @@ class ServerRequestFactory
                 }
             }
             return $files;
-        } elseif (!empty($value['tmp_name'])) {
+        }
+        if (!empty($value['tmp_name'])) {
             return new UploadedFile($value['tmp_name'], $value['size'], $value['error'], $value['name'], $value['type']);
         }
         return null;

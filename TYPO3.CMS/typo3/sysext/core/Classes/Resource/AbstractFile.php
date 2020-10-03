@@ -38,7 +38,7 @@ abstract class AbstractFile implements FileInterface
      *
      * @var ResourceStorage
      */
-    protected $storage = null;
+    protected $storage;
 
     /**
      * The identifier of this file to identify it on the storage.
@@ -122,9 +122,8 @@ abstract class AbstractFile implements FileInterface
     {
         if ($this->hasProperty($key)) {
             return $this->properties[$key];
-        } else {
-            return null;
         }
+        return null;
     }
 
     /**
@@ -259,7 +258,7 @@ abstract class AbstractFile implements FileInterface
     {
         $pathinfo = PathUtility::pathinfo($this->getName());
 
-        $extension = strtolower($pathinfo['extension']);
+        $extension = strtolower($pathinfo['extension'] ?? '');
 
         return $extension;
     }
@@ -423,7 +422,7 @@ abstract class AbstractFile implements FileInterface
      */
     public function getCombinedIdentifier()
     {
-        if (is_array($this->properties) && MathUtility::canBeInterpretedAsInteger($this->properties['storage'])) {
+        if (!empty($this->properties['storage']) && MathUtility::canBeInterpretedAsInteger($this->properties['storage'])) {
             $combinedIdentifier = $this->properties['storage'] . ':' . $this->getIdentifier();
         } else {
             $combinedIdentifier = $this->getStorage()->getUid() . ':' . $this->getIdentifier();
@@ -439,7 +438,15 @@ abstract class AbstractFile implements FileInterface
     public function delete()
     {
         // The storage will mark this file as deleted
-        return $this->getStorage()->deleteFile($this);
+        $wasDeleted = $this->getStorage()->deleteFile($this);
+
+        // Unset all properties when deleting the file, as they will be stale anyway
+        // This needs to happen AFTER the storage deleted the file, because the storage
+        // emits a signal, which passes the file object to the slots, which may need
+        // all file properties of the deleted file.
+        $this->properties = [];
+
+        return $wasDeleted;
     }
 
     /**
@@ -523,15 +530,14 @@ abstract class AbstractFile implements FileInterface
      * web-based authentication. You have to take care of this yourself.
      *
      * @param bool $relativeToCurrentScript Determines whether the URL returned should be relative to the current script, in case it is relative at all (only for the LocalDriver)
-     * @return NULL|string NULL if file is deleted, the generated URL otherwise
+     * @return string|null NULL if file is deleted, the generated URL otherwise
      */
     public function getPublicUrl($relativeToCurrentScript = false)
     {
         if ($this->deleted) {
             return null;
-        } else {
-            return $this->getStorage()->getPublicUrl($this, $relativeToCurrentScript);
         }
+        return $this->getStorage()->getPublicUrl($this, $relativeToCurrentScript);
     }
 
     /**

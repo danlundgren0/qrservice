@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Lowlevel\Command;
 
 /*
@@ -97,7 +97,7 @@ If you want to get more detailed information, use the --verbose option.')
     protected function execute(InputInterface $input, OutputInterface $output)
     {
         // Make sure the _cli_ user is loaded
-        Bootstrap::getInstance()->initializeBackendAuthentication();
+        Bootstrap::initializeBackendAuthentication();
 
         $io = new SymfonyStyle($input, $output);
         $io->title($this->getDescription());
@@ -164,7 +164,9 @@ If you want to get more detailed information, use the --verbose option.')
             $this->removeReferencesToMissingRecords(
                 $results['offlineVersionRecords'],
                 $results['nonExistingRecords'],
-                $dryRun, $io);
+                $dryRun,
+                $io
+            );
             $io->success('All references were updated accordingly.');
         } else {
             $io->success('Nothing to do, no missing relations found. Everything is in place.');

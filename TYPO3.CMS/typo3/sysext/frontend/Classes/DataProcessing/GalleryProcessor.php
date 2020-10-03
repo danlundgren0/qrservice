@@ -266,7 +266,7 @@ class GalleryProcessor implements DataProcessorInterface
         $this->borderEnabled = (bool)$this->getConfigurationValue('borderEnabled', 'imageborder');
         $this->borderWidth = (int)$this->getConfigurationValue('borderWidth');
         $this->borderPadding = (int)$this->getConfigurationValue('borderPadding');
-        $this->cropVariant = (int)$this->getConfigurationValue('cropVariant') ?: 'default';
+        $this->cropVariant = $this->getConfigurationValue('cropVariant') ?: 'default';
 
         $this->determineGalleryPosition();
         $this->determineMaximumGalleryWidth();
@@ -292,7 +292,7 @@ class GalleryProcessor implements DataProcessorInterface
      * with when $dataArrayKey fallback to value from cObj->data array
      *
      * @param string $key
-     * @param string|NULL $dataArrayKey
+     * @param string|null $dataArrayKey
      * @return string
      */
     protected function getConfigurationValue($key, $dataArrayKey = null)
@@ -422,7 +422,7 @@ class GalleryProcessor implements DataProcessorInterface
             // Recalculate gallery width
             $this->galleryData['width'] = floor($maximumRowWidth / $mediaScalingCorrection);
 
-            // User entered a predefined width
+        // User entered a predefined width
         } elseif ($this->equalMediaWidth) {
             $mediaScalingCorrection = 1;
 
@@ -446,11 +446,12 @@ class GalleryProcessor implements DataProcessorInterface
             // Recalculate gallery width
             $this->galleryData['width'] = floor($totalRowWidth / $mediaScalingCorrection);
 
-            // Automatic setting of width and height
+        // Automatic setting of width and height
         } else {
             $maxMediaWidth = (int)($galleryWidthMinusBorderAndSpacing / $this->galleryData['count']['columns']);
             foreach ($this->fileObjects as $key => $fileObject) {
-                $mediaWidth = min($maxMediaWidth, $this->getCroppedDimensionalProperty($fileObject, 'width'));
+                $croppedWidth = $this->getCroppedDimensionalProperty($fileObject, 'width');
+                $mediaWidth = $croppedWidth > 0 ? min($maxMediaWidth, $croppedWidth) : $maxMediaWidth;
                 $mediaHeight = floor(
                     $this->getCroppedDimensionalProperty($fileObject, 'height') * ($mediaWidth / max($this->getCroppedDimensionalProperty($fileObject, 'width'), 1))
                 );
@@ -479,7 +480,7 @@ class GalleryProcessor implements DataProcessorInterface
 
         $croppingConfiguration = $fileObject->getProperty('crop');
         $cropVariantCollection = CropVariantCollection::create((string)$croppingConfiguration);
-        return (int) $cropVariantCollection->getCropArea($this->cropVariant)->makeAbsoluteBasedOnFile($fileObject)->asArray()[$dimensionalProperty];
+        return (int)$cropVariantCollection->getCropArea($this->cropVariant)->makeAbsoluteBasedOnFile($fileObject)->asArray()[$dimensionalProperty];
     }
 
     /**
@@ -494,10 +495,10 @@ class GalleryProcessor implements DataProcessorInterface
                 $fileKey = (($row - 1) * $this->galleryData['count']['columns']) + $column - 1;
 
                 $this->galleryData['rows'][$row]['columns'][$column] = [
-                    'media' => $this->fileObjects[$fileKey],
+                    'media' => $this->fileObjects[$fileKey] ?? null,
                     'dimensions' => [
-                        'width' => $this->mediaDimensions[$fileKey]['width'],
-                        'height' => $this->mediaDimensions[$fileKey]['height']
+                        'width' => $this->mediaDimensions[$fileKey]['width'] ?? null,
+                        'height' => $this->mediaDimensions[$fileKey]['height'] ?? null
                     ]
                 ];
             }

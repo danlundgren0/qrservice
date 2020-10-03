@@ -1,4 +1,5 @@
 <?php
+declare(strict_types = 1);
 namespace TYPO3\CMS\SysNote\Hook;
 
 /*
@@ -14,11 +15,30 @@ namespace TYPO3\CMS\SysNote\Hook;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\SysNote\Controller\NoteController;
+use TYPO3\CMS\SysNote\Domain\Repository\SysNoteRepository;
+
 /**
  * Hook for the page module
+ * @internal This is a specific hook implementation and is not considered part of the Public TYPO3 API.
  */
 class PageHook
 {
+
+    /**
+     * Add sys_notes as additional content to the header of the page module
+     *
+     * @param array $params
+     * @param \TYPO3\CMS\Backend\Controller\PageLayoutController $parentObject
+     * @return string
+     */
+    public function renderInHeader(array $params = [], \TYPO3\CMS\Backend\Controller\PageLayoutController $parentObject)
+    {
+        $controller = GeneralUtility::makeInstance(NoteController::class);
+        return $controller->listAction($parentObject->id, SysNoteRepository::SYS_NOTE_POSITION_TOP);
+    }
+
     /**
      * Add sys_notes as additional content to the footer of the page module
      *
@@ -26,10 +46,9 @@ class PageHook
      * @param \TYPO3\CMS\Backend\Controller\PageLayoutController $parentObject
      * @return string
      */
-    public function render(array $params = [], \TYPO3\CMS\Backend\Controller\PageLayoutController $parentObject)
+    public function renderInFooter(array $params = [], \TYPO3\CMS\Backend\Controller\PageLayoutController $parentObject)
     {
-        /** @var $noteBootstrap \TYPO3\CMS\SysNote\Core\Bootstrap */
-        $noteBootstrap = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\SysNote\Core\Bootstrap::class);
-        return $noteBootstrap->run('Note', 'list', ['pids' => $parentObject->id]);
+        $controller = GeneralUtility::makeInstance(NoteController::class);
+        return $controller->listAction($parentObject->id, SysNoteRepository::SYS_NOTE_POSITION_BOTTOM);
     }
 }

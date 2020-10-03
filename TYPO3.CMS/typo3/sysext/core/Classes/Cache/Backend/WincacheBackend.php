@@ -14,6 +14,10 @@ namespace TYPO3\CMS\Core\Cache\Backend;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Cache\Exception;
+use TYPO3\CMS\Core\Cache\Exception\InvalidDataException;
+use TYPO3\CMS\Core\Cache\Frontend\FrontendInterface;
+
 /**
  * A caching backend which stores cache entries by using wincache.
  *
@@ -34,7 +38,7 @@ namespace TYPO3\CMS\Core\Cache\Backend;
  * This prefix makes sure that keys from the different installations do not
  * conflict.
  */
-class WincacheBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implements \TYPO3\CMS\Core\Cache\Backend\TaggableBackendInterface
+class WincacheBackend extends AbstractBackend implements TaggableBackendInterface
 {
     /**
      * A prefix to separate stored data from other data possible stored in the wincache
@@ -46,14 +50,14 @@ class WincacheBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend impl
     /**
      * Constructs this backend
      *
-     * @param string $context FLOW3's application context
+     * @param string $context Unused, for backward compatibility only
      * @param array $options Configuration options
-     * @throws \TYPO3\CMS\Core\Cache\Exception If wincache PHP extension is not loaded
+     * @throws Exception If wincache PHP extension is not loaded
      */
     public function __construct($context, array $options = [])
     {
         if (!extension_loaded('wincache')) {
-            throw new \TYPO3\CMS\Core\Cache\Exception('The PHP extension "wincache" must be installed and loaded in order to use the wincache backend.', 1343331520);
+            throw new Exception('The PHP extension "wincache" must be installed and loaded in order to use the wincache backend.', 1343331520);
         }
         parent::__construct($context, $options);
     }
@@ -65,26 +69,26 @@ class WincacheBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend impl
      * @param string $data The data to be stored
      * @param array $tags Tags to associate with this cache entry
      * @param int $lifetime Lifetime of this cache entry in seconds. If NULL is specified, the default lifetime is used. "0" means unlimited lifetime.
-     * @throws \TYPO3\CMS\Core\Cache\Exception if no cache frontend has been set
+     * @throws Exception if no cache frontend has been set
      * @throws \InvalidArgumentException if the identifier is not valid
-     * @throws \TYPO3\CMS\Core\Cache\Exception\InvalidDataException if $data is not a string
+     * @throws InvalidDataException if $data is not a string
      */
     public function set($entryIdentifier, $data, array $tags = [], $lifetime = null)
     {
-        if (!$this->cache instanceof \TYPO3\CMS\Core\Cache\Frontend\FrontendInterface) {
-            throw new \TYPO3\CMS\Core\Cache\Exception('No cache frontend has been set yet via setCache().', 1343331521);
+        if (!$this->cache instanceof FrontendInterface) {
+            throw new Exception('No cache frontend has been set yet via setCache().', 1343331521);
         }
         if (!is_string($data)) {
-            throw new \TYPO3\CMS\Core\Cache\Exception\InvalidDataException('The specified data is of type "' . gettype($data) . '" but a string is expected.', 1343331522);
+            throw new InvalidDataException('The specified data is of type "' . gettype($data) . '" but a string is expected.', 1343331522);
         }
         $tags[] = '%WCBE%' . $this->cache->getIdentifier();
-        $expiration = $lifetime !== null ? $lifetime : $this->defaultLifetime;
+        $expiration = $lifetime ?? $this->defaultLifetime;
         $success = wincache_ucache_set($this->identifierPrefix . $entryIdentifier, $data, $expiration);
         if ($success === true) {
             $this->removeIdentifierFromAllTags($entryIdentifier);
             $this->addIdentifierToTags($entryIdentifier, $tags);
         } else {
-            throw new \TYPO3\CMS\Core\Cache\Exception('Could not set value.', 1343331523);
+            throw new Exception('Could not set value.', 1343331523);
         }
     }
 
@@ -139,9 +143,8 @@ class WincacheBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend impl
         $identifiers = wincache_ucache_get($this->identifierPrefix . 'tag_' . $tag, $success);
         if ($success === false) {
             return [];
-        } else {
-            return (array)$identifiers;
         }
+        return (array)$identifiers;
     }
 
     /**
@@ -161,12 +164,12 @@ class WincacheBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend impl
     /**
      * Removes all cache entries of this cache
      *
-     * @throws \TYPO3\CMS\Core\Cache\Exception
+     * @throws Exception
      */
     public function flush()
     {
-        if (!$this->cache instanceof \TYPO3\CMS\Core\Cache\Frontend\FrontendInterface) {
-            throw new \TYPO3\CMS\Core\Cache\Exception('Yet no cache frontend has been set via setCache().', 1343331524);
+        if (!$this->cache instanceof FrontendInterface) {
+            throw new Exception('Yet no cache frontend has been set via setCache().', 1343331524);
         }
         $this->flushByTag('%WCBE%' . $this->cache->getIdentifier());
     }

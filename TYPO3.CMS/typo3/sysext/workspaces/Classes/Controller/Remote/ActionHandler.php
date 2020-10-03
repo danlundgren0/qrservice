@@ -15,18 +15,24 @@ namespace TYPO3\CMS\Workspaces\Controller\Remote;
  */
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\DataHandling\DataHandler;
+use TYPO3\CMS\Core\Exception;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\MathUtility;
 use TYPO3\CMS\Fluid\View\StandaloneView;
 use TYPO3\CMS\Workspaces\Domain\Record\StageRecord;
 use TYPO3\CMS\Workspaces\Domain\Record\WorkspaceRecord;
+use TYPO3\CMS\Workspaces\Preview\PreviewUriBuilder;
 use TYPO3\CMS\Workspaces\Service\StagesService;
 use TYPO3\CMS\Workspaces\Service\WorkspaceService;
 
 /**
- * Class ActionHandler
+ * @internal This is a specific Backend Controller implementation and is not considered part of the Public TYPO3 API.
  */
-class ActionHandler extends AbstractHandler
+class ActionHandler
 {
     /**
      * @var StagesService
@@ -34,11 +40,17 @@ class ActionHandler extends AbstractHandler
     protected $stageService;
 
     /**
+     * @var WorkspaceService
+     */
+    protected $workspaceService;
+
+    /**
      * Creates this object.
      */
     public function __construct()
     {
         $this->stageService = GeneralUtility::makeInstance(StagesService::class);
+        $this->workspaceService = GeneralUtility::makeInstance(WorkspaceService::class);
     }
 
     /**
@@ -49,7 +61,7 @@ class ActionHandler extends AbstractHandler
      */
     public function generateWorkspacePreviewLink($uid)
     {
-        return $this->getWorkspaceService()->generateWorkspacePreviewLink($uid);
+        return GeneralUtility::makeInstance(PreviewUriBuilder::class)->buildUriForPage((int)$uid, 0);
     }
 
     /**
@@ -60,7 +72,7 @@ class ActionHandler extends AbstractHandler
      */
     public function generateWorkspacePreviewLinksForAllLanguages($uid)
     {
-        return $this->getWorkspaceService()->generateWorkspacePreviewLinksForAllLanguages($uid);
+        return GeneralUtility::makeInstance(PreviewUriBuilder::class)->buildUrisForAllLanguagesOfPage((int)$uid);
     }
 
     /**
@@ -69,7 +81,7 @@ class ActionHandler extends AbstractHandler
      * @param string $table
      * @param int $t3ver_oid
      * @param int $orig_uid
-     * @todo What about reporting errors back to the ExtJS interface? /olly/
+     * @todo What about reporting errors back to the interface? /olly/
      */
     public function swapSingleRecord($table, $t3ver_oid, $orig_uid)
     {
@@ -91,7 +103,7 @@ class ActionHandler extends AbstractHandler
      *
      * @param string $table
      * @param int $uid
-     * @todo What about reporting errors back to the ExtJS interface? /olly/
+     * @todo What about reporting errors back to the interface? /olly/
      */
     public function deleteSingleRecord($table, $uid)
     {
@@ -115,7 +127,7 @@ class ActionHandler extends AbstractHandler
      */
     public function viewSingleRecord($table, $uid)
     {
-        return WorkspaceService::viewSingleRecord($table, $uid);
+        return GeneralUtility::makeInstance(PreviewUriBuilder::class)->buildUriForElement($table, $uid);
     }
 
     /**
@@ -197,17 +209,16 @@ class ActionHandler extends AbstractHandler
                 'hidden' => $column->hidden
             ];
         }
-        $GLOBALS['BE_USER']->uc['moduleData']['Workspaces'][$GLOBALS['BE_USER']->workspace]['columns'] = $data;
-        $GLOBALS['BE_USER']->writeUC();
+        $this->getBackendUser()->uc['moduleData']['Workspaces'][$this->getBackendUser()->workspace]['columns'] = $data;
+        $this->getBackendUser()->writeUC();
     }
 
     public function loadColumnModel()
     {
-        if (is_array($GLOBALS['BE_USER']->uc['moduleData']['Workspaces'][$GLOBALS['BE_USER']->workspace]['columns'])) {
-            return $GLOBALS['BE_USER']->uc['moduleData']['Workspaces'][$GLOBALS['BE_USER']->workspace]['columns'];
-        } else {
-            return [];
+        if (is_array($this->getBackendUser()->uc['moduleData']['Workspaces'][$this->getBackendUser()->workspace]['columns'])) {
+            return $this->getBackendUser()->uc['moduleData']['Workspaces'][$this->getBackendUser()->workspace]['columns'];
         }
+        return [];
     }
 
     /**
@@ -217,11 +228,11 @@ class ActionHandler extends AbstractHandler
      */
     public function saveLanguageSelection($language)
     {
-        if (\TYPO3\CMS\Core\Utility\MathUtility::canBeInterpretedAsInteger($language) === false && $language !== 'all') {
+        if (MathUtility::canBeInterpretedAsInteger($language) === false && $language !== 'all') {
             $language = 'all';
         }
-        $GLOBALS['BE_USER']->uc['moduleData']['Workspaces'][$GLOBALS['BE_USER']->workspace]['language'] = $language;
-        $GLOBALS['BE_USER']->writeUC();
+        $this->getBackendUser()->uc['moduleData']['Workspaces'][$this->getBackendUser()->workspace]['language'] = $language;
+        $this->getBackendUser()->writeUC();
     }
 
     /**
@@ -339,7 +350,7 @@ class ActionHandler extends AbstractHandler
 
         if ($stageRecord === null) {
             throw new \InvalidArgumentException(
-                $GLOBALS['LANG']->sL('LLL:EXT:workspaces/Resources/Private/Language/locallang.xlf:error.stageId.integer'),
+                $this->getLanguageService()->sL('LLL:EXT:workspaces/Resources/Private/Language/locallang.xlf:error.stageId.integer'),
                 1476044776
             );
         }
@@ -354,16 +365,16 @@ class ActionHandler extends AbstractHandler
             }
             $beUserRecord = BackendUtility::getRecord('be_users', (int)$userUid);
             if (is_array($beUserRecord) && $beUserRecord['email'] !== '') {
-                $uc = $beUserRecord['uc'] ? unserialize($beUserRecord['uc']) : [];
+                $uc = $beUserRecord['uc'] ? unserialize($beUserRecord['uc'], ['allowed_classes' => false]) : [];
                 $recipients[$beUserRecord['email']] = [
                     'email' => $beUserRecord['email'],
-                    'lang' => isset($uc['lang']) ? $uc['lang'] : $beUserRecord['lang']
+                    'lang' => $uc['lang'] ?? $beUserRecord['lang']
                 ];
             }
         }
 
         if ($stageRecord->hasPreselection() && !$stageRecord->isPreselectionChangeable()) {
-            $preselectedBackendUsers = $this->getStageService()->getBackendUsers(
+            $preselectedBackendUsers = $this->stageService->getBackendUsers(
                 implode(',', $this->stageService->getPreselectedRecipients($stageRecord))
             );
 
@@ -372,10 +383,10 @@ class ActionHandler extends AbstractHandler
                     continue;
                 }
                 if (!isset($recipients[$preselectedBackendUser['email']])) {
-                    $uc = (!empty($preselectedBackendUser['uc']) ? unserialize($preselectedBackendUser['uc']) : []);
+                    $uc = (!empty($preselectedBackendUser['uc']) ? unserialize($preselectedBackendUser['uc'], ['allowed_classes' => false]) : []);
                     $recipients[$preselectedBackendUser['email']] = [
                         'email' => $preselectedBackendUser['email'],
-                        'lang' => (isset($uc['lang']) ? $uc['lang'] : $preselectedBackendUser['lang'])
+                        'lang' => $uc['lang'] ?? $preselectedBackendUser['lang']
                     ];
                 }
             }
@@ -412,11 +423,14 @@ class ActionHandler extends AbstractHandler
     public function discardStagesFromPage($pageId)
     {
         $cmdMapArray = [];
-        /** @var $workspaceService WorkspaceService */
-        $workspaceService = GeneralUtility::makeInstance(WorkspaceService::class);
-        /** @var $stageService StagesService */
-        $stageService = GeneralUtility::makeInstance(StagesService::class);
-        $workspaceItemsArray = $workspaceService->selectVersionsInWorkspace($stageService->getWorkspaceId(), ($filter = 1), ($stage = -99), $pageId, ($recursionLevel = 0), ($selectionType = 'tables_modify'));
+        $workspaceItemsArray = $this->workspaceService->selectVersionsInWorkspace(
+            $this->stageService->getWorkspaceId(),
+            $filter = 1,
+            $stage = -99,
+            $pageId,
+            $recursionLevel = 0,
+            $selectionType = 'tables_modify'
+        );
         foreach ($workspaceItemsArray as $tableName => $items) {
             foreach ($items as $item) {
                 $cmdMapArray[$tableName][$item['uid']]['version']['action'] = 'clearWSID';
@@ -447,7 +461,7 @@ class ActionHandler extends AbstractHandler
         $cmdMapArray = [];
         $comment = $parameters->comments;
         $stageId = $parameters->stageId;
-        if (\TYPO3\CMS\Core\Utility\MathUtility::canBeInterpretedAsInteger($stageId) === false) {
+        if (MathUtility::canBeInterpretedAsInteger($stageId) === false) {
             throw new \InvalidArgumentException('Missing "stageId" in $parameters array.', 1319488194);
         }
         if (!is_object($parameters->affects) || empty($parameters->affects)) {
@@ -462,8 +476,8 @@ class ActionHandler extends AbstractHandler
                     $cmdMapArray[$tableName][$item->t3ver_oid]['version']['swapWith'] = $item->uid;
                     $cmdMapArray[$tableName][$item->t3ver_oid]['version']['comment'] = $comment;
                     $cmdMapArray[$tableName][$item->t3ver_oid]['version']['notificationAlternativeRecipients'] = $recipients;
-                // Setting stage uses version id in command map
                 } else {
+                    // Setting stage uses version id in command map
                     $cmdMapArray[$tableName][$item->uid]['version']['action'] = 'setStage';
                     $cmdMapArray[$tableName][$item->uid]['version']['stageId'] = $stageId;
                     $cmdMapArray[$tableName][$item->uid]['version']['comment'] = $comment;
@@ -494,8 +508,7 @@ class ActionHandler extends AbstractHandler
             return $result;
         }
 
-        /** @var \TYPO3\CMS\Core\DataHandling\DataHandler $dataHandler */
-        $dataHandler = GeneralUtility::makeInstance(\TYPO3\CMS\Core\DataHandling\DataHandler::class);
+        $dataHandler = GeneralUtility::makeInstance(DataHandler::class);
         $dataHandler->start([], $cmdMapArray);
         $dataHandler->process_cmdmap();
 
@@ -669,7 +682,7 @@ class ActionHandler extends AbstractHandler
         }
         $result['comments'] = [
             'type' => 'textarea',
-            'value' => ($nextStage->isInternal() ? '' : $nextStage->getDefaultComment())
+            'value' => $nextStage->isInternal() ? '' : $nextStage->getDefaultComment()
         ];
 
         return $result;
@@ -688,7 +701,7 @@ class ActionHandler extends AbstractHandler
         }
 
         $result = [];
-        $allRecipients = $this->getStageService()->getResponsibleBeUser($stageRecord);
+        $allRecipients = $this->stageService->getResponsibleBeUser($stageRecord);
         $preselectedRecipients = $this->stageService->getPreselectedRecipients($stageRecord);
         $isPreselectionChangeable = $stageRecord->isPreselectionChangeable();
 
@@ -721,21 +734,8 @@ class ActionHandler extends AbstractHandler
      */
     protected function getDefaultCommentOfStage($stage)
     {
-        $result = $this->getStageService()->getPropertyOfCurrentWorkspaceStage($stage, 'default_mailcomment');
+        $result = $this->stageService->getPropertyOfCurrentWorkspaceStage($stage, 'default_mailcomment');
         return $result;
-    }
-
-    /**
-     * Gets an instance of the Stage service.
-     *
-     * @return StagesService
-     */
-    protected function getStageService()
-    {
-        if (!isset($this->stageService)) {
-            $this->stageService = GeneralUtility::makeInstance(StagesService::class);
-        }
-        return $this->stageService;
     }
 
     /**
@@ -746,11 +746,24 @@ class ActionHandler extends AbstractHandler
      */
     public function sendPageToPreviousStage($id)
     {
-        $workspaceService = GeneralUtility::makeInstance(WorkspaceService::class);
-        $workspaceItemsArray = $workspaceService->selectVersionsInWorkspace($this->stageService->getWorkspaceId(), ($filter = 1), ($stage = -99), $id, ($recursionLevel = 0), ($selectionType = 'tables_modify'));
-        list($currentStage, $previousStage) = $this->getStageService()->getPreviousStageForElementCollection($workspaceItemsArray);
+        $workspaceItemsArray = $this->workspaceService->selectVersionsInWorkspace(
+            $this->stageService->getWorkspaceId(),
+            $filter = 1,
+            $stage = -99,
+            $id,
+            $recursionLevel = 0,
+            $selectionType = 'tables_modify'
+        );
+        list($currentStage, $previousStage) = $this->stageService->getPreviousStageForElementCollection($workspaceItemsArray);
         // get only the relevant items for processing
-        $workspaceItemsArray = $workspaceService->selectVersionsInWorkspace($this->stageService->getWorkspaceId(), ($filter = 1), $currentStage['uid'], $id, ($recursionLevel = 0), ($selectionType = 'tables_modify'));
+        $workspaceItemsArray = $this->workspaceService->selectVersionsInWorkspace(
+            $this->stageService->getWorkspaceId(),
+            $filter = 1,
+            $currentStage['uid'],
+            $id,
+            $recursionLevel = 0,
+            $selectionType = 'tables_modify'
+        );
         $stageFormFields = $this->getSentToStageWindow($previousStage['uid']);
         $result = array_merge($stageFormFields, [
             'title' => 'Status message: Page send to next stage - ID: ' . $id . ' - Next stage title: ' . $previousStage['title'],
@@ -767,11 +780,24 @@ class ActionHandler extends AbstractHandler
      */
     public function sendPageToNextStage($id)
     {
-        $workspaceService = GeneralUtility::makeInstance(WorkspaceService::class);
-        $workspaceItemsArray = $workspaceService->selectVersionsInWorkspace($this->stageService->getWorkspaceId(), ($filter = 1), ($stage = -99), $id, ($recursionLevel = 0), ($selectionType = 'tables_modify'));
-        list($currentStage, $nextStage) = $this->getStageService()->getNextStageForElementCollection($workspaceItemsArray);
+        $workspaceItemsArray = $this->workspaceService->selectVersionsInWorkspace(
+            $this->stageService->getWorkspaceId(),
+            $filter = 1,
+            $stage = -99,
+            $id,
+            $recursionLevel = 0,
+            $selectionType = 'tables_modify'
+        );
+        list($currentStage, $nextStage) = $this->stageService->getNextStageForElementCollection($workspaceItemsArray);
         // get only the relevant items for processing
-        $workspaceItemsArray = $workspaceService->selectVersionsInWorkspace($this->stageService->getWorkspaceId(), ($filter = 1), $currentStage['uid'], $id, ($recursionLevel = 0), ($selectionType = 'tables_modify'));
+        $workspaceItemsArray = $this->workspaceService->selectVersionsInWorkspace(
+            $this->stageService->getWorkspaceId(),
+            $filter = 1,
+            $currentStage['uid'],
+            $id,
+            $recursionLevel = 0,
+            $selectionType = 'tables_modify'
+        );
         $stageFormFields = $this->getSentToStageWindow($nextStage['uid']);
         $result = array_merge($stageFormFields, [
             'title' => 'Status message: Page send to next stage - ID: ' . $id . ' - Next stage title: ' . $nextStage['title'],
@@ -789,16 +815,18 @@ class ActionHandler extends AbstractHandler
      */
     public function updateStageChangeButtons($id)
     {
-        /** @var StagesService $stageService */
-        $stageService = GeneralUtility::makeInstance(StagesService::class);
-        /** @var WorkspaceService $workspaceService */
-        $workspaceService = GeneralUtility::makeInstance(WorkspaceService::class);
         // fetch the next and previous stage
-        $workspaceItemsArray = $workspaceService->selectVersionsInWorkspace($stageService->getWorkspaceId(), ($filter = 1), ($stage = -99), $id, ($recursionLevel = 0), ($selectionType = 'tables_modify'));
-        list(, $nextStage) = $stageService->getNextStageForElementCollection($workspaceItemsArray);
-        list(, $previousStage) = $stageService->getPreviousStageForElementCollection($workspaceItemsArray);
+        $workspaceItemsArray = $this->workspaceService->selectVersionsInWorkspace(
+            $this->stageService->getWorkspaceId(),
+            $filter = 1,
+            $stage = -99,
+            $id,
+            $recursionLevel = 0,
+            $selectionType = 'tables_modify'
+        );
+        list(, $nextStage) = $this->stageService->getNextStageForElementCollection($workspaceItemsArray);
+        list(, $previousStage) = $this->stageService->getPreviousStageForElementCollection($workspaceItemsArray);
 
-        /** @var StandaloneView $view */
         $view = GeneralUtility::makeInstance(StandaloneView::class);
         $extensionPath = ExtensionManagementUtility::extPath('workspaces');
         $view->setPartialRootPaths(['default' => $extensionPath . 'Resources/Private/Partials']);
@@ -821,7 +849,7 @@ class ActionHandler extends AbstractHandler
     /**
      * @param int $workspaceId
      * @return int Id of the original workspace
-     * @throws \TYPO3\CMS\Core\Exception
+     * @throws Exception
      */
     protected function setTemporaryWorkspace($workspaceId)
     {
@@ -830,7 +858,7 @@ class ActionHandler extends AbstractHandler
 
         if ($currentWorkspace !== $workspaceId) {
             if (!$this->getBackendUser()->setTemporaryWorkspace($workspaceId)) {
-                throw new \TYPO3\CMS\Core\Exception(
+                throw new Exception(
                     'Cannot set temporary workspace to "' . $workspaceId . '"',
                     1371484524
                 );
@@ -841,10 +869,49 @@ class ActionHandler extends AbstractHandler
     }
 
     /**
-     * @return \TYPO3\CMS\Core\Authentication\BackendUserAuthentication
+     * @return BackendUserAuthentication
      */
     protected function getBackendUser()
     {
         return $GLOBALS['BE_USER'];
+    }
+
+    /**
+     * @return LanguageService
+     */
+    protected function getLanguageService()
+    {
+        return $GLOBALS['LANG'];
+    }
+
+    /**
+     * Gets an error response to be shown in the grid component.
+     *
+     * @param string $errorLabel Name of the label in the locallang.xlf file
+     * @param int $errorCode The error code to be used
+     * @param bool $successFlagValue Value of the success flag to be delivered back (might be FALSE in most cases)
+     * @return array
+     */
+    protected function getErrorResponse($errorLabel, $errorCode = 0, $successFlagValue = false)
+    {
+        $localLangFile = 'LLL:EXT:workspaces/Resources/Private/Language/locallang.xlf';
+        $response = [
+            'error' => [
+                'code' => $errorCode,
+                'message' => $this->getLanguageService()->sL($localLangFile . ':' . $errorLabel)
+            ],
+            'success' => $successFlagValue
+        ];
+        return $response;
+    }
+
+    /**
+     * Gets the current workspace ID.
+     *
+     * @return int The current workspace ID
+     */
+    protected function getCurrentWorkspace()
+    {
+        return $this->workspaceService->getCurrentWorkspace();
     }
 }

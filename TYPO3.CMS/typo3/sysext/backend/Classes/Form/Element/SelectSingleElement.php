@@ -28,6 +28,17 @@ use TYPO3\CMS\Core\Utility\StringUtility;
 class SelectSingleElement extends AbstractFormElement
 {
     /**
+     * Default field information enabled for this element.
+     *
+     * @var array
+     */
+    protected $defaultFieldInformation = [
+        'tcaDescription' => [
+            'renderType' => 'tcaDescription',
+        ],
+    ];
+
+    /**
      * Default field wizards enabled for this element.
      *
      * @var array
@@ -76,6 +87,9 @@ class SelectSingleElement extends AbstractFormElement
         $inlineStackProcessor->initializeByGivenStructure($this->data['inlineStructure']);
         $uniqueIds = null;
         if ($this->data['isInlineChild'] && $this->data['inlineParentUid']) {
+            // @todo: At least parts of this if is dead and/or broken: $uniqueIds is filled but never used.
+            // See InlineControlContainer where 'inlineData' 'unique' 'used' is set. What exactly is
+            // this if supposed to do and when should it kick in and what for?
             $inlineObjectName = $inlineStackProcessor->getCurrentStructureDomObjectIdPrefix($this->data['inlineFirstPid']);
             $inlineFormName = $inlineStackProcessor->getCurrentStructureFormPrefix();
             if ($this->data['inlineParentConfig']['foreign_table'] === $table
@@ -117,8 +131,13 @@ class SelectSingleElement extends AbstractFormElement
         $selectedValue = '';
         $hasIcons = false;
 
+        // In case e.g. "l10n_display" is set to "defaultAsReadonly" only one value (as string) could be handed in
         if (!empty($parameterArray['itemFormElValue'])) {
-            $selectedValue = (string)$parameterArray['itemFormElValue'][0];
+            if (is_array($parameterArray['itemFormElValue'])) {
+                $selectedValue = (string)$parameterArray['itemFormElValue'][0];
+            } else {
+                $selectedValue = (string)$parameterArray['itemFormElValue'];
+            }
         }
 
         foreach ($selectItems as $item) {
@@ -140,7 +159,7 @@ class SelectSingleElement extends AbstractFormElement
                 }
 
                 $selectItemGroups[$selectItemGroupCount]['items'][] = [
-                    'title' => $item[0],
+                    'title' => $this->appendValueToLabelInDebugMode($item[0], $item[1]),
                     'value' => $item[1],
                     'icon' => $icon,
                     'selected' => $selected,
@@ -190,22 +209,17 @@ class SelectSingleElement extends AbstractFormElement
             $selectAttributes['disabled'] = 'disabled';
         }
 
-        $legacyWizards = $this->renderWizards();
-        $legacyFieldWizardHtml = implode(LF, $legacyWizards['fieldWizard']);
-
         $fieldInformationResult = $this->renderFieldInformation();
         $fieldInformationHtml = $fieldInformationResult['html'];
         $resultArray = $this->mergeChildReturnIntoExistingResult($resultArray, $fieldInformationResult, false);
 
         $fieldWizardResult = $this->renderFieldWizard();
-        $fieldWizardHtml = $legacyFieldWizardHtml . $fieldWizardResult['html'];
+        $fieldWizardHtml = $fieldWizardResult['html'];
         $resultArray = $this->mergeChildReturnIntoExistingResult($resultArray, $fieldWizardResult, false);
 
         $html = [];
         $html[] = '<div class="formengine-field-item t3js-formengine-field-item">';
-        if (!$disabled) {
-            $html[] = $fieldInformationHtml;
-        }
+        $html[] = $fieldInformationHtml;
         $html[] =   '<div class="form-control-wrap">';
         $html[] =       '<div class="form-wizards-wrap">';
         $html[] =           '<div class="form-wizards-element">';
@@ -222,7 +236,7 @@ class SelectSingleElement extends AbstractFormElement
             $html[] =           '</div>';
         }
         $html[] =           '</div>';
-        if (!$disabled) {
+        if (!$disabled && !empty($fieldWizardHtml)) {
             $html[] =       '<div class="form-wizards-items-bottom">';
             $html[] =           $fieldWizardHtml;
             $html[] =       '</div>';

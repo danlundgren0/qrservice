@@ -15,15 +15,19 @@ namespace TYPO3\CMS\IndexedSearch\Hook;
  */
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
 use TYPO3\CMS\Core\DataHandling\DataHandler;
+use TYPO3\CMS\Core\Exception\Page\RootLineException;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
+use TYPO3\CMS\Core\Utility\RootlineUtility;
 
 /**
  * Crawler hook for indexed search. Works with the "crawler" extension
+ * @internal this is a TYPO3-internal hook implementation and not part of TYPO3's Core API.
  */
 class CrawlerHook
 {
@@ -53,7 +57,7 @@ class CrawlerHook
     {
         // To make sure the backend charset is available:
         if (!is_object($GLOBALS['LANG'])) {
-            $GLOBALS['LANG'] = GeneralUtility::makeInstance(\TYPO3\CMS\Lang\LanguageService::class);
+            $GLOBALS['LANG'] = GeneralUtility::makeInstance(\TYPO3\CMS\Core\Localization\LanguageService::class);
             $GLOBALS['LANG']->init($GLOBALS['BE_USER']->uc['lang']);
         }
     }
@@ -161,18 +165,16 @@ class CrawlerHook
                     break;
                 default:
                     if ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['crawler'][$cfgRec['type']]) {
-                        $hookObj = GeneralUtility::getUserObj($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['crawler'][$cfgRec['type']]);
-                        if (is_object($hookObj)) {
-                            // Parameters:
-                            $params = [
-                                'indexConfigUid' => $cfgRec['uid'],
-                                // General
-                                'procInstructions' => ['[Index Cfg UID#' . $cfgRec['uid'] . '/CUSTOM]'],
-                                // General
-                                'url' => $hookObj->initMessage($message)
-                            ];
-                            $pObj->addQueueEntry_callBack($setId, $params, $this->callBack, $cfgRec['pid']);
-                        }
+                        $hookObj = GeneralUtility::makeInstance($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['crawler'][$cfgRec['type']]);
+                        // Parameters:
+                        $params = [
+                            'indexConfigUid' => $cfgRec['uid'],
+                            // General
+                            'procInstructions' => ['[Index Cfg UID#' . $cfgRec['uid'] . '/CUSTOM]'],
+                            // General
+                            'url' => $hookObj->initMessage($message)
+                        ];
+                        $pObj->addQueueEntry_callBack($setId, $params, $this->callBack, $cfgRec['pid']);
                     }
             }
         }
@@ -233,12 +235,10 @@ class CrawlerHook
                         break;
                     default:
                         if ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['crawler'][$cfgRec['type']]) {
-                            $hookObj = GeneralUtility::getUserObj($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['crawler'][$cfgRec['type']]);
-                            if (is_object($hookObj)) {
-                                $this->pObj = $pObj;
-                                // For addQueueEntryForHook()
-                                $hookObj->indexOperation($cfgRec, $session_data, $params, $this);
-                            }
+                            $hookObj = GeneralUtility::makeInstance($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['crawler'][$cfgRec['type']]);
+                            $this->pObj = $pObj;
+                            // For addQueueEntryForHook()
+                            $hookObj->indexOperation($cfgRec, $session_data, $params, $this);
                         }
                 }
                 // Save process data which might be modified:
@@ -283,7 +283,7 @@ class CrawlerHook
             $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
                 ->getQueryBuilderForTable($cfgRec['table2index']);
 
-            $result = $queryBuilder->select('*')
+            $baseQueryBuilder = $queryBuilder->select('*')
                 ->from($cfgRec['table2index'])
                 ->where(
                     $queryBuilder->expr()->eq(
@@ -294,7 +294,8 @@ class CrawlerHook
                         'uid',
                         $queryBuilder->createNamedParameter($session_data['uid'], \PDO::PARAM_INT)
                     )
-                )
+                );
+            $result = $baseQueryBuilder
                 ->setMaxResults($numberOfRecords)
                 ->orderBy('uid')
                 ->execute();
@@ -307,8 +308,9 @@ class CrawlerHook
                 $session_data['uid'] = $row['uid'];
             }
 
+            $rowCount = $baseQueryBuilder->count('uid')->execute()->fetchColumn(0);
             // Finally, set entry for next indexing of batch of records:
-            if ($result->rowCount()) {
+            if ($rowCount) {
                 $nparams = [
                     'indexConfigUid' => $cfgRec['uid'],
                     'url' => 'Records from UID#' . ($session_data['uid'] + 1) . '-?',
@@ -361,7 +363,7 @@ class CrawlerHook
                         }
                     }
                 }
-                $files = GeneralUtility::removePrefixPathFromList($files, PATH_site);
+                $files = GeneralUtility::removePrefixPathFromList($files, Environment::getPublicPath() . '/');
                 // traverse the items and create log entries:
                 foreach ($files as $path) {
                     $this->instanceCounter++;
@@ -689,19 +691,21 @@ class CrawlerHook
      */
     public function getUidRootLineForClosestTemplate($id)
     {
-        $tmpl = GeneralUtility::makeInstance(\TYPO3\CMS\Core\TypoScript\ExtendedTemplateService::class);
-        $tmpl->init();
-        // Gets the rootLine
-        $sys_page = GeneralUtility::makeInstance(\TYPO3\CMS\Frontend\Page\PageRepository::class);
-        $rootLine = $sys_page->getRootLine($id);
-        // This generates the constants/config + hierarchy info for the template.
-        $tmpl->runThroughTemplates($rootLine, 0);
-        // Root line uids
-        $rootline_uids = [];
-        foreach ($tmpl->rootLine as $rlkey => $rldat) {
-            $rootline_uids[$rlkey] = $rldat['uid'];
+        $rootLineUids = [];
+        try {
+            // Gets the rootLine
+            $rootLine = GeneralUtility::makeInstance(RootlineUtility::class, $id)->get();
+            // This generates the constants/config + hierarchy info for the template.
+            $tmpl = GeneralUtility::makeInstance(\TYPO3\CMS\Core\TypoScript\ExtendedTemplateService::class);
+            $tmpl->runThroughTemplates($rootLine);
+            // Root line uids
+            foreach ($tmpl->rootLine as $rlkey => $rldat) {
+                $rootLineUids[$rlkey] = $rldat['uid'];
+            }
+        } catch (RootLineException $e) {
+            // do nothing
         }
-        return $rootline_uids;
+        return $rootLineUids;
     }
 
     /**

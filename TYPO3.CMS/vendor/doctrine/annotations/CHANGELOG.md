@@ -1,5 +1,68 @@
 ## Changelog
 
+### 1.6.1
+
+This release fixes an issue in which annotations such as `@foo-bar`
+and `@foo-` were incorrectly recognised as valid, and both erroneously
+parsed as `@foo`.
+
+Any annotation with `@name-*` format will now silently be ignored,
+allowing vendor-specific annotations to be prefixed with the tool
+name.
+
+Total issues resolved: **3**
+
+- [165: Update the composer branch alias](https://github.com/doctrine/annotations/pull/165) thanks to @mikeSimonson
+- [209: Change Annotation::value typehint to mixed](https://github.com/doctrine/annotations/pull/209) thanks to @malarzm
+- [257: Skip parsing annotations containing dashes, such as `@Foo-bar`, or `@Foo-`](https://github.com/doctrine/annotations/pull/257) thanks to @Ocramius
+
+### 1.6.0
+
+This release brings a new endpoint that make sure that you can't shoot yourself in the foot by calling ```registerLoader``` multiple times and a few tests improvements.
+
+Total issues resolved: **7**
+
+- [145: Memory leak in AnnotationRegistry::registerLoader() when called multiple times](https://github.com/doctrine/annotations/issues/145) thanks to @TriAnMan
+- [146: Import error on @experimental Annotation](https://github.com/doctrine/annotations/issues/146) thanks to @aturki
+- [147: Ignoring @experimental annotation used by Symfony 3.3 CacheAdapter](https://github.com/doctrine/annotations/pull/147) thanks to @aturki
+- [151: Remove duplicate code in `DCOM58Test`](https://github.com/doctrine/annotations/pull/151) thanks to @tuanphpvn
+- [161: Prevent loading class&#95;exists multiple times](https://github.com/doctrine/annotations/pull/161) thanks to @jrjohnson
+- [162: Add registerUniqueLoader to AnnotationRegistry](https://github.com/doctrine/annotations/pull/162) thanks to @jrjohnson
+- [163: Use assertDirectoryExists and assertDirectoryNotExists](https://github.com/doctrine/annotations/pull/163) thanks to @carusogabriel
+
+Thanks to everyone involved in this release.
+
+### 1.5.0
+
+This release increments the minimum supported PHP version to 7.1.0.
+
+Also, HHVM official support has been dropped.
+
+Some noticeable performance improvements to annotation autoloading
+have been applied, making failed annotation autoloading less heavy
+on the filesystem access.
+
+- [133: Add @throws annotation in AnnotationReader#__construct()](https://github.com/doctrine/annotations/issues/133) thanks to @SenseException
+- [134: Require PHP 7.1, drop HHVM support](https://github.com/doctrine/annotations/issues/134) thanks to @lcobucci
+- [135: Prevent the same loader from being registered twice](https://github.com/doctrine/annotations/issues/135)  thanks to @jrjohnson
+- [137: #135 optimise multiple class load attempts in AnnotationRegistry](https://github.com/doctrine/annotations/issues/137)  thanks to @Ocramius
+
+
+### 1.4.0
+
+This release fix an issue were some annotations could be not loaded if the namespace in the use statement started with a backslash.
+It also update the tests and drop the support for php 5.X
+
+- [115: Missing annotations with the latest composer version](https://github.com/doctrine/annotations/issues/115) thanks to @pascalporedda
+- [120: Missing annotations with the latest composer version](https://github.com/doctrine/annotations/pull/120) thanks to @gnat42
+- [121: Adding a more detailed explanation of the test](https://github.com/doctrine/annotations/pull/121) thanks to @mikeSimonson
+- [101: Test annotation parameters containing space](https://github.com/doctrine/annotations/pull/101) thanks to @mikeSimonson
+- [111: Cleanup: move to correct phpunit assertions](https://github.com/doctrine/annotations/pull/111) thanks to @Ocramius
+- [112: Removes support for PHP 5.x](https://github.com/doctrine/annotations/pull/112) thanks to @railto
+- [113: bumped phpunit version to 5.7](https://github.com/doctrine/annotations/pull/113) thanks to @gabbydgab
+- [114: Enhancement: Use SVG Travis build badge](https://github.com/doctrine/annotations/pull/114) thanks to @localheinz
+- [118: Integrating PHPStan](https://github.com/doctrine/annotations/pull/118) thanks to @ondrejmirtes
+
 ### 1.3.1 - 2016-12-30
 
 This release fixes an issue with ignored annotations that were already

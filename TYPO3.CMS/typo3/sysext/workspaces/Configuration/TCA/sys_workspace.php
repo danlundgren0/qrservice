@@ -3,7 +3,7 @@ return [
     'ctrl' => [
         'label' => 'title',
         'tstamp' => 'tstamp',
-        'title' => 'LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_workspace',
+        'title' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace',
         'descriptionColumn' => 'description',
         'adminOnly' => true,
         'rootLevel' => 1,
@@ -15,7 +15,7 @@ return [
     ],
     'columns' => [
         'title' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_general.xlf:LGL.title',
+            'label' => 'LLL:EXT:core/Resources/Private/Language/locallang_general.xlf:LGL.title',
             'config' => [
                 'type' => 'input',
                 'size' => 20,
@@ -24,7 +24,7 @@ return [
             ]
         ],
         'description' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_general.xlf:LGL.description',
+            'label' => 'LLL:EXT:core/Resources/Private/Language/locallang_general.xlf:LGL.description',
             'config' => [
                 'type' => 'text',
                 'rows' => 5,
@@ -32,7 +32,7 @@ return [
             ]
         ],
         'adminusers' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_workspace.adminusers',
+            'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.adminusers',
             'config' => [
                 'type' => 'group',
                 'internal_type' => 'db',
@@ -44,7 +44,7 @@ return [
             ]
         ],
         'members' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_workspace.members',
+            'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.members',
             'config' => [
                 'type' => 'group',
                 'internal_type' => 'db',
@@ -56,7 +56,7 @@ return [
             ]
         ],
         'db_mountpoints' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:db_mountpoints',
+            'label' => 'LLL:EXT:core/Resources/Private/Language/locallang_tca.xlf:db_mountpoints',
             'config' => [
                 'type' => 'group',
                 'internal_type' => 'db',
@@ -67,83 +67,98 @@ return [
             ]
         ],
         'file_mountpoints' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:file_mountpoints',
+            'label' => 'LLL:EXT:core/Resources/Private/Language/locallang_tca.xlf:file_mountpoints',
             'config' => [
                 'type' => 'select',
                 'renderType' => 'selectCheckBox',
                 'foreign_table' => 'sys_filemounts',
-                'foreign_table_where' => ' AND sys_filemounts.pid=0 ORDER BY sys_filemounts.title',
+                'foreign_table_where' => ' ORDER BY sys_filemounts.title',
                 'size' => 3,
                 'maxitems' => 25,
                 'autoSizeMax' => 10,
             ]
         ],
         'publish_time' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_workspace.publish_time',
+            'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.publish_time',
             'config' => [
                 'type' => 'input',
                 'renderType' => 'inputDateTime',
-                'eval' => 'datetime',
+                'eval' => 'datetime,int',
                 'default' => 0,
             ]
         ],
         'unpublish_time' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_workspace.unpublish_time',
+            'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.unpublish_time',
             'config' => [
                 'type' => 'input',
                 'renderType' => 'inputDateTime',
-                'eval' => 'datetime',
+                'eval' => 'datetime,int',
                 'default' => 0,
                 'range' => [
-                    'upper' => mktime(0, 0, 0, 12, 31, 2020)
+                    'upper' => mktime(0, 0, 0, 1, 1, 2038)
                 ]
             ],
         ],
         'freeze' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_workspace.freeze',
+            'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.freeze',
             'config' => [
                 'type' => 'check',
-                'default' => 0
+                'renderType' => 'checkboxToggle',
+                'default' => 0,
+                'items' => [
+                    [
+                        0 => '',
+                        1 => '',
+                    ]
+                ],
             ]
         ],
         'live_edit' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_workspace.live_edit',
+            'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.live_edit',
             'config' => [
                 'type' => 'check',
-                'default' => 0
+                'renderType' => 'checkboxToggle',
+                'default' => 0,
+                'items' => [
+                    [
+                        0 => '',
+                        1 => '',
+                    ]
+                ],
             ]
         ],
         'swap_modes' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_workspace.swap_modes',
+            'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.swap_modes',
             'config' => [
                 'type' => 'select',
                 'renderType' => 'selectSingle',
+                'default' => 2,
                 'items' => [
-                    ['', 0],
-                    ['Swap-Into-Workspace on Auto-publish', 1],
-                    ['Disable Swap-Into-Workspace', 2]
+                    ['LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.swap_modes.0', 0],
+                    ['LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.swap_modes.1', 1],
+                    ['LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.swap_modes.2', 2],
                 ]
             ]
         ],
         'publish_access' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_workspace.publish_access',
+            'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.publish_access',
             'config' => [
                 'type' => 'check',
                 'items' => [
-                    ['Publish only content in publish stage', 0],
-                    ['Only workspace owner can publish', 0]
+                    ['LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.publish_access.1', 0],
+                    ['LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.publish_access.2', 0]
                 ]
             ]
         ],
         'stagechg_notification' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_workspace.stagechg_notification',
+            'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.stagechg_notification',
             'config' => [
                 'type' => 'select',
                 'renderType' => 'selectSingle',
                 'items' => [
-                    ['', 0],
-                    ['Notify users on next stage only', 1],
-                    ['Notify all users on any change', 10]
+                    ['LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.stagechg_notification.0', 0],
+                    ['LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.stagechg_notification.1', 1],
+                    ['LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.stagechg_notification.10', 10]
                 ]
             ]
         ],
@@ -162,7 +177,6 @@ return [
         ],
         'edit_notification_defaults' => [
             'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace_stage.notification_defaults',
-            'displayCond' => 'FIELD:edit_allow_notificaton_settings:BIT:1',
             'config' => [
                 'type' => 'group',
                 'internal_type' => 'db',
@@ -182,7 +196,7 @@ return [
                     ['LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.settingsDialog.changeablePreselection', ''],
                 ],
                 'default' => 3,
-                'cols' => 2,
+                'cols' => 1,
             ]
         ],
         'edit_notification_preselection' => [
@@ -195,12 +209,11 @@ return [
                     ['LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.preselection.editors', ''],
                 ],
                 'default' => 2,
-                'cols' => 3,
+                'cols' => 1,
             ]
         ],
         'publish_notification_defaults' => [
             'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace_stage.notification_defaults',
-            'displayCond' => 'FIELD:publish_allow_notificaton_settings:BIT:1',
             'config' => [
                 'type' => 'group',
                 'internal_type' => 'db',
@@ -220,7 +233,7 @@ return [
                     ['LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.settingsDialog.changeablePreselection', ''],
                 ],
                 'default' => 3,
-                'cols' => 2,
+                'cols' => 1,
             ]
         ],
         'publish_notification_preselection' => [
@@ -233,12 +246,11 @@ return [
                     ['LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.preselection.editors', ''],
                 ],
                 'default' => 1,
-                'cols' => 3,
+                'cols' => 1,
             ]
         ],
         'execute_notification_defaults' => [
             'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace_stage.notification_defaults',
-            'displayCond' => 'FIELD:execute_allow_notificaton_settings:BIT:1',
             'config' => [
                 'type' => 'group',
                 'internal_type' => 'db',
@@ -258,7 +270,7 @@ return [
                     ['LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.settingsDialog.changeablePreselection', ''],
                 ],
                 'default' => 3,
-                'cols' => 2,
+                'cols' => 1,
             ]
         ],
         'execute_notification_preselection' => [
@@ -271,40 +283,48 @@ return [
                     ['LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.preselection.editors', ''],
                 ],
                 'default' => 3,
-                'cols' => 3,
+                'cols' => 1,
             ]
         ]
     ],
     'palettes' => [
+        'main' => [
+            'showitem' => 'title,freeze'
+        ],
+        'memberlist' => [
+            'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:tabs.users',
+            'showitem' => 'adminusers,members'
+        ],
         'stage.edit' => [
+            'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.palette.stage.edit',
             'showitem' => 'edit_allow_notificaton_settings, edit_notification_preselection,',
         ],
         'stage.publish' => [
+            'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.palette.stage.publish',
             'showitem' => 'publish_allow_notificaton_settings, publish_notification_preselection,',
         ],
         'stage.execute' => [
+            'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_workspace.palette.stage.execute',
             'showitem' => 'execute_allow_notificaton_settings, execute_notification_preselection,',
         ]
     ],
     'types' => [
         '0' => ['showitem' => '
             --div--;LLL:EXT:core/Resources/Private/Language/Form/locallang_tabs.xlf:general,
-                title,
-            --div--;LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_filemounts.tabs.users,
-                adminusers,members,
-            --div--;LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:tabs.notification_settings,
+                --palette--;;main,
                 stagechg_notification,
-                --palette--;LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xml:sys_workspace.palette.stage.edit;stage.edit, edit_notification_defaults,
-                --palette--;LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xml:sys_workspace.palette.stage.publish;stage.publish, publish_notification_defaults,
-                --palette--;LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xml:sys_workspace.palette.stage.execute;stage.execute, execute_notification_defaults,
-            --div--;LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_filemounts.tabs.mountpoints,
-                db_mountpoints,file_mountpoints,
-            --div--;LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_filemounts.tabs.publishing,
-                publish_time,
-            --div--;LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:sys_filemounts.tabs.staging,
+                --palette--;;memberlist,
+            --div--;LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:tabs.internal_stages,
+            --palette--;LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:tabs.notification_settings,
+                --palette--;;stage.edit, edit_notification_defaults,
+                --palette--;;stage.publish, publish_notification_defaults,
+                --palette--;;stage.execute, execute_notification_defaults,
+            --div--;LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:tabs.custom_stages,
                 custom_stages,
-            --div--;LLL:EXT:core/Resources/Private/Language/Form/locallang_tabs.xlf:access,
-                freeze,live_edit,swap_modes,publish_access,
+            --div--;LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:tabs.mountpoints,
+                db_mountpoints,file_mountpoints,
+            --div--;LLL:EXT:workspaces/Resources/Private/Language/locallang_db.xlf:tabs.publish_access,
+                live_edit,swap_modes,publish_access,publish_time,
             --div--;LLL:EXT:core/Resources/Private/Language/Form/locallang_tabs.xlf:notes,
                 description,
             --div--;LLL:EXT:core/Resources/Private/Language/Form/locallang_tabs.xlf:extended,

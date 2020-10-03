@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Workspaces\Controller;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use TYPO3\CMS\Core\Http\JsonResponse;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Workspaces\Controller\Remote\ActionHandler;
 use TYPO3\CMS\Workspaces\Controller\Remote\MassActionHandler;
@@ -23,6 +24,7 @@ use TYPO3\CMS\Workspaces\Controller\Remote\RemoteServer;
 
 /**
  * Implements the AJAX functionality for the various asynchronous calls
+ * @internal This is a specific Backend Controller implementation and is not considered part of the Public TYPO3 API.
  */
 class AjaxDispatcher
 {
@@ -37,12 +39,11 @@ class AjaxDispatcher
 
     /**
      * @param ServerRequestInterface $request
-     * @param ResponseInterface $response
      * @return ResponseInterface
      */
-    public function dispatch(ServerRequestInterface $request, ResponseInterface $response)
+    public function dispatch(ServerRequestInterface $request): ResponseInterface
     {
-        $callStack = \GuzzleHttp\json_decode($request->getBody()->getContents());
+        $callStack = json_decode($request->getBody()->getContents());
         if (!is_array($callStack)) {
             $callStack = [$callStack];
         }
@@ -54,8 +55,7 @@ class AjaxDispatcher
             $instance = GeneralUtility::makeInstance($className);
             $results[] = $this->buildResultFromResponse(call_user_func_array([$instance, $method], $parameters), $call);
         }
-        $response->getBody()->write(json_encode($results));
-        return $response;
+        return (new JsonResponse())->setPayload($results);
     }
 
     /**
@@ -68,7 +68,6 @@ class AjaxDispatcher
     {
         $tmp = new \stdClass();
         $tmp->action = $call->action;
-        $tmp->debug = '';
         $tmp->method = $call->method;
         $tmp->result = $responseFromMethod;
         $tmp->tid = $call->tid;

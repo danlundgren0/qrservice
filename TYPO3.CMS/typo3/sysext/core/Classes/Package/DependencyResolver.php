@@ -14,13 +14,14 @@ namespace TYPO3\CMS\Core\Package;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Core\Core\Bootstrap;
 use TYPO3\CMS\Core\Service\DependencyOrderingService;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * This class takes care about dependencies between packages.
  * It provides functionality to resolve dependencies and to determine
  * the crucial loading order of the packages.
+ * @deprecated since TYPO3 v9.2, will be removed in TYPO3 v10.0
  */
 class DependencyResolver
 {
@@ -44,6 +45,7 @@ class DependencyResolver
      */
     public function sortPackageStatesConfigurationByDependency(array $packageStatesConfiguration)
     {
+        trigger_error(self::class . ' will be removed in TYPO3 v10.0.', E_USER_DEPRECATED);
         return $this->dependencyOrderingService->calculateOrder($this->buildDependencyGraph($packageStatesConfiguration));
     }
 
@@ -73,7 +75,8 @@ class DependencyResolver
                         throw new \UnexpectedValueException(
                             'The package "' . $packageKey . '" depends on "'
                             . $dependentPackageKey . '" which is not present in the system.',
-                            1382276561);
+                            1382276561
+                        );
                     }
                     $dependencies[$packageKey]['after'][] = $dependentPackageKey;
                 }
@@ -119,7 +122,8 @@ class DependencyResolver
             // The order of the array_merge is crucial here,
             // we want the framework first
             $packageStateConfiguration[$packageKey]['dependencies'] = array_merge(
-                $rootPackageKeys, $packageKeysWithoutFramework
+                $rootPackageKeys,
+                $packageKeysWithoutFramework
             );
         }
         return $packageStateConfiguration;
@@ -147,13 +151,11 @@ class DependencyResolver
     /**
      * @param array $packageStateConfiguration
      * @return array
-     * @throws \TYPO3\CMS\Core\Exception
      */
     protected function findFrameworkPackages(array $packageStateConfiguration)
     {
         $frameworkPackageKeys = [];
-        /** @var PackageManager $packageManager */
-        $packageManager = Bootstrap::getInstance()->getEarlyInstance(\TYPO3\CMS\Core\Package\PackageManager::class);
+        $packageManager = GeneralUtility::makeInstance(PackageManager::class);
         foreach ($packageStateConfiguration as $packageKey => $packageConfiguration) {
             /** @var Package $package */
             $package = $packageManager->getPackage($packageKey);

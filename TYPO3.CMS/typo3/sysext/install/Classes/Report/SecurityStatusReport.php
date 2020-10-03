@@ -14,13 +14,17 @@ namespace TYPO3\CMS\Install\Report;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Crypto\PasswordHashing\InvalidPasswordHashException;
+use TYPO3\CMS\Core\Crypto\PasswordHashing\PasswordHashFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Install\Service\EnableFileService;
+use TYPO3\CMS\Install\SystemEnvironment\ServerResponse\ServerResponseCheck;
 use TYPO3\CMS\Reports\Status;
 
 /**
  * Provides an status report of the security of the install tool
+ * @internal This class is only meant to be used within EXT:install and is not part of the TYPO3 Core API.
  */
 class SecurityStatusReport implements \TYPO3\CMS\Reports\StatusProviderInterface
 {
@@ -32,11 +36,11 @@ class SecurityStatusReport implements \TYPO3\CMS\Reports\StatusProviderInterface
     public function getStatus()
     {
         $this->executeAdminCommand();
-        $statuses = [
+        return [
             'installToolPassword' => $this->getInstallToolPasswordStatus(),
-            'installToolProtection' => $this->getInstallToolProtectionStatus()
+            'installToolProtection' => $this->getInstallToolProtectionStatus(),
+            'serverResponseStatus' => GeneralUtility::makeInstance(ServerResponseCheck::class)->asStatus(),
         ];
-        return $statuses;
     }
 
     /**
@@ -46,26 +50,47 @@ class SecurityStatusReport implements \TYPO3\CMS\Reports\StatusProviderInterface
      */
     protected function getInstallToolPasswordStatus()
     {
+        // @todo @deprecated: This should be removed in TYPO3 v10.0 when install tool allows proper hashes only
         $value = $GLOBALS['LANG']->getLL('status_ok');
         $message = '';
         $severity = Status::OK;
-        $validPassword = true;
+        $isDefaultPassword = false;
         $installToolPassword = $GLOBALS['TYPO3_CONF_VARS']['BE']['installToolPassword'];
-        $saltFactory = \TYPO3\CMS\Saltedpasswords\Salt\SaltFactory::getSaltingInstance($installToolPassword);
-        if (is_object($saltFactory)) {
-            $validPassword = !$saltFactory->checkPassword('joh316', $installToolPassword);
-        } elseif ($installToolPassword === md5('joh316')) {
-            $validPassword = false;
+        $hashInstance = null;
+        $hashFactory = GeneralUtility::makeInstance(PasswordHashFactory::class);
+        try {
+            $hashInstance = $hashFactory->get($installToolPassword, 'BE');
+        } catch (InvalidPasswordHashException $e) {
+            // $hashInstance stays null
+            $value = $GLOBALS['LANG']->getLL('status_wrongValue');
+            $message = $e->getMessage();
+            $severity = Status::ERROR;
         }
-        if (!$validPassword) {
+        if ($installToolPassword !== '' && $hashInstance !== null) {
+            $isDefaultPassword = $hashInstance->checkPassword('joh316', $installToolPassword);
+        } elseif ($installToolPassword === 'bacb98acf97e0b6112b1d1b650b84971') {
+            // using MD5 of legacy default password 'joh316'
+            $isDefaultPassword = true;
+        }
+        if ($isDefaultPassword) {
             $value = $GLOBALS['LANG']->getLL('status_insecure');
             $severity = Status::ERROR;
-            $changeInstallToolPasswordUrl = BackendUtility::getModuleUrl('system_extinstall');
-            $message = sprintf($GLOBALS['LANG']->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:warning.installtool_default_password'),
-                '<a href="' . htmlspecialchars($changeInstallToolPasswordUrl) . '">', '</a>');
+            /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+            $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
+            $changeInstallToolPasswordUrl = (string)$uriBuilder->buildUriFromRoute('tools_toolssettings');
+            $message = sprintf(
+                $GLOBALS['LANG']->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:warning.installtool_default_password'),
+                '<a href="' . htmlspecialchars($changeInstallToolPasswordUrl) . '">',
+                '</a>'
+            );
         }
-        return GeneralUtility::makeInstance(Status::class,
-            $GLOBALS['LANG']->sL('LLL:EXT:install/Resources/Private/Language/Report/locallang.xlf:status_installToolPassword'), $value, $message, $severity);
+        return GeneralUtility::makeInstance(
+            Status::class,
+            $GLOBALS['LANG']->sL('LLL:EXT:install/Resources/Private/Language/Report/locallang.xlf:status_installToolPassword'),
+            $value,
+            $message,
+            $severity
+        );
     }
 
     /**
@@ -75,7 +100,7 @@ class SecurityStatusReport implements \TYPO3\CMS\Reports\StatusProviderInterface
      */
     protected function getInstallToolProtectionStatus()
     {
-        $enableInstallToolFile = PATH_site . EnableFileService::INSTALL_TOOL_ENABLE_FILE_PATH;
+        $enableInstallToolFile = Environment::getPublicPath() . '/' . EnableFileService::INSTALL_TOOL_ENABLE_FILE_PATH;
         $value = $GLOBALS['LANG']->getLL('status_disabled');
         $message = '';
         $severity = Status::OK;
@@ -84,10 +109,12 @@ class SecurityStatusReport implements \TYPO3\CMS\Reports\StatusProviderInterface
                 $severity = Status::WARNING;
                 $disableInstallToolUrl = GeneralUtility::getIndpEnv('TYPO3_REQUEST_URL') . '&adminCmd=remove_ENABLE_INSTALL_TOOL';
                 $value = $GLOBALS['LANG']->sL('LLL:EXT:install/Resources/Private/Language/Report/locallang.xlf:status_enabledPermanently');
-                $message = sprintf($GLOBALS['LANG']->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:warning.install_enabled'),
-                    '<code style="white-space: nowrap;">' . $enableInstallToolFile . '</code>');
+                $message = sprintf(
+                    $GLOBALS['LANG']->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:warning.install_enabled'),
+                    '<code style="white-space: nowrap;">' . $enableInstallToolFile . '</code>'
+                );
                 $message .= ' <a href="' . htmlspecialchars($disableInstallToolUrl) . '">' .
-                    $GLOBALS['LANG']->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:warning.install_enabled_cmd') . '</a>';
+                    $GLOBALS['LANG']->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:warning.install_enabled_cmd') . '</a>';
             } else {
                 if (EnableFileService::installToolEnableFileLifetimeExpired()) {
                     EnableFileService::removeInstallToolEnableFile();
@@ -95,15 +122,23 @@ class SecurityStatusReport implements \TYPO3\CMS\Reports\StatusProviderInterface
                     $severity = Status::NOTICE;
                     $disableInstallToolUrl = GeneralUtility::getIndpEnv('TYPO3_REQUEST_URL') . '&adminCmd=remove_ENABLE_INSTALL_TOOL';
                     $value = $GLOBALS['LANG']->sL('LLL:EXT:install/Resources/Private/Language/Report/locallang.xlf:status_enabledTemporarily');
-                    $message = sprintf($GLOBALS['LANG']->sL('LLL:EXT:install/Resources/Private/Language/Report/locallang.xlf:status_installEnabledTemporarily'),
-                        '<code style="white-space: nowrap;">' . $enableInstallToolFile . '</code>', floor((@filemtime($enableInstallToolFile) + EnableFileService::INSTALL_TOOL_ENABLE_FILE_LIFETIME - time()) / 60));
+                    $message = sprintf(
+                        $GLOBALS['LANG']->sL('LLL:EXT:install/Resources/Private/Language/Report/locallang.xlf:status_installEnabledTemporarily'),
+                        '<code style="white-space: nowrap;">' . $enableInstallToolFile . '</code>',
+                        floor((@filemtime($enableInstallToolFile) + EnableFileService::INSTALL_TOOL_ENABLE_FILE_LIFETIME - time()) / 60)
+                    );
                     $message .= ' <a href="' . htmlspecialchars($disableInstallToolUrl) . '">' .
-                        $GLOBALS['LANG']->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:warning.install_enabled_cmd') . '</a>';
+                        $GLOBALS['LANG']->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:warning.install_enabled_cmd') . '</a>';
                 }
             }
         }
-        return GeneralUtility::makeInstance(Status::class,
-            $GLOBALS['LANG']->sL('LLL:EXT:install/Resources/Private/Language/Report/locallang.xlf:status_installTool'), $value, $message, $severity);
+        return GeneralUtility::makeInstance(
+            Status::class,
+            $GLOBALS['LANG']->sL('LLL:EXT:install/Resources/Private/Language/Report/locallang.xlf:status_installTool'),
+            $value,
+            $message,
+            $severity
+        );
     }
 
     /**

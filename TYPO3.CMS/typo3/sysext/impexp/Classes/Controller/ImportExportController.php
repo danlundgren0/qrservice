@@ -16,50 +16,121 @@ namespace TYPO3\CMS\Impexp\Controller;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use TYPO3\CMS\Backend\Module\BaseScriptClass;
 use TYPO3\CMS\Backend\Template\DocumentTemplate;
 use TYPO3\CMS\Backend\Template\ModuleTemplate;
 use TYPO3\CMS\Backend\Tree\View\PageTreeView;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Compatibility\PublicMethodDeprecationTrait;
+use TYPO3\CMS\Core\Compatibility\PublicPropertyDeprecationTrait;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\QueryHelper;
 use TYPO3\CMS\Core\Database\Query\Restriction\BackendWorkspaceRestriction;
 use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
+use TYPO3\CMS\Core\Http\HtmlResponse;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Messaging\FlashMessage;
 use TYPO3\CMS\Core\Messaging\FlashMessageService;
 use TYPO3\CMS\Core\Resource\DuplicationBehavior;
 use TYPO3\CMS\Core\Resource\Exception;
 use TYPO3\CMS\Core\Resource\Filter\FileExtensionFilter;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
+use TYPO3\CMS\Core\Type\Bitmask\Permission;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\File\ExtendedFileUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
+use TYPO3\CMS\Core\Utility\PathUtility;
 use TYPO3\CMS\Fluid\View\StandaloneView;
 use TYPO3\CMS\Impexp\Domain\Repository\PresetRepository;
 use TYPO3\CMS\Impexp\Export;
 use TYPO3\CMS\Impexp\Import;
 use TYPO3\CMS\Impexp\View\ExportPageTreeView;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Main script class for the Import / Export facility
+ * @internal this is a TYPO3 Backend controller implementation and not part of TYPO3's Core API.
  */
-class ImportExportController extends BaseScriptClass
+class ImportExportController
 {
+    use PublicPropertyDeprecationTrait;
+    use PublicMethodDeprecationTrait;
+
+    /**
+     * @var array
+     */
+    private $deprecatedPublicProperties = [
+        'pageinfo' => 'Using ImportExportController::$pageinfo is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'id' => 'Using ImportExportController::$id is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'perms_clause' => 'Using ImportExportController::$perms_clause is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'extObj' => 'Using ImportExportController::$extObj is deprecated, the property will be removed in TYPO3 v10.0.',
+        'doc' => 'Using ImportExportController::$doc is deprecated, the property will be removed in TYPO3 v10.0.',
+        'content' => 'Using ImportExportController::$content is deprecated, the property will be removed in TYPO3 v10.0.',
+        'extClassConf' => 'Using ImportExportController::$extClassConf is deprecated, the property will be removed in TYPO3 v10.0.',
+        'modMenu_setDefaultList' => 'Using ImportExportController::$modMenu_setDefaultList is deprecated, the property will be removed in TYPO3 v10.0.',
+        'modMenu_dontValidateList' => 'Using ImportExportController::$modMenu_dontValidateList is deprecated, the property will be removed in TYPO3 v10.0.',
+        'modMenu_type' => 'Using ImportExportController::$modMenu_type is deprecated, the property will be removed in TYPO3 v10.0.',
+        'modTSconfig' => 'Using ImportExportController::$modTSconfig is deprecated, the property will be removed in TYPO3 v10.0.',
+        'MOD_SETTINGS' => 'Using ImportExportController::$MOD_SETTINGS is deprecated, the property will be removed in TYPO3 v10.0.',
+        'MOD_MENU' => 'Using ImportExportController::MOD_MENU is deprecated, the property will be removed in TYPO3 v10.0.',
+        'CMD' => 'Using ImportExportController::$CMD is deprecated, the property will be removed in TYPO3 v10.0.',
+        'MCONF' => 'Using ImportExportController::$MCONF is deprecated, the property will be removed in TYPO3 v10.0.',
+    ];
+
+    /**
+     * @var array
+     */
+    private $deprecatedPublicMethods = [
+        'init' => 'Using ImportExportController::init() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'main' => 'Using ImportExportController::main() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'exportData' => 'Using ImportExportController::exportData() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'addRecordsForPid' => 'Using ImportExportController::addRecordsForPid() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'exec_listQueryPid' => 'Using ImportExportController::exec_listQueryPid() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'makeConfigurationForm' => 'Using ImportExportController::makeConfigurationForm() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'makeAdvancedOptionsForm' => 'Using ImportExportController::makeAdvancedOptionsForm() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'makeSaveForm' => 'Using ImportExportController::makeSaveForm() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'importData' => 'Using ImportExportController::importData() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'checkUpload' => 'Using ImportExportController::checkUpload() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'getTableSelectOptions' => 'Using ImportExportController::getTableSelectOptions() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'filterPageIds' => 'Using ImportExportController::filterPageIds() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'getExtObjContent' => 'Using ImportExportController::getExtObjContent() is deprecated, the method will be removed in TYPO3 v10.0.',
+        'extObjContent' => 'Using ImportExportController::extObjContent() is deprecated, the method will be removed in TYPO3 v10.0.',
+        'extObjHeader' => 'Using ImportExportController::extObjHeader() is deprecated, the method will be removed in TYPO3 v10.0.',
+        'checkSubExtObj' => 'Using ImportExportController::checkSubExtObj() is deprecated, the method will be removed in TYPO3 v10.0.',
+        'checkExtObj' => 'Using ImportExportController::checkExtObj() is deprecated, the method will be removed in TYPO3 v10.0.',
+        'getExternalItemConfig' => 'Using ImportExportController::getExternalItemConfig() is deprecated, the method will be removed in TYPO3 v10.0.',
+        'handleExternalFunctionValue' => 'Using ImportExportController::handleExternalFunctionValue() is deprecated, the method will be removed in TYPO3 v10.0.',
+        'mergeExternalItems' => 'Using ImportExportController::mergeExternalItems() is deprecated, the method will be removed in TYPO3 v10.0.',
+        'menuConfig' => 'Using ImportExportController::menuConfig() is deprecated, the method will be removed in TYPO3 v10.0.',
+    ];
+
     /**
      * @var array|\TYPO3\CMS\Core\Resource\File[]
      */
     protected $uploadedFiles = [];
 
     /**
+     * The integer value of the GET/POST var, 'id'. Used for submodules to the 'Web' module (page id)
+     *
+     * @var int
+     */
+    protected $id;
+
+    /**
      * Array containing the current page.
      *
      * @var array
      */
-    public $pageinfo;
+    protected $pageinfo;
+
+    /**
+     * A WHERE clause for selection records from the pages table based on read-permissions of the current backend user.
+     *
+     * @var string
+     */
+    protected $perms_clause;
 
     /**
      * @var Export
@@ -79,7 +150,7 @@ class ImportExportController extends BaseScriptClass
     /**
      * @var LanguageService
      */
-    protected $lang = null;
+    protected $lang;
 
     /**
      * @var string
@@ -122,7 +193,7 @@ class ImportExportController extends BaseScriptClass
     /**
      * @var StandaloneView
      */
-    protected $standaloneView = null;
+    protected $standaloneView;
 
     /**
      * @var bool
@@ -137,6 +208,115 @@ class ImportExportController extends BaseScriptClass
     protected $returnUrl;
 
     /**
+     * Loaded with the global array $MCONF which holds some module configuration from the conf.php file of backend modules.
+     *
+     * @see init()
+     * @var array
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected $MCONF = [];
+
+    /**
+     * The value of GET/POST var, 'CMD'
+     *
+     * @see init()
+     * @var mixed
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected $CMD;
+
+    /**
+     * The module menu items array. Each key represents a key for which values can range between the items in the array of that key.
+     *
+     * @see init()
+     * @var array
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected $MOD_MENU = [
+        'function' => []
+    ];
+
+    /**
+     * Current settings for the keys of the MOD_MENU array
+     *
+     * @see $MOD_MENU
+     * @var array
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected $MOD_SETTINGS = [];
+
+    /**
+     * Module TSconfig based on PAGE TSconfig / USER TSconfig
+     *
+     * @see menuConfig()
+     * @var array
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Module has no TSconfig options
+     */
+    protected $modTSconfig;
+
+    /**
+     * If type is 'ses' then the data is stored as session-lasting data. This means that it'll be wiped out the next time the user logs in.
+     * Can be set from extension classes of this class before the init() function is called.
+     *
+     * @see menuConfig(), \TYPO3\CMS\Backend\Utility\BackendUtility::getModuleData()
+     * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected $modMenu_type = '';
+
+    /**
+     * dontValidateList can be used to list variables that should not be checked if their value is found in the MOD_MENU array. Used for dynamically generated menus.
+     * Can be set from extension classes of this class before the init() function is called.
+     *
+     * @see menuConfig(), \TYPO3\CMS\Backend\Utility\BackendUtility::getModuleData()
+     * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected $modMenu_dontValidateList = '';
+
+    /**
+     * List of default values from $MOD_MENU to set in the output array (only if the values from MOD_MENU are not arrays)
+     * Can be set from extension classes of this class before the init() function is called.
+     *
+     * @see menuConfig(), \TYPO3\CMS\Backend\Utility\BackendUtility::getModuleData()
+     * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected $modMenu_setDefaultList = '';
+
+    /**
+     * Contains module configuration parts from TBE_MODULES_EXT if found
+     *
+     * @see handleExternalFunctionValue()
+     * @var array
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected $extClassConf;
+
+    /**
+     * Generally used for accumulating the output content of backend modules
+     *
+     * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected $content = '';
+
+    /**
+     * @var \TYPO3\CMS\Backend\Template\DocumentTemplate
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected $doc;
+
+    /**
+     * May contain an instance of a 'Function menu module' which connects to this backend module.
+     *
+     * @see checkExtObj()
+     * @var \object
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected $extObj;
+
+    /**
      * Constructor
      */
     public function __construct()
@@ -147,7 +327,6 @@ class ImportExportController extends BaseScriptClass
 
         $templatePath = ExtensionManagementUtility::extPath('impexp') . 'Resources/Private/';
 
-        /* @var $view StandaloneView */
         $this->standaloneView = GeneralUtility::makeInstance(StandaloneView::class);
         $this->standaloneView->setTemplateRootPaths([$templatePath . 'Templates/ImportExport/']);
         $this->standaloneView->setLayoutRootPaths([$templatePath . 'Layouts/']);
@@ -158,10 +337,15 @@ class ImportExportController extends BaseScriptClass
     /**
      * Initializes the module and defining necessary variables for this module to run.
      */
-    public function init()
+    protected function init()
     {
+        // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
         $this->MCONF['name'] = $this->moduleName;
-        parent::init();
+        // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+        $this->CMD = GeneralUtility::_GP('CMD');
+
+        $this->id = (int)GeneralUtility::_GP('id');
+        $this->perms_clause = $this->getBackendUser()->getPagePermsClause(Permission::PAGE_SHOW);
         $this->returnUrl = GeneralUtility::sanitizeLocalUrl(GeneralUtility::_GP('returnUrl'));
         $this->lang = $this->getLanguageService();
     }
@@ -173,14 +357,15 @@ class ImportExportController extends BaseScriptClass
      * @throws \InvalidArgumentException
      * @throws \RuntimeException
      */
-    public function main()
+    protected function main()
     {
         $this->lang->includeLLFile('EXT:impexp/Resources/Private/Language/locallang.xlf');
 
-        // Start document template object:
-        // We keep this here, in case somebody relies on the old doc being here
+        // Start document template object
+        // @deprecated  since TYPO3 v9, will be removed in TYPO3 v10.0. Instantiation will be removed.
         $this->doc = GeneralUtility::makeInstance(DocumentTemplate::class);
         $this->doc->bodyTagId = 'imp-exp-mod';
+
         $this->pageinfo = BackendUtility::readPageAccess($this->id, $this->perms_clause);
         if (is_array($this->pageinfo)) {
             $this->moduleTemplate->getDocHeaderComponent()->setMetaInformation($this->pageinfo);
@@ -203,8 +388,8 @@ class ImportExportController extends BaseScriptClass
             ];
             $flashMessage = GeneralUtility::makeInstance(
                 FlashMessage::class,
-                $this->getLanguageService()->getLL('importdata_upload_nodata'),
-                $this->getLanguageService()->getLL('importdata_upload_error'),
+                $this->lang->getLL('importdata_upload_nodata'),
+                $this->lang->getLL('importdata_upload_error'),
                 FlashMessage::ERROR
             );
             $flashMessageService = GeneralUtility::makeInstance(FlashMessageService::class);
@@ -215,7 +400,8 @@ class ImportExportController extends BaseScriptClass
             // flag doesn't exist initially; state is on by default
             $inData['excludeDisabled'] = 1;
         }
-        $this->standaloneView->assign('moduleUrl', BackendUtility::getModuleUrl('xMOD_tximpexp'));
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
+        $this->standaloneView->assign('moduleUrl', (string)$uriBuilder->buildUriFromRoute('xMOD_tximpexp'));
         $this->standaloneView->assign('id', $this->id);
         $this->standaloneView->assign('inData', $inData);
 
@@ -228,8 +414,8 @@ class ImportExportController extends BaseScriptClass
                 break;
             case 'import':
                 $backendUser = $this->getBackendUser();
-                $isEnabledForNonAdmin = $backendUser->getTSConfig('options.impexp.enableImportForNonAdminUser');
-                if (!$backendUser->isAdmin() && empty($isEnabledForNonAdmin['value'])) {
+                $isEnabledForNonAdmin = (bool)($backendUser->getTSConfig()['options.']['impexp.']['enableImportForNonAdminUser'] ?? false);
+                if (!$backendUser->isAdmin() && !$isEnabledForNonAdmin) {
                     throw new \RuntimeException(
                         'Import module is disabled for non admin users and '
                         . 'userTsConfig options.impexp.enableImportForNonAdminUser is not enabled.',
@@ -266,7 +452,7 @@ class ImportExportController extends BaseScriptClass
      * Incoming array has syntax:
      * GETvar 'id' = import page id (must be readable)
      *
-     * file = 	(pointing to filename relative to PATH_site)
+     * file = pointing to filename relative to public web path
      *
      * [all relation fields are clear, but not files]
      * - page-tree is written first
@@ -290,24 +476,21 @@ class ImportExportController extends BaseScriptClass
      * external_ref[tables][]=table/_ALL
      *
      * @param ServerRequestInterface $request the current request
-     * @param ResponseInterface $response
      * @return ResponseInterface the response with the content
      */
-    public function mainAction(ServerRequestInterface $request, ResponseInterface $response)
+    public function mainAction(ServerRequestInterface $request): ResponseInterface
     {
+        // @deprecated  since TYPO3 v9, will be removed in TYPO3 v10.0. Can be removed along with $this->doc.
         $GLOBALS['SOBE'] = $this;
+
         $this->init();
         $this->main();
         $this->moduleTemplate->setContent($this->standaloneView->render());
-        $response->getBody()->write($this->moduleTemplate->renderContent());
-
-        return $response;
+        return new HtmlResponse($this->moduleTemplate->renderContent());
     }
 
     /**
      * Create the panel of buttons for submitting the form or otherwise perform operations.
-     *
-     * @return array all available buttons as an associated array
      */
     protected function getButtons()
     {
@@ -323,14 +506,14 @@ class ImportExportController extends BaseScriptClass
         if ($this->returnUrl) {
             $backButton = $buttonBar->makeLinkButton()
                 ->setHref($this->returnUrl)
-                ->setTitle($this->lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.goBack'))
+                ->setTitle($this->lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.goBack'))
                 ->setIcon($this->moduleTemplate->getIconFactory()->getIcon('actions-view-go-back', Icon::SIZE_SMALL));
             $buttonBar->addButton($backButton);
         }
         // Input data grabbed:
         $inData = GeneralUtility::_GP('tx_impexp');
         if ((string)$inData['action'] === 'import') {
-            if ($this->id && is_array($this->pageinfo) || $this->getBackendUser()->user['admin'] && !$this->id) {
+            if ($this->id && is_array($this->pageinfo) || $this->getBackendUser()->isAdmin() && !$this->id) {
                 if (is_array($this->pageinfo) && $this->pageinfo['uid']) {
                     // View
                     $onClick = BackendUtility::viewOnClick(
@@ -339,9 +522,9 @@ class ImportExportController extends BaseScriptClass
                         BackendUtility::BEgetRootLine($this->pageinfo['uid'])
                     );
                     $viewButton = $buttonBar->makeLinkButton()
-                        ->setTitle($this->lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.showPage'))
+                        ->setTitle($this->lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.showPage'))
                         ->setHref('#')
-                        ->setIcon($this->iconFactory->getIcon('actions-document-view', Icon::SIZE_SMALL))
+                        ->setIcon($this->iconFactory->getIcon('actions-view-page', Icon::SIZE_SMALL))
                         ->setOnClick($onClick);
                     $buttonBar->addButton($viewButton);
                 }
@@ -355,20 +538,16 @@ class ImportExportController extends BaseScriptClass
 
     /**
      * Export part of module
-     * Setting content in $this->content
      *
      * @param array $inData Content of POST VAR tx_impexp[]..
      * @throws \InvalidArgumentException
      * @throws \RuntimeException
      * @throws \TYPO3\CMS\Core\Resource\Exception\ExistingTargetFileNameException
      */
-    public function exportData($inData)
+    protected function exportData($inData)
     {
         // BUILDING EXPORT DATA:
         // Processing of InData array values:
-        $inData['pagetree']['maxNumber'] = MathUtility::forceIntegerInRange($inData['pagetree']['maxNumber'], 1, 1000000, 100);
-        $inData['listCfg']['maxNumber'] = MathUtility::forceIntegerInRange($inData['listCfg']['maxNumber'], 1, 1000000, 100);
-        $inData['maxFileSize'] = MathUtility::forceIntegerInRange($inData['maxFileSize'], 1, 1000000, 1000);
         $inData['filename'] = trim(preg_replace('/[^[:alnum:]._-]*/', '', preg_replace('/\\.(t3d|xml)$/', '', $inData['filename'])));
         if (strlen($inData['filename'])) {
             $inData['filename'] .= $inData['filetype'] === 'xml' ? '.xml' : '.t3d';
@@ -382,7 +561,6 @@ class ImportExportController extends BaseScriptClass
         // Create export object and configure it:
         $this->export = GeneralUtility::makeInstance(Export::class);
         $this->export->init(0);
-        $this->export->maxFileSize = $inData['maxFileSize'] * 1024;
         $this->export->excludeMap = (array)$inData['exclude'];
         $this->export->softrefCfg = (array)$inData['softrefCfg'];
         $this->export->extensionDependencies = ($inData['extension_dep'] === '') ? [] : (array)$inData['extension_dep'];
@@ -428,7 +606,7 @@ class ImportExportController extends BaseScriptClass
             foreach ($inData['list'] as $ref) {
                 $rParts = explode(':', $ref);
                 if ($beUser->check('tables_select', $rParts[0])) {
-                    $statement = $this->exec_listQueryPid($rParts[0], $rParts[1], MathUtility::forceIntegerInRange($inData['listCfg']['maxNumber'], 1));
+                    $statement = $this->exec_listQueryPid($rParts[0], $rParts[1]);
                     while ($subTrow = $statement->fetch()) {
                         $this->export->export_addRecord($rParts[0], $subTrow);
                     }
@@ -448,7 +626,7 @@ class ImportExportController extends BaseScriptClass
                 $this->treeHTML = $pagetree->printTree($tree);
                 $idH = $pagetree->buffer_idH;
             } elseif ($inData['pagetree']['levels'] == -2) {
-                $this->addRecordsForPid($inData['pagetree']['id'], $inData['pagetree']['tables'], $inData['pagetree']['maxNumber']);
+                $this->addRecordsForPid($inData['pagetree']['id'], $inData['pagetree']['tables']);
             } else {
                 // Based on depth
                 // Drawing tree:
@@ -492,7 +670,7 @@ class ImportExportController extends BaseScriptClass
                 $flatList = $this->export->setPageTree($idH);
                 foreach ($flatList as $k => $value) {
                     $this->export->export_addRecord('pages', BackendUtility::getRecord('pages', $k));
-                    $this->addRecordsForPid($k, $inData['pagetree']['tables'], $inData['pagetree']['maxNumber']);
+                    $this->addRecordsForPid($k, $inData['pagetree']['tables']);
                 }
             }
         }
@@ -519,6 +697,7 @@ class ImportExportController extends BaseScriptClass
                 case 't3d':
                     $this->export->dontCompress = 1;
                     // intentional fall-through
+                    // no break
                 default:
                     $out = $this->export->compileMemoryToFileContent();
                     $fExt = ($this->export->doOutputCompress() ? '-z' : '') . '.t3d';
@@ -535,7 +714,7 @@ class ImportExportController extends BaseScriptClass
                 $mimeType = 'application/octet-stream';
                 header('Content-Type: ' . $mimeType);
                 header('Content-Length: ' . strlen($out));
-                header('Content-Disposition: attachment; filename=' . basename($dlFile));
+                header('Content-Disposition: attachment; filename=' . PathUtility::basename($dlFile));
                 echo $out;
                 die;
             }
@@ -545,17 +724,17 @@ class ImportExportController extends BaseScriptClass
                 $lang = $this->getLanguageService();
                 if ($saveFolder !== false && $saveFolder->checkActionPermission('write')) {
                     $temporaryFileName = GeneralUtility::tempnam('export');
-                    file_put_contents($temporaryFileName, $out);
+                    GeneralUtility::writeFile($temporaryFileName, $out);
                     $file = $saveFolder->addFile($temporaryFileName, $dlFile, 'replace');
                     if ($saveFilesOutsideExportFile) {
                         $filesFolderName = $dlFile . '.files';
                         $filesFolder = $saveFolder->createFolder($filesFolderName);
-                        $temporaryFolderForExport = ResourceFactory::getInstance()->retrieveFileOrFolderObject($this->export->getTemporaryFilesPathForExport());
-                        $temporaryFilesForExport = $temporaryFolderForExport->getFiles();
+                        $temporaryFilesForExport = GeneralUtility::getFilesInDir($this->export->getTemporaryFilesPathForExport(), '', true);
                         foreach ($temporaryFilesForExport as $temporaryFileForExport) {
-                            $filesFolder->getStorage()->moveFile($temporaryFileForExport, $filesFolder);
+                            $filesFolder->addFile($temporaryFileForExport);
+                            GeneralUtility::unlink_tempfile($temporaryFileForExport);
                         }
-                        $temporaryFolderForExport->delete();
+                        GeneralUtility::rmdir($this->export->getTemporaryFilesPathForExport());
                     }
 
                     /** @var FlashMessage $flashMessage */
@@ -574,9 +753,9 @@ class ImportExportController extends BaseScriptClass
                         FlashMessage::ERROR
                     );
                 }
-                /** @var $flashMessageService \TYPO3\CMS\Core\Messaging\FlashMessageService */
+                /** @var \TYPO3\CMS\Core\Messaging\FlashMessageService $flashMessageService */
                 $flashMessageService = GeneralUtility::makeInstance(FlashMessageService::class);
-                /** @var $defaultFlashMessageQueue \TYPO3\CMS\Core\Messaging\FlashMessageQueue */
+                /** @var \TYPO3\CMS\Core\Messaging\FlashMessageQueue $defaultFlashMessageQueue */
                 $defaultFlashMessageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $defaultFlashMessageQueue->enqueue($flashMessage);
             }
@@ -602,9 +781,9 @@ class ImportExportController extends BaseScriptClass
      *
      * @param int $k Page id for which to select records to add
      * @param array $tables Array of table names to select from
-     * @param int $maxNumber Max amount of records to select
+     * @param int $maxNumber @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
-    public function addRecordsForPid($k, $tables, $maxNumber)
+    protected function addRecordsForPid($k, $tables, $maxNumber = null)
     {
         if (!is_array($tables)) {
             return;
@@ -612,7 +791,13 @@ class ImportExportController extends BaseScriptClass
         foreach ($GLOBALS['TCA'] as $table => $value) {
             if ($table !== 'pages' && (in_array($table, $tables) || in_array('_ALL', $tables))) {
                 if ($this->getBackendUser()->check('tables_select', $table) && !$GLOBALS['TCA'][$table]['ctrl']['is_static']) {
-                    $statement = $this->exec_listQueryPid($table, $k, MathUtility::forceIntegerInRange($maxNumber, 1));
+                    if ($maxNumber !== null) {
+                        // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Remove this if in TYPO3 v10.0
+                        // and the 3rd method argument. trigger_error() is called by method exec_listQueryPid() below
+                        $statement = $this->exec_listQueryPid($table, $k, MathUtility::forceIntegerInRange($maxNumber, 1));
+                    } else {
+                        $statement = $this->exec_listQueryPid($table, $k);
+                    }
                     while ($subTrow = $statement->fetch()) {
                         $this->export->export_addRecord($table, $subTrow);
                     }
@@ -626,11 +811,20 @@ class ImportExportController extends BaseScriptClass
      *
      * @param string $table Table to select from
      * @param int $pid Page ID to select from
-     * @param int $limit Max number of records to select
+     * @param int $limit @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      * @return \Doctrine\DBAL\Driver\Statement Query statement
      */
-    public function exec_listQueryPid($table, $pid, $limit)
+    protected function exec_listQueryPid($table, $pid, $limit = null)
     {
+        // @deprecated In v10, remove this if and the method argument
+        if ($limit !== null) {
+            trigger_error(
+                'The third argument of addRecordsForPid() and exec_listQueryPid() has been'
+                . ' deprecated, do not limit exports anymore. The parameter will be removed in TYPO3 v10.0.',
+                E_USER_DEPRECATED
+            );
+        }
+
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
 
         $orderBy = $GLOBALS['TCA'][$table]['ctrl']['sortby'] ?: $GLOBALS['TCA'][$table]['ctrl']['default_sortby'];
@@ -650,8 +844,12 @@ class ImportExportController extends BaseScriptClass
                     'pid',
                     $queryBuilder->createNamedParameter($pid, \PDO::PARAM_INT)
                 )
-            )
-            ->setMaxResults($limit);
+            );
+
+        // @deprecated In v10, remove this if
+        if ($limit !== null) {
+            $queryBuilder->setMaxResults($limit);
+        }
 
         foreach (QueryHelper::parseOrderBy((string)$orderBy) as $orderPair) {
             list($fieldName, $order) = $orderPair;
@@ -660,8 +858,8 @@ class ImportExportController extends BaseScriptClass
 
         $statement = $queryBuilder->execute();
 
-        // Warning about hitting limit:
-        if ($statement->rowCount() == $limit) {
+        // @deprecated In v10, remove this if, and the two getLL locallang target keys
+        if ($limit !== null && $statement->rowCount() == $limit) {
             $limitWarning = sprintf($this->lang->getLL('makeconfig_anSqlQueryReturned'), $limit);
             /** @var FlashMessage $flashMessage */
             $flashMessage = GeneralUtility::makeInstance(
@@ -670,9 +868,9 @@ class ImportExportController extends BaseScriptClass
                 $limitWarning,
                 FlashMessage::WARNING
             );
-            /** @var $flashMessageService \TYPO3\CMS\Core\Messaging\FlashMessageService */
+            /** @var \TYPO3\CMS\Core\Messaging\FlashMessageService $flashMessageService */
             $flashMessageService = GeneralUtility::makeInstance(FlashMessageService::class);
-            /** @var $defaultFlashMessageQueue \TYPO3\CMS\Core\Messaging\FlashMessageQueue */
+            /** @var \TYPO3\CMS\Core\Messaging\FlashMessageQueue $defaultFlashMessageQueue */
             $defaultFlashMessageQueue = $flashMessageService->getMessageQueueByIdentifier();
             $defaultFlashMessageQueue->enqueue($flashMessage);
         }
@@ -685,7 +883,7 @@ class ImportExportController extends BaseScriptClass
      *
      * @param array $inData Form configuration data
      */
-    public function makeConfigurationForm($inData)
+    protected function makeConfigurationForm($inData)
     {
         $nameSuggestion = '';
         // Page tree export options:
@@ -695,12 +893,12 @@ class ImportExportController extends BaseScriptClass
             $opt = [
                 '-2' => $this->lang->getLL('makeconfig_tablesOnThisPage'),
                 '-1' => $this->lang->getLL('makeconfig_expandedTree'),
-                '0' => $this->lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_0'),
-                '1' => $this->lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_1'),
-                '2' => $this->lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_2'),
-                '3' => $this->lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_3'),
-                '4' => $this->lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_4'),
-                '999' => $this->lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_infi'),
+                '0' => $this->lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_0'),
+                '1' => $this->lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_1'),
+                '2' => $this->lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_2'),
+                '3' => $this->lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_3'),
+                '4' => $this->lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_4'),
+                '999' => $this->lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_infi'),
             ];
             $this->standaloneView->assign('levelSelectOptions', $opt);
             $this->standaloneView->assign('tableSelectOptions', $this->getTableSelectOptions('pages'));
@@ -761,11 +959,10 @@ class ImportExportController extends BaseScriptClass
 
     /**
      * Create advanced options form
-     * Sets content in $this->content
      *
-     * @param array $inData Form configurat data
+     * @param array $inData Form configuration data
      */
-    public function makeAdvancedOptionsForm($inData)
+    protected function makeAdvancedOptionsForm($inData)
     {
         $loadedExtensions = ExtensionManagementUtility::getLoadedExtensionListArray();
         $loadedExtensions = array_combine($loadedExtensions, $loadedExtensions);
@@ -778,7 +975,7 @@ class ImportExportController extends BaseScriptClass
      *
      * @param array $inData Form configuration data
      */
-    public function makeSaveForm($inData)
+    protected function makeSaveForm($inData)
     {
         $opt = $this->presetRepository->getPresets((int)$inData['pagetree']['id']);
 
@@ -791,11 +988,11 @@ class ImportExportController extends BaseScriptClass
 
         // Add file options:
         $opt = [];
+        $opt['xml'] = $this->lang->getLL('makesavefo_xml');
         if ($this->export->compress) {
             $opt['t3d_compressed'] = $this->lang->getLL('makesavefo_t3dFileCompressed');
         }
         $opt['t3d'] = $this->lang->getLL('makesavefo_t3dFile');
-        $opt['xml'] = $this->lang->getLL('makesavefo_xml');
 
         $this->standaloneView->assign('filetypeSelectOptions', $opt);
 
@@ -819,18 +1016,18 @@ class ImportExportController extends BaseScriptClass
      * @throws \InvalidArgumentException
      * @throws \RuntimeException
      */
-    public function importData($inData)
+    protected function importData($inData)
     {
-        $access = is_array($this->pageinfo) ? 1 : 0;
+        $access = is_array($this->pageinfo);
         $beUser = $this->getBackendUser();
-        if ($this->id && $access || $beUser->user['admin'] && !$this->id) {
-            if ($beUser->user['admin'] && !$this->id) {
+        if ($this->id && $access || $beUser->isAdmin() && !$this->id) {
+            if ($beUser->isAdmin() && !$this->id) {
                 $this->pageinfo = ['title' => '[root-level]', 'uid' => 0, 'pid' => 0];
             }
             if ($inData['new_import']) {
                 unset($inData['import_mode']);
             }
-            /** @var $import Import */
+            /** @var Import $import */
             $import = GeneralUtility::makeInstance(Import::class);
             $import->init();
             $import->update = $inData['do_update'];
@@ -925,7 +1122,7 @@ class ImportExportController extends BaseScriptClass
      * to the server and is also used for uploading import files.
      *
      * @throws \InvalidArgumentException
-     * @return NULL|\TYPO3\CMS\Core\Resource\Folder
+     * @return \TYPO3\CMS\Core\Resource\Folder|null
      */
     protected function getDefaultImportExportFolder()
     {
@@ -954,7 +1151,7 @@ class ImportExportController extends BaseScriptClass
      * @throws \InvalidArgumentException
      * @throws \UnexpectedValueException
      */
-    public function checkUpload()
+    protected function checkUpload()
     {
         $file = GeneralUtility::_GP('file');
         // Initializing:
@@ -962,21 +1159,11 @@ class ImportExportController extends BaseScriptClass
         $this->fileProcessor->setActionPermissions();
         $conflictMode = empty(GeneralUtility::_GP('overwriteExistingFiles')) ? DuplicationBehavior::__default : DuplicationBehavior::REPLACE;
         $this->fileProcessor->setExistingFilesConflictMode(DuplicationBehavior::cast($conflictMode));
-        // Checking referer / executing:
-        $refInfo = parse_url(GeneralUtility::getIndpEnv('HTTP_REFERER'));
-        $httpHost = GeneralUtility::getIndpEnv('TYPO3_HOST_ONLY');
-        if (
-            $httpHost != $refInfo['host']
-            && !$GLOBALS['$TYPO3_CONF_VARS']['SYS']['doNotCheckReferer']
-        ) {
-            $this->fileProcessor->writeLog(0, 2, 1, 'Referer host "%s" and server host "%s" did not match!', [$refInfo['host'], $httpHost]);
-        } else {
-            $this->fileProcessor->start($file);
-            $result = $this->fileProcessor->processData();
-            if (!empty($result['upload'])) {
-                foreach ($result['upload'] as $uploadedFiles) {
-                    $this->uploadedFiles += $uploadedFiles;
-                }
+        $this->fileProcessor->start($file);
+        $result = $this->fileProcessor->processData();
+        if (!empty($result['upload'])) {
+            foreach ($result['upload'] as $uploadedFiles) {
+                $this->uploadedFiles += $uploadedFiles;
             }
         }
     }
@@ -987,7 +1174,7 @@ class ImportExportController extends BaseScriptClass
      * @param string $excludeList Table names (and the string "_ALL") to exclude. Comma list
      * @return array
      */
-    public function getTableSelectOptions($excludeList = '')
+    protected function getTableSelectOptions($excludeList = '')
     {
         $optValues = [];
         if (!GeneralUtility::inList($excludeList, '_ALL')) {
@@ -1008,7 +1195,7 @@ class ImportExportController extends BaseScriptClass
      * @param array $exclude Exclude array from import/export object.
      * @return string AND where clause part to filter out page uids.
      */
-    public function filterPageIds($exclude)
+    protected function filterPageIds($exclude)
     {
         // Get keys:
         $exclude = array_keys($exclude);
@@ -1028,9 +1215,9 @@ class ImportExportController extends BaseScriptClass
     }
 
     /**
-     * @return \TYPO3\CMS\Core\Authentication\BackendUserAuthentication
+     * @return BackendUserAuthentication
      */
-    protected function getBackendUser()
+    protected function getBackendUser(): BackendUserAuthentication
     {
         return $GLOBALS['BE_USER'];
     }
@@ -1038,7 +1225,7 @@ class ImportExportController extends BaseScriptClass
     /**
      * @return LanguageService
      */
-    protected function getLanguageService()
+    protected function getLanguageService(): LanguageService
     {
         return $GLOBALS['LANG'];
     }
@@ -1056,7 +1243,7 @@ class ImportExportController extends BaseScriptClass
         $folder = $this->getDefaultImportExportFolder();
         if ($folder !== null) {
 
-            /** @var $filter FileExtensionFilter */
+            /** @var FileExtensionFilter $filter */
             $filter = GeneralUtility::makeInstance(FileExtensionFilter::class);
             $filter->setAllowedFileExtensions(['t3d', 'xml']);
             $folder->getStorage()->addFileAndFolderNameFilter([$filter, 'filterFileList']);
@@ -1071,7 +1258,7 @@ class ImportExportController extends BaseScriptClass
      * Gets a file by combined identifier.
      *
      * @param string $combinedIdentifier
-     * @return NULL|\TYPO3\CMS\Core\Resource\File
+     * @return \TYPO3\CMS\Core\Resource\File|null
      */
     protected function getFile($combinedIdentifier)
     {
@@ -1082,5 +1269,173 @@ class ImportExportController extends BaseScriptClass
         }
 
         return $file;
+    }
+
+    /**
+     * Initializes the internal MOD_MENU array setting and unsetting items based on various conditions. It also merges in external menu items from the global array TBE_MODULES_EXT (see mergeExternalItems())
+     * Then MOD_SETTINGS array is cleaned up (see \TYPO3\CMS\Backend\Utility\BackendUtility::getModuleData()) so it contains only valid values. It's also updated with any SET[] values submitted.
+     * Also loads the modTSconfig internal variable.
+     *
+     * @see init(), $MOD_MENU, $MOD_SETTINGS, \TYPO3\CMS\Backend\Utility\BackendUtility::getModuleData(), mergeExternalItems()
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected function menuConfig()
+    {
+        // Page / user TSconfig settings and blinding of menu-items
+        $this->modTSconfig['properties'] = BackendUtility::getPagesTSconfig($this->id)['mod.'][$this->MCONF['name'] . '.'] ?? [];
+        $this->MOD_MENU['function'] = $this->mergeExternalItems($this->MCONF['name'], 'function', $this->MOD_MENU['function']);
+        $blindActions = $this->modTSconfig['properties']['menu.']['function.'] ?? [];
+        foreach ($blindActions as $key => $value) {
+            if (!$value && array_key_exists($key, $this->MOD_MENU['function'])) {
+                unset($this->MOD_MENU['function'][$key]);
+            }
+        }
+        $this->MOD_SETTINGS = BackendUtility::getModuleData($this->MOD_MENU, GeneralUtility::_GP('SET'), $this->MCONF['name'], $this->modMenu_type, $this->modMenu_dontValidateList, $this->modMenu_setDefaultList);
+    }
+
+    /**
+     * Merges menu items from global array $TBE_MODULES_EXT
+     *
+     * @param string $modName Module name for which to find value
+     * @param string $menuKey Menu key, eg. 'function' for the function menu.
+     * @param array $menuArr The part of a MOD_MENU array to work on.
+     * @return array Modified array part.
+     * @internal
+     * @see \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::insertModuleFunction(), menuConfig()
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected function mergeExternalItems($modName, $menuKey, $menuArr)
+    {
+        $mergeArray = $GLOBALS['TBE_MODULES_EXT'][$modName]['MOD_MENU'][$menuKey];
+        if (is_array($mergeArray)) {
+            foreach ($mergeArray as $k => $v) {
+                if (((string)$v['ws'] === '' || $this->getBackendUser()->workspace === 0 && GeneralUtility::inList($v['ws'], 'online')) || $this->getBackendUser()->workspace === -1 && GeneralUtility::inList($v['ws'], 'offline') || $this->getBackendUser()->workspace > 0 && GeneralUtility::inList($v['ws'], 'custom')) {
+                    $menuArr[$k] = $this->getLanguageService()->sL($v['title']);
+                }
+            }
+        }
+        return $menuArr;
+    }
+
+    /**
+     * Loads $this->extClassConf with the configuration for the CURRENT function of the menu.
+     *
+     * @param string $MM_key The key to MOD_MENU for which to fetch configuration. 'function' is default since it is first and foremost used to get information per "extension object" (I think that is what its called)
+     * @param string $MS_value The value-key to fetch from the config array. If NULL (default) MOD_SETTINGS[$MM_key] will be used. This is useful if you want to force another function than the one defined in MOD_SETTINGS[function]. Call this in init() function of your Script Class: handleExternalFunctionValue('function', $forcedSubModKey)
+     * @see getExternalItemConfig(), init()
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected function handleExternalFunctionValue($MM_key = 'function', $MS_value = null)
+    {
+        if ($MS_value === null) {
+            $MS_value = $this->MOD_SETTINGS[$MM_key];
+        }
+        $this->extClassConf = $this->getExternalItemConfig($this->MCONF['name'], $MM_key, $MS_value);
+    }
+
+    /**
+     * Returns configuration values from the global variable $TBE_MODULES_EXT for the module given.
+     * For example if the module is named "web_info" and the "function" key ($menuKey) of MOD_SETTINGS is "stat" ($value) then you will have the values of $TBE_MODULES_EXT['webinfo']['MOD_MENU']['function']['stat'] returned.
+     *
+     * @param string $modName Module name
+     * @param string $menuKey Menu key, eg. "function" for the function menu. See $this->MOD_MENU
+     * @param string $value Optionally the value-key to fetch from the array that would otherwise have been returned if this value was not set. Look source...
+     * @return mixed The value from the TBE_MODULES_EXT array.
+     * @see handleExternalFunctionValue()
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected function getExternalItemConfig($modName, $menuKey, $value = '')
+    {
+        if (isset($GLOBALS['TBE_MODULES_EXT'][$modName])) {
+            return (string)$value !== '' ? $GLOBALS['TBE_MODULES_EXT'][$modName]['MOD_MENU'][$menuKey][$value] : $GLOBALS['TBE_MODULES_EXT'][$modName]['MOD_MENU'][$menuKey];
+        }
+        return null;
+    }
+
+    /**
+     * Creates an instance of the class found in $this->extClassConf['name'] in $this->extObj if any (this should hold three keys, "name", "path" and "title" if a "Function menu module" tries to connect...)
+     * This value in extClassConf might be set by an extension (in an ext_tables/ext_localconf file) which thus "connects" to a module.
+     * The array $this->extClassConf is set in handleExternalFunctionValue() based on the value of MOD_SETTINGS[function]
+     * If an instance is created it is initiated with $this passed as value and $this->extClassConf as second argument. Further the $this->MOD_SETTING is cleaned up again after calling the init function.
+     *
+     * @see handleExternalFunctionValue(), \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::insertModuleFunction(), $extObj
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected function checkExtObj()
+    {
+        if (is_array($this->extClassConf) && $this->extClassConf['name']) {
+            $this->extObj = GeneralUtility::makeInstance($this->extClassConf['name']);
+            $this->extObj->init($this, $this->extClassConf);
+            // Re-write:
+            $this->MOD_SETTINGS = BackendUtility::getModuleData($this->MOD_MENU, GeneralUtility::_GP('SET'), $this->MCONF['name'], $this->modMenu_type, $this->modMenu_dontValidateList, $this->modMenu_setDefaultList);
+        }
+    }
+
+    /**
+     * Calls the checkExtObj function in sub module if present.
+     *
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected function checkSubExtObj()
+    {
+        if (is_object($this->extObj)) {
+            $this->extObj->checkExtObj();
+        }
+    }
+
+    /**
+     * Calls the 'header' function inside the "Function menu module" if present.
+     * A header function might be needed to add JavaScript or other stuff in the head.
+     * This can't be done in the main function because the head is already written.
+     *
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected function extObjHeader()
+    {
+        if (is_callable([$this->extObj, 'head'])) {
+            $this->extObj->head();
+        }
+    }
+
+    /**
+     * Calls the 'main' function inside the "Function menu module" if present
+     *
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected function extObjContent()
+    {
+        if ($this->extObj === null) {
+            $flashMessage = GeneralUtility::makeInstance(
+                FlashMessage::class,
+                $this->getLanguageService()->sL('LLL:EXT:backend/Resources/Private/Language/locallang.xlf:no_modules_registered'),
+                $this->getLanguageService()->getLL('title'),
+                FlashMessage::ERROR
+            );
+            $flashMessageService = GeneralUtility::makeInstance(FlashMessageService::class);
+            /** @var \TYPO3\CMS\Core\Messaging\FlashMessageQueue $defaultFlashMessageQueue */
+            $defaultFlashMessageQueue = $flashMessageService->getMessageQueueByIdentifier();
+            $defaultFlashMessageQueue->enqueue($flashMessage);
+        } else {
+            $this->extObj->pObj = $this;
+            if (is_callable([$this->extObj, 'main'])) {
+                $this->content .= $this->extObj->main();
+            }
+        }
+    }
+
+    /**
+     * Return the content of the 'main' function inside the "Function menu module" if present
+     *
+     * @return string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected function getExtObjContent()
+    {
+        $savedContent = $this->content;
+        $this->content = '';
+        $this->extObjContent();
+        $newContent = $this->content;
+        $this->content = $savedContent;
+        return $newContent;
     }
 }

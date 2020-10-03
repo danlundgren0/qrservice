@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Frontend\Typolink;
 
 /*
@@ -17,6 +17,7 @@ namespace TYPO3\CMS\Frontend\Typolink;
 
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
+use TYPO3\CMS\Frontend\Service\TypoLinkCodecService;
 
 /**
  * Builds a TypoLink to a database record
@@ -34,7 +35,7 @@ class DatabaseRecordLinkBuilder extends AbstractTypolinkBuilder
         $configuration = $tsfe->tmpl->setup['config.']['recordLinks.'];
         $linkHandlerConfiguration = $pageTsConfig['TCEMAIN.']['linkHandler.'];
 
-        if (!isset($configuration[$configurationKey]) || !isset($linkHandlerConfiguration[$configurationKey])) {
+        if (!isset($configuration[$configurationKey], $linkHandlerConfiguration[$configurationKey])) {
             throw new UnableToLinkException(
                 'Configuration how to link "' . $linkDetails['typoLinkParameter'] . '" was not found, so "' . $linkText . '" was not linked.',
                 1490989149,
@@ -59,6 +60,23 @@ class DatabaseRecordLinkBuilder extends AbstractTypolinkBuilder
             );
         }
 
+        // Unset the parameter part of the given TypoScript configuration while keeping
+        // config that has been set in addition.
+        unset($conf['parameter.']);
+
+        $typoLinkCodecService = GeneralUtility::makeInstance(TypoLinkCodecService::class);
+        $parameterFromDb = $typoLinkCodecService->decode($conf['parameter']);
+        unset($parameterFromDb['url']);
+        $parameterFromTypoScript = $typoLinkCodecService->decode($typoScriptConfiguration['parameter']);
+        $parameter = array_replace_recursive($parameterFromTypoScript, array_filter($parameterFromDb));
+        $typoScriptConfiguration['parameter'] = $typoLinkCodecService->encode($parameter);
+
+        $typoScriptConfiguration = array_replace_recursive($conf, $typoScriptConfiguration);
+
+        if (!empty($linkDetails['fragment'])) {
+            $typoScriptConfiguration['section'] = $linkDetails['fragment'];
+        }
+
         // Build the full link to the record
         $localContentObjectRenderer = GeneralUtility::makeInstance(ContentObjectRenderer::class);
         $localContentObjectRenderer->start($record, $linkHandlerConfiguration['table']);
@@ -71,7 +89,10 @@ class DatabaseRecordLinkBuilder extends AbstractTypolinkBuilder
 
         // nasty workaround so typolink stops putting a link together, there is a link already built
         throw new UnableToLinkException(
-            '', 1491130170, null, $link
+            '',
+            1491130170,
+            null,
+            $link
         );
     }
 }

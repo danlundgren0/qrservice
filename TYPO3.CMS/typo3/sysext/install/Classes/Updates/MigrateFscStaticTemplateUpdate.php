@@ -15,32 +15,47 @@ namespace TYPO3\CMS\Install\Updates;
  */
 
 use TYPO3\CMS\Core\Database\ConnectionPool;
-use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Migrate "fluid_styled_content" static template location
+ * @internal This class is only meant to be used within EXT:install and is not part of the TYPO3 Core API.
  */
-class MigrateFscStaticTemplateUpdate extends AbstractUpdate
+class MigrateFscStaticTemplateUpdate implements UpgradeWizardInterface
 {
     /**
-     * @var string
+     * @return string Unique identifier of this updater
      */
-    protected $title = 'Migrate "fluid_styled_content" static template location';
+    public function getIdentifier(): string
+    {
+        return 'migrateFscStaticTemplateUpdate';
+    }
+
+    /**
+     * @return string Title of this updater
+     */
+    public function getTitle(): string
+    {
+        return 'Migrate "fluid_styled_content" static template location';
+    }
+
+    /**
+     * @return string Longer description of this updater
+     */
+    public function getDescription(): string
+    {
+        return 'Static templates have been relocated to EXT:fluid_styled_content/Configuration/TypoScript/';
+    }
 
     /**
      * Checks if an update is needed
      *
-     * @param string &$description The description for the update
      * @return bool Whether an update is needed (TRUE) or not (FALSE)
      */
-    public function checkForUpdate(&$description)
+    public function updateNecessary(): bool
     {
-        if ($this->isWizardDone()) {
-            return false;
-        }
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_template');
-        $queryBuilder->getRestrictions()->removeAll()->add(GeneralUtility::makeInstance(DeletedRestriction::class));
+        $queryBuilder->getRestrictions()->removeAll();
         $elementCount = $queryBuilder->count('uid')
             ->from('sys_template')
             ->where(
@@ -60,24 +75,29 @@ class MigrateFscStaticTemplateUpdate extends AbstractUpdate
                 )
             )
             ->execute()->fetchColumn(0);
-        if ($elementCount) {
-            $description = 'Static templates have been relocated to EXT:fluid_styled_content/Configuration/TypoScript/';
-        }
         return (bool)$elementCount;
+    }
+
+    /**
+     * @return string[] All new fields and tables must exist
+     */
+    public function getPrerequisites(): array
+    {
+        return [
+            DatabaseUpdatedPrerequisite::class
+        ];
     }
 
     /**
      * Performs the database update
      *
-     * @param array &$databaseQueries Queries done in this update
-     * @param string &$customMessage Custom message
      * @return bool
      */
-    public function performUpdate(array &$databaseQueries, &$customMessage)
+    public function executeUpdate(): bool
     {
         $connection = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('sys_template');
         $queryBuilder = $connection->createQueryBuilder();
-        $queryBuilder->getRestrictions()->removeAll()->add(GeneralUtility::makeInstance(DeletedRestriction::class));
+        $queryBuilder->getRestrictions()->removeAll();
         $statement = $queryBuilder->select('uid', 'include_static_file', 'constants', 'config')
             ->from('sys_template')
             ->where(
@@ -114,10 +134,8 @@ class MigrateFscStaticTemplateUpdate extends AbstractUpdate
                 ->set('include_static_file', $record['include_static_file'])
                 ->set('constants', $record['constants'])
                 ->set('config', $record['config']);
-            $databaseQueries[] = $queryBuilder->getSQL();
             $queryBuilder->execute();
         }
-        $this->markWizardAsDone();
         return true;
     }
 }

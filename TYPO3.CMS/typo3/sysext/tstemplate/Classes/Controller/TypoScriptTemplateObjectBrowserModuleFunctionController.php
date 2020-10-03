@@ -14,22 +14,49 @@ namespace TYPO3\CMS\Tstemplate\Controller;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Backend\Module\AbstractFunctionModule;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Compatibility\PublicMethodDeprecationTrait;
+use TYPO3\CMS\Core\Compatibility\PublicPropertyDeprecationTrait;
 use TYPO3\CMS\Core\DataHandling\DataHandler;
 use TYPO3\CMS\Core\Exception;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Messaging\FlashMessage;
 use TYPO3\CMS\Core\Messaging\FlashMessageService;
+use TYPO3\CMS\Core\Page\PageRenderer;
 use TYPO3\CMS\Core\TypoScript\ExtendedTemplateService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\RootlineUtility;
 use TYPO3\CMS\Fluid\View\StandaloneView;
-use TYPO3\CMS\Frontend\Page\PageRepository;
 
 /**
  * This class displays the submodule "TypoScript Object Browser" inside the Web > Template module
+ * @internal This is a specific Backend Controller implementation and is not considered part of the Public TYPO3 API.
  */
-class TypoScriptTemplateObjectBrowserModuleFunctionController extends AbstractFunctionModule
+class TypoScriptTemplateObjectBrowserModuleFunctionController
 {
+    use PublicPropertyDeprecationTrait;
+    use PublicMethodDeprecationTrait;
+
+    /**
+     * @var array
+     */
+    private $deprecatedPublicProperties = [
+        'pObj' => 'Using TypoScriptTemplateObjectBrowserModuleFunctionController::$pObj is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'function_key' => 'Using TypoScriptTemplateObjectBrowserModuleFunctionController::$function_key is deprecated, property will be removed in TYPO3 v10.0.',
+        'extClassConf' => 'Using TypoScriptTemplateObjectBrowserModuleFunctionController::$extClassConf is deprecated, property will be removed in TYPO3 v10.0.',
+        'localLangFile' => 'Using TypoScriptTemplateObjectBrowserModuleFunctionController::$localLangFile is deprecated, property will be removed in TYPO3 v10.0.',
+    ];
+
+    /**
+     * @var array
+     */
+    private $deprecatedPublicMethods = [
+        'initialize_editor' => 'Using TypoScriptTemplateObjectBrowserModuleFunctionController::initialize_editor() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'modMenu' => 'Using TypoScriptTemplateObjectBrowserModuleFunctionController::modMenu() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'handleExternalFunctionValue' => 'Using TypoScriptTemplateObjectBrowserModuleFunctionController::handleExternalFunctionValue() is deprecated, method will be removed in TYPO3 v10.0.',
+    ];
+
     /**
      * @var string
      */
@@ -38,7 +65,7 @@ class TypoScriptTemplateObjectBrowserModuleFunctionController extends AbstractFu
     /**
      * @var TypoScriptTemplateModuleController
      */
-    public $pObj;
+    protected $pObj;
 
     /**
      * The currently selected sys_template record
@@ -52,17 +79,58 @@ class TypoScriptTemplateObjectBrowserModuleFunctionController extends AbstractFu
     protected $templateService;
 
     /**
-     * Init
+     * @var int GET/POST var 'id'
+     */
+    protected $id;
+
+    /**
+     * Can be hardcoded to the name of a locallang.xlf file (from the same directory as the class file) to use/load
+     * and is included / added to $GLOBALS['LOCAL_LANG']
+     *
+     * @see init()
+     * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected $localLangFile = '';
+
+    /**
+     * Contains module configuration parts from TBE_MODULES_EXT if found
+     *
+     * @see handleExternalFunctionValue()
+     * @var array
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected $extClassConf;
+
+    /**
+     * If this value is set it points to a key in the TBE_MODULES_EXT array (not on the top level..) where another classname/filepath/title can be defined for sub-subfunctions.
+     * This is a little hard to explain, so see it in action; it used in the extension 'func_wizards' in order to provide yet a layer of interfacing with the backend module.
+     * The extension 'func_wizards' has this description: 'Adds the 'Wizards' item to the function menu in Web>Func. This is just a framework for wizard extensions.' - so as you can see it is designed to allow further connectivity - 'level 2'
+     *
+     * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected $function_key = '';
+
+    /**
+     * Init, called from parent object
      *
      * @param TypoScriptTemplateModuleController $pObj
-     * @param array $conf
      */
-    public function init(&$pObj, $conf)
+    public function init($pObj)
     {
-        parent::init($pObj, $conf);
+        $this->pObj = $pObj;
+        // Local lang:
+        if (!empty($this->localLangFile)) {
+            // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+            $this->getLanguageService()->includeLLFile($this->localLangFile);
+        }
+        // Setting MOD_MENU items as we need them for logging:
+        $this->pObj->MOD_MENU = array_merge($this->pObj->MOD_MENU, $this->modMenu());
         $this->pObj->modMenu_dontValidateList .= ',ts_browser_toplevel_setup,ts_browser_toplevel_const,ts_browser_TLKeys_setup,ts_browser_TLKeys_const';
         $this->pObj->modMenu_setDefaultList .= ',ts_browser_fixedLgd,ts_browser_showComments';
         $this->localLanguageFilePath = 'EXT:tstemplate/Resources/Private/Language/locallang_objbrowser.xlf';
+        $this->id = (int)GeneralUtility::_GP('id');
     }
 
     /**
@@ -70,7 +138,7 @@ class TypoScriptTemplateObjectBrowserModuleFunctionController extends AbstractFu
      *
      * @return array
      */
-    public function modMenu()
+    protected function modMenu()
     {
         $lang = $this->getLanguageService();
         $lang->includeLLFile('EXT:tstemplate/Resources/Private/Language/locallang_objbrowser.xlf');
@@ -105,7 +173,7 @@ class TypoScriptTemplateObjectBrowserModuleFunctionController extends AbstractFu
                 } else {
                     unset($this->pObj->MOD_SETTINGS['ts_browser_TLKeys_' . $bType][key($addKey)]);
                 }
-                $this->getBackendUserAuthentication()->pushModuleData($this->pObj->MCONF['name'], $this->pObj->MOD_SETTINGS);
+                $this->getBackendUserAuthentication()->pushModuleData('web_ts', $this->pObj->MOD_SETTINGS);
             }
             if (!empty($this->pObj->MOD_SETTINGS['ts_browser_TLKeys_' . $bType])) {
                 $modMenu['ts_browser_toplevel_' . $bType]['-'] = '---';
@@ -124,15 +192,14 @@ class TypoScriptTemplateObjectBrowserModuleFunctionController extends AbstractFu
      * @param int $template_uid
      * @return bool
      */
-    public function initialize_editor($pageId, $template_uid = 0)
+    protected function initialize_editor($pageId, $template_uid = 0)
     {
         // Defined global here!
         $this->templateService = GeneralUtility::makeInstance(ExtendedTemplateService::class);
-        $this->templateService->init();
 
         // Gets the rootLine
-        $sys_page = GeneralUtility::makeInstance(PageRepository::class);
-        $rootLine = $sys_page->getRootLine($pageId);
+        $rootlineUtility = GeneralUtility::makeInstance(RootlineUtility::class, $pageId);
+        $rootLine = $rootlineUtility->get();
         // This generates the constants/config + hierarchy info for the template.
         $this->templateService->runThroughTemplates($rootLine, $template_uid);
 
@@ -142,7 +209,7 @@ class TypoScriptTemplateObjectBrowserModuleFunctionController extends AbstractFu
     }
 
     /**
-     * Main
+     * Main, called from parent object
      *
      * @return string
      */
@@ -158,7 +225,7 @@ class TypoScriptTemplateObjectBrowserModuleFunctionController extends AbstractFu
             $template_uid = $this->pObj->MOD_SETTINGS['templatesOnPage'];
         }
         $bType = $this->pObj->MOD_SETTINGS['ts_browser_type'];
-        $existTemplate = $this->initialize_editor($this->pObj->id, $template_uid);
+        $existTemplate = $this->initialize_editor($this->id, $template_uid);
         // initialize
         $assigns = [];
         $assigns['LLPrefix'] = 'LLL:' . $this->localLanguageFilePath . ':';
@@ -219,7 +286,7 @@ class TypoScriptTemplateObjectBrowserModuleFunctionController extends AbstractFu
                     // Clear the cache (note: currently only admin-users can clear the cache in tce_main.php)
                     $tce->clear_cacheCmd('all');
                     // re-read the template ...
-                    $this->initialize_editor($this->pObj->id, $template_uid);
+                    $this->initialize_editor($this->id, $template_uid);
                 }
             }
         }
@@ -236,13 +303,15 @@ class TypoScriptTemplateObjectBrowserModuleFunctionController extends AbstractFu
             $update = 1;
         }
         if ($update) {
-            $this->getBackendUserAuthentication()->pushModuleData($this->pObj->MCONF['name'], $this->pObj->MOD_SETTINGS);
+            $this->getBackendUserAuthentication()->pushModuleData('web_ts', $this->pObj->MOD_SETTINGS);
         }
         $this->templateService->matchAlternative = $this->pObj->MOD_SETTINGS['tsbrowser_conditions'];
         $this->templateService->matchAlternative[] = 'dummydummydummydummydummydummydummydummydummydummydummy';
         // This is just here to make sure that at least one element is in the array so that the tsparser actually uses this array to match.
         $this->templateService->constantMode = $this->pObj->MOD_SETTINGS['ts_browser_const'];
-        if ($this->pObj->sObj && $this->templateService->constantMode) {
+        // "sObj" is set by ExtendedTemplateService to edit single keys
+        $sObj = GeneralUtility::_GP('sObj');
+        if (!empty($sObj) && $this->templateService->constantMode) {
             $this->templateService->constantMode = 'untouched';
         }
         $this->templateService->regexMode = $this->pObj->MOD_SETTINGS['ts_browser_regexsearch'];
@@ -263,9 +332,9 @@ class TypoScriptTemplateObjectBrowserModuleFunctionController extends AbstractFu
             $theSetup = $this->templateService->setup_constants;
         }
         // EDIT A VALUE:
-        $assigns['typoScriptPath'] = $this->pObj->sObj;
-        if ($this->pObj->sObj) {
-            list($theSetup, $theSetupValue) = $this->templateService->ext_getSetup($theSetup, $this->pObj->sObj ? $this->pObj->sObj : '');
+        $assigns['typoScriptPath'] = $sObj;
+        if (!empty($sObj)) {
+            list($theSetup, $theSetupValue) = $this->templateService->ext_getSetup($theSetup, $sObj);
             $assigns['theSetupValue'] = $theSetupValue;
             if ($existTemplate === false) {
                 $noTemplateMessage = GeneralUtility::makeInstance(FlashMessage::class, $lang->getLL('noCurrentTemplate'), $lang->getLL('edit'), FlashMessage::ERROR);
@@ -273,18 +342,20 @@ class TypoScriptTemplateObjectBrowserModuleFunctionController extends AbstractFu
             }
             // Links:
             $urlParameters = [
-                'id' => $this->pObj->id
+                'id' => $this->id
             ];
-            $aHref = BackendUtility::getModuleUrl('web_ts', $urlParameters);
-            $assigns['moduleUrl'] = BackendUtility::getModuleUrl('web_ts', $urlParameters);
-            $assigns['isNotInTopLevelKeyList'] = !isset($this->pObj->MOD_SETTINGS['ts_browser_TLKeys_' . $bType][$this->pObj->sObj]);
+            /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+            $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
+            $aHref = (string)$uriBuilder->buildUriFromRoute('web_ts', $urlParameters);
+            $assigns['moduleUrl'] = (string)$uriBuilder->buildUriFromRoute('web_ts', $urlParameters);
+            $assigns['isNotInTopLevelKeyList'] = !isset($this->pObj->MOD_SETTINGS['ts_browser_TLKeys_' . $bType][$sObj]);
             $assigns['hasProperties'] = !empty($theSetup);
-            if (!$this->pObj->MOD_SETTINGS['ts_browser_TLKeys_' . $bType][$this->pObj->sObj]) {
+            if (!$this->pObj->MOD_SETTINGS['ts_browser_TLKeys_' . $bType][$sObj]) {
                 if (!empty($theSetup)) {
-                    $assigns['moduleUrlObjectListAction'] = $aHref . '&addKey[' . rawurlencode($this->pObj->sObj) . ']=1&SET[ts_browser_toplevel_' . $bType . ']=' . rawurlencode($this->pObj->sObj);
+                    $assigns['moduleUrlObjectListAction'] = $aHref . '&addKey[' . rawurlencode($sObj) . ']=1&SET[ts_browser_toplevel_' . $bType . ']=' . rawurlencode($sObj);
                 }
             } else {
-                $assigns['moduleUrlObjectListAction'] = $aHref . '&addKey[' . rawurlencode($this->pObj->sObj) . ']=0&SET[ts_browser_toplevel_' . $bType . ']=0';
+                $assigns['moduleUrlObjectListAction'] = $aHref . '&addKey[' . rawurlencode($sObj) . ']=0&SET[ts_browser_toplevel_' . $bType . ']=0';
             }
         } else {
             $this->templateService->tsbrowser_depthKeys = $this->pObj->MOD_SETTINGS['tsbrowser_depthKeys_' . $bType];
@@ -307,14 +378,14 @@ class TypoScriptTemplateObjectBrowserModuleFunctionController extends AbstractFu
             }
             $assigns['hasTsBrowserTypes'] = is_array($this->pObj->MOD_MENU['ts_browser_type']) && count($this->pObj->MOD_MENU['ts_browser_type']) > 1;
             if (is_array($this->pObj->MOD_MENU['ts_browser_type']) && count($this->pObj->MOD_MENU['ts_browser_type']) > 1) {
-                $assigns['browserTypeDropdownMenu'] = BackendUtility::getDropdownMenu($this->pObj->id, 'SET[ts_browser_type]', $bType, $this->pObj->MOD_MENU['ts_browser_type']);
+                $assigns['browserTypeDropdownMenu'] = BackendUtility::getDropdownMenu($this->id, 'SET[ts_browser_type]', $bType, $this->pObj->MOD_MENU['ts_browser_type']);
             }
             $assigns['hasTopLevelInObjectList'] = is_array($this->pObj->MOD_MENU['ts_browser_toplevel_' . $bType]) && count($this->pObj->MOD_MENU['ts_browser_toplevel_' . $bType]) > 1;
             if (is_array($this->pObj->MOD_MENU['ts_browser_toplevel_' . $bType]) && count($this->pObj->MOD_MENU['ts_browser_toplevel_' . $bType]) > 1) {
-                $assigns['objectListDropdownMenu'] = BackendUtility::getDropdownMenu($this->pObj->id, 'SET[ts_browser_toplevel_' . $bType . ']', $this->pObj->MOD_SETTINGS['ts_browser_toplevel_' . $bType], $this->pObj->MOD_MENU['ts_browser_toplevel_' . $bType]);
+                $assigns['objectListDropdownMenu'] = BackendUtility::getDropdownMenu($this->id, 'SET[ts_browser_toplevel_' . $bType . ']', $this->pObj->MOD_SETTINGS['ts_browser_toplevel_' . $bType], $this->pObj->MOD_MENU['ts_browser_toplevel_' . $bType]);
             }
 
-            $assigns['regexSearchCheckbox'] = BackendUtility::getFuncCheck($this->pObj->id, 'SET[ts_browser_regexsearch]', $this->pObj->MOD_SETTINGS['ts_browser_regexsearch'], '', '', 'id="checkTs_browser_regexsearch"');
+            $assigns['regexSearchCheckbox'] = BackendUtility::getFuncCheck($this->id, 'SET[ts_browser_regexsearch]', $this->pObj->MOD_SETTINGS['ts_browser_regexsearch'], '', '', 'id="checkTs_browser_regexsearch"');
             $assigns['postSearchField'] = $POST['search_field'];
             $theKey = $this->pObj->MOD_SETTINGS['ts_browser_toplevel_' . $bType];
             if (!$theKey || !str_replace('-', '', $theKey)) {
@@ -324,9 +395,11 @@ class TypoScriptTemplateObjectBrowserModuleFunctionController extends AbstractFu
             $tree = $this->templateService->ext_getObjTree($theSetup, $theKey, '', '', $theSetupValue, $this->pObj->MOD_SETTINGS['ts_browser_alphaSort']);
             $tree = $this->templateService->substituteCMarkers($tree);
             $urlParameters = [
-                'id' => $this->pObj->id
+                'id' => $this->id
             ];
-            $aHref = BackendUtility::getModuleUrl('web_ts', $urlParameters);
+            /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+            $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
+            $aHref = (string)$uriBuilder->buildUriFromRoute('web_ts', $urlParameters);
             // Parser Errors:
             $pEkey = $bType === 'setup' ? 'config' : 'constants';
             $assigns['hasParseErrors'] = !empty($this->templateService->parserErrors[$pEkey]);
@@ -350,11 +423,11 @@ class TypoScriptTemplateObjectBrowserModuleFunctionController extends AbstractFu
 
             // second row options
             $assigns['isSetupAndCropLinesDisabled'] = $bType === 'setup' && !$this->pObj->MOD_SETTINGS['ts_browser_fixedLgd'];
-            $assigns['checkBoxShowComments'] = BackendUtility::getFuncCheck($this->pObj->id, 'SET[ts_browser_showComments]', $this->pObj->MOD_SETTINGS['ts_browser_showComments'], '', '', 'id="checkTs_browser_showComments"');
-            $assigns['checkBoxAlphaSort'] = BackendUtility::getFuncCheck($this->pObj->id, 'SET[ts_browser_alphaSort]', $this->pObj->MOD_SETTINGS['ts_browser_alphaSort'], '', '', 'id="checkTs_browser_alphaSort"');
-            $assigns['checkBoxCropLines'] = BackendUtility::getFuncCheck($this->pObj->id, 'SET[ts_browser_fixedLgd]', $this->pObj->MOD_SETTINGS['ts_browser_fixedLgd'], '', '', 'id="checkTs_browser_fixedLgd"');
+            $assigns['checkBoxShowComments'] = BackendUtility::getFuncCheck($this->id, 'SET[ts_browser_showComments]', $this->pObj->MOD_SETTINGS['ts_browser_showComments'], '', '', 'id="checkTs_browser_showComments"');
+            $assigns['checkBoxAlphaSort'] = BackendUtility::getFuncCheck($this->id, 'SET[ts_browser_alphaSort]', $this->pObj->MOD_SETTINGS['ts_browser_alphaSort'], '', '', 'id="checkTs_browser_alphaSort"');
+            $assigns['checkBoxCropLines'] = BackendUtility::getFuncCheck($this->id, 'SET[ts_browser_fixedLgd]', $this->pObj->MOD_SETTINGS['ts_browser_fixedLgd'], '', '', 'id="checkTs_browser_fixedLgd"');
             if ($bType === 'setup' && !$this->pObj->MOD_SETTINGS['ts_browser_fixedLgd']) {
-                $assigns['dropdownDisplayConstants'] = BackendUtility::getDropdownMenu($this->pObj->id, 'SET[ts_browser_const]', $this->pObj->MOD_SETTINGS['ts_browser_const'], $this->pObj->MOD_MENU['ts_browser_const']);
+                $assigns['dropdownDisplayConstants'] = BackendUtility::getDropdownMenu($this->id, 'SET[ts_browser_const]', $this->pObj->MOD_SETTINGS['ts_browser_const'], $this->pObj->MOD_MENU['ts_browser_const']);
             }
 
             // Conditions:
@@ -373,7 +446,7 @@ class TypoScriptTemplateObjectBrowserModuleFunctionController extends AbstractFu
             }
             // Ending section displayoptions
         }
-
+        $this->getPageRenderer()->loadRequireJsModule('TYPO3/CMS/Backend/Tooltip');
         $view = GeneralUtility::makeInstance(StandaloneView::class);
         $view->setTemplatePathAndFilename(GeneralUtility::getFileAbsFileName(
             'EXT:tstemplate/Resources/Private/Templates/TemplateObjectBrowserModuleFunction.html'
@@ -390,10 +463,49 @@ class TypoScriptTemplateObjectBrowserModuleFunctionController extends AbstractFu
      */
     protected function addFlashMessage(FlashMessage $flashMessage)
     {
-        /** @var $flashMessageService FlashMessageService */
+        /** @var FlashMessageService $flashMessageService */
         $flashMessageService = GeneralUtility::makeInstance(FlashMessageService::class);
-        /** @var $defaultFlashMessageQueue \TYPO3\CMS\Core\Messaging\FlashMessageQueue */
+        /** @var \TYPO3\CMS\Core\Messaging\FlashMessageQueue $defaultFlashMessageQueue */
         $defaultFlashMessageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $defaultFlashMessageQueue->enqueue($flashMessage);
+    }
+
+    /**
+     * If $this->function_key is set (which means there are two levels of object connectivity) then
+     * $this->extClassConf is loaded with the TBE_MODULES_EXT configuration for that sub-sub-module
+     *
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected function handleExternalFunctionValue()
+    {
+        // Must clean first to make sure the correct key is set...
+        $this->pObj->MOD_SETTINGS = BackendUtility::getModuleData($this->pObj->MOD_MENU, GeneralUtility::_GP('SET'), 'web_ts');
+        if ($this->function_key) {
+            $this->extClassConf = $this->pObj->getExternalItemConfig('web_ts', $this->function_key, $this->pObj->MOD_SETTINGS[$this->function_key]);
+        }
+    }
+
+    /**
+     * @return LanguageService
+     */
+    protected function getLanguageService(): LanguageService
+    {
+        return $GLOBALS['LANG'];
+    }
+
+    /**
+     * @return BackendUserAuthentication
+     */
+    protected function getBackendUserAuthentication(): BackendUserAuthentication
+    {
+        return $GLOBALS['BE_USER'];
+    }
+
+    /**
+     * @return PageRenderer
+     */
+    protected function getPageRenderer(): PageRenderer
+    {
+        return GeneralUtility::makeInstance(PageRenderer::class);
     }
 }

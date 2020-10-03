@@ -1,15 +1,25 @@
 {
 	"name": "typo3/cms-frontend",
 	"type": "typo3-cms-framework",
-	"description": "TYPO3 Core",
+	"description": "Classes for the frontend of TYPO3.",
 	"homepage": "https://typo3.org",
-	"license": ["GPL-2.0+"],
-
-	"require": {
-		"typo3/cms-core": "*"
+	"license": ["GPL-2.0-or-later"],
+	"authors": [{
+		"name": "TYPO3 Core Team",
+		"email": "typo3cms@typo3.org",
+		"role": "Developer"
+	}],
+	"config": {
+		"sort-packages": true
 	},
-	"replace": {
-		"frontend": "*"
+	"require": {
+		"typo3/cms-core": "9.5.21"
+	},
+	"conflict": {
+		"typo3/cms": "*"
+	},
+	"suggest": {
+		"typo3/cms-adminpanel": "Provides additional information and functionality for backend users in the frontend."
 	},
 	"extra": {
 		"typo3/cms": {
@@ -17,7 +27,8 @@
 				"protected": true,
 				"partOfFactoryDefault": true,
 				"partOfMinimalUsableSystem": true
-			}
+			},
+			"extension-key": "frontend"
 		}
 	},
 	"autoload": {

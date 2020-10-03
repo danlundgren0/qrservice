@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Database\Schema;
 
 /*
@@ -18,8 +18,10 @@ namespace TYPO3\CMS\Core\Database\Schema;
 use Doctrine\DBAL\DBALException;
 use Doctrine\DBAL\Platforms\MySqlPlatform;
 use Doctrine\DBAL\Platforms\PostgreSqlPlatform;
+use Doctrine\DBAL\Platforms\SqlitePlatform;
 use Doctrine\DBAL\Schema\Column;
 use Doctrine\DBAL\Schema\ColumnDiff;
+use Doctrine\DBAL\Schema\ForeignKeyConstraint;
 use Doctrine\DBAL\Schema\Index;
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\DBAL\Schema\SchemaConfig;
@@ -27,6 +29,7 @@ use Doctrine\DBAL\Schema\SchemaDiff;
 use Doctrine\DBAL\Schema\Table;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Database\Platform\PlatformInformation;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -40,48 +43,6 @@ class ConnectionMigrator
      * @var string Prefix of deleted tables
      */
     protected $deletedPrefix = 'zzz_deleted_';
-
-    /**
-     * @var array
-     */
-    protected $tableAndFieldMaxNameLengthsPerDbPlatform = [
-        'default' => [
-            'tables' => 30,
-            'columns' => 30
-        ],
-        'mysql' => [
-            'tables' => 64,
-            'columns' => 64
-        ],
-        'drizzle_pdo_mysql' => 'mysql',
-        'mysqli' => 'mysql',
-        'pdo_mysql' => 'mysql',
-        'pdo_sqlite' => 'mysql',
-        'postgresql' => [
-            'tables' => 63,
-            'columns' => 63
-        ],
-        'sqlserver' => [
-            'tables' => 128,
-            'columns' => 128
-        ],
-        'pdo_sqlsrv' => 'sqlserver',
-        'sqlsrv' => 'sqlserver',
-        'ibm' => [
-            'tables' => 30,
-            'columns' => 30
-        ],
-        'ibm_db2' => 'ibm',
-        'pdo_ibm' => 'ibm',
-        'oci8' => [
-            'tables' => 30,
-            'columns' => 30
-        ],
-        'sqlanywhere' => [
-            'tables' => 128,
-            'columns' => 128
-        ]
-    ];
 
     /**
      * @var Connection
@@ -154,15 +115,14 @@ class ConnectionMigrator
                 $this->getChangedFieldUpdateSuggestions($schemaDiff),
                 $this->getChangedTableOptions($schemaDiff)
             );
-        } else {
-            return array_merge_recursive(
-                ['change' => [], 'change_table' => [], 'drop' => [], 'drop_table' => [], 'tables_count' => []],
-                $this->getUnusedFieldUpdateSuggestions($schemaDiff),
-                $this->getUnusedTableUpdateSuggestions($schemaDiff),
-                $this->getDropTableUpdateSuggestions($schemaDiff),
-                $this->getDropFieldUpdateSuggestions($schemaDiff)
-            );
         }
+        return array_merge_recursive(
+            ['change' => [], 'change_table' => [], 'drop' => [], 'drop_table' => [], 'tables_count' => []],
+            $this->getUnusedFieldUpdateSuggestions($schemaDiff),
+            $this->getUnusedTableUpdateSuggestions($schemaDiff),
+            $this->getDropTableUpdateSuggestions($schemaDiff),
+            $this->getDropFieldUpdateSuggestions($schemaDiff)
+        );
     }
 
     /**
@@ -205,7 +165,9 @@ class ConnectionMigrator
                             $columnName = preg_replace('/\(\d+\)$/', '', $columnName);
                             // Strip mssql '[' and ']' from column names
                             $columnName = ltrim($columnName, '[');
-                            return rtrim($columnName, ']');
+                            $columnName = rtrim($columnName, ']');
+                            // Strip sqlite '"' from column names
+                            return trim($columnName, '"');
                         },
                         $addedIndex->getColumns()
                     );
@@ -282,13 +244,8 @@ class ConnectionMigrator
 
         // If there are no mapped tables return a SchemaDiff without any changes
         // to avoid update suggestions for tables not related to TYPO3.
-        if (empty($GLOBALS['TYPO3_CONF_VARS']['DB']['TableMapping'])
-            || !is_array($GLOBALS['TYPO3_CONF_VARS']['DB']['TableMapping'])
-        ) {
-            /** @var SchemaDiff $schemaDiff */
-            $schemaDiff = GeneralUtility::makeInstance(SchemaDiff::class, [], [], [], $fromSchema);
-
-            return $schemaDiff;
+        if (empty($GLOBALS['TYPO3_CONF_VARS']['DB']['TableMapping'] ?? null)) {
+            return GeneralUtility::makeInstance(SchemaDiff::class, [], [], [], $fromSchema);
         }
 
         // Collect the table names that have been mapped to this connection.
@@ -354,6 +311,9 @@ class ConnectionMigrator
 
         $schemaConfig = GeneralUtility::makeInstance(SchemaConfig::class);
         $schemaConfig->setName($this->connection->getDatabase());
+        if (isset($this->connection->getParams()['tableoptions'])) {
+            $schemaConfig->setDefaultTableOptions($this->connection->getParams()['tableoptions']);
+        }
 
         return GeneralUtility::makeInstance(Schema::class, $tablesForConnection, [], $schemaConfig);
     }
@@ -396,20 +356,22 @@ class ConnectionMigrator
         $changedTables = [];
 
         foreach ($schemaDiff->changedTables as $index => $changedTable) {
+            $fromTable = $this->buildQuotedTable($schemaDiff->fromSchema->getTable($changedTable->name));
+
             if (count($changedTable->addedColumns) !== 0) {
                 // Treat each added column with a new diff to get a dedicated suggestions
                 // just for this single column.
-                foreach ($changedTable->addedColumns as $addedColumn) {
+                foreach ($changedTable->addedColumns as $columnName => $addedColumn) {
                     $changedTables[$index . ':tbl_' . $addedColumn->getName()] = GeneralUtility::makeInstance(
                         TableDiff::class,
                         $changedTable->name,
-                        [$addedColumn],
+                        [$columnName => $addedColumn],
                         [],
                         [],
                         [],
                         [],
                         [],
-                        $schemaDiff->fromSchema->getTable($changedTable->name)
+                        $fromTable
                     );
                 }
             }
@@ -417,17 +379,17 @@ class ConnectionMigrator
             if (count($changedTable->addedIndexes) !== 0) {
                 // Treat each added index with a new diff to get a dedicated suggestions
                 // just for this index.
-                foreach ($changedTable->addedIndexes as $addedIndex) {
+                foreach ($changedTable->addedIndexes as $indexName => $addedIndex) {
                     $changedTables[$index . ':idx_' . $addedIndex->getName()] = GeneralUtility::makeInstance(
                         TableDiff::class,
                         $changedTable->name,
                         [],
                         [],
                         [],
-                        [$addedIndex],
+                        [$indexName => $this->buildQuotedIndex($addedIndex)],
                         [],
                         [],
-                        $schemaDiff->fromSchema->getTable($changedTable->name)
+                        $fromTable
                     );
                 }
             }
@@ -446,9 +408,9 @@ class ConnectionMigrator
                         [],
                         [],
                         [],
-                        $schemaDiff->fromSchema->getTable($changedTable->name)
+                        $fromTable
                     );
-                    $changedTables[$fkIndex]->addedForeignKeys = [$addedForeignKey];
+                    $changedTables[$fkIndex]->addedForeignKeys = [$this->buildQuotedForeignKey($addedForeignKey)];
                 }
             }
         }
@@ -532,56 +494,10 @@ class ConnectionMigrator
         $updateSuggestions = [];
 
         foreach ($schemaDiff->changedTables as $index => $changedTable) {
-            if (count($changedTable->changedColumns) !== 0) {
-                // Treat each changed column with a new diff to get a dedicated suggestions
-                // just for this single column.
-                $fromTable = $schemaDiff->fromSchema->getTable($changedTable->name);
-                foreach ($changedTable->changedColumns as $changedColumn) {
-                    // Field has been renamed and will be handled separately
-                    if ($changedColumn->getOldColumnName()->getName() !== $changedColumn->column->getName()) {
-                        continue;
-                    }
-
-                    // Get the current SQL declaration for the column
-                    $currentColumn = $fromTable->getColumn($changedColumn->getOldColumnName()->getName());
-                    $currentDeclaration = $databasePlatform->getColumnDeclarationSQL(
-                        $currentColumn->getQuotedName($this->connection->getDatabasePlatform()),
-                        $currentColumn->toArray()
-                    );
-
-                    // Build a dedicated diff just for the current column
-                    $tableDiff = GeneralUtility::makeInstance(
-                        TableDiff::class,
-                        $changedTable->name,
-                        [],
-                        [$changedColumn],
-                        [],
-                        [],
-                        [],
-                        [],
-                        $schemaDiff->fromSchema->getTable($changedTable->name)
-                    );
-
-                    $temporarySchemaDiff = GeneralUtility::makeInstance(
-                        SchemaDiff::class,
-                        [],
-                        [$tableDiff],
-                        [],
-                        $schemaDiff->fromSchema
-                    );
-
-                    $statements = $temporarySchemaDiff->toSql($databasePlatform);
-                    foreach ($statements as $statement) {
-                        $updateSuggestions['change'][md5($statement)] = $statement;
-                        $updateSuggestions['change_currentValue'][md5($statement)] = $currentDeclaration;
-                    }
-                }
-            }
-
             // Treat each changed index with a new diff to get a dedicated suggestions
             // just for this index.
             if (count($changedTable->changedIndexes) !== 0) {
-                foreach ($changedTable->renamedIndexes as $key => $changedIndex) {
+                foreach ($changedTable->changedIndexes as $indexName => $changedIndex) {
                     $indexDiff = GeneralUtility::makeInstance(
                         TableDiff::class,
                         $changedTable->name,
@@ -589,7 +505,7 @@ class ConnectionMigrator
                         [],
                         [],
                         [],
-                        [$changedIndex],
+                        [$indexName => $changedIndex],
                         [],
                         $schemaDiff->fromSchema->getTable($changedTable->name)
                     );
@@ -646,6 +562,55 @@ class ConnectionMigrator
                 }
             }
 
+            if (count($changedTable->changedColumns) !== 0) {
+                // Treat each changed column with a new diff to get a dedicated suggestions
+                // just for this single column.
+                $fromTable = $this->buildQuotedTable($schemaDiff->fromSchema->getTable($changedTable->name));
+
+                foreach ($changedTable->changedColumns as $columnName => $changedColumn) {
+                    // Field has been renamed and will be handled separately
+                    if ($changedColumn->getOldColumnName()->getName() !== $changedColumn->column->getName()) {
+                        continue;
+                    }
+
+                    $changedColumn->fromColumn = $this->buildQuotedColumn($changedColumn->fromColumn);
+
+                    // Get the current SQL declaration for the column
+                    $currentColumn = $fromTable->getColumn($changedColumn->getOldColumnName()->getName());
+                    $currentDeclaration = $databasePlatform->getColumnDeclarationSQL(
+                        $currentColumn->getQuotedName($this->connection->getDatabasePlatform()),
+                        $currentColumn->toArray()
+                    );
+
+                    // Build a dedicated diff just for the current column
+                    $tableDiff = GeneralUtility::makeInstance(
+                        TableDiff::class,
+                        $changedTable->name,
+                        [],
+                        [$columnName => $changedColumn],
+                        [],
+                        [],
+                        [],
+                        [],
+                        $fromTable
+                    );
+
+                    $temporarySchemaDiff = GeneralUtility::makeInstance(
+                        SchemaDiff::class,
+                        [],
+                        [$tableDiff],
+                        [],
+                        $schemaDiff->fromSchema
+                    );
+
+                    $statements = $temporarySchemaDiff->toSql($databasePlatform);
+                    foreach ($statements as $statement) {
+                        $updateSuggestions['change'][md5($statement)] = $statement;
+                        $updateSuggestions['change_currentValue'][md5($statement)] = $currentDeclaration;
+                    }
+                }
+            }
+
             // Treat each changed foreign key with a new diff to get a dedicated suggestions
             // just for this foreign key.
             if (count($changedTable->changedForeignKeys) !== 0) {
@@ -663,7 +628,7 @@ class ConnectionMigrator
 
                 foreach ($changedTable->changedForeignKeys as $changedForeignKey) {
                     $foreignKeyDiff = clone $tableDiff;
-                    $foreignKeyDiff->changedForeignKeys = [$changedForeignKey];
+                    $foreignKeyDiff->changedForeignKeys = [$this->buildQuotedForeignKey($changedForeignKey)];
 
                     $temporarySchemaDiff = GeneralUtility::makeInstance(
                         SchemaDiff::class,
@@ -746,9 +711,11 @@ class ConnectionMigrator
                 continue;
             }
 
+            $isSqlite = $this->tableRunsOnSqlite($index);
+
             // Treat each changed column with a new diff to get a dedicated suggestions
             // just for this single column.
-            foreach ($changedTable->changedColumns as $changedColumn) {
+            foreach ($changedTable->changedColumns as $oldFieldName => $changedColumn) {
                 // Field has not been renamed
                 if ($changedColumn->getOldColumnName()->getName() === $changedColumn->column->getName()) {
                     continue;
@@ -758,13 +725,16 @@ class ConnectionMigrator
                     TableDiff::class,
                     $changedTable->name,
                     [],
-                    [$changedColumn],
+                    [$oldFieldName => $changedColumn],
                     [],
                     [],
                     [],
                     [],
-                    $schemaDiff->fromSchema->getTable($changedTable->name)
+                    $this->buildQuotedTable($schemaDiff->fromSchema->getTable($changedTable->name))
                 );
+                if ($isSqlite) {
+                    break;
+                }
             }
         }
 
@@ -798,28 +768,37 @@ class ConnectionMigrator
         $changedTables = [];
 
         foreach ($schemaDiff->changedTables as $index => $changedTable) {
+            $fromTable = $this->buildQuotedTable($schemaDiff->fromSchema->getTable($changedTable->name));
+
+            $isSqlite = $this->tableRunsOnSqlite($index);
+            $addMoreOperations = true;
+
             if (count($changedTable->removedColumns) !== 0) {
                 // Treat each changed column with a new diff to get a dedicated suggestions
                 // just for this single column.
-                foreach ($changedTable->removedColumns as $removedColumn) {
+                foreach ($changedTable->removedColumns as $columnName => $removedColumn) {
                     $changedTables[$index . ':tbl_' . $removedColumn->getName()] = GeneralUtility::makeInstance(
                         TableDiff::class,
                         $changedTable->name,
                         [],
                         [],
-                        [$removedColumn],
+                        [$columnName => $this->buildQuotedColumn($removedColumn)],
                         [],
                         [],
                         [],
-                        $schemaDiff->fromSchema->getTable($changedTable->name)
+                        $fromTable
                     );
+                    if ($isSqlite) {
+                        $addMoreOperations = false;
+                        break;
+                    }
                 }
             }
 
-            if (count($changedTable->removedIndexes) !== 0) {
+            if ($addMoreOperations && count($changedTable->removedIndexes) !== 0) {
                 // Treat each removed index with a new diff to get a dedicated suggestions
                 // just for this index.
-                foreach ($changedTable->removedIndexes as $removedIndex) {
+                foreach ($changedTable->removedIndexes as $indexName => $removedIndex) {
                     $changedTables[$index . ':idx_' . $removedIndex->getName()] = GeneralUtility::makeInstance(
                         TableDiff::class,
                         $changedTable->name,
@@ -828,13 +807,17 @@ class ConnectionMigrator
                         [],
                         [],
                         [],
-                        [$removedIndex],
-                        $schemaDiff->fromSchema->getTable($changedTable->name)
+                        [$indexName => $this->buildQuotedIndex($removedIndex)],
+                        $fromTable
                     );
+                    if ($isSqlite) {
+                        $addMoreOperations = false;
+                        break;
+                    }
                 }
             }
 
-            if (count($changedTable->removedForeignKeys) !== 0) {
+            if ($addMoreOperations && count($changedTable->removedForeignKeys) !== 0) {
                 // Treat each removed foreign key with a new diff to get a dedicated suggestions
                 // just for this foreign key.
                 foreach ($changedTable->removedForeignKeys as $removedForeignKey) {
@@ -848,9 +831,12 @@ class ConnectionMigrator
                         [],
                         [],
                         [],
-                        $schemaDiff->fromSchema->getTable($changedTable->name)
+                        $fromTable
                     );
-                    $changedTables[$fkIndex]->removedForeignKeys = [$removedForeignKey];
+                    $changedTables[$fkIndex]->removedForeignKeys = [$this->buildQuotedForeignKey($removedForeignKey)];
+                    if ($isSqlite) {
+                        break;
+                    }
                 }
             }
         }
@@ -889,7 +875,7 @@ class ConnectionMigrator
                 SchemaDiff::class,
                 [],
                 [],
-                [$removedTable],
+                [$this->buildQuotedTable($removedTable)],
                 $schemaDiff->fromSchema
             );
 
@@ -934,13 +920,15 @@ class ConnectionMigrator
                 $addedIndexes = [],
                 $changedIndexes = [],
                 $removedIndexes = [],
-                $fromTable = $removedTable
+                $this->buildQuotedTable($removedTable)
             );
 
-            $tableDiff->newName = substr(
-                $this->deletedPrefix . $removedTable->getName(),
-                0,
-                $this->getMaxTableNameLength()
+            $tableDiff->newName = $this->connection->getDatabasePlatform()->quoteIdentifier(
+                substr(
+                    $this->deletedPrefix . $removedTable->getName(),
+                    0,
+                    PlatformInformation::getMaxIdentifierLength($this->connection->getDatabasePlatform())
+                )
             );
             $schemaDiff->changedTables[$index] = $tableDiff;
             unset($schemaDiff->removedTables[$index]);
@@ -974,7 +962,7 @@ class ConnectionMigrator
                 $renamedColumnName = substr(
                     $this->deletedPrefix . $removedColumn->getName(),
                     0,
-                    $this->getMaxColumnNameLength()
+                    PlatformInformation::getMaxIdentifierLength($this->connection->getDatabasePlatform())
                 );
                 $renamedColumn = new Column(
                     $this->connection->quoteIdentifier($renamedColumnName),
@@ -988,7 +976,7 @@ class ConnectionMigrator
                     $removedColumn->getQuotedName($this->connection->getDatabasePlatform()),
                     $renamedColumn,
                     $changedProperties = [],
-                    $removedColumn
+                    $this->buildQuotedColumn($removedColumn)
                 );
 
                 // Add the column with the required rename information to the changed column list
@@ -1044,57 +1032,6 @@ class ConnectionMigrator
     }
 
     /**
-     * Retrieve the database platform-specific limitations on column and schema name sizes as
-     * defined in the tableAndFieldMaxNameLengthsPerDbPlatform property.
-     *
-     * @param string $databasePlatform
-     * @return array
-     */
-    protected function getTableAndFieldNameMaxLengths(string $databasePlatform = '')
-    {
-        if ($databasePlatform === '') {
-            $databasePlatform = $this->connection->getDatabasePlatform()->getName();
-        }
-        $databasePlatform = strtolower($databasePlatform);
-
-        if (isset($this->tableAndFieldMaxNameLengthsPerDbPlatform[$databasePlatform])) {
-            $nameLengthRestrictions = $this->tableAndFieldMaxNameLengthsPerDbPlatform[$databasePlatform];
-        } else {
-            $nameLengthRestrictions = $this->tableAndFieldMaxNameLengthsPerDbPlatform['default'];
-        }
-
-        if (is_string($nameLengthRestrictions)) {
-            return $this->getTableAndFieldNameMaxLengths($nameLengthRestrictions);
-        } else {
-            return $nameLengthRestrictions;
-        }
-    }
-
-    /**
-     * Get the maximum table name length possible for the given DB platform.
-     *
-     * @param string $databasePlatform
-     * @return string
-     */
-    protected function getMaxTableNameLength(string $databasePlatform = '')
-    {
-        $nameLengthRestrictions = $this->getTableAndFieldNameMaxLengths($databasePlatform);
-        return $nameLengthRestrictions['tables'];
-    }
-
-    /**
-     * Get the maximum column name length possible for the given DB platform.
-     *
-     * @param string $databasePlatform
-     * @return string
-     */
-    protected function getMaxColumnNameLength(string $databasePlatform = '')
-    {
-        $nameLengthRestrictions = $this->getTableAndFieldNameMaxLengths($databasePlatform);
-        return $nameLengthRestrictions['columns'];
-    }
-
-    /**
      * Return the amount of records in the given table.
      *
      * @param string $tableName
@@ -1119,7 +1056,7 @@ class ConnectionMigrator
     {
         $connectionNames = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionNames();
 
-        if (array_key_exists($tableName, (array)$GLOBALS['TYPO3_CONF_VARS']['DB']['TableMapping'])) {
+        if (isset($GLOBALS['TYPO3_CONF_VARS']['DB']['TableMapping'][$tableName])) {
             return in_array($GLOBALS['TYPO3_CONF_VARS']['DB']['TableMapping'][$tableName], $connectionNames, true)
                 ? $GLOBALS['TYPO3_CONF_VARS']['DB']['TableMapping'][$tableName]
                 : ConnectionPool::DEFAULT_CONNECTION_NAME;
@@ -1182,12 +1119,15 @@ class ConnectionMigrator
      */
     protected function transformTablesForDatabasePlatform(array $tables, Connection $connection): array
     {
+        $defaultTableOptions = $connection->getParams()['tableoptions'] ?? [];
         foreach ($tables as &$table) {
             $indexes = [];
             foreach ($table->getIndexes() as $key => $index) {
                 $indexName = $index->getName();
-                // PostgreSQL requires index names to be unique per database/schema.
-                if ($connection->getDatabasePlatform() instanceof PostgreSqlPlatform) {
+                // PostgreSQL and sqlite require index names to be unique per database/schema.
+                if ($connection->getDatabasePlatform() instanceof PostgreSqlPlatform
+                    || $connection->getDatabasePlatform() instanceof SqlitePlatform
+                ) {
                     $indexName = $indexName . '_' . hash('crc32b', $table->getName() . '_' . $indexName);
                 }
 
@@ -1224,7 +1164,7 @@ class ConnectionMigrator
                 $indexes,
                 $table->getForeignKeys(),
                 0,
-                $table->getOptions()
+                array_merge($defaultTableOptions, $table->getOptions())
             );
         }
 
@@ -1252,13 +1192,23 @@ class ConnectionMigrator
         $queryBuilder = $this->connection->createQueryBuilder();
         $result = $queryBuilder
             ->select(
-                'TABLE_NAME AS table',
-                'ENGINE AS engine',
-                'ROW_FORMAT AS row_format',
-                'TABLE_COLLATION AS collate',
-                'TABLE_COMMENT AS comment'
+                'tables.TABLE_NAME AS table',
+                'tables.ENGINE AS engine',
+                'tables.ROW_FORMAT AS row_format',
+                'tables.TABLE_COLLATION AS collate',
+                'tables.TABLE_COMMENT AS comment',
+                'CCSA.character_set_name AS charset'
             )
-            ->from('information_schema.TABLES')
+            ->from('information_schema.TABLES', 'tables')
+            ->join(
+                'tables',
+                'information_schema.COLLATION_CHARACTER_SET_APPLICABILITY',
+                'CCSA',
+                $queryBuilder->expr()->eq(
+                    'CCSA.collation_name',
+                    $queryBuilder->quoteIdentifier('tables.table_collation')
+                )
+            )
             ->where(
                 $queryBuilder->expr()->eq(
                     'TABLE_TYPE',
@@ -1278,5 +1228,103 @@ class ConnectionMigrator
         }
 
         return $tableOptions;
+    }
+
+    /**
+     * Helper function to build a table object that has the _quoted attribute set so that the SchemaManager
+     * will use quoted identifiers when creating the final SQL statements. This is needed as Doctrine doesn't
+     * provide a method to set the flag after the object has been instantiated and there's no possibility to
+     * hook into the createSchema() method early enough to influence the original table object.
+     *
+     * @param \Doctrine\DBAL\Schema\Table $table
+     * @return \Doctrine\DBAL\Schema\Table
+     */
+    protected function buildQuotedTable(Table $table): Table
+    {
+        $databasePlatform = $this->connection->getDatabasePlatform();
+
+        return GeneralUtility::makeInstance(
+            Table::class,
+            $databasePlatform->quoteIdentifier($table->getName()),
+            $table->getColumns(),
+            $table->getIndexes(),
+            $table->getForeignKeys(),
+            0,
+            $table->getOptions()
+        );
+    }
+
+    /**
+     * Helper function to build a column object that has the _quoted attribute set so that the SchemaManager
+     * will use quoted identifiers when creating the final SQL statements. This is needed as Doctrine doesn't
+     * provide a method to set the flag after the object has been instantiated and there's no possibility to
+     * hook into the createSchema() method early enough to influence the original column object.
+     *
+     * @param \Doctrine\DBAL\Schema\Column $column
+     * @return \Doctrine\DBAL\Schema\Column
+     */
+    protected function buildQuotedColumn(Column $column): Column
+    {
+        $databasePlatform = $this->connection->getDatabasePlatform();
+
+        return GeneralUtility::makeInstance(
+            Column::class,
+            $databasePlatform->quoteIdentifier($column->getName()),
+            $column->getType(),
+            array_diff_key($column->toArray(), ['name', 'type'])
+        );
+    }
+
+    /**
+     * Helper function to build an index object that has the _quoted attribute set so that the SchemaManager
+     * will use quoted identifiers when creating the final SQL statements. This is needed as Doctrine doesn't
+     * provide a method to set the flag after the object has been instantiated and there's no possibility to
+     * hook into the createSchema() method early enough to influence the original column object.
+     *
+     * @param \Doctrine\DBAL\Schema\Index $index
+     * @return \Doctrine\DBAL\Schema\Index
+     */
+    protected function buildQuotedIndex(Index $index): Index
+    {
+        $databasePlatform = $this->connection->getDatabasePlatform();
+
+        return GeneralUtility::makeInstance(
+            Index::class,
+            $databasePlatform->quoteIdentifier($index->getName()),
+            $index->getColumns(),
+            $index->isUnique(),
+            $index->isPrimary(),
+            $index->getFlags(),
+            $index->getOptions()
+        );
+    }
+
+    /**
+     * Helper function to build a foreign key constraint object that has the _quoted attribute set so that the
+     * SchemaManager will use quoted identifiers when creating the final SQL statements. This is needed as Doctrine
+     * doesn't provide a method to set the flag after the object has been instantiated and there's no possibility to
+     * hook into the createSchema() method early enough to influence the original column object.
+     *
+     * @param \Doctrine\DBAL\Schema\ForeignKeyConstraint $index
+     * @return \Doctrine\DBAL\Schema\ForeignKeyConstraint
+     */
+    protected function buildQuotedForeignKey(ForeignKeyConstraint $index): ForeignKeyConstraint
+    {
+        $databasePlatform = $this->connection->getDatabasePlatform();
+
+        return GeneralUtility::makeInstance(
+            ForeignKeyConstraint::class,
+            $index->getLocalColumns(),
+            $databasePlatform->quoteIdentifier($index->getForeignTableName()),
+            $index->getForeignColumns(),
+            $databasePlatform->quoteIdentifier($index->getName()),
+            $index->getOptions()
+        );
+    }
+
+    protected function tableRunsOnSqlite(string $tableName): bool
+    {
+        $connection = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable($tableName);
+        return $connection->getDatabasePlatform() instanceof SqlitePlatform;
     }
 }

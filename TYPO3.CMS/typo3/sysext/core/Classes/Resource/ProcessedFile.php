@@ -129,7 +129,6 @@ class ProcessedFile extends AbstractFile
      * Creates a ProcessedFile object from a database record.
      *
      * @param array $databaseRow
-     * @return ProcessedFile
      */
     protected function reconstituteFromDatabaseRecord(array $databaseRow)
     {
@@ -140,6 +139,10 @@ class ProcessedFile extends AbstractFile
         $this->identifier = $databaseRow['identifier'];
         $this->name = $databaseRow['name'];
         $this->properties = $databaseRow;
+
+        if (!empty($databaseRow['storage']) && (int)$this->storage->getUid() !== (int)$databaseRow['storage']) {
+            $this->storage = ResourceFactory::getInstance()->getStorageObject($databaseRow['storage']);
+        }
     }
 
     /********************************
@@ -164,7 +167,6 @@ class ProcessedFile extends AbstractFile
      * Replace the current file contents with the given string
      *
      * @param string $contents The contents to write to the file.
-     * @return File The file object (allows chaining).
      * @throws \BadMethodCallException
      */
     public function setContents($contents)
@@ -180,7 +182,7 @@ class ProcessedFile extends AbstractFile
      */
     public function updateWithLocalFile($filePath)
     {
-        if ($this->identifier === null) {
+        if (empty($this->identifier)) {
             throw new \RuntimeException('Cannot update original file!', 1350582054);
         }
         $processingFolder = $this->originalFile->getStorage()->getProcessingFolder($this->originalFile);
@@ -248,8 +250,8 @@ class ProcessedFile extends AbstractFile
      */
     public function setName($name)
     {
-        // Remove the existing file
-        if ($this->name !== $name && $this->name !== '' && $this->exists()) {
+        // Remove the existing file, but only we actually have a name or the name has changed
+        if (!empty($this->name) && $this->name !== $name && $this->exists()) {
             $this->delete();
         }
 
@@ -258,6 +260,22 @@ class ProcessedFile extends AbstractFile
         $this->identifier = $this->storage->getProcessingFolder($this->originalFile)->getIdentifier() . $this->name;
 
         $this->updated = true;
+    }
+
+    /**
+     * Checks if this file exists.
+     * Since the original file may reside in a different storage
+     * we ask the original file if it exists in case the processed is representing it
+     *
+     * @return bool TRUE if this file physically exists
+     */
+    public function exists()
+    {
+        if ($this->usesOriginalFile()) {
+            return $this->originalFile->exists();
+        }
+
+        return parent::exists();
     }
 
     /******************
@@ -311,9 +329,8 @@ class ProcessedFile extends AbstractFile
     {
         if ($this->usesOriginalFile()) {
             return $this->originalFile->getName();
-        } else {
-            return $this->name;
         }
+        return $this->name;
     }
 
     /**
@@ -402,7 +419,7 @@ class ProcessedFile extends AbstractFile
      */
     public function usesOriginalFile()
     {
-        return $this->identifier == null || $this->identifier === $this->originalFile->getIdentifier();
+        return empty($this->identifier) || $this->identifier === $this->originalFile->getIdentifier();
     }
 
     /**
@@ -429,9 +446,8 @@ class ProcessedFile extends AbstractFile
         // Only delete file when original isn't used
         if (!$this->usesOriginalFile()) {
             return parent::delete();
-        } else {
-            return true;
         }
+        return true;
     }
 
     /**
@@ -446,9 +462,8 @@ class ProcessedFile extends AbstractFile
         // The uid always (!) has to come from this file and never the original file (see getOriginalFile() to get this)
         if ($this->isUnchanged() && $key !== 'uid') {
             return $this->originalFile->getProperty($key);
-        } else {
-            return $this->properties[$key];
         }
+        return $this->properties[$key];
     }
 
     /**
@@ -554,16 +569,16 @@ class ProcessedFile extends AbstractFile
      * Returns a publicly accessible URL for this file
      *
      * @param bool $relativeToCurrentScript Determines whether the URL returned should be relative to the current script, in case it is relative at all
-     * @return NULL|string NULL if file is deleted, the generated URL otherwise
+     * @return string|null NULL if file is deleted, the generated URL otherwise
      */
     public function getPublicUrl($relativeToCurrentScript = false)
     {
         if ($this->deleted) {
             return null;
-        } elseif ($this->usesOriginalFile()) {
-            return $this->getOriginalFile()->getPublicUrl($relativeToCurrentScript);
-        } else {
-            return $this->getStorage()->getPublicUrl($this, $relativeToCurrentScript);
         }
+        if ($this->usesOriginalFile()) {
+            return $this->getOriginalFile()->getPublicUrl($relativeToCurrentScript);
+        }
+        return $this->getStorage()->getPublicUrl($this, $relativeToCurrentScript);
     }
 }

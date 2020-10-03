@@ -15,18 +15,19 @@ namespace TYPO3\CMS\Core\Resource;
  */
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
 use TYPO3\CMS\Core\Resource\Index\FileIndexRepository;
+use TYPO3\CMS\Core\Service\FlexFormService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
 use TYPO3\CMS\Core\Utility\PathUtility;
-use TYPO3\CMS\Extbase\Service\FlexFormService;
 use TYPO3\CMS\Extbase\SignalSlot\Dispatcher;
 
-// @todo implement constructor-level caching
 /**
  * Factory class for FAL objects
+ * @todo implement constructor-level caching
  */
 class ResourceFactory implements ResourceFactoryInterface, \TYPO3\CMS\Core\SingletonInterface
 {
@@ -65,7 +66,7 @@ class ResourceFactory implements ResourceFactoryInterface, \TYPO3\CMS\Core\Singl
      *
      * @var array
      */
-    protected $localDriverStorageCache = null;
+    protected $localDriverStorageCache;
 
     /**
      * @var Dispatcher
@@ -92,7 +93,7 @@ class ResourceFactory implements ResourceFactoryInterface, \TYPO3\CMS\Core\Singl
      */
     public function getDriverObject($driverIdentificationString, array $driverConfiguration)
     {
-        /** @var $driverRegistry Driver\DriverRegistry */
+        /** @var Driver\DriverRegistry $driverRegistry */
         $driverRegistry = GeneralUtility::makeInstance(Driver\DriverRegistry::class);
         $driverClass = $driverRegistry->getDriverClass($driverIdentificationString);
         $driverObject = GeneralUtility::makeInstance($driverClass, $driverConfiguration);
@@ -107,11 +108,11 @@ class ResourceFactory implements ResourceFactoryInterface, \TYPO3\CMS\Core\Singl
      * getDefaultStorage->getDefaultFolder() will get you fileadmin/user_upload/ in a standard
      * TYPO3 installation.
      *
-     * @return null|ResourceStorage
+     * @return ResourceStorage|null
      */
     public function getDefaultStorage()
     {
-        /** @var $storageRepository StorageRepository */
+        /** @var StorageRepository $storageRepository */
         $storageRepository = GeneralUtility::makeInstance(StorageRepository::class);
 
         $allStorages = $storageRepository->findAll();
@@ -142,9 +143,8 @@ class ResourceFactory implements ResourceFactoryInterface, \TYPO3\CMS\Core\Singl
         if ($uid === 0 && $fileIdentifier !== null) {
             $uid = $this->findBestMatchingStorageByLocalPath($fileIdentifier);
         }
-        if (!$this->storageInstances[$uid]) {
+        if (empty($this->storageInstances[$uid])) {
             $storageConfiguration = null;
-            $storageObject = null;
             list($_, $uid, $recordData, $fileIdentifier) = $this->emitPreProcessStorageSignal($uid, $recordData, $fileIdentifier);
             // If the built-in storage with UID=0 is requested:
             if ($uid === 0) {
@@ -167,15 +167,12 @@ class ResourceFactory implements ResourceFactoryInterface, \TYPO3\CMS\Core\Singl
                     'basePath' => '/',
                     'pathType' => 'relative'
                 ];
-            } elseif (count($recordData) === 0 || (int)$recordData['uid'] !== $uid) {
-                /** @var $storageRepository StorageRepository */
+            } elseif ($recordData === [] || (int)$recordData['uid'] !== $uid) {
+                /** @var StorageRepository $storageRepository */
                 $storageRepository = GeneralUtility::makeInstance(StorageRepository::class);
-                /** @var $storage ResourceStorage */
-                $storageObject = $storageRepository->findByUid($uid);
+                $recordData = $storageRepository->fetchRowByUid($uid);
             }
-            if (!$storageObject instanceof ResourceStorage) {
-                $storageObject = $this->createStorageObject($recordData, $storageConfiguration);
-            }
+            $storageObject = $this->createStorageObject($recordData, $storageConfiguration);
             $this->emitPostProcessStorageSignal($storageObject);
             $this->storageInstances[$uid] = $storageObject;
         }
@@ -207,7 +204,7 @@ class ResourceFactory implements ResourceFactoryInterface, \TYPO3\CMS\Core\Singl
 
     /**
      * Checks whether a file resides within a real storage in local file system.
-     * If no match is found, uid 0 is returned which is a fallback storage pointing to PATH_site.
+     * If no match is found, uid 0 is returned which is a fallback storage pointing to fileadmin in public web path.
      *
      * The file identifier is adapted accordingly to match the new storage's base path.
      *
@@ -243,9 +240,9 @@ class ResourceFactory implements ResourceFactoryInterface, \TYPO3\CMS\Core\Singl
      */
     protected function initializeLocalStorageCache()
     {
-        /** @var $storageRepository StorageRepository */
+        /** @var StorageRepository $storageRepository */
         $storageRepository = GeneralUtility::makeInstance(StorageRepository::class);
-        /** @var $storageObjects ResourceStorage[] */
+        /** @var ResourceStorage[] $storageObjects */
         $storageObjects = $storageRepository->findByStorageType('Local');
 
         $storageCache = [];
@@ -319,7 +316,7 @@ class ResourceFactory implements ResourceFactoryInterface, \TYPO3\CMS\Core\Singl
      */
     public function createCollectionObject(array $collectionData)
     {
-        /** @var $registry Collection\FileCollectionRegistry */
+        /** @var Collection\FileCollectionRegistry $registry */
         $registry = GeneralUtility::makeInstance(Collection\FileCollectionRegistry::class);
 
         /** @var \TYPO3\CMS\Core\Collection\AbstractRecordCollection $class */
@@ -374,7 +371,7 @@ class ResourceFactory implements ResourceFactoryInterface, \TYPO3\CMS\Core\Singl
         if (!is_numeric($uid)) {
             throw new \InvalidArgumentException('The UID of file has to be numeric. UID given: "' . $uid . '"', 1300096564);
         }
-        if (!$this->fileInstances[$uid]) {
+        if (empty($this->fileInstances[$uid])) {
             // Fetches data in case $fileData is empty
             if (empty($fileData)) {
                 $fileData = $this->getFileIndexRepository()->findOneByUid($uid);
@@ -391,7 +388,7 @@ class ResourceFactory implements ResourceFactoryInterface, \TYPO3\CMS\Core\Singl
      * Gets an file object from an identifier [storage]:[fileId]
      *
      * @param string $identifier
-     * @return File
+     * @return File|ProcessedFile|null
      * @throws \InvalidArgumentException
      */
     public function getFileObjectFromCombinedIdentifier($identifier)
@@ -422,7 +419,7 @@ class ResourceFactory implements ResourceFactoryInterface, \TYPO3\CMS\Core\Singl
      *
      * @param int $storageUid
      * @param string $fileIdentifier
-     * @return NULL|File|ProcessedFile
+     * @return File|ProcessedFile|null
      */
     public function getFileObjectByStorageAndIdentifier($storageUid, &$fileIdentifier)
     {
@@ -459,47 +456,47 @@ class ResourceFactory implements ResourceFactoryInterface, \TYPO3\CMS\Core\Singl
      * - "file:23"
      *
      * @param string $input
-     * @return File|Folder
+     * @return File|Folder|null
      */
     public function retrieveFileOrFolderObject($input)
     {
-        // Remove PATH_site because absolute paths under Windows systems contain ':'
+        // Remove Environment::getPublicPath() because absolute paths under Windows systems contain ':'
         // This is done in all considered sub functions anyway
-        $input = str_replace(PATH_site, '', $input);
+        $input = str_replace(Environment::getPublicPath() . '/', '', $input);
 
         if (GeneralUtility::isFirstPartOfStr($input, 'file:')) {
             $input = substr($input, 5);
             return $this->retrieveFileOrFolderObject($input);
-        } elseif (MathUtility::canBeInterpretedAsInteger($input)) {
+        }
+        if (MathUtility::canBeInterpretedAsInteger($input)) {
             return $this->getFileObject($input);
-        } elseif (strpos($input, ':') > 0) {
+        }
+        if (strpos($input, ':') > 0) {
             list($prefix) = explode(':', $input);
             if (MathUtility::canBeInterpretedAsInteger($prefix)) {
                 // path or folder in a valid storageUID
                 return $this->getObjectFromCombinedIdentifier($input);
-            } elseif ($prefix === 'EXT') {
+            }
+            if ($prefix === 'EXT') {
                 $input = GeneralUtility::getFileAbsFileName($input);
                 if (empty($input)) {
                     return null;
                 }
 
-                $input = PathUtility::getRelativePath(PATH_site, PathUtility::dirname($input)) . PathUtility::basename($input);
+                $input = PathUtility::getRelativePath(Environment::getPublicPath() . '/', PathUtility::dirname($input)) . PathUtility::basename($input);
                 return $this->getFileObjectFromCombinedIdentifier($input);
-            } else {
-                return null;
             }
-        } else {
-            // this is a backwards-compatible way to access "0-storage" files or folders
-            // eliminate double slashes, /./ and /../
-            $input = PathUtility::getCanonicalPath(ltrim($input, '/'));
-            if (@is_file(PATH_site . $input)) {
-                // only the local file
-                return $this->getFileObjectFromCombinedIdentifier($input);
-            } else {
-                // only the local path
-                return $this->getFolderObjectFromCombinedIdentifier($input);
-            }
+            return null;
         }
+        // this is a backwards-compatible way to access "0-storage" files or folders
+        // eliminate double slashes, /./ and /../
+        $input = PathUtility::getCanonicalPath(ltrim($input, '/'));
+        if (@is_file(Environment::getPublicPath() . '/' . $input)) {
+            // only the local file
+            return $this->getFileObjectFromCombinedIdentifier($input);
+        }
+        // only the local path
+        return $this->getFolderObjectFromCombinedIdentifier($input);
     }
 
     /**
@@ -523,8 +520,8 @@ class ResourceFactory implements ResourceFactoryInterface, \TYPO3\CMS\Core\Singl
             // please note that getStorageObject() might modify $folderIdentifier when
             // auto-detecting the best-matching storage to use
             $folderIdentifier = $parts[0];
-            // make sure to not use an absolute path, and remove PATH_site if it is prepended
-            if (GeneralUtility::isFirstPartOfStr($folderIdentifier, PATH_site)) {
+            // make sure to not use an absolute path, and remove Environment::getPublicPath if it is prepended
+            if (GeneralUtility::isFirstPartOfStr($folderIdentifier, Environment::getPublicPath() . '/')) {
                 $folderIdentifier = PathUtility::stripPathSitePrefix($parts[0]);
             }
         }
@@ -558,11 +555,11 @@ class ResourceFactory implements ResourceFactoryInterface, \TYPO3\CMS\Core\Singl
         $storage = $this->getStorageObject($storageId);
         if ($storage->hasFile($objectIdentifier)) {
             return $storage->getFile($objectIdentifier);
-        } elseif ($storage->hasFolder($objectIdentifier)) {
-            return $storage->getFolder($objectIdentifier);
-        } else {
-            throw new Exception\ResourceDoesNotExistException('Object with identifier "' . $identifier . '" does not exist in storage', 1329647780);
         }
+        if ($storage->hasFolder($objectIdentifier)) {
+            return $storage->getFolder($objectIdentifier);
+        }
+        throw new Exception\ResourceDoesNotExistException('Object with identifier "' . $identifier . '" does not exist in storage', 1329647780);
     }
 
     /**
@@ -643,7 +640,7 @@ class ResourceFactory implements ResourceFactoryInterface, \TYPO3\CMS\Core\Singl
      *
      * @param int $uid The uid of the file usage (sys_file_reference) to be fetched
      * @param bool $raw Whether to get raw results without performing overlays
-     * @return NULL|array
+     * @return array|null
      */
     protected function getFileReferenceData($uid, $raw = false)
     {

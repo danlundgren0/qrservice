@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Backend\Tree\View;
 
 use TYPO3\CMS\Core\Resource\Folder;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\HttpUtility;
 use TYPO3\CMS\Recordlist\Tree\View\LinkParameterProviderInterface;
 
 /**
@@ -62,9 +63,11 @@ class ElementBrowserFolderTreeView extends FolderTreeView
         $theFolderIcon = '';
 
         // Wrap icon in link (in ElementBrowser only the "titlelink" is used).
-        if ($this->ext_IconMode === 'titlelink' && $this->ext_isLinkable($folderObject)) {
-            $parameters = GeneralUtility::implodeArrayForUrl('', $this->linkParameterProvider->getUrlParameters(['identifier' => $folderObject->getCombinedIdentifier()]));
-            $aOnClick = 'return jumpToUrl(' . GeneralUtility::quoteJSvalue($this->getThisScript() . ltrim($parameters, '&')) . ');';
+        if ($this->ext_IconMode === 'titlelink') {
+            $parameters = HttpUtility::buildQueryString(
+                $this->linkParameterProvider->getUrlParameters(['identifier' => $folderObject->getCombinedIdentifier()])
+            );
+            $aOnClick = 'return jumpToUrl(' . GeneralUtility::quoteJSvalue($this->getThisScript() . $parameters) . ');';
             $theFolderIcon = '<a href="#" onclick="' . htmlspecialchars($aOnClick) . '">' . $icon . '</a>';
         }
 
@@ -81,24 +84,23 @@ class ElementBrowserFolderTreeView extends FolderTreeView
      */
     public function wrapTitle($title, $folderObject, $bank = 0)
     {
-        if ($this->ext_isLinkable($folderObject)) {
-            $parameters = GeneralUtility::implodeArrayForUrl('', $this->linkParameterProvider->getUrlParameters(['identifier' => $folderObject->getCombinedIdentifier()]));
-            return '<a href="#" onclick="return jumpToUrl(' . htmlspecialchars(GeneralUtility::quoteJSvalue($this->getThisScript() . ltrim($parameters, '&'))) . ');">' . $title . '</a>';
-        } else {
-            return '<span class="text-muted">' . $title . '</span>';
-        }
+        $parameters = HttpUtility::buildQueryString(
+            $this->linkParameterProvider->getUrlParameters(['identifier' => $folderObject->getCombinedIdentifier()])
+        );
+        return '<a href="#" onclick="return jumpToUrl(' . htmlspecialchars(GeneralUtility::quoteJSvalue($this->getThisScript() . $parameters)) . ');">' . $title . '</a>';
     }
 
     /**
      * Returns TRUE if the input "record" contains a folder which can be linked.
      *
      * @param Folder $folderObject Object with information about the folder element. Contains keys like title, uid, path, _title
-     * @return bool TRUE is returned if the path is found in the web-part of the server and is NOT a recycler or temp folder AND if ->ext_noTempRecyclerDirs is not set.
+     * @return bool TRUE
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function ext_isLinkable(Folder $folderObject)
     {
-        $identifier = $folderObject->getIdentifier();
-        return !$this->ext_noTempRecyclerDirs || substr($identifier, -7) !== '_temp_/' && substr($identifier, -11) !== '_recycler_/';
+        trigger_error('This method is obsolete and will be removed in TYPO3 v10.0.', E_USER_DEPRECATED);
+        return true;
     }
 
     /**
@@ -108,7 +110,7 @@ class ElementBrowserFolderTreeView extends FolderTreeView
      */
     protected function renderPMIconAndLink($cmd, $isOpen)
     {
-        if (get_class($this) === __CLASS__) {
+        if (static::class === __CLASS__) {
             return $this->PMiconATagWrap('', $cmd, !$isOpen);
         }
         return parent::renderPMIconAndLink($cmd, $isOpen);
@@ -122,7 +124,7 @@ class ElementBrowserFolderTreeView extends FolderTreeView
      * @param bool|string $bMark If set, the link will have an anchor point (=$bMark) and a name attribute (=$bMark)
      * @param bool $isOpen check if the item has children
      * @return string Link-wrapped input string
-     * @access private
+     * @internal
      */
     public function PM_ATagWrap($icon, $cmd, $bMark = '', $isOpen = false)
     {
@@ -130,7 +132,7 @@ class ElementBrowserFolderTreeView extends FolderTreeView
         $name = $bMark ? ' name=' . $bMark : '';
         $urlParameters = $this->linkParameterProvider->getUrlParameters([]);
         $urlParameters['PM'] = $cmd;
-        $aOnClick = 'return jumpToUrl(' . GeneralUtility::quoteJSvalue($this->getThisScript() . ltrim(GeneralUtility::implodeArrayForUrl('', $urlParameters), '&')) . ',' . GeneralUtility::quoteJSvalue($anchor) . ');';
+        $aOnClick = 'return jumpToUrl(' . GeneralUtility::quoteJSvalue($this->getThisScript() . HttpUtility::buildQueryString($urlParameters)) . ',' . GeneralUtility::quoteJSvalue($anchor) . ');';
         return '<a href="#"' . htmlspecialchars($name) . ' onclick="' . htmlspecialchars($aOnClick) . '">' . $icon . '</a>';
     }
 
@@ -147,9 +149,8 @@ class ElementBrowserFolderTreeView extends FolderTreeView
     {
         if (empty($this->scope)) {
             $this->scope = [
-                'class' => get_class($this),
+                'class' => static::class,
                 'script' => $this->thisScript,
-                'ext_noTempRecyclerDirs' => $this->ext_noTempRecyclerDirs,
                 'browser' => $this->linkParameterProvider->getUrlParameters([]),
             ];
         }

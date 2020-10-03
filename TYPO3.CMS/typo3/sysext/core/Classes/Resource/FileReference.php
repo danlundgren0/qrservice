@@ -86,7 +86,7 @@ class FileReference implements FileInterface
             throw new \InvalidArgumentException('Incorrect reference to original file given for FileReference.', 1300098528);
         }
         if (!$factory) {
-            /** @var $factory ResourceFactory */
+            /** @var ResourceFactory $factory */
             $factory = ResourceFactory::getInstance();
         }
         $this->originalFile = $factory->getFileObject($fileReferenceData['uid_local']);
@@ -409,7 +409,6 @@ class FileReference implements FileInterface
      * (database table sys_file_reference) but leaves the original file untouched.
      *
      * @throws \BadMethodCallException
-     * @return bool TRUE if deletion succeeded
      */
     public function delete()
     {
@@ -424,7 +423,6 @@ class FileReference implements FileInterface
      *
      * @param string $newName The new name
      * @param string $conflictMode
-     * @return FileReference
      */
     public function rename($newName, $conflictMode = DuplicationBehavior::RENAME)
     {
@@ -444,7 +442,7 @@ class FileReference implements FileInterface
      * some web-based authentication. You have to take care of this yourself.
      *
      * @param bool  $relativeToCurrentScript   Determines whether the URL returned should be relative to the current script, in case it is relative at all (only for the LocalDriver)
-     * @return string
+     * @return string|null NULL if file is missing or deleted, the generated url otherwise
      */
     public function getPublicUrl($relativeToCurrentScript = false)
     {

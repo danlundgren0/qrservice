@@ -93,16 +93,16 @@ class Report extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     /**
      * nodeType
      *
-     * @var int
+     * @var \DanLundgren\DlIponlyestate\Domain\Model\NodeType
      */
-    protected $nodeType = 0;
+    protected $nodeType = null;
     
     /**
      * controlPoint
      *
-     * @var int
+     * @var \DanLundgren\DlIponlyestate\Domain\Model\ControlPoint
      */
-    protected $controlPoint = 0;
+    protected $controlPoint = null;
     
     /**
      * executiveTechnician
@@ -483,7 +483,7 @@ class Report extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     /**
      * Returns the nodeType
      *
-     * @return int $nodeType
+     * @return \DanLundgren\DlIponlyestate\Domain\Model\NodeType $nodeType
      */
     public function getNodeTypeName()
     {
@@ -499,7 +499,7 @@ class Report extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     /**
      * Sets the nodeType
      *
-     * @param int $nodeType
+     * @param \DanLundgren\DlIponlyestate\Domain\Model\NodeType $nodeType
      * @return void
      */
     public function setNodeType($nodeType)
@@ -508,9 +508,9 @@ class Report extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     }
     
     /**
-     * Returns the controlPoint
+     * Returns the controlPoints
      *
-     * @return int $controlPoint
+     * @return \DanLundgren\DlIponlyestate\Domain\Model\ControlPoint $controlPoint
      */
     public function getControlPoint()
     {
@@ -518,9 +518,9 @@ class Report extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     }
     
     /**
-     * Sets the controlPoint
+     * Sets the controlPoints
      *
-     * @param string $controlPoint
+     * @param \DanLundgren\DlIponlyestate\Domain\Model\ControlPoint $controlPoint
      * @return void
      */
     public function setControlPoint($controlPoint)

@@ -18,6 +18,7 @@ namespace TYPO3\CMS\IndexedSearch\Hook;
  * Crawler hook for indexed search. Works with the "crawler" extension
  * This hook is specifically used to index external files found on pages through the crawler extension.
  * @see \TYPO3\CMS\IndexedSearch\Indexer::extractLinks()
+ * @internal this is a TYPO3-internal hook implementation and not part of TYPO3's Core API.
  */
 class CrawlerFilesHook
 {
@@ -26,7 +27,7 @@ class CrawlerFilesHook
      *
      * @param array $params Params from log element.
      * @param object $pObj Parent object (tx_crawler lib)
-     * @return null|array Result array
+     * @return array|null Result array
      */
     public function crawler_execute($params, &$pObj)
     {

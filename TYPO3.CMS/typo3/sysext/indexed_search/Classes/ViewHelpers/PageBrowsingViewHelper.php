@@ -17,8 +17,8 @@ namespace TYPO3\CMS\IndexedSearch\ViewHelpers;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
 use TYPO3\CMS\Extbase\Utility\LocalizationUtility;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
@@ -49,7 +49,6 @@ class PageBrowsingViewHelper extends AbstractViewHelper
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('maximumNumberOfResultPages', 'int', '', true);
         $this->registerArgument('numberOfResults', 'int', '', true);
         $this->registerArgument('resultsPerPage', 'int', '', true);
@@ -117,7 +116,7 @@ class PageBrowsingViewHelper extends AbstractViewHelper
         // next link
         if ($currentPage < $pageCount - 1) {
             $label = LocalizationUtility::translate('displayResults.next', 'IndexedSearch');
-            $content .= '<li>' . self::makecurrentPageSelector_link($label, ($currentPage + 1), $freeIndexUid) . '</li>';
+            $content .= '<li>' . self::makecurrentPageSelector_link($label, $currentPage + 1, $freeIndexUid) . '</li>';
         }
         return '<ul class="tx-indexedsearch-browsebox">' . $content . '</ul>';
     }

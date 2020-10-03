@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Extensionmanager\Controller;
 
 /**
  * Abstract action controller.
+ * @internal This class is a specific controller implementation and is not considered part of the Public TYPO3 API.
  */
 class AbstractController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionController
 {
@@ -35,8 +36,8 @@ class AbstractController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControl
      * Translation shortcut
      *
      * @param $key
-     * @param NULL|array $arguments
-     * @return NULL|string
+     * @param array|null $arguments
+     * @return string|null
      */
     protected function translate($key, $arguments = null)
     {

@@ -1,4 +1,5 @@
 <?php
+declare(strict_types = 1);
 namespace TYPO3\CMS\Frontend\Page;
 
 /*
@@ -14,10 +15,13 @@ namespace TYPO3\CMS\Frontend\Page;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Core\Utility\HttpUtility;
+use Psr\Http\Message\ResponseInterface;
+use TYPO3\CMS\Core\Http\RedirectResponse;
+use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
 
 /**
  * Handles the redirection for external URL pages.
+ * @deprecated since TYPO3 v9.3, will be removed in TYPO3 v10.0. The functionality has been moved into a PSR-15 middleware.
  */
 class ExternalPageUrlHandler implements \TYPO3\CMS\Frontend\Http\UrlHandlerInterface
 {
@@ -26,12 +30,17 @@ class ExternalPageUrlHandler implements \TYPO3\CMS\Frontend\Http\UrlHandlerInter
      */
     protected $externalUrl = '';
 
+    public function __construct()
+    {
+        trigger_error('ExternalPageUrlHandler has been moved into a PSR-15 middleware and will be removed in TYPO3 v10.0. In order to modify the external page redirection, use a PSR-15 middleware as well.', E_USER_DEPRECATED);
+    }
+
     /**
      * Checks if external URLs are enabled and if the current page points to an external URL.
      *
      * @return bool
      */
-    public function canHandleCurrentUrl()
+    public function canHandleCurrentUrl(): bool
     {
         $tsfe = $this->getTypoScriptFrontendController();
 
@@ -42,23 +51,22 @@ class ExternalPageUrlHandler implements \TYPO3\CMS\Frontend\Http\UrlHandlerInter
         $this->externalUrl = $tsfe->sys_page->getExtURL($tsfe->page);
         if (empty($this->externalUrl)) {
             return false;
-        } else {
-            return true;
         }
+        return true;
     }
 
     /**
      * Redirects the user to the detected external URL.
      */
-    public function handle()
+    public function handle(): ResponseInterface
     {
-        HttpUtility::redirect($this->externalUrl, HttpUtility::HTTP_STATUS_303);
+        return new RedirectResponse($this->externalUrl, 303);
     }
 
     /**
-     * @return \TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController
+     * @return TypoScriptFrontendController
      */
-    protected function getTypoScriptFrontendController()
+    protected function getTypoScriptFrontendController(): TypoScriptFrontendController
     {
         return $GLOBALS['TSFE'];
     }

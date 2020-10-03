@@ -21,6 +21,7 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Helper class for the 'recycler' extension.
+ * @internal
  */
 class RecyclerUtility
 {
@@ -34,12 +35,20 @@ class RecyclerUtility
      * as well as the table access rights of the user.
      *
      * @param string $table The table to check access for
-     * @param string $row Record array
+     * @param array $row Record array
      * @return bool Returns TRUE is the user has access, or FALSE if not
      */
     public static function checkAccess($table, $row)
     {
         $backendUser = static::getBackendUser();
+
+        if ($backendUser->isAdmin()) {
+            return true;
+        }
+
+        if (!$backendUser->check('tables_modify', $table)) {
+            return false;
+        }
 
         // Checking if the user has permissions? (Only working as a precaution, because the final permission check is always down in TCE. But it's good to notify the user on beforehand...)
         // First, resetting flags.
@@ -60,9 +69,6 @@ class RecyclerUtility
                 $hasAccess = $backendUser->recordEditAccessInternals($table, $calcPRec);
             }
         }
-        if (!$backendUser->check('tables_modify', $table)) {
-            $hasAccess = false;
-        }
         return $hasAccess;
     }
 
@@ -72,26 +78,18 @@ class RecyclerUtility
      * Deleted pages are filtered out.
      *
      * @param int $uid Page uid for which to create record path
-     * @param string $clause is additional where clauses, eg.
-     * @param int $titleLimit Title limit
-     * @param int $fullTitleLimit Title limit of Full title (typ. set to 1000 or so)
-     * @return mixed Path of record (string) OR array with short/long title if $fullTitleLimit is set.
+     * @return string Path of record (string) OR array with short/long title if $fullTitleLimit is set.
      */
-    public static function getRecordPath($uid, $clause = '', $titleLimit = 1000, $fullTitleLimit = 0)
+    public static function getRecordPath($uid)
     {
-        if ($clause !== '' || (int)$titleLimit !== 1000 || (int)$fullTitleLimit !== 0) {
-            GeneralUtility::deprecationLog('The arguments "clause", "tileLimit" and "fullTitleLimit" ' .
-                'have been deprecated since TYPO3 CMS 8 and will be removed in TYPO3 CMS 9');
-        }
         $uid = (int)$uid;
-        $output = ($fullOutput = '/');
+        $output = '/';
         if ($uid === 0) {
             return $output;
         }
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
         $queryBuilder->getRestrictions()->removeAll();
 
-        $clause = trim($clause);
         $loopCheck = 100;
         while ($loopCheck > 0) {
             $loopCheck--;
@@ -100,21 +98,15 @@ class RecyclerUtility
                 ->select('uid', 'pid', 'title', 'deleted', 't3ver_oid', 't3ver_wsid')
                 ->from('pages')
                 ->where($queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($uid, \PDO::PARAM_INT)));
-            if (!empty($clause)) {
-                $queryBuilder->andWhere($clause);
-            }
             $row = $queryBuilder->execute()->fetch();
             if ($row !== false) {
                 BackendUtility::workspaceOL('pages', $row);
                 if (is_array($row)) {
                     BackendUtility::fixVersioningPid('pages', $row);
                     $uid = (int)$row['pid'];
-                    $output = '/' . htmlspecialchars(GeneralUtility::fixed_lgd_cs($row['title'], $titleLimit)) . $output;
+                    $output = '/' . htmlspecialchars(GeneralUtility::fixed_lgd_cs($row['title'], 1000)) . $output;
                     if ($row['deleted']) {
                         $output = '<span class="text-danger">' . $output . '</span>';
-                    }
-                    if ($fullTitleLimit) {
-                        $fullOutput = '/' . htmlspecialchars(GeneralUtility::fixed_lgd_cs($row['title'], $fullTitleLimit)) . $fullOutput;
                     }
                 } else {
                     break;
@@ -123,11 +115,7 @@ class RecyclerUtility
                 break;
             }
         }
-        if ($fullTitleLimit) {
-            return [$output, $fullOutput];
-        } else {
-            return $output;
-        }
+        return $output;
     }
 
     /**
@@ -195,7 +183,7 @@ class RecyclerUtility
      * Gets the TCA of the table used in the current context.
      *
      * @param string $tableName Name of the table to get TCA for
-     * @return array|FALSE TCA of the table used in the current context
+     * @return array|false TCA of the table used in the current context
      */
     public static function getTableTCA($tableName)
     {
@@ -219,7 +207,7 @@ class RecyclerUtility
     /**
      * Returns an instance of LanguageService
      *
-     * @return \TYPO3\CMS\Lang\LanguageService
+     * @return \TYPO3\CMS\Core\Localization\LanguageService
      */
     protected static function getLanguageService()
     {
@@ -231,7 +219,7 @@ class RecyclerUtility
      */
     public static function getModifyableTables()
     {
-        if ((bool)$GLOBALS['BE_USER']->user['admin']) {
+        if ($GLOBALS['BE_USER']->isAdmin()) {
             $tables = array_keys($GLOBALS['TCA']);
         } else {
             $tables = explode(',', $GLOBALS['BE_USER']->groupData['tables_modify']);

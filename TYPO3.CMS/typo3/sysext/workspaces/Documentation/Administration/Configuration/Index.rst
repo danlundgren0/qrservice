@@ -1,4 +1,4 @@
-﻿.. include:: ../../Includes.txt
+.. include:: ../../Includes.txt
 
 
 
@@ -242,21 +242,6 @@ Description
 
 
 .. _usertsconfig-options-workspaces-considerreferences:
-
-considerReferences
-******************
-
-Data type
-  Boolean
-
-Description
-  If elements which are part of an interdependent structure (e.g. Inline
-  Relational Record Editing) are swapped, published or sent to a stage
-  alone, the whole related parent/child structure is taken into account
-  automatically.
-
-Default
-  1
 
 allowed\_languages
 ******************

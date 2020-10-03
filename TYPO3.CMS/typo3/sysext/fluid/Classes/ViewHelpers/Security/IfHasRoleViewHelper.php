@@ -14,47 +14,61 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Security;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Context\Context;
+use TYPO3\CMS\Core\Context\UserAspect;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractConditionViewHelper;
+
 /**
- * This view helper implements an ifHasRole/else condition for FE users/groups.
+ * This ViewHelper implements an ifHasRole/else condition for frontend groups.
  *
- * = Examples =
+ * Examples
+ * ========
  *
- * <code title="Basic usage">
- * <f:security.ifHasRole role="Administrator">
- * This is being shown in case the current FE user belongs to a FE usergroup (aka role) titled "Administrator" (case sensitive)
- * </f:security.ifHasRole>
- * </code>
- * <output>
- * Everything inside the <f:ifHasRole> tag is being displayed if the logged in FE user belongs to the specified role.
- * </output>
+ * Basic usage
+ * -----------
  *
- * <code title="Using the usergroup uid as role identifier">
- * <f:security.ifHasRole role="1">
- * This is being shown in case the current FE user belongs to a FE usergroup (aka role) with the uid "1"
- * </f:security.ifHasRole>
- * </code>
- * <output>
- * Everything inside the <f:ifHasRole> tag is being displayed if the logged in FE user belongs to the specified role.
- * </output>
+ * ::
  *
- * <code title="IfRole / then / else">
- * <f:security.ifHasRole role="Administrator">
- * <f:then>
- * This is being shown in case you have the role.
- * </f:then>
- * <f:else>
- * This is being displayed in case you do not have the role.
- * </f:else>
- * </f:security.ifHasRole>
- * </code>
- * <output>
- * Everything inside the "then" tag is displayed if the logged in FE user belongs to the specified role.
- * Otherwise, everything inside the "else"-tag is displayed.
- * </output>
+ *    <f:security.ifHasRole role="Administrator">
+ *        This is being shown in case the current FE user belongs to a FE usergroup (aka role) titled "Administrator" (case sensitive)
+ *    </f:security.ifHasRole>
  *
- * @api
+ * Everything inside the :html:`<f:security.ifHasRole>` tag is being displayed if the
+ * logged in frontend user belongs to the specified frontend user group.
+ * Comparison is done by comparing to title of the user groups.
+ *
+ * Using the usergroup uid as role identifier
+ * ------------------------------------------
+ *
+ * ::
+ *
+ *    <f:security.ifHasRole role="1">
+ *       This is being shown in case the current FE user belongs to a FE usergroup (aka role) with the uid "1"
+ *    </f:security.ifHasRole>
+ *
+ * Everything inside the :html:`<f:security.ifHasRole>` tag is being displayed if the
+ * logged in frontend user belongs to the specified role. Comparison is done
+ * using the ``uid`` of frontend user groups.
+ *
+ * IfRole / then / else
+ * --------------------
+ *
+ * ::
+ *
+ *    <f:security.ifHasRole role="Administrator">
+ *       <f:then>
+ *          This is being shown in case you have the role.
+ *       </f:then>
+ *       <f:else>
+ *          This is being displayed in case you do not have the role.
+ *       </f:else>
+ *    </f:security.ifHasRole>
+ *
+ * Everything inside the :html:`<f:then></f:then>` tag is displayed if the logged in FE user belongs to the specified role.
+ * Otherwise, everything inside the :html:`<f:else></f:else>` tag is displayed.
  */
-class IfHasRoleViewHelper extends \TYPO3\CMS\Fluid\Core\ViewHelper\AbstractConditionViewHelper
+class IfHasRoleViewHelper extends AbstractConditionViewHelper
 {
     /**
      * Initializes the "role" argument.
@@ -63,6 +77,8 @@ class IfHasRoleViewHelper extends \TYPO3\CMS\Fluid\Core\ViewHelper\AbstractCondi
      */
     public function initializeArguments()
     {
+        parent::initializeArguments();
+
         $this->registerArgument('role', 'string', 'The usergroup (either the usergroup uid or its title).');
     }
 
@@ -75,25 +91,15 @@ class IfHasRoleViewHelper extends \TYPO3\CMS\Fluid\Core\ViewHelper\AbstractCondi
     protected static function evaluateCondition($arguments = null)
     {
         $role = $arguments['role'];
-        if (!isset($GLOBALS['TSFE']) || !$GLOBALS['TSFE']->loginUser) {
+        /** @var UserAspect $userAspect */
+        $userAspect = GeneralUtility::makeInstance(Context::class)->getAspect('frontend.user');
+        if (!$userAspect->isLoggedIn()) {
             return false;
         }
         if (is_numeric($role)) {
-            return is_array($GLOBALS['TSFE']->fe_user->groupData['uid']) && in_array($role, $GLOBALS['TSFE']->fe_user->groupData['uid']);
-        } else {
-            return is_array($GLOBALS['TSFE']->fe_user->groupData['title']) && in_array($role, $GLOBALS['TSFE']->fe_user->groupData['title']);
+            $groupIds = $userAspect->getGroupIds();
+            return in_array((int)$role, $groupIds, true);
         }
-    }
-
-    /**
-     * @return mixed
-     */
-    public function render()
-    {
-        if (static::evaluateCondition($this->arguments)) {
-            return $this->renderThenChild();
-        } else {
-            return $this->renderElseChild();
-        }
+        return in_array($role, $userAspect->getGroupNames(), true);
     }
 }

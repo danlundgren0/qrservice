@@ -15,18 +15,18 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Form;
  */
 
 /**
- * View Helper which creates a simple Password Text Box (<input type="password">).
+ * ViewHelper which creates a simple Password Text Box :html:`<input type="password">`.
  *
- * = Examples =
+ * Examples
+ * ========
  *
- * <code title="Example">
- * <f:form.password name="myPassword" />
- * </code>
- * <output>
- * <input type="password" name="myPassword" value="default value" />
- * </output>
+ * Example::
  *
- * @api
+ *    <f:form.password name="myPassword" />
+ *
+ * Output::
+ *
+ *    <input type="password" name="myPassword" value="default value" />
  */
 class PasswordViewHelper extends \TYPO3\CMS\Fluid\ViewHelpers\Form\AbstractFormFieldViewHelper
 {
@@ -37,22 +37,29 @@ class PasswordViewHelper extends \TYPO3\CMS\Fluid\ViewHelpers\Form\AbstractFormF
 
     /**
      * Initialize the arguments.
-     *
-     * @api
      */
     public function initializeArguments()
     {
         parent::initializeArguments();
         $this->registerTagAttribute(
-            'disabled', 'string', 'Specifies that the input element should be disabled when the page loads'
+            'disabled',
+            'string',
+            'Specifies that the input element should be disabled when the page loads'
         );
         $this->registerTagAttribute(
-            'maxlength', 'int', 'The maxlength attribute of the input field (will not be validated)'
+            'maxlength',
+            'int',
+            'The maxlength attribute of the input field (will not be validated)'
         );
+        $this->registerTagAttribute('placeholder', 'string', 'The placeholder of the textfield');
         $this->registerTagAttribute('readonly', 'string', 'The readonly attribute of the input field');
         $this->registerTagAttribute('size', 'int', 'The size of the input field');
         $this->registerArgument(
-            'errorClass', 'string', 'CSS class to set if there are errors for this view helper', false, 'f3-form-error'
+            'errorClass',
+            'string',
+            'CSS class to set if there are errors for this ViewHelper',
+            false,
+            'f3-form-error'
         );
         $this->registerUniversalTagAttributes();
     }
@@ -61,7 +68,6 @@ class PasswordViewHelper extends \TYPO3\CMS\Fluid\ViewHelpers\Form\AbstractFormF
      * Renders the password input field.
      *
      * @return string
-     * @api
      */
     public function render()
     {

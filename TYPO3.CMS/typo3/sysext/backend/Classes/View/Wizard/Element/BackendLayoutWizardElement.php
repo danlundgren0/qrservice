@@ -20,6 +20,7 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Backend layout element
+ * @internal This class is a TYPO3 Backend implementation and is not considered part of the Public TYPO3 API.
  */
 class BackendLayoutWizardElement extends AbstractFormElement
 {
@@ -73,11 +74,11 @@ class BackendLayoutWizardElement extends AbstractFormElement
         $html[] =                           '<div class="btn-group">';
         $html[] =                               '<a class="btn btn-default btn-sm t3js-grideditor-removerow-top" href="#"';
         $html[] =                                   ' title="' . htmlspecialchars($lang->getLL('grid_removeRow')) . '">';
-        $html[] =                                   '<i class="fa fa-fw fa-arrow-down"></i>';
+        $html[] =                                   '<i class="fa fa-fw fa-minus"></i>';
         $html[] =                               '</a>';
         $html[] =                               '<a class="btn btn-default btn-sm t3js-grideditor-addrow-top" href="#"';
         $html[] =                                   ' title="' . htmlspecialchars($lang->getLL('grid_addRow')) . '">';
-        $html[] =                                   '<i class="fa fa-fw fa-arrow-up"></i>';
+        $html[] =                                   '<i class="fa fa-fw fa-plus"></i>';
         $html[] =                               '</a>';
         $html[] =                           '</div>';
         $html[] =                       '</td>';
@@ -98,11 +99,11 @@ class BackendLayoutWizardElement extends AbstractFormElement
         $html[] =                           '<div class="btn-group-vertical">';
         $html[] =                               '<a class="btn btn-default btn-sm t3js-grideditor-addcolumn" href="#"';
         $html[] =                                   ' title="' . htmlspecialchars($lang->getLL('grid_addColumn')) . '">';
-        $html[] =                                   '<i class="fa fa-fw fa-arrow-right"></i>';
+        $html[] =                                   '<i class="fa fa-fw fa-plus"></i>';
         $html[] =                               '</a>';
         $html[] =                               '<a class="btn btn-default btn-sm t3js-grideditor-removecolumn" href="#"';
         $html[] =                                   ' title="' . htmlspecialchars($lang->getLL('grid_removeColumn')) . '">';
-        $html[] =                                   '<i class="fa fa-fw fa-arrow-left"></i>';
+        $html[] =                                   '<i class="fa fa-fw fa-minus"></i>';
         $html[] =                               '</a>';
         $html[] =                           '</div>';
         $html[] =                       '</td>';
@@ -112,11 +113,11 @@ class BackendLayoutWizardElement extends AbstractFormElement
         $html[] =                           '<div class="btn-group">';
         $html[] =                               '<a class="btn btn-default btn-sm t3js-grideditor-addrow-bottom" href="#"';
         $html[] =                                   ' title="' . htmlspecialchars($lang->getLL('grid_addRow')) . '">';
-        $html[] =                                   '<i class="fa fa-fw fa-arrow-down"></i>';
+        $html[] =                                   '<i class="fa fa-fw fa-plus"></i>';
         $html[] =                               '</a>';
         $html[] =                               '<a class="btn btn-default btn-sm t3js-grideditor-removerow-bottom" href="#"';
         $html[] =                                   ' title="' . htmlspecialchars($lang->getLL('grid_removeRow')) . '">';
-        $html[] =                                   '<i class="fa fa-fw fa-arrow-up"></i>';
+        $html[] =                                   '<i class="fa fa-fw fa-minus"></i>';
         $html[] =                               '</a>';
         $html[] =                           '</div>';
         $html[] =                       '</td>';
@@ -129,17 +130,19 @@ class BackendLayoutWizardElement extends AbstractFormElement
         $html[] =                   '</tr>';
         $html[] =               '</table>';
         $html[] =           '</div>';
-        $html[] =           '<div class="form-wizards-items-bottom">';
-        $html[] =               $fieldWizardHtml;
-        $html[] =           '</div>';
+        if (!empty($fieldWizardHtml)) {
+            $html[] = '<div class="form-wizards-items-bottom">';
+            $html[] = $fieldWizardHtml;
+            $html[] = '</div>';
+        }
         $html[] =       '</div>';
         $html[] =   '</div>';
         $html[] = '</div>';
 
         $html = implode(LF, $html);
         $resultArray['html'] = $html;
-        $resultArray['requireJsModules'][] = 'TYPO3/CMS/Backend/GridEditor';
-        $resultArray['additionalInlineLanguageLabelFiles'][] = 'EXT:lang/Resources/Private/Language/locallang_wizards.xlf';
+        $resultArray['requireJsModules'][] = ['TYPO3/CMS/Backend/GridEditor' => 'function(GridEditor) { new GridEditor.GridEditor(); }'];
+        $resultArray['additionalInlineLanguageLabelFiles'][] = 'EXT:core/Resources/Private/Language/locallang_wizards.xlf';
         $resultArray['additionalInlineLanguageLabelFiles'][] = 'EXT:backend/Resources/Private/Language/locallang.xlf';
 
         return $resultArray;

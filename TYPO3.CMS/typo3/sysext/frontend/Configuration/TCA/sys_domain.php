@@ -13,10 +13,10 @@ return [
         'typeicon_classes' => [
             'default' => 'mimetypes-x-content-domain'
         ],
-        'searchFields' => 'domainName,redirectTo'
+        'searchFields' => 'domainName'
     ],
     'interface' => [
-        'showRecordFieldList' => 'hidden,domainName,redirectTo'
+        'showRecordFieldList' => 'hidden,domainName'
     ],
     'columns' => [
         'domainName' => [
@@ -24,68 +24,33 @@ return [
             'config' => [
                 'type' => 'input',
                 'size' => 35,
-                'max' => 80,
+                'max' => 255,
                 'eval' => 'required,unique,lower,trim,domainname',
                 'softref' => 'substitute'
             ]
         ],
-        'redirectTo' => [
-            'label' => 'LLL:EXT:frontend/Resources/Private/Language/locallang_tca.xlf:sys_domain.redirectTo',
-            'config' => [
-                'type' => 'input',
-                'size' => 35,
-                'max' => 255,
-                'default' => '',
-                'eval' => 'trim',
-                'softref' => 'substitute'
-            ]
-        ],
-        'redirectHttpStatusCode' => [
-            'exclude' => true,
-            'label' => 'LLL:EXT:frontend/Resources/Private/Language/locallang_tca.xlf:sys_domain.redirectHttpStatusCode',
-            'config' => [
-                'type' => 'select',
-                'renderType' => 'selectSingle',
-                'items' => [
-                    ['LLL:EXT:frontend/Resources/Private/Language/locallang_tca.xlf:sys_domain.redirectHttpStatusCode.301', '301'],
-                    ['LLL:EXT:frontend/Resources/Private/Language/locallang_tca.xlf:sys_domain.redirectHttpStatusCode.302', '302'],
-                    ['LLL:EXT:frontend/Resources/Private/Language/locallang_tca.xlf:sys_domain.redirectHttpStatusCode.303', '303'],
-                    ['LLL:EXT:frontend/Resources/Private/Language/locallang_tca.xlf:sys_domain.redirectHttpStatusCode.307', '307']
-                ],
-                'size' => 1,
-                'maxitems' => 1
-            ]
-        ],
         'hidden' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_general.xlf:LGL.disable',
+            'label' => 'LLL:EXT:core/Resources/Private/Language/locallang_general.xlf:LGL.enabled',
             'exclude' => true,
             'config' => [
                 'type' => 'check',
-                'default' => 0
-            ]
+                'renderType' => 'checkboxToggle',
+                'default' => 0,
+                'items' => [
+                    [
+                        0 => '',
+                        1 => '',
+                        'invertStateDisplay' => true,
+                    ],
+                ],
+            ],
         ],
-        'prepend_params' => [
-            'label' => 'LLL:EXT:frontend/Resources/Private/Language/locallang_tca.xlf:sys_domain.prepend_params',
-            'exclude' => true,
-            'config' => [
-                'type' => 'check',
-                'default' => 0
-            ]
-        ],
-        'forced' => [
-            'label' => 'LLL:EXT:frontend/Resources/Private/Language/locallang_tca.xlf:sys_domain.forced',
-            'exclude' => true,
-            'config' => [
-                'type' => 'check',
-                'default' => 0
-            ]
-        ]
     ],
     'types' => [
         '1' => [
             'showitem' => '
                 --div--;LLL:EXT:core/Resources/Private/Language/Form/locallang_tabs.xlf:general,
-                    domainName,--palette--;;1, prepend_params, forced,
+                    domainName,
                 --div--;LLL:EXT:core/Resources/Private/Language/Form/locallang_tabs.xlf:access,
                     hidden,
                 --div--;LLL:EXT:core/Resources/Private/Language/Form/locallang_tabs.xlf:extended,
@@ -93,8 +58,5 @@ return [
         ],
     ],
     'palettes' => [
-        '1' => [
-            'showitem' => 'redirectTo, redirectHttpStatusCode',
-        ],
     ]
 ];

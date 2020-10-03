@@ -15,62 +15,85 @@
  * Module: TYPO3/CMS/Filelist/Filelist
  * @exports TYPO3/CMS/Filelist/Filelist
  */
-define(['jquery'], function($) {
+define(['jquery', 'TYPO3/CMS/Backend/InfoWindow'], function($, InfoWindow) {
 
-	$('a.filelist-file-title').click(function(event) {
-		event.preventDefault();
+  $(function() {
+    $('a.filelist-file-title').click(function(event) {
+      event.preventDefault();
 
-		var url = $(this).attr('data-url');
-		window.location.href=url;
-	});
+      var url = $(this).attr('data-url');
+      window.location.href = url;
+    });
 
-	$('a.btn.filelist-file-edit').click(function(event) {
-		event.preventDefault();
+    $('a.btn.filelist-file-edit').click(function(event) {
+      event.preventDefault();
 
-		var url = $(this).attr('data-url');
-		top.list_frame.location.href=url;
-	});
+      var url = $(this).attr('data-url');
+      top.list_frame.location.href = url;
+    });
 
-	$('a.btn.filelist-file-view').click(function(event) {
-		event.preventDefault();
+    $('a.btn.filelist-file-view').click(function(event) {
+      event.preventDefault();
 
-		var url = $(this).attr('data-url');
-		top.openUrlInWindow(url, 'WebFile')
-	});
+      var url = $(this).attr('data-url');
+      top.openUrlInWindow(url, 'WebFile')
+    });
 
-	$('a.btn.filelist-file-replace').click(function(event) {
-		event.preventDefault();
+    $('a.btn.filelist-file-replace').click(function(event) {
+      event.preventDefault();
 
-		var url = $(this).attr('data-url');
-		top.list_frame.location.href=url;
-	});
+      var url = $(this).attr('data-url');
+      top.list_frame.location.href = url;
+    });
 
-	$('a.btn.filelist-file-rename').click(function(event) {
-		event.preventDefault();
+    $('a.btn.filelist-file-rename').click(function(event) {
+      event.preventDefault();
 
-		var url = $(this).attr('data-url');
-		top.list_frame.location.href=url;
-	});
+      var url = $(this).attr('data-url');
+      top.list_frame.location.href = url;
+    });
 
-	$('a.btn.filelist-file-info').click(function(event) {
-		event.preventDefault();
+    $('a.btn.filelist-file-info').click(function(event) {
+      event.preventDefault();
 
-		var identifier = $(this).attr('data-identifier');
-		openFileInfoPopup(identifier);
-	});
+      var identifier = $(this).attr('data-identifier');
+      openFileInfoPopup(identifier);
+    });
 
-	$('a.filelist-file-references').click(function(event) {
-		event.preventDefault();
+    $('a.filelist-file-references').click(function(event) {
+      event.preventDefault();
 
-		var identifier = $(this).attr('data-identifier');
-		openFileInfoPopup(identifier);
-	});
+      var identifier = $(this).attr('data-identifier');
+      openFileInfoPopup(identifier);
+    });
 
-	/**
-	 * @param identifier
-	 */
-	function openFileInfoPopup(identifier) {
-		top.launchView('_FILE', identifier);
-	}
+    $('a.btn.filelist-file-copy').click(function(event) {
+        event.preventDefault();
+
+        var url = $(this).attr('data-url');
+        var redirectUrl = $(this).attr('data-url');
+        if (redirectUrl) {
+            redirectUrl = top.rawurlencode(redirectUrl);
+        } else {
+            redirectUrl = top.rawurlencode(top.list_frame.document.location.pathname + top.list_frame.document.location.search);
+        }
+        top.list_frame.location.href = url + '&redirect=' + redirectUrl;
+    });
+
+    $('a.btn.filelist-file-cut').click(function(event) {
+        event.preventDefault();
+
+        var url = $(this).attr('data-url');
+        top.list_frame.location.href = url;
+    });
+
+  });
+
+  /**
+   * @param identifier
+   */
+  function openFileInfoPopup(identifier) {
+    InfoWindow.showItem('_FILE', identifier);
+  }
 
 });

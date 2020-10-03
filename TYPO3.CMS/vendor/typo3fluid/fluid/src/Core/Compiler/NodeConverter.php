@@ -6,6 +6,7 @@ namespace TYPO3Fluid\Fluid\Core\Compiler;
  * See LICENSE.txt that was shipped with this package.
  */
 
+use TYPO3Fluid\Fluid\Core\Parser\BooleanParser;
 use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\ArrayNode;
 use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\BooleanNode;
 use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\EscapingNode;
@@ -16,7 +17,6 @@ use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\ObjectAccessorNode;
 use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\RootNode;
 use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\TextNode;
 use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\ViewHelperNode;
-use TYPO3Fluid\Fluid\Core\Parser\BooleanParser;
 use TYPO3Fluid\Fluid\Core\Variables\VariableExtractor;
 
 /**
@@ -107,7 +107,12 @@ class NodeConverter
     protected function convertEscapingNode(EscapingNode $node)
     {
         $configuration = $this->convert($node->getNode());
-        $configuration['execution'] = sprintf('htmlspecialchars(%s, ENT_QUOTES)', $configuration['execution']);
+        $configuration['execution'] = sprintf(
+            'call_user_func_array( function ($var) { ' .
+            'return (is_string($var) || (is_object($var) && method_exists($var, \'__toString\')) ' .
+            '? htmlspecialchars((string) $var, ENT_QUOTES) : $var); }, [%s])',
+            $configuration['execution']
+        );
         return $configuration;
     }
 

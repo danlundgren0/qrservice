@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\LinkHandling;
 
 /*
@@ -41,6 +41,10 @@ class RecordLinkHandler implements LinkHandlingInterface
         }
         $urn = $this->baseUrn;
         $urn .= sprintf('?identifier=%s&uid=%s', $parameters['identifier'], $parameters['uid']);
+
+        if (!empty($parameters['fragment'])) {
+            $urn .= sprintf('#%s', $parameters['fragment']);
+        }
 
         return $urn;
     }

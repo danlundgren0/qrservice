@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Messaging;
 
 /*
@@ -15,6 +15,7 @@ namespace TYPO3\CMS\Core\Messaging;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Messaging\Renderer\FlashMessageRendererInterface;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
@@ -40,7 +41,7 @@ class FlashMessageRendererResolver
      *
      * @return FlashMessageRendererInterface
      */
-    public function resolve() : FlashMessageRendererInterface
+    public function resolve(): FlashMessageRendererInterface
     {
         $rendererClass = $this->resolveFlashMessageRenderClass();
         $renderer = GeneralUtility::makeInstance($rendererClass);
@@ -56,7 +57,7 @@ class FlashMessageRendererResolver
      *
      * @return string
      */
-    protected function resolveFlashMessageRenderClass() : string
+    protected function resolveFlashMessageRenderClass(): string
     {
         $context = $this->resolveContext();
         $renderClass = $this->renderer['_default'];
@@ -77,10 +78,10 @@ class FlashMessageRendererResolver
      *
      * @return string
      */
-    protected function resolveContext() : string
+    protected function resolveContext(): string
     {
         $context = '';
-        if (TYPO3_REQUESTTYPE & TYPO3_REQUESTTYPE_CLI) {
+        if (Environment::isCli()) {
             $context = 'CLI';
         } elseif (TYPO3_REQUESTTYPE & TYPO3_REQUESTTYPE_BE) {
             $context = 'BE';

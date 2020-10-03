@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\ViewHelpers;
 
 /*
@@ -14,7 +15,7 @@ namespace EBT\ExtensionBuilder\ViewHelpers;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 
 /**
  * View helper to check if one string contains another string
@@ -26,19 +27,26 @@ use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
  */
 class MatchStringViewHelper extends AbstractViewHelper
 {
+
     /**
-     * @param string $match
-     * @param string $in
-     * @param bool $caseSensitive
-     *
+     * Arguments Initialization
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('match', 'string', 'RegEx', true);
+        $this->registerArgument('in', 'string', 'the string to compare', true);
+        $this->registerArgument('caseSensitive', 'boolean', 'caseSensitive', false);
+    }
+
+    /**
      * @return bool
      */
-    public function render($match, $in, $caseSensitive = false)
+    public function render()
     {
-        $matchAsRegularExpression = '/' . $match . '/';
-        if (!$caseSensitive) {
+        $matchAsRegularExpression = '/' . $this->arguments['match'] . '/';
+        if (!$this->arguments['caseSensitive']) {
             $matchAsRegularExpression .= 'i';
         }
-        return (preg_match($matchAsRegularExpression, $in) === 0) ? false : true;
+        return (preg_match($matchAsRegularExpression, $this->arguments['in']) === 0) ? false : true;
     }
 }

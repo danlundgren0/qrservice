@@ -13,7 +13,6 @@ namespace TYPO3\CMS\IndexedSearch\Domain\Repository;
  *
  * The TYPO3 project - inspiring people to share!
  */
-use TYPO3\CMS\Backend\FrontendBackendUserAuthentication;
 use TYPO3\CMS\Backend\Tree\View\PageTreeView;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
@@ -22,14 +21,17 @@ use TYPO3\CMS\Core\Cache\Frontend\FrontendInterface;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\QueryHelper;
+use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
 use TYPO3\CMS\Core\DataHandling\DataHandler;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Type\Bitmask\Permission;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\IndexedSearch\FileContentParser;
 
 /**
  * Administration repository
+ * @internal This class is a specific repository implementation and is not considered part of the Public TYPO3 API.
  */
 class AdministrationRepository
 {
@@ -69,7 +71,10 @@ class AdministrationRepository
                 )
             )
             ->execute();
-        $numberOfRows = $result->rowCount();
+        $numberOfRows = $queryBuilder
+            ->count('uniqid')
+            ->execute()
+            ->fetchColumn(0);
         $allRows = [];
         while ($row = $result->fetch()) {
             $row['pcount'] = $numberOfRows;
@@ -143,6 +148,7 @@ class AdministrationRepository
                 'cHashParams',
                 'data_filename',
                 'data_page_id',
+                // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Remove along with database field data_page_reg1
                 'data_page_reg1',
                 'data_page_type',
                 'data_page_mp',
@@ -328,6 +334,7 @@ class AdministrationRepository
                 'cHashParams',
                 'data_filename',
                 'data_page_id',
+                // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Remove along with database field data_page_reg1
                 'data_page_reg1',
                 'data_page_type',
                 'data_page_mp',
@@ -385,7 +392,7 @@ class AdministrationRepository
      * @param string $additionalWhere
      * @param int $pageUid
      * @param int $max
-     * @return array|NULL
+     * @return array|null
      */
     public function getGeneralSearchStatistic($additionalWhere, $pageUid, $max = 50)
     {
@@ -402,6 +409,7 @@ class AdministrationRepository
                 )
             )
             ->groupBy('word')
+            ->orderBy('c', 'desc')
             ->setMaxResults((int)$max);
 
         if (!empty($additionalWhere)) {
@@ -409,7 +417,12 @@ class AdministrationRepository
         }
 
         $result = $queryBuilder->execute();
-        $count = (int)$result->rowCount();
+        $countQueryBuilder = clone $queryBuilder;
+        $countQueryBuilder->resetQueryPart('orderBy');
+        $count = (int)$countQueryBuilder
+            ->count('uid')
+            ->execute()
+            ->fetchColumn(0);
         $result->closeCursor();
 
         // exist several statistics for this page?
@@ -419,7 +432,7 @@ class AdministrationRepository
                 $queryBuilder->expr()->in(
                     'pageid',
                     $queryBuilder->createNamedParameter(
-                        GeneralUtility::intExplode(',', $this->extGetTreeList((int)$pageUid, 100, 0, '1=1'), true),
+                        $this->extGetTreeList((int)$pageUid),
                         Connection::PARAM_INT_ARRAY
                     )
                 ),
@@ -439,6 +452,7 @@ class AdministrationRepository
     {
         $grListRec = $this->getGrlistRecord($row['phash']);
         $unserializedCHashParams = unserialize($row['cHashParams']);
+        $row['static_page_arguments'] = $row['static_page_arguments'] ? json_decode($row['static_page_arguments'], true) : null;
 
         $row['numberOfWords'] = $this->getNumberOfWords($row['phash']);
         $row['numberOfSections'] = $this->getNumberOfSections($row['phash']);
@@ -464,7 +478,7 @@ class AdministrationRepository
         }
         /** @var PageTreeView $tree */
         $tree = GeneralUtility::makeInstance(PageTreeView::class);
-        $perms_clause = $this->getBackendUserAuthentication()->getPagePermsClause(1);
+        $perms_clause = $this->getBackendUserAuthentication()->getPagePermsClause(Permission::PAGE_SHOW);
         $tree->init('AND ' . $perms_clause);
         $iconFactory = GeneralUtility::makeInstance(IconFactory::class);
         $HTML = '<span title="' . htmlspecialchars($pageRecord['title']) . '">' . $iconFactory->getIconForRecord('pages', $pageRecord, Icon::SIZE_SMALL)->render() . '</span>';
@@ -491,6 +505,7 @@ class AdministrationRepository
                 'IP.cHashParams',
                 'IP.data_filename',
                 'IP.data_page_id',
+                // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Remove along with database field data_page_reg1
                 'IP.data_page_reg1',
                 'IP.data_page_type',
                 'IP.data_page_mp',
@@ -527,6 +542,7 @@ class AdministrationRepository
                 'IP.cHashParams',
                 'IP.data_filename',
                 'IP.data_page_id',
+                // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Remove along with database field data_page_reg1
                 'IP.data_page_reg1',
                 'IP.data_page_type',
                 'IP.data_page_mp',
@@ -582,7 +598,10 @@ class AdministrationRepository
                     ->groupBy('index_words.baseword')
                     ->execute();
 
-                $row['wordCount'] = $wordCountResult->rowCount();
+                $row['wordCount'] = $queryBuilder
+                    ->count('index_rel.wid')
+                    ->execute()
+                    ->fetchColumn(0);
                 $wordCountResult->closeCursor();
 
                 if ($mode === 'content') {
@@ -640,23 +659,53 @@ class AdministrationRepository
      * The only pages excluded from the list are deleted pages.
      *
      * @param int $id page id
-     * @param int $depth to traverse down the page tree.
-     * @param int $begin is an optional integer that determines at which level in the tree to start collecting uid's. Zero means 'start right away', 1 = 'next level and out'
-     * @param string $perms_clause
-     * @return string Returns the list with a comma in the end + id itself
+     * @return array Returns an array with all page IDs
      */
-    protected function extGetTreeList($id, $depth, $begin = 0, $perms_clause)
+    protected function extGetTreeList(int $id): array
     {
-        $list = GeneralUtility::makeInstance(FrontendBackendUserAuthentication::class)
-            ->extGetTreeList($id, $depth, $begin, $perms_clause);
+        $pageIds = $this->getPageTreeIds($id, 100, 0);
+        $pageIds[] = $id;
+        return $pageIds;
+    }
 
-        if (empty($list)) {
-            $list = $id;
-        } else {
-            $list = rtrim($list, ',') . ',' . $id;
+    /**
+     * Generates a list of Page-uid's from $id. List does not include $id itself
+     * The only pages excluded from the list are deleted pages.
+     *
+     * @param int $id Start page id
+     * @param int $depth Depth to traverse down the page tree.
+     * @param int $begin Determines at which level in the tree to start collecting uid's. Zero means 'start right away', 1 = 'next level and out'
+     * @return array Returns the list of pages
+     */
+    protected function getPageTreeIds(int $id, int $depth, int $begin): array
+    {
+        if (!$id || $depth <= 0) {
+            return [];
         }
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
+            ->getQueryBuilderForTable('pages');
 
-        return $list;
+        $queryBuilder->getRestrictions()
+            ->removeAll()
+            ->add(GeneralUtility::makeInstance(DeletedRestriction::class));
+        $result = $queryBuilder
+            ->select('uid', 'title')
+            ->from('pages')
+            ->where(
+                $queryBuilder->expr()->eq('pid', $queryBuilder->createNamedParameter($id, \PDO::PARAM_INT))
+            )
+            ->execute();
+
+        $pageIds = [];
+        while ($row = $result->fetch()) {
+            if ($begin <= 0) {
+                $pageIds[] = (int)$row['uid'];
+            }
+            if ($depth > 1) {
+                $pageIds = array_merge($pageIds, $this->getPageTreeIds((int)$row['uid'], $depth - 1, $begin - 1));
+            }
+        }
+        return $pageIds;
     }
 
     /**

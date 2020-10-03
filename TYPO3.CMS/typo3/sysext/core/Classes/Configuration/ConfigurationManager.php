@@ -14,6 +14,8 @@ namespace TYPO3\CMS\Core\Configuration;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Crypto\Random;
 use TYPO3\CMS\Core\Service\OpcodeCacheService;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -36,34 +38,34 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 class ConfigurationManager
 {
     /**
-     * @var string Path to default TYPO3_CONF_VARS file, relative to PATH_site
+     * @var string Path to default TYPO3_CONF_VARS file, relative to the public web folder
      */
-    protected $defaultConfigurationFile = 'typo3/sysext/core/Configuration/DefaultConfiguration.php';
+    protected $defaultConfigurationFile = 'core/Configuration/DefaultConfiguration.php';
 
     /**
-     * @var string Path to description file for TYPO3_CONF_VARS, relative to PATH_site
+     * @var string Path to description file for TYPO3_CONF_VARS, relative to the public web folder
      */
-    protected $defaultConfigurationDescriptionFile = 'typo3/sysext/core/Configuration/DefaultConfigurationDescription.php';
+    protected $defaultConfigurationDescriptionFile = 'core/Configuration/DefaultConfigurationDescription.yaml';
 
     /**
-     * @var string Path to local overload TYPO3_CONF_VARS file, relative to PATH_site
+     * @var string Path to local overload TYPO3_CONF_VARS file, relative to the public web folder
      */
-    protected $localConfigurationFile = 'typo3conf/LocalConfiguration.php';
+    protected $localConfigurationFile = 'LocalConfiguration.php';
 
     /**
-     * @var string Path to additional local file, relative to PATH_site
+     * @var string Path to additional local file, relative to the public web folder
      */
-    protected $additionalConfigurationFile = 'typo3conf/AdditionalConfiguration.php';
+    protected $additionalConfigurationFile = 'AdditionalConfiguration.php';
 
     /**
      * @var string Path to factory configuration file used during installation as LocalConfiguration boilerplate
      */
-    protected $factoryConfigurationFile = 'typo3/sysext/core/Configuration/FactoryConfiguration.php';
+    protected $factoryConfigurationFile = 'core/Configuration/FactoryConfiguration.php';
 
     /**
      * @var string Path to possible additional factory configuration file delivered by packages
      */
-    protected $additionalFactoryConfigurationFile = 'typo3conf/AdditionalFactoryConfiguration.php';
+    protected $additionalFactoryConfigurationFile = 'AdditionalFactoryConfiguration.php';
 
     /**
      * Writing to these configuration paths is always allowed,
@@ -76,6 +78,8 @@ class ConfigurationManager
         'EXTCONF',
         'DB',
         'SYS/caching/cacheConfigurations',
+        'SYS/session',
+        'EXTENSIONS',
     ];
 
     /**
@@ -93,11 +97,11 @@ class ConfigurationManager
      * currently the path and filename.
      *
      * @return string
-     * @access private
+     * @internal
      */
     public function getDefaultConfigurationFileLocation()
     {
-        return PATH_site . $this->defaultConfigurationFile;
+        return Environment::getFrameworkBasePath() . '/' . $this->defaultConfigurationFile;
     }
 
     /**
@@ -105,11 +109,11 @@ class ConfigurationManager
      * currently the path and filename.
      *
      * @return string
-     * @access private
+     * @internal
      */
     public function getDefaultConfigurationDescriptionFileLocation()
     {
-        return PATH_site . $this->defaultConfigurationDescriptionFile;
+        return Environment::getFrameworkBasePath() . '/' . $this->defaultConfigurationDescriptionFile;
     }
 
     /**
@@ -127,11 +131,23 @@ class ConfigurationManager
      * currently the path and filename.
      *
      * @return string
-     * @access private
+     * @internal
      */
     public function getLocalConfigurationFileLocation()
     {
-        return PATH_site . $this->localConfigurationFile;
+        return Environment::getLegacyConfigPath() . '/' . $this->localConfigurationFile;
+    }
+
+    /**
+     * Returns local configuration array merged with default configuration
+     *
+     * @return array
+     */
+    public function getMergedLocalConfiguration(): array
+    {
+        $localConfiguration = $this->getDefaultConfiguration();
+        ArrayUtility::mergeRecursiveWithOverrule($localConfiguration, $this->getLocalConfiguration());
+        return $localConfiguration;
     }
 
     /**
@@ -139,11 +155,11 @@ class ConfigurationManager
      * currently the path and filename.
      *
      * @return string
-     * @access private
+     * @internal
      */
     public function getAdditionalConfigurationFileLocation()
     {
-        return PATH_site . $this->additionalConfigurationFile;
+        return Environment::getLegacyConfigPath() . '/' . $this->additionalConfigurationFile;
     }
 
     /**
@@ -153,7 +169,7 @@ class ConfigurationManager
      */
     protected function getFactoryConfigurationFileLocation()
     {
-        return PATH_site . $this->factoryConfigurationFile;
+        return Environment::getFrameworkBasePath() . '/' . $this->factoryConfigurationFile;
     }
 
     /**
@@ -163,7 +179,7 @@ class ConfigurationManager
      */
     protected function getAdditionalFactoryConfigurationFileLocation()
     {
-        return PATH_site . $this->additionalFactoryConfigurationFile;
+        return Environment::getLegacyConfigPath() . '/' . $this->additionalFactoryConfigurationFile;
     }
 
     /**
@@ -273,21 +289,45 @@ class ConfigurationManager
     }
 
     /**
+     * Enables a certain feature and writes the option to LocalConfiguration.php
+     * Short-hand method
+     *
+     * @param string $featureName something like "InlineSvgImages"
+     * @return bool true on successful writing the setting
+     */
+    public function enableFeature(string $featureName): bool
+    {
+        return $this->setLocalConfigurationValueByPath('SYS/features/' . $featureName, true);
+    }
+
+    /**
+     * Disables a feature and writes the option to LocalConfiguration.php
+     * Short-hand method
+     *
+     * @param string $featureName something like "InlineSvgImages"
+     * @return bool true on successful writing the setting
+     */
+    public function disableFeature(string $featureName): bool
+    {
+        return $this->setLocalConfigurationValueByPath('SYS/features/' . $featureName, false);
+    }
+
+    /**
      * Checks if the configuration can be written.
      *
      * @return bool
-     * @access private
+     * @internal
      */
     public function canWriteConfiguration()
     {
         $fileLocation = $this->getLocalConfigurationFileLocation();
-        return @is_writable(file_exists($fileLocation) ? $fileLocation : PATH_site . 'typo3conf/');
+        return @is_writable(file_exists($fileLocation) ? $fileLocation : Environment::getLegacyConfigPath() . '/');
     }
 
     /**
      * Reads the configuration array and exports it to the global variable
      *
-     * @access private
+     * @internal
      * @throws \UnexpectedValueException
      */
     public function exportConfiguration()
@@ -301,12 +341,14 @@ class ConfigurationManager
             } else {
                 throw new \UnexpectedValueException('LocalConfiguration invalid.', 1349272276);
             }
-            if (@is_file($this->getAdditionalConfigurationFileLocation())) {
-                require $this->getAdditionalConfigurationFileLocation();
-            }
         } else {
-            // No LocalConfiguration (yet), load DefaultConfiguration only
+            // No LocalConfiguration (yet), load DefaultConfiguration
             $GLOBALS['TYPO3_CONF_VARS'] = $this->getDefaultConfiguration();
+        }
+
+        // Load AdditionalConfiguration
+        if (@is_file($this->getAdditionalConfigurationFileLocation())) {
+            require $this->getAdditionalConfigurationFileLocation();
         }
     }
 
@@ -316,25 +358,24 @@ class ConfigurationManager
      * @param array $configuration The local configuration to be written
      * @throws \RuntimeException
      * @return bool TRUE on success
-     * @access private
+     * @internal
      */
     public function writeLocalConfiguration(array $configuration)
     {
         $localConfigurationFile = $this->getLocalConfigurationFileLocation();
         if (!$this->canWriteConfiguration()) {
             throw new \RuntimeException(
-                $localConfigurationFile . ' is not writable.', 1346323822
+                $localConfigurationFile . ' is not writable.',
+                1346323822
             );
         }
         $configuration = ArrayUtility::sortByKeyRecursive($configuration);
         $result = GeneralUtility::writeFile(
             $localConfigurationFile,
-            '<?php' . LF .
+            "<?php\n" .
                 'return ' .
-                    ArrayUtility::arrayExport(
-                        ArrayUtility::renumberKeysToAvoidLeapsIfKeysAreAllNumeric($configuration)
-                    ) .
-                ';' . LF,
+                    ArrayUtility::arrayExport($configuration) .
+                ";\n",
             true
         );
 
@@ -349,14 +390,13 @@ class ConfigurationManager
      * @param array $additionalConfigurationLines The configuration lines to be written
      * @throws \RuntimeException
      * @return bool TRUE on success
-     * @access private
+     * @internal
      */
     public function writeAdditionalConfiguration(array $additionalConfigurationLines)
     {
         return GeneralUtility::writeFile(
-            PATH_site . $this->additionalConfigurationFile,
-            '<?php' . LF .
-                implode(LF, $additionalConfigurationLines) . LF
+            $this->getAdditionalConfigurationFileLocation(),
+            "<?php\n" . implode("\n", $additionalConfigurationLines) . "\n"
         );
     }
 
@@ -366,7 +406,7 @@ class ConfigurationManager
      * by the install tool in an early step.
      *
      * @throws \RuntimeException
-     * @access private
+     * @internal
      */
     public function createLocalConfigurationFromFactoryConfiguration()
     {
@@ -385,6 +425,9 @@ class ConfigurationManager
                 $additionalFactoryConfigurationArray
             );
         }
+        $randomKey = GeneralUtility::makeInstance(Random::class)->generateRandomHexString(96);
+        $localConfigurationArray['SYS']['encryptionKey'] = $randomKey;
+
         $this->writeLocalConfiguration($localConfigurationArray);
     }
 

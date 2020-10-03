@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Utility;
 
 /*
@@ -14,7 +15,6 @@ namespace EBT\ExtensionBuilder\Utility;
  * The TYPO3 project - inspiring people to share!
  */
 
-use EBT\ExtensionBuilder\Domain\Model\Extension;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Object\ObjectManager;
@@ -44,6 +44,11 @@ class ExtensionInstallationStatus
      */
     protected $dbUpdateNeeded = false;
 
+    /**
+     * @var bool
+     */
+    protected $usesComposerPath = false;
+
     public function __construct()
     {
         $this->installTool = GeneralUtility::makeInstance(InstallUtility::class);
@@ -58,13 +63,21 @@ class ExtensionInstallationStatus
     }
 
     /**
+     * @param bool $usesComposerPath
+     */
+    public function setUsesComposerPath(bool $usesComposerPath): void
+    {
+        $this->usesComposerPath = $usesComposerPath;
+    }
+
+    /**
      * @return string
      * @throws \Exception
      */
     public function getStatusMessage()
     {
         $statusMessage = '';
-        $this->checkForDbUpdate($this->extension->getExtensionKey());
+        // $this->checkForDbUpdate($this->extension->getExtensionKey());
 
         if ($this->dbUpdateNeeded) {
             $statusMessage .= '<p>Database has to be updated!</p>';
@@ -92,6 +105,14 @@ class ExtensionInstallationStatus
 
         if (!ExtensionManagementUtility::isLoaded($this->extension->getExtensionKey())) {
             $statusMessage .= '<p>Your Extension is not installed yet.</p>';
+            if ($this->usesComposerPath) {
+                $statusMessage .= sprintf(
+                    '<p>Execute <code>composer require %s</code> in terminal',
+                    $this->extension->getComposerInfo()['name']
+                );
+            }
+        } else {
+            $statusMessage .= '<br /><p>Please check the Install Tool for possible database updates!</p>';
         }
 
         return $statusMessage;
@@ -116,7 +137,10 @@ class ExtensionInstallationStatus
                 $fieldDefinitionsFromFile = $sqlHandler->getFieldDefinitions_fileContent($sqlContent);
                 if (count($fieldDefinitionsFromFile)) {
                     $fieldDefinitionsFromCurrentDatabase = $sqlHandler->getFieldDefinitions_database();
-                    $updateTableDefinition = $sqlHandler->getDatabaseExtra($fieldDefinitionsFromFile, $fieldDefinitionsFromCurrentDatabase);
+                    $updateTableDefinition = $sqlHandler->getDatabaseExtra(
+                        $fieldDefinitionsFromFile,
+                        $fieldDefinitionsFromCurrentDatabase
+                    );
                     $this->updateStatements = $sqlHandler->getUpdateSuggestions($updateTableDefinition);
                     if (!empty($updateTableDefinition['extra']) || !empty($updateTableDefinition['diff']) || !empty($updateTableDefinition['diff_currentValues'])) {
                         $this->dbUpdateNeeded = true;
@@ -139,11 +163,11 @@ class ExtensionInstallationStatus
             if ($this->dbUpdateNeeded) {
                 foreach ($this->updateStatements as $type => $statements) {
                     foreach ($statements as $key => $statement) {
-                        if (in_array($type, ['change', 'add', 'create_table']) && in_array($key, $params['updateStatements'])) {
+                        if (in_array($type, ['change', 'add', 'create_table']) && in_array($key,
+                                $params['updateStatements'])) {
                             $res = $this->getDatabaseConnection()->admin_query($statement);
                             if ($res === false) {
                                 $hasErrors = true;
-                                GeneralUtility::devLog('SQL error', 'extension_builder', 0, ['statement' => $statement, 'error' => $this->getDatabaseConnection()->sql_error()]);
                             } elseif (is_resource($res) || is_a($res, \mysqli_result::class)) {
                                 $this->getDatabaseConnection()->sql_free_result($res);
                             }
@@ -154,9 +178,9 @@ class ExtensionInstallationStatus
         }
         if ($hasErrors) {
             return ['error' => 'Database could not be updated. Please check it in the update wizzard of the install tool'];
-        } else {
-            return ['success' => 'Database was successfully updated'];
         }
+
+        return ['success' => 'Database was successfully updated'];
     }
 
     /**

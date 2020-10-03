@@ -15,19 +15,19 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Form;
  */
 
 /**
- * A view helper which generates an <input type="file"> HTML element.
- * Make sure to set enctype="multipart/form-data" on the form!
+ * A ViewHelper which generates an :html:`<input type="file">` HTML element.
+ * Make sure to set ``enctype="multipart/form-data"`` on the form!
  *
- * = Examples =
+ * Examples
+ * ========
  *
- * <code title="Example">
- * <f:form.upload name="file" />
- * </code>
- * <output>
- * <input type="file" name="file" />
- * </output>
+ * Example::
  *
- * @api
+ *    <f:form.upload name="file" />
+ *
+ * Output::
+ *
+ *    <input type="file" name="file" />
  */
 class UploadViewHelper extends \TYPO3\CMS\Fluid\ViewHelpers\Form\AbstractFormFieldViewHelper
 {
@@ -38,15 +38,13 @@ class UploadViewHelper extends \TYPO3\CMS\Fluid\ViewHelpers\Form\AbstractFormFie
 
     /**
      * Initialize the arguments.
-     *
-     * @api
      */
     public function initializeArguments()
     {
         parent::initializeArguments();
         $this->registerTagAttribute('disabled', 'string', 'Specifies that the input element should be disabled when the page loads');
         $this->registerTagAttribute('multiple', 'string', 'Specifies that the file input element should allow multiple selection of files');
-        $this->registerArgument('errorClass', 'string', 'CSS class to set if there are errors for this view helper', false, 'f3-form-error');
+        $this->registerArgument('errorClass', 'string', 'CSS class to set if there are errors for this ViewHelper', false, 'f3-form-error');
         $this->registerUniversalTagAttributes();
     }
 
@@ -54,7 +52,6 @@ class UploadViewHelper extends \TYPO3\CMS\Fluid\ViewHelpers\Form\AbstractFormFie
      * Renders the upload field.
      *
      * @return string
-     * @api
      */
     public function render()
     {

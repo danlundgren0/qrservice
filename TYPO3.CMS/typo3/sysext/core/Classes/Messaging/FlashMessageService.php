@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Messaging;
 
 /*
@@ -36,9 +36,8 @@ class FlashMessageService implements SingletonInterface
      *
      * @param string $identifier
      * @return FlashMessageQueue
-     * @api
      */
-    public function getMessageQueueByIdentifier($identifier = 'core.template.flashMessages') : FlashMessageQueue
+    public function getMessageQueueByIdentifier($identifier = 'core.template.flashMessages'): FlashMessageQueue
     {
         if (!isset($this->flashMessageQueues[$identifier])) {
             $this->flashMessageQueues[$identifier] = GeneralUtility::makeInstance(

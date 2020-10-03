@@ -110,8 +110,11 @@ class LayoutSetup
     protected function loadLayoutSetup($pageId)
     {
         // Load page TSconfig.
-        $pageTSconfig = BackendUtility::getPagesTSconfig($pageId);
-
+        if (\TYPO3_MODE === 'FE') {
+            $pageTSconfig = $GLOBALS['TSFE']->getPagesTSconfig();
+        } else {
+            $pageTSconfig = BackendUtility::getPagesTSconfig($pageId);
+        }
         $excludeLayoutIds = !empty($pageTSconfig['tx_gridelements.']['excludeLayoutIds'])
             ? array_flip(GeneralUtility::trimExplode(',', $pageTSconfig['tx_gridelements.']['excludeLayoutIds']))
             : [];
@@ -644,7 +647,7 @@ class LayoutSetup
     /**
      * getter for restrictions
      *
-     * @return DefaultRestrictionContainer restrictions
+     * @return object|DefaultRestrictionContainer restrictions
      */
     public function getRestrictions()
     {

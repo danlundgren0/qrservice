@@ -3,7 +3,7 @@ defined('TYPO3_MODE') or die();
 
 // We set the default implementation for Storage Backend & Query Settings in Backend and Frontend.
 // The code below is NO PUBLIC API!
-/** @var $extbaseObjectContainer \TYPO3\CMS\Extbase\Object\Container\Container */
+/** @var \TYPO3\CMS\Extbase\Object\Container\Container $extbaseObjectContainer */
 $extbaseObjectContainer = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Extbase\Object\Container\Container::class);
 // Singleton
 $extbaseObjectContainer->registerImplementation(\TYPO3\CMS\Extbase\Persistence\QueryInterface::class, \TYPO3\CMS\Extbase\Persistence\Generic\Query::class);
@@ -31,15 +31,16 @@ unset($extbaseObjectContainer);
 \TYPO3\CMS\Extbase\Utility\ExtensionUtility::registerTypeConverter(\TYPO3\CMS\Extbase\Property\TypeConverter\StaticFileCollectionConverter::class);
 \TYPO3\CMS\Extbase\Utility\ExtensionUtility::registerTypeConverter(\TYPO3\CMS\Extbase\Property\TypeConverter\FolderConverter::class);
 
-if (TYPO3_MODE === 'BE') {
-    // registers Extbase at the cli_dispatcher with key "extbase".
-    // Using cliKeys is deprecated as of TYPO3 v8 and will be removed in TYPO3 v9, use Configuration/Commands.php instead
-    $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['GLOBAL']['cliKeys']['extbase'] = [
-        function () {
-            $bootstrap = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Extbase\Core\Bootstrap::class);
-            echo $bootstrap->run('', []);
-        }
-    ];
-    // register help command
-    $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['extbase']['commandControllers'][] = \TYPO3\CMS\Extbase\Command\HelpCommandController::class;
-}
+// register help command
+// @deprecated will be removed in TYPO3 v10.0. Use symfony/console commands instead
+$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['extbase']['commandControllers'][] = \TYPO3\CMS\Extbase\Command\HelpCommandController::class;
+
+// @deprecated will be removed in TYPO3 v10.0. Use symfony/console commands instead
+$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['scheduler']['tasks'][\TYPO3\CMS\Extbase\Scheduler\Task::class] = [
+    'extension' => 'extbase',
+    'title' => 'LLL:EXT:extbase/Resources/Private/Language/locallang_db.xlf:task.name',
+    'description' => 'LLL:EXT:extbase/Resources/Private/Language/locallang_db.xlf:task.description',
+    'additionalFields' => \TYPO3\CMS\Extbase\Scheduler\FieldProvider::class
+];
+
+$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_tcemain.php']['checkFlexFormValue'][] = \TYPO3\CMS\Extbase\Hook\DataHandler\CheckFlexFormValue::class;

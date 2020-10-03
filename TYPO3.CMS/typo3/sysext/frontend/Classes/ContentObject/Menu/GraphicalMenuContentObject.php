@@ -14,6 +14,8 @@ namespace TYPO3\CMS\Frontend\ContentObject\Menu;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Type\File\ImageInfo;
 use TYPO3\CMS\Core\TypoScript\TypoScriptService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
@@ -21,9 +23,16 @@ use TYPO3\CMS\Frontend\Imaging\GifBuilder;
 
 /**
  * Extension class creating graphic based menus (PNG or GIF files)
+ *
+ * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0
  */
 class GraphicalMenuContentObject extends AbstractMenuContentObject
 {
+    public function __construct()
+    {
+        trigger_error('GMENU and GraphicalMenuContentObject will be removed in TYPO3 v10.0, you should build accessible websites with TMENU/Text, and optional images on top, which can be achieved with TypoScript.', E_USER_DEPRECATED);
+    }
+
     /**
      * Calls procesItemStates() so that the common configuration for the menu items are resolved into individual configuration per item.
      * Calls makeGifs() for all "normal" items and if configured for, also the "rollover" items.
@@ -100,11 +109,11 @@ class GraphicalMenuContentObject extends AbstractMenuContentObject
             }
             $minDim = $this->mconf['min'];
             if ($minDim) {
-                $minDim = $this->parent_cObj->calcIntExplode(',', $minDim . ',');
+                $minDim = $this->calcIntExplode($minDim . ',');
             }
             $maxDim = $this->mconf['max'];
             if ($maxDim) {
-                $maxDim = $this->parent_cObj->calcIntExplode(',', $maxDim . ',');
+                $maxDim = $this->calcIntExplode($maxDim . ',');
             }
             if ($minDim) {
                 $conf[$items] = $conf[$items - 1];
@@ -151,7 +160,6 @@ class GraphicalMenuContentObject extends AbstractMenuContentObject
             if ($isGD) {
                 // Pre-working the item
                 $gifCreator = GeneralUtility::makeInstance(GifBuilder::class);
-                $gifCreator->init();
                 $gifCreator->start($val, $this->menuArr[$key]);
                 // If useLargestItemH/W is specified
                 if (!empty($totalWH) && ($this->mconf['useLargestItemX'] || $this->mconf['useLargestItemY'])) {
@@ -165,7 +173,6 @@ class GraphicalMenuContentObject extends AbstractMenuContentObject
                     // Regenerate the new values...
                     $val['XY'] = implode(',', $tempXY);
                     $gifCreator = GeneralUtility::makeInstance(GifBuilder::class);
-                    $gifCreator->init();
                     $gifCreator->start($val, $this->menuArr[$key]);
                 }
                 // If distributeH/W is specified
@@ -186,7 +193,6 @@ class GraphicalMenuContentObject extends AbstractMenuContentObject
                     // Regenerate the new values...
                     $val['XY'] = implode(',', $tempXY);
                     $gifCreator = GeneralUtility::makeInstance(GifBuilder::class);
-                    $gifCreator->init();
                     $gifCreator->start($val, $this->menuArr[$key]);
                 }
                 // If max dimensions are specified
@@ -203,7 +209,6 @@ class GraphicalMenuContentObject extends AbstractMenuContentObject
                     if ($maxFlag) {
                         $val['XY'] = implode(',', $tempXY);
                         $gifCreator = GeneralUtility::makeInstance(GifBuilder::class);
-                        $gifCreator->init();
                         $gifCreator->start($val, $this->menuArr[$key]);
                     }
                 }
@@ -235,16 +240,16 @@ class GraphicalMenuContentObject extends AbstractMenuContentObject
             }
             // If an alternative name was NOT given, find the GIFBUILDER name.
             if (!$gifFileName && $isGD) {
-                GeneralUtility::mkdir_deep(PATH_site . 'typo3temp/assets/menu/');
+                GeneralUtility::mkdir_deep(Environment::getPublicPath() . '/typo3temp/assets/menu/');
                 $gifFileName = $gifCreator->fileName('assets/menu/');
             }
             $this->result[$resKey][$key] = $conf[$key];
             // Generation of image file:
             // File exists
             if (file_exists($gifFileName)) {
-                $info = @getimagesize($gifFileName);
-                $this->result[$resKey][$key]['output_w'] = (int)$info[0];
-                $this->result[$resKey][$key]['output_h'] = (int)$info[1];
+                $imageInfo = GeneralUtility::makeInstance(ImageInfo::class, $gifFileName);
+                $this->result[$resKey][$key]['output_w'] = (int)$imageInfo->getWidth();
+                $this->result[$resKey][$key]['output_h'] = (int)$imageInfo->getHeight();
                 $this->result[$resKey][$key]['output_file'] = $gifFileName;
             } elseif ($isGD) {
                 // file is generated
@@ -321,7 +326,6 @@ class GraphicalMenuContentObject extends AbstractMenuContentObject
             }
             $c++;
             $gifCreator = GeneralUtility::makeInstance(GifBuilder::class);
-            $gifCreator->init();
             $gifCreator->start($val, $this->menuArr[$key]);
             if ($maxDim) {
                 $tempXY = explode(',', $val['XY']);
@@ -336,7 +340,6 @@ class GraphicalMenuContentObject extends AbstractMenuContentObject
                 if ($maxFlag) {
                     $val['XY'] = implode(',', $tempXY);
                     $gifCreator = GeneralUtility::makeInstance(GifBuilder::class);
-                    $gifCreator->init();
                     $gifCreator->start($val, $this->menuArr[$key]);
                 }
             }
@@ -474,10 +477,9 @@ class GraphicalMenuContentObject extends AbstractMenuContentObject
      * Called right before the traversing of $this->result begins.
      * Can be used for various initialization
      *
-     * @internal
      * @see writeMenu()
      */
-    public function extProc_init()
+    protected function extProc_init()
     {
     }
 
@@ -485,10 +487,9 @@ class GraphicalMenuContentObject extends AbstractMenuContentObject
      * Called after all processing for RollOver of an element has been done.
      *
      * @param int $key Pointer to $this->menuArr[$key] where the current menu element record is found OR $this->result['RO'][$key] where the configuration for that elements RO version is found!
-     * @internal
      * @see writeMenu()
      */
-    public function extProc_RO($key)
+    protected function extProc_RO($key)
     {
     }
 
@@ -496,10 +497,9 @@ class GraphicalMenuContentObject extends AbstractMenuContentObject
      * Called right before the creation of the link for the menu item
      *
      * @param int $key Pointer to $this->menuArr[$key] where the current menu element record is found
-     * @internal
      * @see writeMenu()
      */
-    public function extProc_beforeLinking($key)
+    protected function extProc_beforeLinking($key)
     {
     }
 
@@ -510,10 +510,9 @@ class GraphicalMenuContentObject extends AbstractMenuContentObject
      * Further this calls the subMenu function in the parent class to create any submenu there might be.
      *
      * @param int $key Pointer to $this->menuArr[$key] where the current menu element record is found
-     * @internal
      * @see writeMenu(), AbstractMenuContentObject::subMenu()
      */
-    public function extProc_afterLinking($key)
+    protected function extProc_afterLinking($key)
     {
         // Add part to the accumulated result + fetch submenus
         if (!$this->I['spacer']) {
@@ -529,10 +528,9 @@ class GraphicalMenuContentObject extends AbstractMenuContentObject
      * @param string $item The current content of the menu item, $this->I['theItem'], passed along.
      * @param int $key Pointer to $this->menuArr[$key] where the current menu element record is found (unused)
      * @return string The modified version of $item, going back into $this->I['theItem']
-     * @internal
      * @see writeMenu()
      */
-    public function extProc_beforeAllWrap($item, $key)
+    protected function extProc_beforeAllWrap($item, $key)
     {
         return $item;
     }
@@ -541,15 +539,31 @@ class GraphicalMenuContentObject extends AbstractMenuContentObject
      * Called before the writeMenu() function returns (only if a menu was generated)
      *
      * @return string The total menu content should be returned by this function
-     * @internal
      * @see writeMenu()
      */
-    public function extProc_finish()
+    protected function extProc_finish()
     {
         // stdWrap:
         if (is_array($this->mconf['stdWrap.'])) {
             $this->WMresult = $this->WMcObj->stdWrap($this->WMresult, $this->mconf['stdWrap.']);
         }
         return $this->WMcObj->wrap($this->WMresult, $this->mconf['wrap']) . $this->WMextraScript;
+    }
+
+    /**
+     * This explodes a comma-list into an array where the values are parsed through ContentObjectRender::calc() and cast to (int)(so you are sure to have integers in the output array)
+     * Used to split and calculate min and max values for GMENUs.
+     *
+     * @param string $string The string with parts in (where each part is evaluated by ->calc())
+     * @return array And array with evaluated values.
+     * @see ContentObjectRenderer::calc(), makeGifs()
+     */
+    protected function calcIntExplode($string)
+    {
+        $temp = explode(',', $string);
+        foreach ($temp as $key => $val) {
+            $temp[$key] = (int)$this->parent_cObj->calc($val);
+        }
+        return $temp;
     }
 }

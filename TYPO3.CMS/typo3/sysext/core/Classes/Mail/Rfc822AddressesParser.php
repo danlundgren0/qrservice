@@ -102,20 +102,19 @@ class Rfc822AddressesParser
      *
      * @var string $error
      */
-    private $error = null;
+    private $error;
 
     /**
      * An internal counter/pointer.
      *
      * @var int $index
      */
-    private $index = null;
+    private $index;
 
     /**
      * The number of groups that have been found in the address list.
      *
      * @var int $num_groups
-     * @access public
      */
     private $num_groups = 0;
 
@@ -124,7 +123,7 @@ class Rfc822AddressesParser
      *
      * @var int $limit
      */
-    private $limit = null;
+    private $limit;
 
     /**
      * Sets up the object.
@@ -154,7 +153,6 @@ class Rfc822AddressesParser
      * Starts the whole process. The address must either be set here
      * or when creating the object. One or the other.
      *
-     * @access public
      * @param string $address The address(es) to validate.
      * @param string $default_domain Default domain/host etc.
      * @param bool $validate Whether to validate atoms. Turn this off if you need to run addresses through before encoding the personal names, for instance.
@@ -203,7 +201,7 @@ class Rfc822AddressesParser
     /**
      * Splits an address into separate addresses.
      *
-     * @access private
+     * @internal
      * @param string $address The addresses to split.
      * @return bool Success or failure.
      */
@@ -255,17 +253,17 @@ class Rfc822AddressesParser
         if ($is_group && $address[0] === ',') {
             $address = trim(substr($address, 1));
             return $address;
-        } elseif ($address !== '') {
-            return $address;
-        } else {
-            return '';
         }
+        if ($address !== '') {
+            return $address;
+        }
+        return '';
     }
 
     /**
      * Checks for a group at the start of the string.
      *
-     * @access private
+     * @internal
      * @param string $address The address to check.
      * @return bool Whether or not there is a group at the start of the string.
      */
@@ -277,18 +275,17 @@ class Rfc822AddressesParser
         // Now we have the first address, we can reliably check for a
         // group by searching for a colon that's not escaped or in
         // quotes or angle brackets.
-        if (count(($parts = explode(':', $string))) > 1) {
+        if (count($parts = explode(':', $string)) > 1) {
             $string2 = $this->_splitCheck($parts, ':');
             return $string2 !== $string;
-        } else {
-            return false;
         }
+        return false;
     }
 
     /**
      * A common function that will check an exploded string.
      *
-     * @access private
+     * @internal
      * @param array $parts The exloded string.
      * @param string $char  The char that was exploded on.
      * @return mixed False if the string contains unclosed quotes/brackets, or the string on success.
@@ -316,7 +313,7 @@ class Rfc822AddressesParser
     /**
      * Checks if a string has unclosed quotes or not.
      *
-     * @access private
+     * @internal
      * @param string $string  The string to check.
      * @return bool TRUE if there are unclosed quotes inside the string,
      */
@@ -335,6 +332,7 @@ class Rfc822AddressesParser
                     if ($slashes % 2 == 0) {
                         $in_quote = !$in_quote;
                     }
+                    // no break
                 default:
                     $slashes = 0;
             }
@@ -346,7 +344,7 @@ class Rfc822AddressesParser
      * Checks if a string has an unclosed brackets or not. IMPORTANT:
      * This function handles both angle brackets and square brackets;
      *
-     * @access private
+     * @internal
      * @param string $string The string to check.
      * @param string $chars  The characters to check for.
      * @return bool TRUE if there are unclosed brackets inside the string, FALSE otherwise.
@@ -360,15 +358,14 @@ class Rfc822AddressesParser
         if ($num_angle_start < $num_angle_end) {
             $this->error = 'Invalid address spec. Unmatched quote or bracket (' . $chars . ')';
             return false;
-        } else {
-            return $num_angle_start > $num_angle_end;
         }
+        return $num_angle_start > $num_angle_end;
     }
 
     /**
      * Sub function that is used only by hasUnclosedBrackets().
      *
-     * @access private
+     * @internal
      * @param string $string The string to check.
      * @param int &$num	The number of occurrences.
      * @param string $char   The character to count.
@@ -392,7 +389,7 @@ class Rfc822AddressesParser
     /**
      * Function to begin checking the address.
      *
-     * @access private
+     * @internal
      * @param string $address The address to validate.
      * @return mixed False on failure, or a structured array of address information on success.
      */
@@ -458,7 +455,7 @@ class Rfc822AddressesParser
     /**
      * Function to validate a phrase.
      *
-     * @access private
+     * @internal
      * @param string $phrase The phrase to check.
      * @return bool Success or failure.
      */
@@ -498,7 +495,7 @@ class Rfc822AddressesParser
      * can split a list of addresses up before encoding personal names
      * (umlauts, etc.), for example.
      *
-     * @access private
+     * @internal
      * @param string $atom The string to check.
      * @return bool Success or failure.
      */
@@ -527,7 +524,7 @@ class Rfc822AddressesParser
      * Function to validate quoted string, which is:
      * quoted-string = <"> *(qtext/quoted-pair) <">
      *
-     * @access private
+     * @internal
      * @param string $qstring The string to check
      * @return bool Success or failure.
      */
@@ -544,7 +541,6 @@ class Rfc822AddressesParser
      * mailbox =   addr-spec		 ; simple address
      * phrase route-addr ; name and route-addr
      *
-     * @access public
      * @param string &$mailbox The string to check.
      * @return bool Success or failure.
      */
@@ -552,7 +548,6 @@ class Rfc822AddressesParser
     {
         // A couple of defaults.
         $phrase = '';
-        $comment = '';
         $comments = [];
         // Catch any RFC822 comments and store them separately.
         $_mailbox = $mailbox;
@@ -566,7 +561,7 @@ class Rfc822AddressesParser
                 $comment = $this->_splitCheck($parts, ')');
                 $comments[] = $comment;
                 // +2 is for the brackets
-                $_mailbox = substr($_mailbox, strpos($_mailbox, ('(' . $comment)) + strlen($comment) + 2);
+                $_mailbox = substr($_mailbox, strpos($_mailbox, '(' . $comment) + strlen($comment) + 2);
             } else {
                 break;
             }
@@ -599,7 +594,7 @@ class Rfc822AddressesParser
         $mbox = new \stdClass();
         // Add the phrase (even if empty) and comments
         $mbox->personal = $phrase;
-        $mbox->comment = isset($comments) ? $comments : [];
+        $mbox->comment = $comments ?? [];
         if (isset($route_addr)) {
             $mbox->mailbox = $route_addr['local_part'];
             $mbox->host = $route_addr['domain'];
@@ -619,7 +614,7 @@ class Rfc822AddressesParser
      * Angle brackets have already been removed at the point of
      * getting to this function.
      *
-     * @access private
+     * @internal
      * @param string $route_addr The string to check.
      * @return mixed False on failure, or an array containing validated address/route information on success.
      */
@@ -664,7 +659,7 @@ class Rfc822AddressesParser
      * Function to validate a route, which is:
      * route = 1#("@" domain) ":"
      *
-     * @access private
+     * @internal
      * @param string $route The string to check.
      * @return mixed False on failure, or the validated $route on success.
      */
@@ -687,7 +682,7 @@ class Rfc822AddressesParser
      *
      * domain = sub-domain *("." sub-domain)
      *
-     * @access private
+     * @internal
      * @param string $domain The string to check.
      * @return mixed False on failure, or the validated domain on success.
      */
@@ -714,7 +709,7 @@ class Rfc822AddressesParser
      * Function to validate a subdomain:
      * subdomain = domain-ref / domain-literal
      *
-     * @access private
+     * @internal
      * @param string $subdomain The string to check.
      * @return bool Success or failure.
      */
@@ -737,7 +732,7 @@ class Rfc822AddressesParser
      * Function to validate a domain literal:
      * domain-literal =  "[" *(dtext / quoted-pair) "]"
      *
-     * @access private
+     * @internal
      * @param string $dliteral The string to check.
      * @return bool Success or failure.
      */
@@ -751,7 +746,7 @@ class Rfc822AddressesParser
      *
      * addr-spec = local-part "@" domain
      *
-     * @access private
+     * @internal
      * @param string $addr_spec The string to check.
      * @return mixed False on failure, or the validated addr-spec on success.
      */
@@ -781,7 +776,7 @@ class Rfc822AddressesParser
      * Function to validate the local part of an address:
      * local-part = word *("." word)
      *
-     * @access private
+     * @internal
      * @param string $local_part
      * @return mixed False on failure, or the validated local part on success.
      */

@@ -15,16 +15,27 @@ namespace TYPO3\CMS\Backend\Form\Element;
  */
 
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
 use TYPO3\CMS\Core\Utility\StringUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Generation of TCEform elements of the type "text"
  */
 class TextElement extends AbstractFormElement
 {
+    /**
+     * Default field information enabled for this element.
+     *
+     * @var array
+     */
+    protected $defaultFieldInformation = [
+        'tcaDescription' => [
+            'renderType' => 'tcaDescription',
+        ],
+    ];
+
     /**
      * Default field wizards enabled for this element.
      *
@@ -77,7 +88,7 @@ class TextElement extends AbstractFormElement
         $evalList = GeneralUtility::trimExplode(',', $config['eval'], true);
         $cols = MathUtility::forceIntegerInRange($config['cols'] ?: $this->defaultInputWidth, $this->minimumInputWidth, $this->maxInputWidth);
         $width = $this->formMaxWidth($cols);
-        $nullControlNameAttribute = ' name="' . htmlspecialchars('control[active][' . $table . '][' . $row['uid'] . '][' . $fieldName . ']') . '"';
+        $nullControlNameEscaped = htmlspecialchars('control[active][' . $table . '][' . $row['uid'] . '][' . $fieldName . ']');
 
         // Setting number of rows
         $rows = MathUtility::forceIntegerInRange($config['rows'] ?: 5, 1, 20);
@@ -94,9 +105,14 @@ class TextElement extends AbstractFormElement
             }
         }
 
+        $fieldInformationResult = $this->renderFieldInformation();
+        $fieldInformationHtml = $fieldInformationResult['html'];
+        $resultArray = $this->mergeChildReturnIntoExistingResult($resultArray, $fieldInformationResult, false);
+
         if ($config['readOnly']) {
             $html = [];
             $html[] = '<div class="formengine-field-item t3js-formengine-field-item">';
+            $html[] =   $fieldInformationHtml;
             $html[] =   '<div class="form-wizards-wrap">';
             $html[] =       '<div class="form-wizards-element">';
             $html[] =           '<div class="form-control-wrap" style="max-width: ' . $width . 'px">';
@@ -189,20 +205,12 @@ class TextElement extends AbstractFormElement
             $valuePickerHtml[] = '</select>';
         }
 
-        $legacyWizards = $this->renderWizards();
-        $legacyFieldControlHtml = implode(LF, $legacyWizards['fieldControl']);
-        $legacyFieldWizardHtml = implode(LF, $legacyWizards['fieldWizard']);
-
-        $fieldInformationResult = $this->renderFieldInformation();
-        $fieldInformationHtml = $fieldInformationResult['html'];
-        $resultArray = $this->mergeChildReturnIntoExistingResult($resultArray, $fieldInformationResult, false);
-
         $fieldControlResult = $this->renderFieldControl();
-        $fieldControlHtml = $legacyFieldControlHtml . $fieldControlResult['html'];
+        $fieldControlHtml = $fieldControlResult['html'];
         $resultArray = $this->mergeChildReturnIntoExistingResult($resultArray, $fieldControlResult, false);
 
         $fieldWizardResult = $this->renderFieldWizard();
-        $fieldWizardHtml = $legacyFieldWizardHtml . $fieldWizardResult['html'];
+        $fieldWizardHtml = $fieldWizardResult['html'];
         $resultArray = $this->mergeChildReturnIntoExistingResult($resultArray, $fieldWizardResult, false);
 
         $mainFieldHtml = [];
@@ -211,15 +219,19 @@ class TextElement extends AbstractFormElement
         $mainFieldHtml[] =      '<div class="form-wizards-element">';
         $mainFieldHtml[] =          '<textarea ' . GeneralUtility::implodeAttributes($attributes, true) . '>' . htmlspecialchars($itemValue) . '</textarea>';
         $mainFieldHtml[] =      '</div>';
-        $mainFieldHtml[] =      '<div class="form-wizards-items-aside">';
-        $mainFieldHtml[] =          '<div class="btn-group">';
-        $mainFieldHtml[] =              implode(LF, $valuePickerHtml);
-        $mainFieldHtml[] =              $fieldControlHtml;
-        $mainFieldHtml[] =          '</div>';
-        $mainFieldHtml[] =      '</div>';
-        $mainFieldHtml[] =      '<div class="form-wizards-items-bottom">';
-        $mainFieldHtml[] =          $fieldWizardHtml;
-        $mainFieldHtml[] =      '</div>';
+        if (!empty($valuePickerHtml) || !empty($fieldControlHtml)) {
+            $mainFieldHtml[] =      '<div class="form-wizards-items-aside">';
+            $mainFieldHtml[] =          '<div class="btn-group">';
+            $mainFieldHtml[] =              implode(LF, $valuePickerHtml);
+            $mainFieldHtml[] =              $fieldControlHtml;
+            $mainFieldHtml[] =          '</div>';
+            $mainFieldHtml[] =      '</div>';
+        }
+        if (!empty($fieldWizardHtml)) {
+            $mainFieldHtml[] = '<div class="form-wizards-items-bottom">';
+            $mainFieldHtml[] = $fieldWizardHtml;
+            $mainFieldHtml[] = '</div>';
+        }
         $mainFieldHtml[] =  '</div>';
         $mainFieldHtml[] = '</div>';
         $mainFieldHtml = implode(LF, $mainFieldHtml);
@@ -230,10 +242,10 @@ class TextElement extends AbstractFormElement
             $fullElement = [];
             $fullElement[] = '<div class="t3-form-field-disable"></div>';
             $fullElement[] = '<div class="checkbox t3-form-field-eval-null-checkbox">';
-            $fullElement[] =     '<label>';
-            $fullElement[] =         '<input type="hidden"' . $nullControlNameAttribute . ' value="0" />';
-            $fullElement[] =         '<input type="checkbox"' . $nullControlNameAttribute . ' value="1"' . $checked . ' />';
-            $fullElement[] =         $languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.nullCheckbox');
+            $fullElement[] =     '<label for="' . $nullControlNameEscaped . '">';
+            $fullElement[] =         '<input type="hidden" name="' . $nullControlNameEscaped . '" value="0" />';
+            $fullElement[] =         '<input type="checkbox" name="' . $nullControlNameEscaped . '" id="' . $nullControlNameEscaped . '" value="1"' . $checked . ' />';
+            $fullElement[] =         $languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.nullCheckbox');
             $fullElement[] =     '</label>';
             $fullElement[] = '</div>';
             $fullElement[] = $mainFieldHtml;
@@ -247,28 +259,25 @@ class TextElement extends AbstractFormElement
                 $shortenedPlaceholder = GeneralUtility::fixed_lgd_cs($placeholder, 20);
                 if ($placeholder !== $shortenedPlaceholder) {
                     $overrideLabel = sprintf(
-                        $languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.placeholder.override'),
+                        $languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.placeholder.override'),
                         '<span title="' . htmlspecialchars($placeholder) . '">' . htmlspecialchars($shortenedPlaceholder) . '</span>'
                     );
                 } else {
                     $overrideLabel = sprintf(
-                        $languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.placeholder.override'),
+                        $languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.placeholder.override'),
                         htmlspecialchars($placeholder)
                     );
                 }
             } else {
-                $fallbackValue = 1;
-                $checked = ' checked="checked"';
-                $disabled = ' disabled="disabled"';
                 $overrideLabel = $languageService->sL(
-                    'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.placeholder.override_not_available'
+                    'LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.placeholder.override_not_available'
                 );
             }
             $fullElement = [];
             $fullElement[] = '<div class="checkbox t3js-form-field-eval-null-placeholder-checkbox">';
-            $fullElement[] =     '<label>';
-            $fullElement[] =         '<input type="hidden"' . $nullControlNameAttribute . ' value="' . $fallbackValue . '" />';
-            $fullElement[] =         '<input type="checkbox"' . $nullControlNameAttribute . ' value="1"' . $checked . $disabled . ' />';
+            $fullElement[] =     '<label for="' . $nullControlNameEscaped . '">';
+            $fullElement[] =         '<input type="hidden" name="' . $nullControlNameEscaped . '" value="' . $fallbackValue . '" />';
+            $fullElement[] =         '<input type="checkbox" name="' . $nullControlNameEscaped . '" id="' . $nullControlNameEscaped . '" value="1"' . $checked . $disabled . ' />';
             $fullElement[] =         $overrideLabel;
             $fullElement[] =     '</label>';
             $fullElement[] = '</div>';
@@ -282,7 +291,7 @@ class TextElement extends AbstractFormElement
             $fullElement[] =            isset($attributes['style']) ? ' style="' . htmlspecialchars($attributes['style']) . '"' : '';
             $fullElement[] =            isset($attributes['maxlength']) ? ' maxlength="' . htmlspecialchars($attributes['maxlength']) . '"' : '';
             $fullElement[] =        '>';
-            $fullElement[] =            htmlspecialchars($itemValue);
+            $fullElement[] =            htmlspecialchars($shortenedPlaceholder);
             $fullElement[] =        '</textarea>';
             $fullElement[] =    '</div>';
             $fullElement[] = '</div>';

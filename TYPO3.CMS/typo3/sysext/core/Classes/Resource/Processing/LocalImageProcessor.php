@@ -15,7 +15,6 @@ namespace TYPO3\CMS\Core\Resource\Processing;
  */
 
 use TYPO3\CMS\Core\Imaging\GraphicalFunctions;
-use TYPO3\CMS\Core\Log\LogManager;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -23,21 +22,6 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  */
 class LocalImageProcessor implements ProcessorInterface
 {
-    /**
-     * @var \TYPO3\CMS\Core\Log\Logger
-     */
-    protected $logger;
-
-    /**
-     * Constructor
-     */
-    public function __construct()
-    {
-        /** @var $logManager LogManager */
-        $logManager = GeneralUtility::makeInstance(LogManager::class);
-        $this->logger = $logManager->getLogger(__CLASS__);
-    }
-
     /**
      * Returns TRUE if this processor can process the given task.
      *
@@ -79,17 +63,15 @@ class LocalImageProcessor implements ProcessorInterface
                     ['width' => $imageDimensions[0], 'height' => $imageDimensions[1], 'size' => filesize($result['filePath']), 'checksum' => $task->getConfigurationChecksum()]
                 );
                 $task->getTargetFile()->updateWithLocalFile($result['filePath']);
-
-            // New dimensions + no new file (for instance svg)
             } elseif (!empty($result['width']) && !empty($result['height']) && empty($result['filePath'])) {
+                // New dimensions + no new file (for instance svg)
                 $task->setExecuted(true);
                 $task->getTargetFile()->setUsesOriginalFile();
                 $task->getTargetFile()->updateProperties(
                     ['width' => $result['width'], 'height' => $result['height'], 'size' => $task->getSourceFile()->getSize(), 'checksum' => $task->getConfigurationChecksum()]
                 );
-
-            // Seems we have no valid processing result
             } else {
+                // Seems we have no valid processing result
                 $task->setExecuted(false);
             }
         } catch (\Exception $e) {
@@ -130,9 +112,8 @@ class LocalImageProcessor implements ProcessorInterface
             $task->getTargetFile()->updateProperties($properties);
 
             return true;
-        } else {
-            return false;
         }
+        return false;
     }
 
     /**
@@ -159,14 +140,8 @@ class LocalImageProcessor implements ProcessorInterface
     /**
      * @return GraphicalFunctions
      */
-    protected function getGraphicalFunctionsObject()
+    protected function getGraphicalFunctionsObject(): GraphicalFunctions
     {
-        static $graphicalFunctionsObject = null;
-
-        if ($graphicalFunctionsObject === null) {
-            $graphicalFunctionsObject = GeneralUtility::makeInstance(GraphicalFunctions::class);
-        }
-
-        return $graphicalFunctionsObject;
+        return GeneralUtility::makeInstance(GraphicalFunctions::class);
     }
 }

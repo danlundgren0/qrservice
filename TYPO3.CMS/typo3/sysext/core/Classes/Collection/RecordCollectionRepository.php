@@ -17,7 +17,6 @@ namespace TYPO3\CMS\Core\Collection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
 use TYPO3\CMS\Core\Database\Query\Restriction\FrontendRestrictionContainer;
-use TYPO3\CMS\Core\Database\Query\Restriction\HiddenRestriction;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -51,7 +50,7 @@ class RecordCollectionRepository
      * Finds a record collection by uid.
      *
      * @param int $uid The uid to be looked up
-     * @return NULL|\TYPO3\CMS\Core\Collection\AbstractRecordCollection
+     * @return \TYPO3\CMS\Core\Collection\AbstractRecordCollection|null
      */
     public function findByUid($uid)
     {
@@ -60,9 +59,6 @@ class RecordCollectionRepository
 
         if ($this->getEnvironmentMode() === 'FE') {
             $queryBuilder->setRestrictions(GeneralUtility::makeInstance(FrontendRestrictionContainer::class));
-            if ($GLOBALS['TSFE']->showHiddenRecords) {
-                $queryBuilder->getRestrictions()->removeByType(HiddenRestriction::class);
-            }
         } else {
             $queryBuilder->getRestrictions()
                 ->removeAll()
@@ -83,7 +79,7 @@ class RecordCollectionRepository
     /**
      * Finds all record collections.
      *
-     * @return NULL|\TYPO3\CMS\Core\Collection\AbstractRecordCollection[]
+     * @return \TYPO3\CMS\Core\Collection\AbstractRecordCollection[]|null
      */
     public function findAll()
     {
@@ -111,7 +107,7 @@ class RecordCollectionRepository
      * Finds record collection by type.
      *
      * @param string $type Type to be looked up
-     * @return NULL|\TYPO3\CMS\Core\Collection\AbstractRecordCollection[]
+     * @return \TYPO3\CMS\Core\Collection\AbstractRecordCollection[]|null
      */
     public function findByType($type)
     {
@@ -129,7 +125,7 @@ class RecordCollectionRepository
      *
      * @param string $type Type to be looked up
      * @param string $tableName Name of the table to be looked up
-     * @return NULL|\TYPO3\CMS\Core\Collection\AbstractRecordCollection[]
+     * @return \TYPO3\CMS\Core\Collection\AbstractRecordCollection[]|null
      */
     public function findByTypeAndTableName($type, $tableName)
     {
@@ -163,7 +159,7 @@ class RecordCollectionRepository
      * Queries for multiple records for the given conditions.
      *
      * @param array $conditions Conditions concatenated with AND for query
-     * @return NULL|\TYPO3\CMS\Core\Collection\AbstractRecordCollection[]
+     * @return \TYPO3\CMS\Core\Collection\AbstractRecordCollection[]|null
      */
     protected function queryMultipleRecords(array $conditions = [])
     {

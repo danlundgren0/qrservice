@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Form\FieldWizard;
 
 /*
@@ -18,8 +18,8 @@ namespace TYPO3\CMS\Backend\Form\FieldWizard;
 use TYPO3\CMS\Backend\Form\AbstractNode;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Render list of tables and link to element browser,
@@ -52,27 +52,35 @@ class TableList extends AbstractNode
         $allowed = GeneralUtility::trimExplode(',', $config['allowed'], true);
         $allowedTablesHtml = [];
         foreach ($allowed as $tableName) {
-            if ($allowed === '*') {
-                $label = $languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.allTables');
+            if ($tableName === '*') {
+                $label = $languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.allTables');
                 $allowedTablesHtml[] = '<span>';
                 $allowedTablesHtml[] =  htmlspecialchars($label);
                 $allowedTablesHtml[] = '</span>';
             } else {
                 $label = $languageService->sL($GLOBALS['TCA'][$tableName]['ctrl']['title']);
-                $onClick = [];
-                $onClick[] = 'setFormValueOpenBrowser(';
-                $onClick[] =    '\'db\',';
-                $onClick[] =    GeneralUtility::quoteJSvalue($itemName . '|||' . $tableName);
-                $onClick[] = ');';
-                $onClick[] = 'return false;';
-                $allowedTablesHtml[] = '<a href="#" onClick="' . htmlspecialchars(implode('', $onClick)) . '" class="btn btn-default">';
-                $allowedTablesHtml[] =  $iconFactory->getIconForRecord($tableName, [], Icon::SIZE_SMALL)->render();
-                $allowedTablesHtml[] =  htmlspecialchars($label);
-                $allowedTablesHtml[] = '</a>';
+                $icon = $iconFactory->getIconForRecord($tableName, [], Icon::SIZE_SMALL)->render();
+                if ((bool)($config['fieldControl']['elementBrowser']['disabled'] ?? false)) {
+                    $allowedTablesHtml[] = '<span class="tablelist-item-nolink">';
+                    $allowedTablesHtml[] =  $icon;
+                    $allowedTablesHtml[] =  htmlspecialchars($label);
+                    $allowedTablesHtml[] = '</span>';
+                } else {
+                    $onClick = [];
+                    $onClick[] = 'setFormValueOpenBrowser(';
+                    $onClick[] =    '\'db\',';
+                    $onClick[] =    GeneralUtility::quoteJSvalue($itemName . '|||' . $tableName);
+                    $onClick[] = ');';
+                    $onClick[] = 'return false;';
+                    $allowedTablesHtml[] = '<a href="#" onClick="' . htmlspecialchars(implode('', $onClick)) . '" class="btn btn-default">';
+                    $allowedTablesHtml[] =  $icon;
+                    $allowedTablesHtml[] =  htmlspecialchars($label);
+                    $allowedTablesHtml[] = '</a>';
+                }
             }
         }
 
-        $html= [];
+        $html = [];
         $html[] = '<div class="help-block">';
         $html[] =   implode(LF, $allowedTablesHtml);
         $html[] = '</div>';

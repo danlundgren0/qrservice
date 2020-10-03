@@ -1,4 +1,6 @@
 <?php
+declare(strict_types = 1);
+
 namespace TYPO3\CMS\Frontend\Hooks;
 
 /*
@@ -14,8 +16,12 @@ namespace TYPO3\CMS\Frontend\Hooks;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Localization\LanguageService;
+use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
+
 /**
- * Uses frontend hooks to show preview informations
+ * Uses frontend hooks to show preview information
+ * @internal this is a concrete TYPO3 hook implementation and solely used for EXT:frontend and not part of TYPO3's Core API.
  */
 class FrontendHooks
 {
@@ -24,19 +30,45 @@ class FrontendHooks
      * in the LIVE workspace
      *
      * @param array $params
-     * @param \TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController $pObj
-     * @return string
+     * @param TypoScriptFrontendController $controller
      */
-    public function hook_previewInfo($params, $pObj)
+    public function displayPreviewInfoMessage($params, TypoScriptFrontendController $controller)
     {
-        if ($pObj->fePreview !== 1) {
-            return '';
+        if (!$controller->fePreview || $controller->doWorkspacePreview() || ($controller->config['config']['disablePreviewNotification'] ?? false)) {
+            return;
         }
-        if ($pObj->config['config']['message_preview']) {
-            $message = $pObj->config['config']['message_preview'];
+        if ($controller->config['config']['message_preview']) {
+            $message = $controller->config['config']['message_preview'];
         } else {
-            $message = '<div id="typo3-previewInfo" style="position: absolute; top: 20px; right: 20px; border: 2px solid #000; padding: 5px 5px; background: #f00; font: 1em Verdana; color: #000; font-weight: bold; z-index: 10001">PREVIEW!</div>';
+            $label = $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_tsfe.xlf:preview');
+            $styles = [];
+            $styles[] = 'position: fixed';
+            $styles[] = 'top: 15px';
+            $styles[] = 'right: 15px';
+            $styles[] = 'padding: 8px 18px';
+            $styles[] = 'background: #fff3cd';
+            $styles[] = 'border: 1px solid #ffeeba';
+            $styles[] = 'font-family: sans-serif';
+            $styles[] = 'font-size: 14px';
+            $styles[] = 'font-weight: bold';
+            $styles[] = 'color: #856404';
+            $styles[] = 'z-index: 20000';
+            $styles[] = 'user-select: none';
+            $styles[] = 'pointer-events: none';
+            $styles[] = 'text-align: center';
+            $styles[] = 'border-radius: 2px';
+            $message = '<div id="typo3-preview-info" style="' . implode(';', $styles) . '">' . htmlspecialchars($label) . '</div>';
         }
-        return $message;
+        if (!empty($message)) {
+            $controller->content = str_ireplace('</body>', $message . '</body>', $controller->content);
+        }
+    }
+
+    /**
+     * @return LanguageService
+     */
+    protected function getLanguageService()
+    {
+        return $GLOBALS['LANG'];
     }
 }

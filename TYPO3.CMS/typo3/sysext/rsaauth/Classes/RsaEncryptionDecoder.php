@@ -22,17 +22,17 @@ class RsaEncryptionDecoder implements \TYPO3\CMS\Core\SingletonInterface
     /**
      * @var Backend\AbstractBackend
      */
-    protected $backend = null;
+    protected $backend;
 
     /**
      * @var Storage\AbstractStorage
      */
-    protected $storage = null;
+    protected $storage;
 
     /**
      * @var string
      */
-    protected $key = null;
+    protected $key;
 
     /**
      * @param string|array $data
@@ -104,7 +104,7 @@ class RsaEncryptionDecoder implements \TYPO3\CMS\Core\SingletonInterface
     }
 
     /**
-     * @return Backend\AbstractBackend|NULL
+     * @return Backend\AbstractBackend|null
      */
     protected function getBackend()
     {

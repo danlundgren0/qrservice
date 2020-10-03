@@ -1,4 +1,5 @@
 <?php
+
 namespace TYPO3\CMS\Install\Updates;
 
 /*
@@ -14,59 +15,100 @@ namespace TYPO3\CMS\Install\Updates;
  * The TYPO3 project - inspiring people to share!
  */
 
+use Symfony\Component\Console\Output\OutputInterface;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
- * Remove all backend users starting with _CLI_
+ * Remove all backend users starting with _cli_
+ * @internal This class is only meant to be used within EXT:install and is not part of the TYPO3 Core API.
  */
-class CommandLineBackendUserRemovalUpdate extends AbstractUpdate
+class CommandLineBackendUserRemovalUpdate implements UpgradeWizardInterface, ChattyInterface, RepeatableInterface, ConfirmableInterface
 {
     /**
-     * @var string
+     * @var OutputInterface
      */
-    protected $title = 'Remove unneeded CLI backend users';
+    protected $output;
+
+    /**
+     * @var Confirmation
+     */
+    protected $confirmation;
+
+    public function __construct()
+    {
+        $this->confirmation = new Confirmation(
+            'Are you sure?',
+            'The following backend users will be removed: ' . implode(', ', $this->getUnneededCommandLineUsers()),
+            true
+        );
+    }
+
+    /**
+     * @return string Unique identifier of this updater
+     */
+    public function getIdentifier(): string
+    {
+        return 'commandLineBackendUserRemovalUpdate';
+    }
+
+    /**
+     * @return string Title of this updater
+     */
+    public function getTitle(): string
+    {
+        return 'Remove unneeded CLI backend users';
+    }
+
+    /**
+     * @return string Longer description of this updater
+     */
+    public function getDescription(): string
+    {
+        return 'The command line interface does not need to have custom _cli_* backend users anymore.'
+               . ' They can safely be deleted.';
+    }
 
     /**
      * Checks if an update is needed
      *
-     * @param string &$description The description for the update
      * @return bool Whether an update is needed (TRUE) or not (FALSE)
      */
-    public function checkForUpdate(&$description)
+    public function updateNecessary(): bool
     {
-        if ($this->isWizardDone()) {
-            return false;
-        }
         $needsExecution = false;
         $usersFound = $this->getUnneededCommandLineUsers();
         if (!empty($usersFound)) {
             $needsExecution = true;
-            $description = 'The command line interface does not need to have custom _CLI_* backend users anymore. They can safely be deleted.';
         }
         return $needsExecution;
     }
 
     /**
-     * Shows information on the next step of the page
-     * @param string $formFieldNamePrefix
-     * @return string
+     * @param OutputInterface $output
      */
-    public function getUserInput($formFieldNamePrefix)
+    public function setOutput(OutputInterface $output): void
     {
-        $usersFound = $this->getUnneededCommandLineUsers();
-        return '<p>The following backend users will be deleted:</p><ul><li>' . implode('</li><li>', $usersFound) . '</li></ul>';
+        $this->output = $output;
+    }
+
+    /**
+     * @return string[] All new fields and tables must exist
+     */
+    public function getPrerequisites(): array
+    {
+        return [
+            DatabaseUpdatedPrerequisite::class,
+        ];
     }
 
     /**
      * Performs the database update to set all be_users starting with _CLI_* to deleted
      *
-     * @param array &$databaseQueries Queries done in this update
-     * @param string &$customMessage Custom message
      * @return bool
      */
-    public function performUpdate(array &$databaseQueries, &$customMessage)
+    public function executeUpdate(): bool
     {
         $usersFound = $this->getUnneededCommandLineUsers();
         foreach ($usersFound as $userUid => $username) {
@@ -82,10 +124,11 @@ class CommandLineBackendUserRemovalUpdate extends AbstractUpdate
                 // value in $databaseQueries and not a statement placeholder
                 ->set('deleted', 1, false)
                 ->execute();
-            $databaseQueries[] = $queryBuilder->getSQL();
         }
-        $customMessage = '<p>The following backend users have been deleted:</p><ul><li>' . implode('</li><li>', $usersFound) . '</li></ul>';
-        $this->markWizardAsDone();
+        $this->output->writeln('The following backend users have been deleted:');
+        foreach ($usersFound as $user) {
+            $this->output->writeln('* ' . $user);
+        }
         return true;
     }
 
@@ -94,7 +137,7 @@ class CommandLineBackendUserRemovalUpdate extends AbstractUpdate
      *
      * @return array a list of uids
      */
-    protected function getUnneededCommandLineUsers()
+    protected function getUnneededCommandLineUsers(): array
     {
         $commandLineUsers = [];
 
@@ -108,13 +151,8 @@ class CommandLineBackendUserRemovalUpdate extends AbstractUpdate
             ->select('uid', 'username')
             ->from('be_users')
             ->where(
-                $queryBuilder->expr()->like(
-                    'username',
-                    $queryBuilder->createNamedParameter(
-                        $queryBuilder->escapeLikeWildcards('_CLI_') . '%',
-                        \PDO::PARAM_STR
-                    )
-                ),
+            // Using query builder is complicated in this case. Get it straight, no user input is involved.
+                'LOWER(username) LIKE \'_cli_%\'',
                 $queryBuilder->expr()->neq(
                     'username',
                     $queryBuilder->createNamedParameter('_cli_', \PDO::PARAM_STR)
@@ -127,5 +165,15 @@ class CommandLineBackendUserRemovalUpdate extends AbstractUpdate
         }
 
         return $commandLineUsers;
+    }
+
+    /**
+     * Return a confirmation message instance
+     *
+     * @return Confirmation
+     */
+    public function getConfirmation(): Confirmation
+    {
+        return $this->confirmation;
     }
 }

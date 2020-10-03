@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Imaging\ImageManipulation;
 
 /*
@@ -118,7 +118,7 @@ class CropVariantCollection
         foreach ($this->cropVariants as $id => $cropVariant) {
             $cropVariantsAsArray[$id] = array_filter($cropVariant->asArray(), $filterNonPersistentKeys, ARRAY_FILTER_USE_KEY);
         }
-        return json_encode($cropVariantsAsArray);
+        return json_encode($cropVariantsAsArray) ?: '[]';
     }
 
     /**
@@ -129,9 +129,8 @@ class CropVariantCollection
     {
         if (isset($this->cropVariants[$id])) {
             return $this->cropVariants[$id]->getCropArea();
-        } else {
-            return Area::createEmpty();
         }
+        return Area::createEmpty();
     }
 
     /**
@@ -142,9 +141,8 @@ class CropVariantCollection
     {
         if (isset($this->cropVariants[$id]) && $this->cropVariants[$id]->getFocusArea() !== null) {
             return $this->cropVariants[$id]->getFocusArea();
-        } else {
-            return Area::createEmpty();
         }
+        return Area::createEmpty();
     }
 
     /**
@@ -156,7 +154,7 @@ class CropVariantCollection
     }
 
     /**
-     * @param CropVariant[] ...$cropVariants
+     * @param CropVariant[] $cropVariants
      * @throws \TYPO3\CMS\Core\Imaging\ImageManipulation\InvalidConfigurationException
      */
     protected function setCropVariants(CropVariant ...$cropVariants)

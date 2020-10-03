@@ -14,21 +14,22 @@ namespace TYPO3\CMS\Rsaauth;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Authentication\AuthenticationService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Service "RSA authentication" for the "rsaauth" extension. This service will
  * authenticate a user using hos password encoded with one time public key. It
  * uses the standard TYPO3 service to do all dirty work. Firsts, it will decode
- * the password and then pass it to the parent service ('sv'). This ensures that it
+ * the password and then pass it to the parent service ('core'). This ensures that it
  * always works, even if other TYPO3 internals change.
  */
-class RsaAuthService extends \TYPO3\CMS\Sv\AuthenticationService
+class RsaAuthService extends AuthenticationService
 {
     /**
      * @var RsaEncryptionDecoder
      */
-    protected $rsaEncryptionDecoder = null;
+    protected $rsaEncryptionDecoder;
 
     /**
      * Standard extension key for the service
@@ -59,20 +60,16 @@ class RsaAuthService extends \TYPO3\CMS\Sv\AuthenticationService
         $isProcessed = false;
         if ($passwordTransmissionStrategy === 'rsa') {
             $password = $loginData['uident'];
-            if (substr($password, 0, 4) === 'rsa:') {
+            if (strpos($password, 'rsa:') === 0) {
                 $decryptedPassword = $this->getRsaEncryptionDecoder()->decrypt($password);
                 if ($decryptedPassword !== $password) {
                     $loginData['uident_text'] = $decryptedPassword;
                     $isProcessed = true;
                 } else {
-                    if ($this->pObj->writeDevLog) {
-                        GeneralUtility::devLog('Process login data: Failed to RSA decrypt password', self::class);
-                    }
+                    $this->logger->debug('Process login data: Failed to RSA decrypt password');
                 }
             } else {
-                if ($this->pObj->writeDevLog) {
-                    GeneralUtility::devLog('Process login data: passwordTransmissionStrategy has been set to "rsa" but no rsa encrypted password has been found.', self::class);
-                }
+                $this->logger->debug('Process login data: passwordTransmissionStrategy has been set to "rsa" but no rsa encrypted password has been found.');
             }
         }
         return $isProcessed;

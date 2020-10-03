@@ -43,18 +43,28 @@ class TcaSelectItems extends AbstractItemProvider implements FormDataProviderInt
                 continue;
             }
 
-            $fieldConfig['config']['items'] = $this->sanitizeItemArray($fieldConfig['config']['items'], $table, $fieldName);
-            $fieldConfig['config']['maxitems'] = MathUtility::forceIntegerInRange($fieldConfig['config']['maxitems'], 0, 99999);
+            $fieldConfig['config']['items'] = $this->sanitizeItemArray($fieldConfig['config']['items'] ?? [], $table, $fieldName);
+
+            $fieldConfig['config']['maxitems'] = MathUtility::forceIntegerInRange($fieldConfig['config']['maxitems'] ?? 0, 0, 99999);
             if ($fieldConfig['config']['maxitems'] === 0) {
                 $fieldConfig['config']['maxitems'] = 99999;
             }
 
             $fieldConfig['config']['items'] = $this->addItemsFromSpecial($result, $fieldName, $fieldConfig['config']['items']);
             $fieldConfig['config']['items'] = $this->addItemsFromFolder($result, $fieldName, $fieldConfig['config']['items']);
-            $staticItems = $fieldConfig['config']['items'];
 
             $fieldConfig['config']['items'] = $this->addItemsFromForeignTable($result, $fieldName, $fieldConfig['config']['items']);
-            $dynamicItems = array_diff_key($fieldConfig['config']['items'], $staticItems);
+
+            // Resolve "itemsProcFunc"
+            if (!empty($fieldConfig['config']['itemsProcFunc'])) {
+                $fieldConfig['config']['items'] = $this->resolveItemProcessorFunction($result, $fieldName, $fieldConfig['config']['items']);
+                // itemsProcFunc must not be used anymore
+                unset($fieldConfig['config']['itemsProcFunc']);
+            }
+
+            // removing items before $dynamicItems and $removedItems have been built results in having them
+            // not populated to the dynamic database row and displayed as "invalid value" in the forms view
+            $fieldConfig['config']['items'] = $this->removeItemsByUserStorageRestriction($result, $fieldName, $fieldConfig['config']['items']);
 
             $removedItems = $fieldConfig['config']['items'];
 
@@ -68,19 +78,23 @@ class TcaSelectItems extends AbstractItemProvider implements FormDataProviderInt
 
             $removedItems = array_diff_key($removedItems, $fieldConfig['config']['items']);
 
-            // Resolve "itemsProcFunc"
-            if (!empty($fieldConfig['config']['itemsProcFunc'])) {
-                $fieldConfig['config']['items'] = $this->resolveItemProcessorFunction($result, $fieldName, $fieldConfig['config']['items']);
-                // itemsProcFunc must not be used anymore
-                unset($fieldConfig['config']['itemsProcFunc']);
+            $currentDatabaseValuesArray = $this->processDatabaseFieldValue($result['databaseRow'], $fieldName);
+            // Check if it's a new record to respect TCAdefaults
+            if (!empty($fieldConfig['config']['MM']) && $result['command'] !== 'new') {
+                // Getting the current database value on a mm relation doesn't make sense since the amount of selected
+                // relations is stored in the field and not the uids of the items
+                $currentDatabaseValuesArray = [];
             }
 
-            // needed to determine the items for invalid values
-            $currentDatabaseValuesArray = $this->processDatabaseFieldValue($result['databaseRow'], $fieldName);
             $result['databaseRow'][$fieldName] = $currentDatabaseValuesArray;
 
-            $staticValues = $this->getStaticValues($fieldConfig['config']['items'], $dynamicItems);
-            $result['databaseRow'][$fieldName] = $this->processSelectFieldValue($result, $fieldName, $staticValues);
+            // add item values as keys to determine which items are stored in the database and should be preselected
+            $itemArrayValues = array_column($fieldConfig['config']['items'], 1);
+            $itemArray = array_fill_keys(
+                $itemArrayValues,
+                $fieldConfig['config']['items']
+            );
+            $result['databaseRow'][$fieldName] = $this->processSelectFieldValue($result, $fieldName, $itemArray);
 
             $fieldConfig['config']['items'] = $this->addInvalidItemsFromDatabase(
                 $result,
@@ -92,7 +106,10 @@ class TcaSelectItems extends AbstractItemProvider implements FormDataProviderInt
             );
 
             // Translate labels
-            $fieldConfig['config']['items'] = $this->translateLabels($result, $fieldConfig['config']['items'], $table, $fieldName);
+            // skip file of sys_file_metadata which is not rendered anyway but can use all memory
+            if (!($table === 'sys_file_metadata' && $fieldName === 'file')) {
+                $fieldConfig['config']['items'] = $this->translateLabels($result, $fieldConfig['config']['items'], $table, $fieldName);
+            }
 
             // Keys may contain table names, so a numeric array is created
             $fieldConfig['config']['items'] = array_values($fieldConfig['config']['items']);
@@ -120,8 +137,8 @@ class TcaSelectItems extends AbstractItemProvider implements FormDataProviderInt
         // Early return if there are no items or invalid values should not be displayed
         if (empty($fieldConf['config']['items'])
             || $fieldConf['config']['renderType'] !== 'selectSingle'
-            || $result['pageTsConfig']['TCEFORM.'][$table . '.'][$fieldName . '.']['disableNoMatchingValueElement']
-            || $fieldConf['config']['disableNoMatchingValueElement']
+            || ($result['pageTsConfig']['TCEFORM.'][$table . '.'][$fieldName . '.']['disableNoMatchingValueElement'] ?? false)
+            || ($fieldConf['config']['disableNoMatchingValueElement'] ?? false)
         ) {
             return $fieldConf['config']['items'];
         }
@@ -129,7 +146,7 @@ class TcaSelectItems extends AbstractItemProvider implements FormDataProviderInt
         $languageService = $this->getLanguageService();
         $noMatchingLabel = isset($result['pageTsConfig']['TCEFORM.'][$table . '.'][$fieldName . '.']['noMatchingValue_label'])
             ? $languageService->sL(trim($result['pageTsConfig']['TCEFORM.'][$table . '.'][$fieldName . '.']['noMatchingValue_label']))
-            : '[ ' . $languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.noMatchingValue') . ' ]';
+            : '[ ' . $languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.noMatchingValue') . ' ]';
 
         $unmatchedValues = array_diff(
             array_values($databaseValues),

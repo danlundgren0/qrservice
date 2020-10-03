@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Form\Element;
 
 /*
@@ -35,6 +35,11 @@ use TYPO3\CMS\Fluid\View\StandaloneView;
 class ImageManipulationElement extends AbstractFormElement
 {
     /**
+     * @var string
+     */
+    private $wizardRouteName = 'ajax_wizard_image_manipulation';
+
+    /**
      * Default element configuration
      *
      * @var array
@@ -44,26 +49,26 @@ class ImageManipulationElement extends AbstractFormElement
         'allowedExtensions' => null, // default: $GLOBALS['TYPO3_CONF_VARS']['GFX']['imagefile_ext']
         'cropVariants' => [
             'default' => [
-                'title' => 'LLL:EXT:lang/Resources/Private/Language/locallang_wizards.xlf:imwizard.crop_variant.default',
+                'title' => 'LLL:EXT:core/Resources/Private/Language/locallang_wizards.xlf:imwizard.crop_variant.default',
                 'allowedAspectRatios' => [
                     '16:9' => [
-                        'title' => 'LLL:EXT:lang/Resources/Private/Language/locallang_wizards.xlf:imwizard.ratio.16_9',
+                        'title' => 'LLL:EXT:core/Resources/Private/Language/locallang_wizards.xlf:imwizard.ratio.16_9',
                         'value' => 16 / 9
                     ],
                     '3:2' => [
-                        'title' => 'LLL:EXT:lang/Resources/Private/Language/locallang_wizards.xlf:imwizard.ratio.3_2',
+                        'title' => 'LLL:EXT:core/Resources/Private/Language/locallang_wizards.xlf:imwizard.ratio.3_2',
                         'value' => 3 / 2
                     ],
                     '4:3' => [
-                        'title' => 'LLL:EXT:lang/Resources/Private/Language/locallang_wizards.xlf:imwizard.ratio.4_3',
+                        'title' => 'LLL:EXT:core/Resources/Private/Language/locallang_wizards.xlf:imwizard.ratio.4_3',
                         'value' => 4 / 3
                     ],
                     '1:1' => [
-                        'title' => 'LLL:EXT:lang/Resources/Private/Language/locallang_wizards.xlf:imwizard.ratio.1_1',
+                        'title' => 'LLL:EXT:core/Resources/Private/Language/locallang_wizards.xlf:imwizard.ratio.1_1',
                         'value' => 1.0
                     ],
                     'NaN' => [
-                        'title' => 'LLL:EXT:lang/Resources/Private/Language/locallang_wizards.xlf:imwizard.ratio.free',
+                        'title' => 'LLL:EXT:core/Resources/Private/Language/locallang_wizards.xlf:imwizard.ratio.free',
                         'value' => 0.0
                     ],
                 ],
@@ -76,6 +81,17 @@ class ImageManipulationElement extends AbstractFormElement
                 ],
             ],
         ]
+    ];
+
+    /**
+     * Default field information enabled for this element.
+     *
+     * @var array
+     */
+    protected $defaultFieldInformation = [
+        'tcaDescription' => [
+            'renderType' => 'tcaDescription',
+        ],
     ];
 
     /**
@@ -172,7 +188,8 @@ class ImageManipulationElement extends AbstractFormElement
                 'validation' => '[]'
             ],
             'config' => $config,
-            'wizardUri' => $this->getWizardUri($config['cropVariants'], $file),
+            'wizardUri' => $this->getWizardUri(),
+            'wizardPayload' => json_encode($this->getWizardPayload($config['cropVariants'], $file)),
             'previewUrl' => $this->getPreviewUrl($this->data['databaseRow'], $file),
         ];
 
@@ -196,7 +213,7 @@ class ImageManipulationElement extends AbstractFormElement
      *
      * @param array $row
      * @param string $fieldName
-     * @return null|File
+     * @return File|null
      */
     protected function getFile(array $row, $fieldName)
     {
@@ -224,15 +241,13 @@ class ImageManipulationElement extends AbstractFormElement
     {
         $previewUrl = '';
         // Hook to generate a preview URL
-        if (isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['Backend/Form/Element/ImageManipulationElement']['previewUrl']) && is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['Backend/Form/Element/ImageManipulationElement']['previewUrl'])) {
-            $hookParameters = [
-                'databaseRow' => $databaseRow,
-                'file' => $file,
-                'previewUrl' => $previewUrl,
-            ];
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['Backend/Form/Element/ImageManipulationElement']['previewUrl'] as $listener) {
-                $previewUrl = GeneralUtility::callUserFunction($listener, $hookParameters, $this);
-            }
+        $hookParameters = [
+            'databaseRow' => $databaseRow,
+            'file' => $file,
+            'previewUrl' => $previewUrl,
+        ];
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['Backend/Form/Element/ImageManipulationElement']['previewUrl'] ?? [] as $listener) {
+            $previewUrl = GeneralUtility::callUserFunction($listener, $hookParameters, $this);
         }
         return $previewUrl;
     }
@@ -299,19 +314,27 @@ class ImageManipulationElement extends AbstractFormElement
     }
 
     /**
-     * @param array $cropVariants
-     * @param File $image
      * @return string
      */
-    protected function getWizardUri(array $cropVariants, File $image): string
+    protected function getWizardUri(): string
     {
-        $routeName = 'ajax_wizard_image_manipulation';
+        return (string)$this->uriBuilder->buildUriFromRoute($this->wizardRouteName);
+    }
+
+    /**
+     * @param array $cropVariants
+     * @param File $image
+     * @return array
+     */
+    protected function getWizardPayload(array $cropVariants, File $image): array
+    {
         $arguments = [
             'cropVariants' => $cropVariants,
             'image' => $image->getUid(),
         ];
         $uriArguments['arguments'] = json_encode($arguments);
-        $uriArguments['signature'] = GeneralUtility::hmac($uriArguments['arguments'], $routeName);
-        return (string)$this->uriBuilder->buildUriFromRoute($routeName, $uriArguments);
+        $uriArguments['signature'] = GeneralUtility::hmac($uriArguments['arguments'], $this->wizardRouteName);
+
+        return $uriArguments;
     }
 }

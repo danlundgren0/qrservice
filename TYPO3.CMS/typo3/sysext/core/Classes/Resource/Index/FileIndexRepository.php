@@ -22,6 +22,8 @@ use TYPO3\CMS\Core\Resource\FileInterface;
 use TYPO3\CMS\Core\Resource\Folder;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Resource\ResourceStorage;
+use TYPO3\CMS\Core\Resource\Search\FileSearchDemand;
+use TYPO3\CMS\Core\Resource\Search\FileSearchQuery;
 use TYPO3\CMS\Core\SingletonInterface;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Object\ObjectManager;
@@ -33,7 +35,7 @@ use TYPO3\CMS\Extbase\SignalSlot\Dispatcher;
  * Every access to table sys_file_metadata which is not handled by DataHandler
  * has to use this Repository class.
  *
- * This is meant for FAL internal use only!.
+ * @internal This is meant for FAL internal use only!
  */
 class FileIndexRepository implements SingletonInterface
 {
@@ -196,7 +198,7 @@ class FileIndexRepository implements SingletonInterface
      * Find all records for files in a Folder
      *
      * @param Folder $folder
-     * @return array|NULL
+     * @return array|null
      */
     public function findByFolder(Folder $folder)
     {
@@ -232,7 +234,7 @@ class FileIndexRepository implements SingletonInterface
      * @param Folder[] $folders
      * @param bool $includeMissing
      * @param string $fileName
-     * @return array|NULL
+     * @return array|null
      */
     public function findByFolders(array $folders, $includeMissing = true, $fileName = null)
     {
@@ -275,8 +277,10 @@ class FileIndexRepository implements SingletonInterface
                     $queryBuilder->andWhere(
                         $queryBuilder->expr()->like(
                             'name',
-                            $queryBuilder->createNamedParameter('%' . $queryBuilder->escapeLikeWildcards($part) . '%',
-                                \PDO::PARAM_STR)
+                            $queryBuilder->createNamedParameter(
+                                '%' . $queryBuilder->escapeLikeWildcards($part) . '%',
+                                \PDO::PARAM_STR
+                            )
                         )
                     );
                 }
@@ -454,7 +458,7 @@ class FileIndexRepository implements SingletonInterface
      * Helper function for the Indexer to detect missing files
      *
      * @param ResourceStorage $storage
-     * @param array $uidList
+     * @param int[] $uidList
      * @return array
      */
     public function findInStorageAndNotInUidList(ResourceStorage $storage, array $uidList)
@@ -475,7 +479,7 @@ class FileIndexRepository implements SingletonInterface
             $queryBuilder->andWhere(
                 $queryBuilder->expr()->notIn(
                     'uid',
-                    $queryBuilder->createNamedParameter($uidList, Connection::PARAM_INT_ARRAY)
+                    array_map('intval', $uidList)
                 )
             );
         }
@@ -549,12 +553,34 @@ class FileIndexRepository implements SingletonInterface
      */
     public function updateRefIndex($id)
     {
-        /** @var $refIndexObj ReferenceIndex */
+        /** @var ReferenceIndex $refIndexObj */
         $refIndexObj = GeneralUtility::makeInstance(ReferenceIndex::class);
+        $refIndexObj->enableRuntimeCache();
         $refIndexObj->updateRefIndexTable($this->table, $id);
     }
 
-    /*
+    /**
+     * Search for files by search word in metadata
+     *
+     * @param string $searchWord search word
+     * @deprecated Use FileSearchQuery instead
+     * @return array
+     */
+    public function findBySearchWordInMetaData($searchWord)
+    {
+        trigger_error(__METHOD__ . ' is deprecated. Use FileSearchQuery instead', \E_USER_DEPRECATED);
+        $searchDemand = FileSearchDemand::createForSearchTerm($searchWord);
+        $searchQuery = FileSearchQuery::createForSearchDemand($searchDemand);
+        $result = $searchQuery->execute();
+        $fileRecords = [];
+        while ($fileRecord = $result->fetch()) {
+            $fileRecords[$fileRecord['identifier']] = $fileRecord;
+        }
+
+        return $fileRecords;
+    }
+
+    /**
      * Get the SignalSlot dispatcher
      *
      * @return Dispatcher
@@ -578,7 +604,6 @@ class FileIndexRepository implements SingletonInterface
      * Signal that is called after an IndexRecord is updated
      *
      * @param array $data
-     * @signal
      */
     protected function emitRecordUpdatedSignal(array $data)
     {
@@ -589,7 +614,6 @@ class FileIndexRepository implements SingletonInterface
      * Signal that is called after an IndexRecord is created
      *
      * @param array $data
-     * @signal
      */
     protected function emitRecordCreatedSignal(array $data)
     {
@@ -600,7 +624,6 @@ class FileIndexRepository implements SingletonInterface
      * Signal that is called after an IndexRecord is deleted
      *
      * @param int $fileUid
-     * @signal
      */
     protected function emitRecordDeletedSignal($fileUid)
     {
@@ -611,7 +634,6 @@ class FileIndexRepository implements SingletonInterface
      * Signal that is called after an IndexRecord is marked as missing
      *
      * @param int $fileUid
-     * @signal
      */
     protected function emitRecordMarkedAsMissingSignal($fileUid)
     {

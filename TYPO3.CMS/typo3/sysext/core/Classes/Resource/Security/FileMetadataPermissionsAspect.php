@@ -34,7 +34,7 @@ class FileMetadataPermissionsAspect implements DataHandlerCheckModifyAccessListH
      * @param string $table
      * @param int $id
      * @param array $fileMetadataRecord
-     * @param int|NULL $otherHookGrantedAccess
+     * @param int|null $otherHookGrantedAccess
      * @param \TYPO3\CMS\Core\DataHandling\DataHandler $dataHandler
      * @return int|null
      */
@@ -163,7 +163,7 @@ class FileMetadataPermissionsAspect implements DataHandlerCheckModifyAccessListH
                 $file = substr($file, strlen('sys_file_'));
             }
             $fileObject = ResourceFactory::getInstance()->getFileObject((int)$file);
-            $accessAllowed = $fileObject->checkActionPermission('write');
+            $accessAllowed = $fileObject->checkActionPermission('editMeta');
         }
         return $accessAllowed;
     }

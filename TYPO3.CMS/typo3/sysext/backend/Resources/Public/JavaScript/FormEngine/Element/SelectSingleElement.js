@@ -15,53 +15,61 @@
  * Module: TYPO3/CMS/Backend/FormEngine/Element/SelectSingleElement
  * Logic for SelectSingleElement
  */
-define(['jquery'], function ($) {
+define(['jquery'], function($) {
 
-	/**
-	 *
-	 * @type {{}}
-	 * @exports TYPO3/CMS/Backend/FormEngine/Element/SelectSingleElement
-	 */
-	var SelectSingleElement = {};
+  /**
+   *
+   * @type {{}}
+   * @exports TYPO3/CMS/Backend/FormEngine/Element/SelectSingleElement
+   */
+  var SelectSingleElement = {};
 
-	/**
-	 * Initializes the SelectSingleEleemnt
-	 *
-	 * @param {String} selector
-	 * @param {Object} options
-	 */
-	SelectSingleElement.initialize = function(selector, options) {
+  /**
+   * Initializes the SelectSingleEleemnt
+   *
+   * @param {String} selector
+   * @param {Object} options
+   */
+  SelectSingleElement.initialize = function(selector, options) {
 
-		var $selectElement = $(selector);
-		var $groupIconContainer = $selectElement.prev('.input-group-icon');
-		var options = options || {};
+    var $selectElement = $(selector);
+    var $groupIconContainer = $selectElement.prev('.input-group-icon');
+    var options = options || {};
 
-		$selectElement.on('change', function() {
-			// Update prepended select icon
-			$groupIconContainer.html($selectElement.find(':selected').data('icon'));
-		});
+    $selectElement.on('change', function(e) {
+      var $me = $(e.target);
 
-		// Append optionally passed additional "change" event callback
-		if (typeof options.onChange === 'function') {
-			$selectElement.on('change', options.onChange);
-		}
+      // Update prepended select icon
+      $groupIconContainer.html($selectElement.find(':selected').data('icon'));
 
-		// Append optionally passed additional "focus" event callback
-		if (typeof options.onFocus === 'function') {
-			$selectElement.on('focus', options.onFocus);
-		}
+      var $selectIcons = $me.closest('.t3js-formengine-field-item').find('.t3js-forms-select-single-icons');
+      $selectIcons.find('.item.active').removeClass('active');
+      $selectIcons.find('[data-select-index="' + $me.prop('selectedIndex') + '"]').closest('.item').addClass('active');
+    });
 
-		$selectElement.closest('.form-control-wrap').find('.t3js-forms-select-single-icons').on('click', function(e) {
-			var $selectIcon = $(e.target).closest('[data-select-index]');
+    // Append optionally passed additional "change" event callback
+    if (typeof options.onChange === 'function') {
+      $selectElement.on('change', options.onChange);
+    }
 
-			$selectElement
-				.prop('selectedIndex', $selectIcon.data('selectIndex'))
-				.trigger('change');
-			$selectIcon.trigger('blur');
+    // Append optionally passed additional "focus" event callback
+    if (typeof options.onFocus === 'function') {
+      $selectElement.on('focus', options.onFocus);
+    }
 
-			return false;
-		});
-	};
+    $selectElement.closest('.form-control-wrap').find('.t3js-forms-select-single-icons a').on('click', function(e) {
+      var $me = $(e.target);
+      var $selectIcon = $me.closest('[data-select-index]');
 
-	return SelectSingleElement;
+      $me.closest('.t3js-forms-select-single-icons').find('.item.active').removeClass('active');
+      $selectElement
+        .prop('selectedIndex', $selectIcon.data('selectIndex'))
+        .trigger('change');
+      $selectIcon.closest('.item').addClass('active');
+
+      return false;
+    });
+  };
+
+  return SelectSingleElement;
 });

@@ -13,79 +13,73 @@ namespace TYPO3\CMS\Install\Http;
  *
  * The TYPO3 project - inspiring people to share!
  */
-use TYPO3\CMS\Core\Core\ApplicationInterface;
-use TYPO3\CMS\Core\Core\Bootstrap;
+
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use TYPO3\CMS\Core\Context\Context;
+use TYPO3\CMS\Core\Context\DateTimeAspect;
+use TYPO3\CMS\Core\Context\UserAspect;
+use TYPO3\CMS\Core\Context\VisibilityAspect;
+use TYPO3\CMS\Core\Context\WorkspaceAspect;
+use TYPO3\CMS\Core\Http\AbstractApplication;
+use TYPO3\CMS\Core\Http\RequestHandlerInterface;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Entry point for the TYPO3 Install Tool
+ * @internal This class is only meant to be used within EXT:install and is not part of the TYPO3 Core API.
  */
-class Application implements ApplicationInterface
+class Application extends AbstractApplication
 {
-    /**
-     * @var Bootstrap
-     */
-    protected $bootstrap;
-
-    /**
-     * Number of subdirectories where the entry script is located, relative to PATH_site
-     * @var int
-     */
-    protected $entryPointLevel = 4;
-
     /**
      * All available request handlers that can handle an install tool request
      * @var array
      */
-    protected $availableRequestHandlers = [
-        \TYPO3\CMS\Install\Http\RequestHandler::class
-    ];
+    protected $availableRequestHandlers = [];
 
     /**
-     * Constructor setting up legacy constant and register available Request Handlers
+     * Construct Application
      *
-     * @param \Composer\Autoload\ClassLoader $classLoader an instance of the class loader
+     * @param RequestHandlerInterface $requestHandler
+     * @param RequestHandlerInterface $installerRequestHandler
      */
-    public function __construct($classLoader)
-    {
-        $this->defineLegacyConstants();
-
-        $this->bootstrap = Bootstrap::getInstance()
-            ->initializeClassLoader($classLoader)
-            ->setRequestType(TYPO3_REQUESTTYPE_INSTALL)
-            ->baseSetup($this->entryPointLevel);
-
-        foreach ($this->availableRequestHandlers as $requestHandler) {
-            $this->bootstrap->registerRequestHandlerImplementation($requestHandler);
-        }
-
-        $this->bootstrap
-            ->startOutputBuffering()
-            ->loadConfigurationAndInitialize(false, \TYPO3\CMS\Core\Package\FailsafePackageManager::class);
+    public function __construct(
+        RequestHandlerInterface $requestHandler,
+        RequestHandlerInterface $installerRequestHandler
+    ) {
+        $this->availableRequestHandlers = [
+            $requestHandler,
+            $installerRequestHandler
+        ];
     }
 
     /**
-     * Set up the application and shut it down afterwards
-     * Failsafe minimal setup mode for the install tool
-     * Does not call "run()" therefore
-     *
-     * @param callable $execute
+     * @param ServerRequestInterface $request
+     * @return ResponseInterface
      */
-    public function run(callable $execute = null)
+    protected function handle(ServerRequestInterface $request): ResponseInterface
     {
-        $this->bootstrap->handleRequest(\TYPO3\CMS\Core\Http\ServerRequestFactory::fromGlobals());
-
-        if ($execute !== null) {
-            call_user_func($execute);
+        $this->initializeContext();
+        foreach ($this->availableRequestHandlers as $handler) {
+            if ($handler->canHandleRequest($request)) {
+                return $handler->handle($request)
+                    ->withHeader('X-Frame-Options', 'SAMEORIGIN');
+            }
         }
-
-        $this->bootstrap->shutdown();
+        throw new \TYPO3\CMS\Core\Exception('No suitable request handler found.', 1518448686);
     }
 
     /**
-     * Define constants
+     * Initializes the Context used for accessing data and finding out the current state of the application
+     * Will be moved to a DI-like concept once introduced, for now, this is a singleton
      */
-    protected function defineLegacyConstants()
+    protected function initializeContext()
     {
-        define('TYPO3_MODE', 'BE');
+        GeneralUtility::makeInstance(Context::class, [
+            'date' => new DateTimeAspect(new \DateTimeImmutable('@' . $GLOBALS['EXEC_TIME'])),
+            'visibility' => new VisibilityAspect(true, true, true),
+            'workspace' => new WorkspaceAspect(0),
+            'backend.user' => new UserAspect(),
+        ]);
     }
 }

@@ -14,15 +14,21 @@ namespace TYPO3\CMS\Backend\Template;
  * The TYPO3 project - inspiring people to share!
  */
 
-use Psr\Http\Message\ResponseInterface;
-use Psr\Http\Message\ServerRequestInterface;
+use Psr\Log\LoggerAwareInterface;
+use Psr\Log\LoggerAwareTrait;
+use TYPO3\CMS\Backend\Backend\Shortcut\ShortcutRepository;
+use TYPO3\CMS\Backend\Routing\UriBuilder;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Compatibility\PublicPropertyDeprecationTrait;
+use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
 use TYPO3\CMS\Core\Page\PageRenderer;
 use TYPO3\CMS\Core\Service\MarkerBasedTemplateService;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\HttpUtility;
 use TYPO3\CMS\Core\Utility\PathUtility;
 
 /**
@@ -38,8 +44,18 @@ use TYPO3\CMS\Core\Utility\PathUtility;
  *
  * Please refer to Inside TYPO3 for a discussion of how to use this API.
  */
-class DocumentTemplate
+class DocumentTemplate implements LoggerAwareInterface
 {
+    use LoggerAwareTrait;
+    use PublicPropertyDeprecationTrait;
+
+    /**
+     * @var array
+     */
+    protected $deprecatedPublicProperties = [
+        'hasDocheader' => 'Using $hasDocheader of class DocumentTemplate is discouraged. The property is not evaluated in the TYPO3 core anymore and will be removed in TYPO3 v10.0.'
+    ];
+
     // Vars you typically might want to/should set from outside after making instance of this class:
     /**
      * This can be set to the HTML-code for a formtag.
@@ -55,14 +71,6 @@ class DocumentTemplate
      * @var string
      */
     public $JScode = '';
-
-    /**
-     * Additional header code for ExtJS. It will be included in document header and inserted in a Ext.onReady(function()
-     *
-     * @var string
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9, use PageRenderers's JS methods to inject JavaScript on a backend page.
-     */
-    public $extJScode = '';
 
     /**
      * Similar to $JScode but for use as array with associative keys to prevent double inclusion of JS code. a <script> tag is automatically wrapped around.
@@ -127,21 +135,14 @@ function jumpToUrl(URL) {
     public $inDocStylesArray = [];
 
     /**
-     * Compensation for large documents (used in \TYPO3\CMS\Backend\Form\FormEngine)
-     *
-     * @var float
-     */
-    public $form_largeComp = 1.33;
-
-    /**
-     * Filename of stylesheet (relative to PATH_typo3)
+     * Filename of stylesheet
      *
      * @var string
      */
     public $styleSheetFile = '';
 
     /**
-     * Filename of stylesheet #2 - linked to right after the $this->styleSheetFile script (relative to PATH_typo3)
+     * Filename of stylesheet #2 - linked to right after the $this->styleSheetFile script
      *
      * @var string
      */
@@ -159,7 +160,7 @@ function jumpToUrl(URL) {
      *
      * @var bool
      */
-    protected $useCompatibilityTag = true;
+    protected $useCompatibilityTag = false;
 
     /**
      * X-Ua-Compatible version output in meta tag
@@ -220,13 +221,14 @@ function jumpToUrl(URL) {
 
     /**
      * @var bool
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0
      */
-    public $hasDocheader = true;
+    protected $hasDocheader = true;
 
     /**
      * @var PageRenderer
      */
-    protected $pageRenderer = null;
+    protected $pageRenderer;
 
     /**
      * Alternative template file
@@ -252,11 +254,6 @@ function jumpToUrl(URL) {
      */
     protected $templateService;
 
-    const STATUS_ICON_ERROR = 3;
-    const STATUS_ICON_WARNING = 2;
-    const STATUS_ICON_NOTIFICATION = 1;
-    const STATUS_ICON_OK = -1;
-
     /**
      * Constructor
      */
@@ -271,10 +268,10 @@ function jumpToUrl(URL) {
         $this->templateService = GeneralUtility::makeInstance(MarkerBasedTemplateService::class);
 
         // Setting default scriptID, trim forward slash from route
-        $this->scriptID = GeneralUtility::_GET('M') !== null ? GeneralUtility::_GET('M') : ltrim(GeneralUtility::_GET('route'), '/');
+        $this->scriptID = ltrim(GeneralUtility::_GET('route'), '/');
         $this->bodyTagId = preg_replace('/[^A-Za-z0-9-]/', '-', $this->scriptID);
         // Individual configuration per script? If so, make a recursive merge of the arrays:
-        if (is_array($GLOBALS['TBE_STYLES']['scriptIDindex'][$this->scriptID])) {
+        if (is_array($GLOBALS['TBE_STYLES']['scriptIDindex'][$this->scriptID] ?? false)) {
             // Make copy
             $ovr = $GLOBALS['TBE_STYLES']['scriptIDindex'][$this->scriptID];
             // merge styles.
@@ -283,16 +280,16 @@ function jumpToUrl(URL) {
             unset($GLOBALS['TBE_STYLES']['scriptIDindex'][$this->scriptID]);
         }
         // Main Stylesheets:
-        if ($GLOBALS['TBE_STYLES']['stylesheet']) {
+        if (!empty($GLOBALS['TBE_STYLES']['stylesheet'])) {
             $this->styleSheetFile = $GLOBALS['TBE_STYLES']['stylesheet'];
         }
-        if ($GLOBALS['TBE_STYLES']['stylesheet2']) {
+        if (!empty($GLOBALS['TBE_STYLES']['stylesheet2'])) {
             $this->styleSheetFile2 = $GLOBALS['TBE_STYLES']['stylesheet2'];
         }
-        if ($GLOBALS['TBE_STYLES']['styleSheetFile_post']) {
+        if (!empty($GLOBALS['TBE_STYLES']['styleSheetFile_post'])) {
             $this->styleSheetFile_post = $GLOBALS['TBE_STYLES']['styleSheetFile_post'];
         }
-        if ($GLOBALS['TBE_STYLES']['inDocStyles_TBEstyle']) {
+        if (!empty($GLOBALS['TBE_STYLES']['inDocStyles_TBEstyle'])) {
             $this->inDocStylesArray['TBEstyle'] = $GLOBALS['TBE_STYLES']['inDocStyles_TBEstyle'];
         }
         // include all stylesheets
@@ -311,7 +308,8 @@ function jumpToUrl(URL) {
         }
         $this->pageRenderer = GeneralUtility::makeInstance(PageRenderer::class);
         $this->pageRenderer->setLanguage($GLOBALS['LANG']->lang);
-        $this->pageRenderer->enableConcatenateFiles();
+        $this->pageRenderer->enableConcatenateCss();
+        $this->pageRenderer->enableConcatenateJavascript();
         $this->pageRenderer->enableCompressCss();
         $this->pageRenderer->enableCompressJavascript();
         // Add all JavaScript files defined in $this->jsFiles to the PageRenderer
@@ -342,93 +340,6 @@ function jumpToUrl(URL) {
      *****************************************/
 
     /**
-     * Makes link to page $id in frontend (view page)
-     * Returns an icon which links to the frontend index.php document for viewing the page with id $id
-     * $id must be a page-uid
-     * If the BE_USER has access to Web>List then a link to that module is shown as well (with return-url)
-     *
-     * @param int $id The page id
-     * @return string HTML string with linked icon(s)
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function viewPageIcon($id)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        // If access to Web>List for user, then link to that module.
-        $str = '<a href="' . htmlspecialchars(BackendUtility::getModuleUrl('web_list', [
-            'id' => $id,
-            'returnUrl' > GeneralUtility::getIndpEnv('REQUEST_URI')
-        ])) . '" title="' . htmlspecialchars($GLOBALS['LANG']->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.showList')) . '">' . $this->iconFactory->getIcon('actions-system-list-open', Icon::SIZE_SMALL)->render() . '</a>';
-
-        // Make link to view page
-        $str .= '<a href="#" onclick="' . htmlspecialchars(BackendUtility::viewOnClick($id, '', BackendUtility::BEgetRootLine($id))) . '" title="' . htmlspecialchars($GLOBALS['LANG']->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.showPage')) . '">' . $this->iconFactory->getIcon('actions-document-view', Icon::SIZE_SMALL)->render() . '</a>';
-        return $str;
-    }
-
-    /**
-     * Makes the header (icon+title) for a page (or other record). Used in most modules under Web>*
-     * $table and $row must be a tablename/record from that table
-     * $path will be shown as alt-text for the icon.
-     * The title will be truncated to 45 chars.
-     *
-     * @param string $table Table name
-     * @param array $row Record row
-     * @param string $path Alt text
-     * @param bool $noViewPageIcon Set $noViewPageIcon TRUE if you don't want a magnifier-icon for viewing the page in the frontend
-     * @param array $tWrap is an array with indexes 0 and 1 each representing HTML-tags (start/end) which will wrap the title
-     * @param bool $enableClickMenu If TRUE, render click menu code around icon image
-     * @return string HTML content
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function getHeader($table, $row, $path, $noViewPageIcon = false, $tWrap = ['', ''], $enableClickMenu = true)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $viewPage = '';
-        if (is_array($row) && $row['uid']) {
-            $iconImgTag = '<span title="' . htmlspecialchars($path) . '">' . $this->iconFactory->getIconForRecord($table, $row, Icon::SIZE_SMALL)->render() . '</span>';
-            $title = strip_tags(BackendUtility::getRecordTitle($table, $row));
-            $viewPage = $noViewPageIcon ? '' : $this->viewPageIcon($row['uid']);
-        } else {
-            $iconImgTag = '<span title="' . htmlspecialchars($path) . '">' . $this->iconFactory->getIcon('apps-pagetree-page-domain', Icon::SIZE_SMALL)->render() . '</span>';
-            $title = $GLOBALS['TYPO3_CONF_VARS']['SYS']['sitename'];
-        }
-
-        if ($enableClickMenu) {
-            $iconImgTag = BackendUtility::wrapClickMenuOnIcon($iconImgTag, $table, $row['uid']);
-        }
-
-        return '<span class="typo3-moduleHeader">' . $iconImgTag . $viewPage . $tWrap[0] . htmlspecialchars(GeneralUtility::fixed_lgd_cs($title, 45)) . $tWrap[1] . '</span>';
-    }
-
-    /**
-     * Like ->getHeader() but for files and folders
-     * Returns the icon with the path of the file/folder set in the alt/title attribute. Shows the name after the icon.
-     *
-     * @param \TYPO3\CMS\Core\Resource\ResourceInterface $resource
-     * @param array $tWrap is an array with indexes 0 and 1 each representing HTML-tags (start/end) which will wrap the title
-     * @param bool $enableClickMenu If TRUE, render click menu code around icon image
-     * @return string
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function getResourceHeader(\TYPO3\CMS\Core\Resource\ResourceInterface $resource, $tWrap = ['', ''], $enableClickMenu = true)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        try {
-            $path = $resource->getStorage()->getName() . $resource->getParentFolder()->getIdentifier();
-            $iconImgTag = '<span title="' . htmlspecialchars($path) . '">' . $this->iconFactory->getIconForResource($resource, Icon::SIZE_SMALL)->render() . '</span>';
-        } catch (\TYPO3\CMS\Core\Resource\Exception\ResourceDoesNotExistException $e) {
-            $iconImgTag = '';
-        }
-
-        if ($enableClickMenu && ($resource instanceof \TYPO3\CMS\Core\Resource\File)) {
-            $metaData = $resource->_getMetaData();
-            $iconImgTag = BackendUtility::wrapClickMenuOnIcon($iconImgTag, 'sys_file_metadata', $metaData['uid']);
-        }
-
-        return '<span class="typo3-moduleHeader">' . $iconImgTag . $tWrap[0] . htmlspecialchars(GeneralUtility::fixed_lgd_cs($resource->getName(), 45)) . $tWrap[1] . '</span>';
-    }
-
-    /**
      * Returns a linked shortcut-icon which will call the shortcut frame and set a shortcut there back to the calling page/module
      *
      * @param string $gvList Is the list of GET variables to store (if any)
@@ -457,10 +368,11 @@ function jumpToUrl(URL) {
         } else {
             $motherModule = '\'\'';
         }
-        $confirmationText = GeneralUtility::quoteJSvalue($GLOBALS['LANG']->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.makeBookmark'));
+        $confirmationText = GeneralUtility::quoteJSvalue($GLOBALS['LANG']->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.makeBookmark'));
 
         $shortcutUrl = $pathInfo['path'] . '?' . $storeUrl;
-        $shortcutExist = BackendUtility::shortcutExists($shortcutUrl);
+        $shortcutRepository = GeneralUtility::makeInstance(ShortcutRepository::class);
+        $shortcutExist = $shortcutRepository->shortcutExists($shortcutUrl);
 
         if ($shortcutExist) {
             return '<a class="active ' . htmlspecialchars($classes) . '" title="">' .
@@ -471,7 +383,7 @@ function jumpToUrl(URL) {
             ', ' . $url . ', ' . $confirmationText . ', ' . $motherModule . ', this);return false;';
 
         return '<a href="#" class="' . htmlspecialchars($classes) . '" onclick="' . htmlspecialchars($onClick) . '" title="' .
-        htmlspecialchars($GLOBALS['LANG']->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.makeBookmark')) . '">' .
+        htmlspecialchars($GLOBALS['LANG']->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.makeBookmark')) . '">' .
         $this->iconFactory->getIcon('actions-system-shortcut-new', Icon::SIZE_SMALL)->render() . '</a>';
     }
 
@@ -482,15 +394,17 @@ function jumpToUrl(URL) {
      * @param string $gvList Is the list of GET variables to store (if any)
      * @param string $setList Is the list of SET[] variables to store (if any) - SET[] variables a stored in $GLOBALS["SOBE"]->MOD_SETTINGS for backend modules
      * @return string
-     * @access private
+     * @internal
      * @see makeShortcutIcon()
      */
     public function makeShortcutUrl($gvList, $setList)
     {
         $GET = GeneralUtility::_GET();
-        $storeArray = array_merge(GeneralUtility::compileSelectedGetVarsFromArray($gvList, $GET), ['SET' => GeneralUtility::compileSelectedGetVarsFromArray($setList, (array)$GLOBALS['SOBE']->MOD_SETTINGS)]);
-        $storeUrl = GeneralUtility::implodeArrayForUrl('', $storeArray);
-        return $storeUrl;
+        $storeArray = array_merge(
+            GeneralUtility::compileSelectedGetVarsFromArray($gvList, $GET),
+            ['SET' => GeneralUtility::compileSelectedGetVarsFromArray($setList, (array)$GLOBALS['SOBE']->MOD_SETTINGS)]
+        );
+        return HttpUtility::buildQueryString($storeArray, '&');
     }
 
     /**
@@ -502,9 +416,11 @@ function jumpToUrl(URL) {
      * @param bool $textarea A flag you can set for textareas - DEPRECATED as there is no difference any more between the two
      * @param string $styleOverride A string which will be returned as attribute-value for style="" instead of the calculated width (if CSS is enabled)
      * @return string Tag attributes for an <input> tag (regarding width)
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
      */
     public function formWidth($size = 48, $textarea = false, $styleOverride = '')
     {
+        trigger_error('DocumentTemplate->formWidth() will be removed in TYPO3 10.0 - use responsive code or direct inline styles to format your input fields instead.', E_USER_DEPRECATED);
         return ' style="' . ($styleOverride ?: 'width:' . ceil($size * 9.58) . 'px;') . '"';
     }
 
@@ -558,16 +474,11 @@ function jumpToUrl(URL) {
     public function startPage($title)
     {
         // hook pre start page
-        if (isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/template.php']['preStartPageHook'])) {
-            $preStartPageHook = &$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/template.php']['preStartPageHook'];
-            if (is_array($preStartPageHook)) {
-                $hookParameters = [
-                    'title' => &$title
-                ];
-                foreach ($preStartPageHook as $hookFunction) {
-                    GeneralUtility::callUserFunction($hookFunction, $hookParameters, $this);
-                }
-            }
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/template.php']['preStartPageHook'] ?? [] as $hookFunction) {
+            $hookParameters = [
+                'title' => &$title
+            ];
+            GeneralUtility::callUserFunction($hookFunction, $hookParameters, $this);
         }
         // alternative template for Header and Footer
         if ($this->pageHeaderFooterTemplateFile) {
@@ -588,13 +499,12 @@ function jumpToUrl(URL) {
         $this->pageRenderer->setHeadTag('<head>' . LF . '<!-- TYPO3 Script ID: ' . htmlspecialchars($this->scriptID) . ' -->');
         header('Content-Type:text/html;charset=utf-8');
         $this->pageRenderer->setCharSet('utf-8');
-        $this->pageRenderer->addMetaTag($this->generator());
-        $this->pageRenderer->addMetaTag('<meta name="robots" content="noindex,follow">');
-        $this->pageRenderer->addMetaTag('<meta charset="utf-8">');
-        $this->pageRenderer->addMetaTag('<meta name="viewport" content="width=device-width, initial-scale=1">');
+        $this->pageRenderer->setMetaTag('name', 'generator', $this->generator());
+        $this->pageRenderer->setMetaTag('name', 'robots', 'noindex,follow');
+        $this->pageRenderer->setMetaTag('name', 'viewport', 'width=device-width, initial-scale=1');
         $this->pageRenderer->setFavIcon($this->getBackendFavicon());
         if ($this->useCompatibilityTag) {
-            $this->pageRenderer->addMetaTag($this->xUaCompatible($this->xUaCompatibilityVersion));
+            $this->pageRenderer->setMetaTag('http-equiv', 'X-UA-Compatible', $this->xUaCompatibilityVersion);
         }
         $this->pageRenderer->setTitle($title);
         // add docstyles
@@ -604,33 +514,33 @@ function jumpToUrl(URL) {
             $this->pageRenderer->addJsInlineCode($name, $code, false);
         }
 
-        if ($this->extJScode) {
-            GeneralUtility::deprecationLog('The property DocumentTemplate->extJScode to add ExtJS-based onReadyCode is deprecated since TYPO3 v8, and will be removed in TYPO3 v9. Use the page renderer directly instead to add JavaScript code.');
-            $this->pageRenderer->addExtOnReadyCode($this->extJScode);
-        }
-
-        // Load jquery and twbs JS libraries on every backend request
-        $this->pageRenderer->loadJquery();
         // Note: please do not reference "bootstrap" outside of the TYPO3 Core (not in your own extensions)
         // as this is preliminary as long as Twitter bootstrap does not support AMD modules
         // this logic will be changed once Twitter bootstrap 4 is included
+        // @todo
         $this->pageRenderer->addJsFile('EXT:core/Resources/Public/JavaScript/Contrib/bootstrap/bootstrap.js');
 
+        // csh manual require js module & moduleUrl
+        if (TYPO3_MODE === 'BE' && $this->getBackendUser() && !empty($this->getBackendUser()->user)) {
+            $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+            $this->pageRenderer->loadRequireJsModule('TYPO3/CMS/Backend/ContextHelp');
+            $this->pageRenderer->addInlineSetting(
+                'ContextHelp',
+                'moduleUrl',
+                (string)$uriBuilder->buildUriFromRoute('help_cshmanual', ['action' => 'detail'])
+            );
+        }
+
         // hook for additional headerData
-        if (isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/template.php']['preHeaderRenderHook'])) {
-            $preHeaderRenderHook = &$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/template.php']['preHeaderRenderHook'];
-            if (is_array($preHeaderRenderHook)) {
-                $hookParameters = [
-                    'pageRenderer' => &$this->pageRenderer
-                ];
-                foreach ($preHeaderRenderHook as $hookFunction) {
-                    GeneralUtility::callUserFunction($hookFunction, $hookParameters, $this);
-                }
-            }
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/template.php']['preHeaderRenderHook'] ?? [] as $hookFunction) {
+            $hookParameters = [
+                'pageRenderer' => &$this->pageRenderer
+            ];
+            GeneralUtility::callUserFunction($hookFunction, $hookParameters, $this);
         }
         // Construct page header.
         $str = $this->pageRenderer->render(PageRenderer::PART_HEADER);
-        $this->JScode = ($this->extJScode = '');
+        $this->JScode = '';
         $this->JScodeArray = [];
         $this->endOfPageJsBlock = $this->pageRenderer->render(PageRenderer::PART_FOOTER);
         $str .= $this->docBodyTagBegin() . ($this->divClass ? '
@@ -664,7 +574,7 @@ function jumpToUrl(URL) {
 </div>' : '') . $this->endOfPageJsBlock;
 
         // Logging: Can't find better place to put it:
-        GeneralUtility::devLog('END of BACKEND session', \TYPO3\CMS\Backend\Template\DocumentTemplate::class, 0, ['_FLUSH' => true]);
+        $this->logger->debug('END of BACKEND session', ['_FLUSH' => true]);
         return $str;
     }
 
@@ -684,152 +594,6 @@ function jumpToUrl(URL) {
     }
 
     /**
-     * Returns the header-bar in the top of most backend modules
-     * Closes section if open.
-     *
-     * @param string $text The text string for the header
-     * @return string HTML content
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 9
-     */
-    public function header($text)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $str = '
-
-	<!-- MAIN Header in page top -->
-	<h1 class="t3js-title-inlineedit">' . htmlspecialchars($text) . '</h1>
-';
-        return $this->sectionEnd() . $str;
-    }
-
-    /**
-     * Begins an output section and sets header and content
-     *
-     * @param string $label The header
-     * @param string $text The HTML-content
-     * @param bool $nostrtoupper	A flag that will prevent the header from being converted to uppercase
-     * @param bool $sH Defines the type of header (if set, "<h3>" rather than the default "h4")
-     * @param int $type The number of an icon to show with the header (see the icon-function). -1,1,2,3
-     * @param bool $allowHTMLinHeader If set, HTML tags are allowed in $label (otherwise this value is by default htmlspecialchars()'ed)
-     * @return string HTML content
-     * @see icons(), sectionHeader()
-     * @deprecated since TYPO3 CMS 8, will be removed in TYPO3 CMS 9.
-     */
-    public function section($label, $text, $nostrtoupper = false, $sH = false, $type = 0, $allowHTMLinHeader = false)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $str = '';
-        // Setting header
-        if ($label) {
-            if (!$allowHTMLinHeader) {
-                $label = htmlspecialchars($label);
-            }
-            $str .= $this->sectionHeader($this->icons($type) . $label, $sH, $nostrtoupper ? '' : ' class="uppercase"');
-        }
-        // Setting content
-        $str .= '
-
-	<!-- Section content -->
-' . $text;
-        return $this->sectionBegin() . $str;
-    }
-
-    /**
-     * Inserts a divider image
-     * Ends a section (if open) before inserting the image
-     *
-     * @param int $dist The margin-top/-bottom of the <hr> ruler.
-     * @return string HTML content
-     * @deprecated since TYPO3 CMS 8, will be removed in TYPO3 CMS 9.
-     */
-    public function divider($dist)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $dist = (int)$dist;
-        $str = '
-
-	<!-- DIVIDER -->
-	<hr style="margin-top: ' . $dist . 'px; margin-bottom: ' . $dist . 'px;" />
-';
-        return $this->sectionEnd() . $str;
-    }
-
-    /**
-     * Make a section header.
-     * Begins a section if not already open.
-     *
-     * @param string $label The label between the <h3> or <h4> tags. (Allows HTML)
-     * @param bool $sH If set, <h3> is used, otherwise <h4>
-     * @param string $addAttrib Additional attributes to h-tag, eg. ' class=""'
-     * @return string HTML content
-     * @deprecated since TYPO3 CMS 8, will be removed in TYPO3 CMS 9.
-     */
-    public function sectionHeader($label, $sH = false, $addAttrib = '')
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $tag = $sH ? 'h2' : 'h3';
-        if ($addAttrib && $addAttrib[0] !== ' ') {
-            $addAttrib = ' ' . $addAttrib;
-        }
-        $str = '
-
-	<!-- Section header -->
-	<' . $tag . $addAttrib . '>' . $label . '</' . $tag . '>
-';
-        return $this->sectionBegin() . $str;
-    }
-
-    /**
-     * Begins an output section.
-     * Returns the <div>-begin tag AND sets the ->sectionFlag TRUE (if the ->sectionFlag is not already set!)
-     * You can call this function even if a section is already begun since the function will only return something if the sectionFlag is not already set!
-     *
-     * @return string HTML content
-     * @deprecated since TYPO3 CMS 8, will be removed in TYPO3 CMS 9.
-     */
-    public function sectionBegin()
-    {
-        GeneralUtility::logDeprecatedFunction();
-        if (!$this->sectionFlag) {
-            $this->sectionFlag = 1;
-            $str = '
-
-	<!-- ***********************
-	      Begin output section.
-	     *********************** -->
-	<div>
-';
-            return $str;
-        } else {
-            return '';
-        }
-    }
-
-    /**
-     * Ends and output section
-     * Returns the </div>-end tag AND clears the ->sectionFlag (but does so only IF the sectionFlag is set - that is a section is 'open')
-     * See sectionBegin() also.
-     *
-     * @return string HTML content
-     * @deprecated since TYPO3 CMS 8, will be removed in TYPO3 CMS 9.
-     */
-    public function sectionEnd()
-    {
-        if ($this->sectionFlag) {
-            GeneralUtility::logDeprecatedFunction();
-            $this->sectionFlag = 0;
-            return '
-	</div>
-	<!-- *********************
-	      End output section.
-	     ********************* -->
-';
-        } else {
-            return '';
-        }
-    }
-
-    /**
      * Creates the bodyTag.
      * You can add to the bodyTag by $this->bodyTagAdditions
      *
@@ -842,8 +606,6 @@ function jumpToUrl(URL) {
 
     /**
      * Outputting document style
-     *
-     * @return string HTML style section/link tags
      */
     public function docStyle()
     {
@@ -876,9 +638,12 @@ function jumpToUrl(URL) {
      * @param string $href uri to the style sheet file
      * @param string $title value for the title attribute of the link element
      * @param string $relation value for the rel attribute of the link element
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0
+     * @see PageRenderer::addCssFile()
      */
     public function addStyleSheet($key, $href, $title = '', $relation = 'stylesheet')
     {
+        trigger_error('DocumentTemplate->->addStyleSheet() will be removed in TYPO3 v10.0.', E_USER_DEPRECATED);
         $this->pageRenderer->addCssFile($href, $relation, 'screen', $title);
     }
 
@@ -959,18 +724,19 @@ function jumpToUrl(URL) {
      */
     public function generator()
     {
-        $str = 'TYPO3 CMS, ' . TYPO3_URL_GENERAL . ', &#169; Kasper Sk&#229;rh&#248;j ' . TYPO3_copyright_year . ', extensions are copyright of their respective owners.';
-        return '<meta name="generator" content="' . $str . '" />';
+        return 'TYPO3 CMS, ' . TYPO3_URL_GENERAL . ', &#169; Kasper Sk&#229;rh&#248;j ' . TYPO3_copyright_year . ', extensions are copyright of their respective owners.';
     }
 
     /**
      * Returns X-UA-Compatible meta tag
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
      *
      * @param string $content Content of the compatible tag (default: IE-8)
      * @return string <meta http-equiv="X-UA-Compatible" content="???" />
      */
     public function xUaCompatible($content = 'IE=8')
     {
+        trigger_error('DocumentTemplate->xUaCompatible() will be removed with TYPO3 v10.0. Use PageRenderer->setMetaTag() instead.', E_USER_DEPRECATED);
         return '<meta http-equiv="X-UA-Compatible" content="' . $content . '" />';
     }
 
@@ -980,255 +746,6 @@ function jumpToUrl(URL) {
      * Tables, buttons, formatting dimmed/red strings
      *
      ******************************************/
-    /**
-     * Returns an image-tag with an 18x16 icon of the following types:
-     *
-     * $type:
-     * -1:	OK icon (Check-mark)
-     * 1:	Notice (Speach-bubble)
-     * 2:	Warning (Yellow triangle)
-     * 3:	Fatal error (Red stop sign)
-     *
-     * @param int $type See description
-     * @param string $styleAttribValue Value for style attribute
-     * @return string HTML image tag (if applicable)
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function icons($type, $styleAttribValue = '')
-    {
-        GeneralUtility::logDeprecatedFunction();
-        switch ($type) {
-            case self::STATUS_ICON_ERROR:
-                $icon = 'status-dialog-error';
-                break;
-            case self::STATUS_ICON_WARNING:
-                $icon = 'status-dialog-warning';
-                break;
-            case self::STATUS_ICON_NOTIFICATION:
-                $icon = 'status-dialog-notification';
-                break;
-            case self::STATUS_ICON_OK:
-                $icon = 'status-dialog-ok';
-                break;
-            default:
-                // Do nothing
-        }
-        if ($icon) {
-            return $this->iconFactory->getIcon($icon, Icon::SIZE_SMALL)->render();
-        }
-    }
-
-    /**
-     * Returns an <input> button with the $onClick action and $label
-     *
-     * @param string $onClick The value of the onclick attribute of the input tag (submit type)
-     * @param string $label The label for the button (which will be htmlspecialchar'ed)
-     * @return string A <input> tag of the type "submit
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function t3Button($onClick, $label)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $button = '<input class="btn btn-default" type="submit" onclick="' . htmlspecialchars($onClick) . '; return false;" value="' . htmlspecialchars($label) . '" />';
-        return $button;
-    }
-
-    /**
-     * Returns string wrapped in CDATA "tags" for XML / XHTML (wrap content of <script> and <style> sections in those!)
-     *
-     * @param string $string Input string
-     * @return string Output string
-     * @deprecated since TYPO3 CMS 8, will be removed in TYPO3 CMS 9.
-     */
-    public function wrapInCData($string)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $string = '/*<![CDATA[*/' . $string . '/*]]>*/';
-        return $string;
-    }
-
-    /**
-     * Wraps the input string in script tags.
-     * Automatic re-identing of the JS code is done by using the first line as ident reference.
-     * This is nice for identing JS code with PHP code on the same level.
-     *
-     * @param string $string Input string
-     * @param bool $linebreak Wrap script element in linebreaks? Default is TRUE.
-     * @return string Output string
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9, use GeneralUtility::wrapJS()
-     */
-    public function wrapScriptTags($string, $linebreak = true)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        if (trim($string)) {
-            // <script wrapped in nl?
-            $cr = $linebreak ? LF : '';
-            // Remove nl from the beginning
-            $string = ltrim($string, LF);
-            // Re-ident to one tab using the first line as reference
-            if ($string[0] === TAB) {
-                $string = TAB . ltrim($string, TAB);
-            }
-            $string = $cr . '<script type="text/javascript">
-/*<![CDATA[*/
-' . $string . '
-/*]]>*/
-</script>' . $cr;
-        }
-        return trim($string);
-    }
-
-    /**
-     * Returns a one-row/two-celled table with $content and $menu side by side.
-     * The table is a 100% width table and each cell is aligned left / right
-     *
-     * @param string $content Content cell content (left)
-     * @param string $menu Menu cell content (right)
-     * @return string HTML output
-     * @deprecated since TYPO3 CMS 8, will be removed in TYPO3 CMS 9.
-     */
-    public function funcMenu($content, $menu)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        return '
-			<table border="0" cellpadding="0" cellspacing="0" width="100%" id="typo3-funcmenu">
-				<tr>
-					<td valign="top" nowrap="nowrap">' . $content . '</td>
-					<td valign="top" align="right" nowrap="nowrap">' . $menu . '</td>
-				</tr>
-			</table>';
-    }
-
-    /**
-     * Includes a javascript library that exists in the core /typo3/ directory
-     *
-     * @param string $lib: Library name. Call it with the full path like "sysext/core/Resources/Public/JavaScript/QueryGenerator.js" to load it
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function loadJavascriptLib($lib)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $this->pageRenderer->addJsFile($lib);
-    }
-
-    /**
-     * Includes the necessary Javascript function for the clickmenu (context sensitive menus) in the document
-     *
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function getContextMenuCode()
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $this->pageRenderer->loadJquery();
-        $this->pageRenderer->loadRequireJsModule('TYPO3/CMS/Backend/ContextMenu');
-    }
-
-    /**
-     * Includes the necessary javascript file for use on pages which have the
-     * drag and drop functionality (legacy folder tree)
-     *
-     * @param string $table indicator of which table the drag and drop function should work on (pages or folders)
-     * @param string $additionalJavaScriptCode adds more code to the additional javascript code
-     * @deprecated since TYPO3 CMS 8, will be removed in TYPO3 CMS 9.
-     */
-    public function getDragDropCode($table, $additionalJavaScriptCode = '')
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $this->pageRenderer->loadRequireJsModule('TYPO3/CMS/Backend/LegacyTree', 'function() {
-			DragDrop.table = "' . $table . '";
-			' . $additionalJavaScriptCode . '
-		}');
-    }
-
-    /**
-     * Creates a tab menu from an array definition
-     *
-     * Returns a tab menu for a module
-     * Requires the JS function jumpToUrl() to be available
-     *
-     * @param mixed $mainParams is the "&id=" parameter value to be sent to the module, but it can be also a parameter array which will be passed instead of the &id=...
-     * @param string $elementName it the form elements name, probably something like "SET[...]
-     * @param string $currentValue is the value to be selected currently.
-     * @param array $menuItems is an array with the menu items for the selector box
-     * @param string $script is the script to send the &id to, if empty it's automatically found
-     * @param string $addparams is additional parameters to pass to the script.
-     * @return string HTML code for tab menu
-     * @deprecated since TYPO3 CMS 8, will be removed in TYPO3 CMS 9.
-     */
-    public function getTabMenu($mainParams, $elementName, $currentValue, $menuItems, $script = '', $addparams = '')
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $content = '';
-        if (is_array($menuItems)) {
-            if (!is_array($mainParams)) {
-                $mainParams = ['id' => $mainParams];
-            }
-            $mainParams = GeneralUtility::implodeArrayForUrl('', $mainParams);
-            if (!$script) {
-                $script = basename(PATH_thisScript);
-            }
-            $menuDef = [];
-            foreach ($menuItems as $value => $label) {
-                $menuDef[$value]['isActive'] = (string)$currentValue === (string)$value;
-                $menuDef[$value]['label'] = htmlspecialchars($label, ENT_COMPAT, 'UTF-8', false);
-                $menuDef[$value]['url'] = $script . '?' . $mainParams . $addparams . '&' . $elementName . '=' . $value;
-            }
-            $content = $this->getTabMenuRaw($menuDef);
-        }
-        return $content;
-    }
-
-    /**
-     * Creates the HTML content for the tab menu
-     *
-     * @param array $menuItems Menu items for tabs
-     * @return string Table HTML
-     * @access private
-     */
-    public function getTabMenuRaw($menuItems)
-    {
-        if (!is_array($menuItems)) {
-            return '';
-        }
-
-        $options = '';
-        foreach ($menuItems as $id => $def) {
-            $class = $def['isActive'] ? 'active' : '';
-            $label = $def['label'];
-            $url = htmlspecialchars($def['url']);
-            $params = $def['addParams'];
-
-            $options .= '<li class="' . $class . '">' .
-                '<a href="' . $url . '" ' . $params . '>' . $label . '</a>' .
-                '</li>';
-        }
-
-        return '<ul class="nav nav-tabs" role="tablist">' .
-                $options .
-            '</ul>';
-    }
-
-    /**
-     * Creates the version selector for the page id inputted.
-     * Requires the core version management extension, "version" to be loaded.
-     *
-     * @param int $id Page id to create selector for.
-     * @param bool $noAction If set, there will be no button for swapping page.
-     * @return string
-     * @deprecated since TYPO3 CMS 8, will be removed in TYPO3 CMS 9.
-     */
-    public function getVersionSelector($id, $noAction = false)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        if (
-                ExtensionManagementUtility::isLoaded('version') &&
-                ExtensionManagementUtility::isLoaded('compatibility7') &&
-                !ExtensionManagementUtility::isLoaded('workspaces')
-        ) {
-            $versionGuiObj = GeneralUtility::makeInstance(\TYPO3\CMS\Compatibility7\View\VersionView::class);
-            return $versionGuiObj->getVersionSelector($id, $noAction);
-        }
-    }
 
     /**
      * Function to load a HTML template file with markers.
@@ -1244,18 +761,8 @@ function jumpToUrl(URL) {
         if ($GLOBALS['TBE_STYLES']['htmlTemplates'][$filename]) {
             $filename = $GLOBALS['TBE_STYLES']['htmlTemplates'][$filename];
         }
-        if (GeneralUtility::isFirstPartOfStr($filename, 'EXT:')) {
-            $filename = GeneralUtility::getFileAbsFileName($filename);
-        } elseif (!GeneralUtility::isAbsPath($filename)) {
-            $filename = GeneralUtility::resolveBackPath($filename);
-        } elseif (!GeneralUtility::isAllowedAbsPath($filename)) {
-            $filename = '';
-        }
-        $htmlTemplate = '';
-        if ($filename !== '') {
-            $htmlTemplate = file_get_contents($filename);
-        }
-        return $htmlTemplate;
+        $filename = GeneralUtility::getFileAbsFileName($filename);
+        return $filename !== '' ? file_get_contents($filename) : '';
     }
 
     /**
@@ -1309,7 +816,7 @@ function jumpToUrl(URL) {
             }
         }
         // Hook for adding more markers/content to the page, like the version selector
-        if (isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/template.php']['moduleBodyPostProcess'])) {
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/template.php']['moduleBodyPostProcess'] ?? [] as $funcRef) {
             $params = [
                 'moduleTemplateFilename' => &$this->moduleTemplateFilename,
                 'moduleTemplate' => &$this->moduleTemplate,
@@ -1317,9 +824,7 @@ function jumpToUrl(URL) {
                 'markers' => &$markerArray,
                 'parentObject' => &$this
             ];
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/template.php']['moduleBodyPostProcess'] as $funcRef) {
-                GeneralUtility::callUserFunction($funcRef, $params, $this);
-            }
+            GeneralUtility::callUserFunction($funcRef, $params, $this);
         }
         // Replacing all markers with the finished markers and return the HTML content
         return $this->templateService->substituteMarkerArray($moduleBody, $markerArray, '###|###');
@@ -1332,39 +837,11 @@ function jumpToUrl(URL) {
      */
     public function getFlashMessages()
     {
-        /** @var $flashMessageService \TYPO3\CMS\Core\Messaging\FlashMessageService */
+        /** @var \TYPO3\CMS\Core\Messaging\FlashMessageService $flashMessageService */
         $flashMessageService = GeneralUtility::makeInstance(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
-        /** @var $defaultFlashMessageQueue \TYPO3\CMS\Core\Messaging\FlashMessageQueue */
+        /** @var \TYPO3\CMS\Core\Messaging\FlashMessageQueue $defaultFlashMessageQueue */
         $defaultFlashMessageQueue = $flashMessageService->getMessageQueueByIdentifier();
         return $defaultFlashMessageQueue->renderFlashMessages();
-    }
-
-    /**
-     * Renders the FlashMessages from queue and returns them as AJAX.
-     *
-     * @param ServerRequestInterface $request
-     * @param ResponseInterface $response
-     * @return ResponseInterface
-     */
-    public function renderQueuedFlashMessages(ServerRequestInterface $request, ResponseInterface $response)
-    {
-        /** @var $flashMessageService \TYPO3\CMS\Core\Messaging\FlashMessageService */
-        $flashMessageService = GeneralUtility::makeInstance(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
-        /** @var $defaultFlashMessageQueue \TYPO3\CMS\Core\Messaging\FlashMessageQueue */
-        $defaultFlashMessageQueue = $flashMessageService->getMessageQueueByIdentifier();
-        $flashMessages = $defaultFlashMessageQueue->getAllMessagesAndFlush();
-
-        $messages = [];
-        foreach ($flashMessages as $flashMessage) {
-            $messages[] = [
-                'title' => $flashMessage->getTitle(),
-                'message' => $flashMessage->getMessage(),
-                'severity' => $flashMessage->getSeverity()
-            ];
-        }
-
-        $response->getBody()->write(json_encode($messages));
-        return $response;
     }
 
     /**
@@ -1400,15 +877,13 @@ function jumpToUrl(URL) {
             $markers['BUTTONLIST_' . strtoupper($key)] = str_replace(LF, '', $buttonTemplate);
         }
         // Hook for manipulating docHeaderButtons
-        if (isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/template.php']['docHeaderButtonsHook'])) {
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/template.php']['docHeaderButtonsHook'] ?? [] as $funcRef) {
             $params = [
                 'buttons' => $buttons,
                 'markers' => &$markers,
                 'pObj' => &$this
             ];
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/template.php']['docHeaderButtonsHook'] as $funcRef) {
-                GeneralUtility::callUserFunction($funcRef, $params, $this);
-            }
+            GeneralUtility::callUserFunction($funcRef, $params, $this);
         }
         return $markers;
     }
@@ -1433,7 +908,7 @@ function jumpToUrl(URL) {
             $title = '';
         }
         // Setting the path of the page
-        $pagePath = htmlspecialchars($GLOBALS['LANG']->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.path')) . ': <span class="typo3-docheader-pagePath">';
+        $pagePath = htmlspecialchars($GLOBALS['LANG']->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.path')) . ': <span class="typo3-docheader-pagePath">';
         // crop the title to title limit (or 50, if not defined)
         $cropLength = empty($GLOBALS['BE_USER']->uc['titleLen']) ? 50 : $GLOBALS['BE_USER']->uc['titleLen'];
         $croppedTitle = GeneralUtility::fixed_lgd_cs($title, -$cropLength);
@@ -1467,8 +942,8 @@ function jumpToUrl(URL) {
             // On root-level of page tree
             // Make Icon
             $iconImg = '<span title="' . htmlspecialchars($GLOBALS['TYPO3_CONF_VARS']['SYS']['sitename']) . '">' . $this->iconFactory->getIcon('apps-pagetree-root', Icon::SIZE_SMALL)->render() . '</span>';
-            if ($GLOBALS['BE_USER']->user['admin']) {
-                $theIcon = BackendUtility::wrapClickMenuOnIcon($iconImg, 'pages', 0);
+            if ($GLOBALS['BE_USER']->isAdmin()) {
+                $theIcon = BackendUtility::wrapClickMenuOnIcon($iconImg, 'pages');
             } else {
                 $theIcon = $iconImg;
             }
@@ -1481,16 +956,15 @@ function jumpToUrl(URL) {
     }
 
     /**
-    * Retrieves configured favicon for backend (with fallback)
-    *
-    * @return string
-    */
+     * Retrieves configured favicon for backend (with fallback)
+     *
+     * @return string
+     */
     protected function getBackendFavicon()
     {
-        $extConf = unserialize($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['backend'], ['allowed_classes' => false]);
-
-        if (!empty($extConf['backendFavicon'])) {
-            $path =  $this->getUriForFileName($extConf['backendFavicon']);
+        $backendFavicon = GeneralUtility::makeInstance(ExtensionConfiguration::class)->get('backend', 'backendFavicon');
+        if (!empty($backendFavicon)) {
+            $path = $this->getUriForFileName($backendFavicon);
         } else {
             $path = ExtensionManagementUtility::extPath('backend') . 'Resources/Public/Icons/favicon.ico';
         }
@@ -1500,7 +974,7 @@ function jumpToUrl(URL) {
     /**
      * Returns the uri of a relative reference, resolves the "EXT:" prefix
      * (way of referring to files inside extensions) and checks that the file is inside
-     * the PATH_site of the TYPO3 installation
+     * the project root of the TYPO3 installation
      *
      * @param string $filename The input filename/filepath to evaluate
      * @return string Returns the filename of $filename if valid, otherwise blank string.
@@ -1521,5 +995,13 @@ function jumpToUrl(URL) {
             $urlPrefix = GeneralUtility::getIndpEnv('TYPO3_SITE_PATH');
         }
         return $urlPrefix . $filename;
+    }
+
+    /**
+     * @return BackendUserAuthentication|null
+     */
+    protected function getBackendUser()
+    {
+        return $GLOBALS['BE_USER'] ?? null;
     }
 }

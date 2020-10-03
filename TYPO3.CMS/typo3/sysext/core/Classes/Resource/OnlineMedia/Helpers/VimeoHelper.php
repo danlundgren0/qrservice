@@ -29,12 +29,12 @@ class VimeoHelper extends AbstractOEmbedHelper
      *
      * @param File $file
      * @param bool $relativeToCurrentScript
-     * @return string|NULL
+     * @return string|null
      */
     public function getPublicUrl(File $file, $relativeToCurrentScript = false)
     {
         $videoId = $this->getOnlineMediaId($file);
-        return sprintf('https://vimeo.com/%s', $videoId);
+        return sprintf('https://vimeo.com/%s', rawurlencode($videoId));
     }
 
     /**
@@ -63,17 +63,17 @@ class VimeoHelper extends AbstractOEmbedHelper
      *
      * @param string $url
      * @param Folder $targetFolder
-     * @return File|NULL
+     * @return File|null
      */
     public function transformUrlToFile($url, Folder $targetFolder)
     {
         $videoId = null;
         // Try to get the Vimeo code from given url.
         // Next formats are supported with and without http(s)://
-        // - vimeo.com/<code> # Share URL
-        // - player.vimeo.com/video/<code> # URL form iframe embed code, can also get code from full iframe snippet
-        if (preg_match('/vimeo\.com\/(video\/)*([0-9]+)/i', $url, $matches)) {
-            $videoId = $matches[2];
+        // - vimeo.com/<code>/<optionalPrivateCode> # Share URL
+        // - player.vimeo.com/video/<code>/<optionalPrivateCode> # URL form iframe embed code, can also get code from full iframe snippet
+        if (preg_match('/vimeo\.com\/(?:video\/)?([0-9a-z\/]+)/i', $url, $matches)) {
+            $videoId = $matches[1];
         }
         if (empty($videoId)) {
             return null;
@@ -91,9 +91,9 @@ class VimeoHelper extends AbstractOEmbedHelper
     protected function getOEmbedUrl($mediaId, $format = 'json')
     {
         return sprintf(
-            'https://vimeo.com/api/oembed.%s?url=%s',
-            urlencode($format),
-            urlencode(sprintf('https://vimeo.com/%s', $mediaId))
+            'https://vimeo.com/api/oembed.%s?width=2048&url=%s',
+            rawurlencode($format),
+            rawurlencode(sprintf('https://vimeo.com/%s', rawurlencode($mediaId)))
         );
     }
 }

@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Frontend\Typolink;
 
 /*
@@ -27,8 +27,8 @@ class ExternalUrlLinkBuilder extends AbstractTypolinkBuilder
     public function build(array &$linkDetails, string $linkText, string $target, array $conf): array
     {
         return [
-            $this->processUrl(UrlProcessorInterface::CONTEXT_EXTERNAL, htmlspecialchars_decode($linkDetails['url']), $conf),
-            $this->parseFallbackLinkTextIfLinkTextIsEmpty($linkText, $linkDetails['url']),
+            $this->processUrl(UrlProcessorInterface::CONTEXT_EXTERNAL, $linkDetails['url'], $conf),
+            $this->encodeFallbackLinkTextIfLinkTextIsEmpty($linkText, $linkDetails['url']),
             $target ?: $this->resolveTargetAttribute($conf, 'extTarget', true, $this->getTypoScriptFrontendController()->extTarget)
         ];
     }

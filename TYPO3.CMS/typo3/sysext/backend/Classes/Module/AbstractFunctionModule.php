@@ -17,11 +17,9 @@ namespace TYPO3\CMS\Backend\Module;
 use TYPO3\CMS\Backend\Template\DocumentTemplate;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
-use TYPO3\CMS\Core\Database\DatabaseConnection;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Page\PageRenderer;
-use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Parent class for 'Extension Objects' in backend modules.
@@ -34,7 +32,7 @@ use TYPO3\CMS\Lang\LanguageService;
  * In other words this class is used for backend modules which is not true
  * backend modules appearing in the menu but rather adds themselves as a new
  * entry in the function menu which typically exists for a backend
- * module (like Web>Functions, Web>Info or Tools etc...)
+ * module (like Web>Info or Tools etc...)
  * The magic that binds this together is stored in the global variable
  * $TBE_MODULES_EXT where extensions wanting to connect a module based on
  * this class to an existing backend module store configuration which consists
@@ -43,8 +41,7 @@ use TYPO3\CMS\Lang\LanguageService;
  * For more information about this, please see the large example comment for the
  * class \TYPO3\CMS\Backend\Module\BaseScriptClass. This will show the principle of a
  * 'level-1' connection. The more advanced example - having two layers as it is done
- * by the 'func_wizards' extension with the 'web_info' module - can be seen in the
- * comment above.
+ * with the 'web_info' module - can be seen in the comment above.
  *
  * EXAMPLE: One level.
  * This can be seen in the extension 'frontend' where the info module have a
@@ -57,53 +54,13 @@ use TYPO3\CMS\Lang\LanguageService;
  * 'LLL:EXT:frontend/Resources/Private/Language/locallang_tca.xlf:mod_tx_cms_webinfo_page'
  * );
  *
- * EXAMPLE: Two levels.
- * This is the advanced example. You can see it with the extension 'func_wizards'
- * which is the first layer but then providing another layer for extensions to connect by.
- * The key used in TBE_MODULES_EXT is normally 'function' (for the 'function menu')
- * but the 'func_wizards' extension uses an alternative key for its configuration: 'wiz'.
- * In the 'ext_tables.php' file of an extension ('wizard_crpages') which uses the
- * framework provided by 'func_wizards' this looks like this:
- *
- * \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::insertModuleFunction(
- * 'web_func',
- * \TYPO3\CMS\WizardCrpages\Controller\CreatePagesWizardModuleFunctionController::class
- * NULL,
- * 'LLL:EXT:wizard_crpages/locallang.xlf:wiz_crMany',
- * 'wiz'
- * );
- *
- * But for this two-level thing to work it also requires that the parent
+ * For this two-level thing to work it also requires that the parent
  * module (the real backend module) supports it.
- * This is the case for the modules web_func and web_info since they have two
- * times inclusion sections in their index.php scripts. For example (from web_func):
+ * This is the case for the modules web_info since it has two
+ * times inclusion sections in their index.php scripts.
  *
- * Make instance:
- * $GLOBALS['SOBE'] = GeneralUtility::makeInstance(\TYPO3\CMS\Func\Controller\PageFunctionsController::class);
- * $GLOBALS['SOBE']->init();
- *
- * Anyways, the final interesting thing is to see what the framework
- * "func_wizard" actually does:
- *
- * class WebFunctionWizardsBaseController extends \TYPO3\CMS\Backend\Module\AbstractFunctionModule {
- * var $localLangFile = "locallang.xlf";
- * var $function_key = "wiz";
- * function init(&$pObj, $conf) {
- * OK, handles ordinary init. This includes setting up the
- * menu array with ->modMenu
- * parent::init($pObj,$conf);
- * $this->handleExternalFunctionValue();
- * }
- * }
- *
- * Notice that the handleExternalFunctionValue of this class
- * is called and that the ->function_key internal var is set!
- *
- * The two level-2 sub-module "wizard_crpages" and "wizard_sortpages"
- * are totally normal "submodules".
  * @see \TYPO3\CMS\Backend\Module\BaseScriptClass
- * @see \TYPO3\CMS\FuncWizards\Controller\WebFunctionWizardsBaseController
- * @see \TYPO3\CMS\WizardSortpages\View\SortPagesWizardModuleFunction
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
  */
 abstract class AbstractFunctionModule
 {
@@ -119,16 +76,7 @@ abstract class AbstractFunctionModule
     /**
      * @var BaseScriptClass
      */
-    public $extObj = null;
-
-    /**
-     * Set to the directory name of this class file.
-     *
-     * @see init()
-     * @var string
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public $thisPath = '';
+    public $extObj;
 
     /**
      * Can be hardcoded to the name of a locallang.xlf file (from the same directory as the class file) to use/load
@@ -160,25 +108,29 @@ abstract class AbstractFunctionModule
     /**
      * @var PageRenderer
      */
-    protected $pageRenderer = null;
+    protected $pageRenderer;
+
+    /**
+     * Constructor deprecates the class
+     */
+    public function __construct()
+    {
+        trigger_error(
+            'Class AbstractFunctionModule is deprecated and will be removed in TYPO3 v10.0',
+            E_USER_DEPRECATED
+        );
+    }
 
     /**
      * Initialize the object
      *
-     * @param BaseScriptClass $pObj A reference to the parent (calling) object
-     * @param array $conf The configuration set for this module - from global array TBE_MODULES_EXT
+     * @param \object $pObj A reference to the parent (calling) object
      * @throws \RuntimeException
      * @see \TYPO3\CMS\Backend\Module\BaseScriptClass::checkExtObj()
      */
-    public function init(&$pObj, $conf)
+    public function init($pObj)
     {
         $this->pObj = $pObj;
-        // Path of this script:
-        $reflector = new \ReflectionObject($this);
-        $this->thisPath = dirname($reflector->getFileName());
-        if (!@is_dir($this->thisPath)) {
-            throw new \RuntimeException('TYPO3 Fatal Error: Could not find path for class ' . get_class($this), 1381164687);
-        }
         // Local lang:
         if (!empty($this->localLangFile)) {
             $this->getLanguageService()->includeLLFile($this->localLangFile);
@@ -199,29 +151,6 @@ abstract class AbstractFunctionModule
         $this->pObj->MOD_SETTINGS = BackendUtility::getModuleData($this->pObj->MOD_MENU, GeneralUtility::_GP('SET'), $this->pObj->MCONF['name']);
         if ($this->function_key) {
             $this->extClassConf = $this->pObj->getExternalItemConfig($this->pObj->MCONF['name'], $this->function_key, $this->pObj->MOD_SETTINGS[$this->function_key]);
-        }
-    }
-
-    /**
-     * Including any locallang file configured and merging its content over
-     * the current global LOCAL_LANG array (which is EXPECTED to exist!!!)
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function incLocalLang()
-    {
-        GeneralUtility::logDeprecatedFunction();
-        if (
-            $this->localLangFile
-            && (
-                @is_file(($this->thisPath . '/' . $this->localLangFile))
-                || @is_file(($this->thisPath . '/' . substr($this->localLangFile, 0, -4) . '.xml'))
-            )
-        ) {
-            $LOCAL_LANG = $this->getLanguageService()->includeLLFile($this->thisPath . '/' . $this->localLangFile, false);
-            if (is_array($LOCAL_LANG)) {
-                $GLOBALS['LOCAL_LANG'] = (array)$GLOBALS['LOCAL_LANG'];
-                ArrayUtility::mergeRecursiveWithOverrule($GLOBALS['LOCAL_LANG'], $LOCAL_LANG);
-            }
         }
     }
 
@@ -283,26 +212,6 @@ abstract class AbstractFunctionModule
     protected function getDocumentTemplate()
     {
         return $GLOBALS['TBE_TEMPLATE'];
-    }
-
-    /**
-     * @return string
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    protected function getBackPath()
-    {
-        GeneralUtility::logDeprecatedFunction();
-        return '';
-    }
-
-    /**
-     * @return DatabaseConnection
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9, use the Doctrine DBAL layer via the ConnectionPool class
-     */
-    protected function getDatabaseConnection()
-    {
-        GeneralUtility::logDeprecatedFunction();
-        return $GLOBALS['TYPO3_DB'];
     }
 
     /**

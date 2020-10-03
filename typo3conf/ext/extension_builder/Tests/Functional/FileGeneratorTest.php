@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Tests\Functional;
 
 /*
@@ -22,7 +23,8 @@ use EBT\ExtensionBuilder\Domain\Model\Plugin;
 use EBT\ExtensionBuilder\Tests\BaseFunctionalTest;
 use EBT\ExtensionBuilder\Utility\Inflector;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Extbase\Reflection\ClassReflection;
+use TYPO3\CMS\Extbase\Reflection\ReflectionService;
+use Doctrine\Common\Annotations\AnnotationReader;
 
 class FileGeneratorTest extends BaseFunctionalTest
 {
@@ -43,12 +45,17 @@ class FileGeneratorTest extends BaseFunctionalTest
         $domainObject->addProperty($property);
         $classFileContent = $this->fileGenerator->generateDomainObjectCode($domainObject);
         self::assertRegExp('/.*class ModelCgt1.*/', $classFileContent, 'Class declaration was not generated');
-        self::assertRegExp('/.*protected \\$blue.*/', $classFileContent, 'protected boolean property was not generated');
+        self::assertRegExp('/.*protected \\$blue.*/', $classFileContent,
+            'protected boolean property was not generated');
         self::assertRegExp('/.*\* \@var bool.*/', $classFileContent, 'var tag for boolean property was not generated');
-        self::assertRegExp('/.*\* \@validate NotEmpty.*/', $classFileContent, 'validate tag for required property was not generated');
-        self::assertRegExp('/.*public function getBlue\(\).*/', $classFileContent, 'Getter for boolean property was not generated');
-        self::assertRegExp('/.*public function setBlue\(\$blue\).*/', $classFileContent, 'Setter for boolean property was not generated');
-        self::assertRegExp('/.*public function isBlue\(\).*/', $classFileContent, 'is method for boolean property was not generated');
+        self::assertRegExp('/.*\* @TYPO3\\\CMS\\\Extbase\\\Annotation\\\Validate\("NotEmpty"\).*/', $classFileContent,
+            'validate tag for required property was not generated');
+        self::assertRegExp('/.*public function getBlue\(\).*/', $classFileContent,
+            'Getter for boolean property was not generated');
+        self::assertRegExp('/.*public function setBlue\(\$blue\).*/', $classFileContent,
+            'Setter for boolean property was not generated');
+        self::assertRegExp('/.*public function isBlue\(\).*/', $classFileContent,
+            'is method for boolean property was not generated');
     }
 
     /**
@@ -79,15 +86,16 @@ class FileGeneratorTest extends BaseFunctionalTest
             include_once($modelClassPath);
         }
         self::assertTrue(class_exists($className), 'Class was not generated:' . $className);
-        $reflection = new \ReflectionClass($className);
+        $reflectionService = new ReflectionService();
+        $reflection = $reflectionService->getClassSchema(new $className());
         self::assertTrue($reflection->hasMethod('get' . ucfirst($propertyName)), 'Getter was not generated');
         self::assertTrue($reflection->hasMethod('set' . ucfirst($propertyName)), 'Setter was not generated');
         self::assertTrue($reflection->hasMethod('is' . ucfirst($propertyName)), 'isMethod was not generated');
         $setterMethod = $reflection->getMethod('set' . ucfirst($propertyName));
-        $parameters = $setterMethod->getParameters();
+        $parameters = $setterMethod['params'];
         self::assertEquals(1, count($parameters), 'Wrong parameter count in setter method');
-        $parameter = current($parameters);
-        self::assertEquals($parameter->getName(), $propertyName, 'Wrong parameter name in setter method');
+        $firstParameterName = current(array_keys($parameters));
+        self::assertEquals($firstParameterName, $propertyName, 'Wrong parameter name in setter method');
     }
 
     /**
@@ -116,16 +124,16 @@ class FileGeneratorTest extends BaseFunctionalTest
             include($modelClassPath);
         }
         self::assertTrue(class_exists($className), 'Class was not generated:' . $className);
-
-        $reflection = new \ReflectionClass($className);
+        $reflectionService = new ReflectionService();
+        $reflection = $reflectionService->getClassSchema(new $className());
         self::assertTrue($reflection->hasMethod('get' . ucfirst($propertyName)), 'Getter was not generated');
         self::assertTrue($reflection->hasMethod('set' . ucfirst($propertyName)), 'Setter was not generated');
         self::assertFalse($reflection->hasMethod('is' . ucfirst($propertyName)), 'isMethod should not be generated');
         $setterMethod = $reflection->getMethod('set' . ucfirst($propertyName));
-        $parameters = $setterMethod->getParameters();
+        $parameters = $setterMethod['params'];
         self::assertEquals(1, count($parameters), 'Wrong parameter count in setter method');
-        $parameter = current($parameters);
-        self::assertEquals($parameter->getName(), $propertyName, 'Wrong parameter name in setter method');
+        $firstParameterName = current(array_keys($parameters));
+        self::assertEquals($firstParameterName, $propertyName, 'Wrong parameter name in setter method');
     }
 
     /**
@@ -150,7 +158,6 @@ class FileGeneratorTest extends BaseFunctionalTest
         self::assertTrue(is_dir($absModelClassDir), 'Directory ' . $absModelClassDir . ' was not created');
 
         $modelClassPath = $absModelClassDir . $domainObject->getName() . '.php';
-        GeneralUtility::devLog('Class Content', 'extension_builder', 0, ['c' => $classFileContent, 'path' => $absModelClassDir]);
         GeneralUtility::writeFile($modelClassPath, $classFileContent);
         self::assertFileExists($modelClassPath, 'File was not generated: ' . $modelClassPath);
         $className = $domainObject->getFullQualifiedClassName();
@@ -158,18 +165,15 @@ class FileGeneratorTest extends BaseFunctionalTest
             include($modelClassPath);
         }
         self::assertTrue(class_exists($className), 'Class was not generated:' . $className);
-        $reflection = new ClassReflection($className);
-        self::assertTrue($reflection->hasMethod('get' . ucfirst($propertyName)), 'Getter was not generated');
-        self::assertTrue($reflection->hasMethod('set' . ucfirst($propertyName)), 'Setter was not generated');
-        $setterMethod = $reflection->getMethod('set' . ucfirst($propertyName));
-        self::assertTrue($setterMethod->isTaggedWith('param'), 'No param tag set for setter method');
-        $paramTagValues = $setterMethod->getTagValues('param');
-        self::assertEquals(0, strpos($paramTagValues[0], $relatedDomainObject->getFullQualifiedClassName()), 'Wrong param tag:' . $paramTagValues[0]);
+        include_once($modelClassPath);
+        $reflectionClass = new \ReflectionClass(new $className());
+        self::assertTrue($reflectionClass->hasMethod('get' . ucfirst($propertyName)), 'Getter was not generated');
+        self::assertTrue($reflectionClass->hasMethod('set' . ucfirst($propertyName)), 'Setter was not generated');
+        $setterMethod = $reflectionClass->getMethod('set' . ucfirst($propertyName));
 
         $parameters = $setterMethod->getParameters();
         self::assertEquals(1, count($parameters), 'Wrong parameter count in setter method');
-        $parameter = current($parameters);
-        self::assertEquals($parameter->getName(), $propertyName, 'Wrong parameter name in setter method');
+        self::assertTrue(in_array($propertyName, array_keys($parameters)), 'Wrong parameter name in setter method');
     }
 
     /**
@@ -203,42 +207,44 @@ class FileGeneratorTest extends BaseFunctionalTest
         }
         self::assertTrue(class_exists($className), 'Class was not generated:' . $className);
 
-        $reflection = new ClassReflection($className);
-        self::assertTrue($reflection->hasMethod('add' . ucfirst(Inflector::singularize($propertyName))), 'Add method was not generated');
-        self::assertTrue($reflection->hasMethod('remove' . ucfirst(Inflector::singularize($propertyName))), 'Remove method was not generated');
+        $relatedClassFileContent = $this->fileGenerator->generateDomainObjectCode($relatedDomainObject, false);
+
+        $relatedModelClassPath = $absModelClassDir . $relatedDomainObject->getName() . '.php';
+        GeneralUtility::writeFile($relatedModelClassPath, $relatedClassFileContent);
+        self::assertFileExists($relatedModelClassPath, 'File was not generated: ' . $relatedModelClassPath);
+        $relatedClassName = $relatedDomainObject->getFullQualifiedClassName();
+        if (!class_exists($relatedClassName)) {
+            include($relatedModelClassPath);
+            $r = new $relatedClassName();
+        }
+        self::assertTrue(class_exists($relatedClassName), 'Class was not generated:' . $relatedClassName);
+
+        $reflection = new \ReflectionClass(new $className());
+        self::assertTrue($reflection->hasMethod('add' . ucfirst(Inflector::singularize($propertyName))),
+            'Add method was not generated');
+        self::assertTrue($reflection->hasMethod('remove' . ucfirst(Inflector::singularize($propertyName))),
+            'Remove method was not generated');
         self::assertTrue($reflection->hasMethod('get' . ucfirst($propertyName)), 'Getter was not generated');
         self::assertTrue($reflection->hasMethod('set' . ucfirst($propertyName)), 'Setter was not generated');
-
-        //checking methods
         $setterMethod = $reflection->getMethod('set' . ucfirst($propertyName));
-        self::assertTrue($setterMethod->isTaggedWith('param'), 'No param tag set for setter method');
-        $paramTagValues = $setterMethod->getTagValues('param');
-        self::assertEquals(0, strpos($paramTagValues[0], '\\TYPO3\\CMS\\Extbase\\Persistence\\ObjectStorage<' . $relatedDomainObject->getFullQualifiedClassName()), 'Wrong param tag:' . $paramTagValues[0]);
-
         $parameters = $setterMethod->getParameters();
         self::assertEquals(1, count($parameters), 'Wrong parameter count in setter method');
         $parameter = current($parameters);
         self::assertEquals($parameter->getName(), $propertyName, 'Wrong parameter name in setter method');
 
         $addMethod = $reflection->getMethod('add' . ucfirst(Inflector::singularize($propertyName)));
-        self::assertTrue($addMethod->isTaggedWith('param'), 'No param tag set for setter method');
-        $paramTagValues = $addMethod->getTagValues('param');
-        self::assertEquals(0, strpos($paramTagValues[0], $relatedDomainObject->getFullQualifiedClassName()), 'Wrong param tag:' . $paramTagValues[0]);
-
         $parameters = $addMethod->getParameters();
         self::assertEquals(1, count($parameters), 'Wrong parameter count in add method');
         $parameter = current($parameters);
-        self::assertEquals($parameter->getName(), Inflector::singularize($propertyName), 'Wrong parameter name in add method');
+        self::assertEquals($parameter->getName(), Inflector::singularize($propertyName),
+            'Wrong parameter name in add method');
 
         $removeMethod = $reflection->getMethod('remove' . ucfirst(Inflector::singularize($propertyName)));
-        self::assertTrue($removeMethod->isTaggedWith('param'), 'No param tag set for remove method');
-        $paramTagValues = $removeMethod->getTagValues('param');
-        self::assertEquals(0, strpos($paramTagValues[0], $relatedDomainObject->getFullQualifiedClassName()), 'Wrong param tag:' . $paramTagValues[0]);
-
         $parameters = $removeMethod->getParameters();
         self::assertEquals(1, count($parameters), 'Wrong parameter count in remove method');
         $parameter = current($parameters);
-        self::assertEquals($parameter->getName(), Inflector::singularize($propertyName) . 'ToRemove', 'Wrong parameter name in remove method');
+        self::assertEquals($parameter->getName(), Inflector::singularize($propertyName) . 'ToRemove',
+            'Wrong parameter name in remove method');
     }
 
     /**
@@ -268,48 +274,34 @@ class FileGeneratorTest extends BaseFunctionalTest
         GeneralUtility::writeFile($modelClassPath, $classFileContent);
         self::assertFileExists($modelClassPath, 'File was not generated: ' . $modelClassPath);
         $className = $domainObject->getFullQualifiedClassName();
-        if (!class_exists($className)) {
-            include($modelClassPath);
-        }
+        include($modelClassPath);
         self::assertTrue(class_exists($className), 'Class was not generated:' . $className);
-
-        $reflection = new ClassReflection($className);
-        self::assertTrue($reflection->hasMethod('add' . ucfirst(Inflector::singularize($propertyName))), 'Add method was not generated');
-        self::assertTrue($reflection->hasMethod('remove' . ucfirst(Inflector::singularize($propertyName))), 'Remove method was not generated');
+        $reflection = new \ReflectionClass(new $className());
+        self::assertTrue($reflection->hasMethod('add' . ucfirst(Inflector::singularize($propertyName))),
+            'Add method was not generated');
+        self::assertTrue($reflection->hasMethod('remove' . ucfirst(Inflector::singularize($propertyName))),
+            'Remove method was not generated');
         self::assertTrue($reflection->hasMethod('get' . ucfirst($propertyName)), 'Getter was not generated');
         self::assertTrue($reflection->hasMethod('set' . ucfirst($propertyName)), 'Setter was not generated');
         self::assertTrue($reflection->hasMethod('initStorageObjects'), 'initStorageObjects was not generated');
-
-        //checking methods
         $setterMethod = $reflection->getMethod('set' . ucfirst($propertyName));
-        self::assertTrue($setterMethod->isTaggedWith('param'), 'No param tag set for setter method');
-        $paramTagValues = $setterMethod->getTagValues('param');
-        self::assertEquals(0, strpos($paramTagValues[0], '\\TYPO3\\CMS\\Extbase\\Persistence\\ObjectStorage<' . $relatedDomainObject->getFullQualifiedClassName()), 'Wrong param tag:' . $paramTagValues[0]);
-
         $parameters = $setterMethod->getParameters();
         self::assertEquals(1, count($parameters), 'Wrong parameter count in setter method');
         $parameter = current($parameters);
         self::assertEquals($parameter->getName(), $propertyName, 'Wrong parameter name in setter method');
-
         $addMethod = $reflection->getMethod('add' . ucfirst(Inflector::singularize($propertyName)));
-        self::assertTrue($addMethod->isTaggedWith('param'), 'No param tag set for setter method');
-        $paramTagValues = $addMethod->getTagValues('param');
-        self::assertEquals(0, strpos($paramTagValues[0], $relatedDomainObject->getFullQualifiedClassName()), 'Wrong param tag:' . $paramTagValues[0]);
-
         $parameters = $addMethod->getParameters();
         self::assertEquals(1, count($parameters), 'Wrong parameter count in add method');
         $parameter = current($parameters);
-        self::assertEquals($parameter->getName(), Inflector::singularize($propertyName), 'Wrong parameter name in add method');
+        self::assertEquals($parameter->getName(), Inflector::singularize($propertyName),
+            'Wrong parameter name in add method');
 
         $removeMethod = $reflection->getMethod('remove' . ucfirst(Inflector::singularize($propertyName)));
-        self::assertTrue($removeMethod->isTaggedWith('param'), 'No param tag set for remove method');
-        $paramTagValues = $removeMethod->getTagValues('param');
-        self::assertEquals(0, strpos($paramTagValues[0], $relatedDomainObject->getFullQualifiedClassName()), 'Wrong param tag:' . $paramTagValues[0]);
-
         $parameters = $removeMethod->getParameters();
         self::assertEquals(1, count($parameters), 'Wrong parameter count in remove method');
         $parameter = current($parameters);
-        self::assertEquals($parameter->getName(), Inflector::singularize($propertyName) . 'ToRemove', 'Wrong parameter name in remove method');
+        self::assertEquals($parameter->getName(), Inflector::singularize($propertyName) . 'ToRemove',
+            'Wrong parameter name in remove method');
     }
 
     /**
@@ -360,7 +352,8 @@ class FileGeneratorTest extends BaseFunctionalTest
         if (!class_exists($className)) {
             include($repositoryClassPath);
         }
-        self::assertTrue(class_exists($className), 'Class was not generated:' . $className . 'in ' . $repositoryClassPath);
+        self::assertTrue(class_exists($className),
+            'Class was not generated:' . $className . 'in ' . $repositoryClassPath);
     }
 
     /**
@@ -387,10 +380,6 @@ class FileGeneratorTest extends BaseFunctionalTest
     }
 
     /**
-     * @depends writeModelClassWithManyToManyRelation
-     * @depends writeAggregateRootClassesFromDomainObject
-     *
-     *
      * @test
      */
     public function writeExtensionFiles()
@@ -428,10 +417,43 @@ class FileGeneratorTest extends BaseFunctionalTest
 
         self::assertFileExists($extensionDir . 'Configuration/TCA/' . $domainObject->getDatabaseTableName() . '.php');
         self::assertFileExists($extensionDir . 'Configuration/ExtensionBuilder/settings.yaml');
+        self::assertFileExists($extensionDir . 'Configuration/TypoScript/setup.typoscript');
+        self::assertFileExists($extensionDir . 'Configuration/TypoScript/constants.typoscript');
 
         self::assertFileExists($extensionDir . 'Resources/Private/Language/locallang_db.xlf');
         self::assertFileExists($extensionDir . 'Resources/Private/Language/locallang.xlf');
         self::assertFileExists($extensionDir . 'Resources/Private/Partials/' . $domainObject->getName() . '/Properties.html');
         self::assertFileExists($extensionDir . 'Resources/Private/Partials/' . $domainObject->getName() . '/FormFields.html');
+    }
+
+    public function getDeprecatedTypoScriptExtensions()
+    {
+        return [["ts"], ["txt"]];
+    }
+
+    /**
+     * @test
+     * @dataProvider getDeprecatedTypoScriptExtensions
+     * @param $deprecatedExtension
+     */
+    public function writeExtensionFilesOverWritesFilesWithDeprecatedExtensions($deprecatedExtension)
+    {
+        $plugin = new Plugin();
+        $plugin->setName('Test');
+        $plugin->setKey('test');
+        $this->extension->addPlugin($plugin);
+
+        $setupFile = join(DIRECTORY_SEPARATOR,
+            [$this->extension->getExtensionDir(), 'Configuration', 'TypoScript', 'setup.' . $deprecatedExtension]);
+
+        GeneralUtility::mkdir_deep(dirname($setupFile));
+        GeneralUtility::writeFile($setupFile, "# some sample content");
+
+        $this->fileGenerator->build($this->extension);
+
+        $extensionDir = $this->extension->getExtensionDir();
+
+        self::assertFileExists($extensionDir . 'Configuration/TypoScript/setup.' . $deprecatedExtension);
+        self::assertFileNotExists($extensionDir . 'Configuration/TypoScript/setup.typoscript');
     }
 }

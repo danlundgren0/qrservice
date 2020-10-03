@@ -1,4 +1,4 @@
-﻿.. ==================================================
+.. ==================================================
 .. FOR YOUR INFORMATION
 .. --------------------------------------------------
 .. -*- coding: utf-8 -*- with BOM.
@@ -28,7 +28,7 @@ Frontend Login
       felogin, frontend login
 
 :Copyright:
-      2000-2017
+      2000-2020
 
 :Author:
       TYPO3 CMS Core Development Team

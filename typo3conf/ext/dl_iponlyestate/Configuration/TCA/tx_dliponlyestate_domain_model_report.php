@@ -21,7 +21,7 @@ return array(
 			'endtime' => 'endtime',
 		),
 		'searchFields' => 'name,version,date,is_complete,node_type,control_point,executive_technician,responsible_technicians,report_is_posted,start_date,end_date,no_of_critical_remarks,no_of_remarks,no_of_old_remarks,no_of_notes,no_of_purchases,has_admin_note,admin_note_is_checked,admin_note,dynamic_column,notes,estate,reported_measurement,',
-		'iconfile' => \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::extRelPath('dl_iponlyestate') . 'Resources/Public/Icons/tx_dliponlyestate_domain_model_report.gif'
+		'iconfile' => \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::siteRelPath('dl_iponlyestate') . 'Resources/Public/Icons/tx_dliponlyestate_domain_model_report.gif'
 	),
 	'interface' => array(
 		'showRecordFieldList' => 'sys_language_uid, l10n_parent, l10n_diffsource, hidden, name, version, date, is_complete, node_type, control_point, executive_technician, responsible_technicians, report_is_posted, start_date, end_date, no_of_critical_remarks, no_of_remarks, no_of_old_remarks, no_of_notes, no_of_purchases, has_admin_note, admin_note_is_checked, admin_note, dynamic_column, notes, estate, reported_measurement',

@@ -1,34 +1,24 @@
 <?php
 namespace TYPO3\CMS\Extbase\Utility;
 
-/*                                                                        *
- * This script belongs to the Extbase framework                           *
- *                                                                        *
- * It is free software; you can redistribute it and/or modify it under    *
- * the terms of the GNU Lesser General Public License as published by the *
- * Free Software Foundation, either version 3 of the License, or (at your *
- * option) any later version.                                             *
- *                                                                        *
- * This script is distributed in the hope that it will be useful, but     *
- * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHAN-    *
- * TABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser       *
- * General Public License for more details.                               *
- *                                                                        *
- * You should have received a copy of the GNU Lesser General Public       *
- * License along with the script.                                         *
- * If not, see http://www.gnu.org/licenses/lgpl.html                      *
- *                                                                        *
- * The TYPO3 project - inspiring people to share!                         *
- *                                                                        */
+/*
+ * This file is part of the TYPO3 CMS project.
+ *
+ * It is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License, either version 2
+ * of the License, or any later version.
+ *
+ * For the full copyright and license information, please read the
+ * LICENSE.txt file that was distributed with this source code.
+ *
+ * The TYPO3 project - inspiring people to share!
+ */
+
 /**
  * This class is a backport of the corresponding class of TYPO3 Flow.
  * All credits go to the TYPO3 Flow team.
- */
-/**
- * A debugging utility class
  *
- * @license http://www.gnu.org/licenses/lgpl.html GNU Lesser General Public License, version 3 or later
- * @api
+ * A debugging utility class
  */
 class DebuggerUtility
 {
@@ -99,7 +89,7 @@ class DebuggerUtility
         if (is_string($value)) {
             $croppedValue = strlen($value) > 2000 ? substr($value, 0, 2000) . '...' : $value;
             if ($plainText) {
-                $dump = self::ansiEscapeWrap(('"' . implode((PHP_EOL . str_repeat(self::PLAINTEXT_INDENT, ($level + 1))), str_split($croppedValue, 76)) . '"'), '33', $ansiColors) . ' (' . strlen($value) . ' chars)';
+                $dump = self::ansiEscapeWrap('"' . implode(PHP_EOL . str_repeat(self::PLAINTEXT_INDENT, $level + 1), str_split($croppedValue, 76)) . '"', '33', $ansiColors) . ' (' . strlen($value) . ' chars)';
             } else {
                 $lines = str_split($croppedValue, 76);
                 $lines = array_map('htmlspecialchars', $lines);
@@ -109,7 +99,7 @@ class DebuggerUtility
             $dump = sprintf('%s (%s)', self::ansiEscapeWrap($value, '35', $ansiColors), gettype($value));
         } elseif (is_bool($value)) {
             $dump = $value ? self::ansiEscapeWrap('TRUE', '32', $ansiColors) : self::ansiEscapeWrap('FALSE', '32', $ansiColors);
-        } elseif (is_null($value) || is_resource($value)) {
+        } elseif ($value === null || is_resource($value)) {
             $dump = gettype($value);
         } elseif (is_array($value)) {
             $dump = self::renderArray($value, $level + 1, $plainText, $ansiColors);
@@ -188,9 +178,8 @@ class DebuggerUtility
         }
         if ($plainText) {
             return $header . $content;
-        } else {
-            return '<span class="extbase-debugger-tree">' . $header . '<span class="extbase-debug-content">' . $content . '</span></span>';
         }
+        return '<span class="extbase-debugger-tree">' . $header . '<span class="extbase-debug-content">' . $content . '</span></span>';
     }
 
     /**
@@ -212,9 +201,8 @@ class DebuggerUtility
         }
         if ($plainText) {
             return $header . $content;
-        } else {
-            return '<span class="extbase-debugger-tree"><input type="checkbox" /><span class="extbase-debug-header">' . $header . '</span><span class="extbase-debug-content">' . $content . '</span></span>';
         }
+        return '<span class="extbase-debugger-tree"><input type="checkbox" /><span class="extbase-debug-header">' . $header . '</span><span class="extbase-debug-content">' . $content . '</span></span>';
     }
 
     /**
@@ -263,9 +251,9 @@ class DebuggerUtility
         if ($plainText) {
             $dump .= self::ansiEscapeWrap($className, '36', $ansiColors);
         } else {
-            $dump .= '<span class="extbase-debug-type">' . $className . '</span>';
+            $dump .= '<span class="extbase-debug-type">' . htmlspecialchars($className) . '</span>';
         }
-        if (! $object instanceof \Closure) {
+        if (!$object instanceof \Closure) {
             if ($object instanceof \TYPO3\CMS\Core\SingletonInterface) {
                 $scope = 'singleton';
             } else {
@@ -296,7 +284,7 @@ class DebuggerUtility
                 $domainObjectType = 'object';
             }
             if ($plainText) {
-                $dump .= ' ' . self::ansiEscapeWrap((($persistenceType ? $persistenceType . ' ' : '') . $domainObjectType), '42;30', $ansiColors);
+                $dump .= ' ' . self::ansiEscapeWrap(($persistenceType ? $persistenceType . ' ' : '') . $domainObjectType, '42;30', $ansiColors);
             } else {
                 $dump .= '<span class="extbase-debug-ptype">' . ($persistenceType ? $persistenceType . ' ' : '') . $domainObjectType . '</span>';
             }
@@ -309,13 +297,13 @@ class DebuggerUtility
             }
         } elseif (self::$renderedObjects->contains($object) && !$plainText) {
             $dump = '<a href="javascript:;" onclick="document.location.hash=\'#' . spl_object_hash($object) . '\';" class="extbase-debug-seeabove">' . $dump . '<span class="extbase-debug-filtered">see above</span></a>';
-        } elseif ($level >= self::$maxDepth && !$object instanceof \DateTime) {
+        } elseif ($level >= self::$maxDepth && !$object instanceof \DateTimeInterface) {
             if ($plainText) {
                 $dump .= ' ' . self::ansiEscapeWrap('max depth', '47;30', $ansiColors);
             } else {
                 $dump .= '<span class="extbase-debug-filtered">max depth</span>';
             }
-        } elseif ($level > 1 && !$object instanceof \DateTime && !$plainText) {
+        } elseif ($level > 1 && !$object instanceof \DateTimeInterface && !$plainText) {
             if (($object instanceof \Countable && empty($object)) || empty($classReflection->getProperties())) {
                 $dump = '<span>' . $dump . '</span>';
             } else {
@@ -326,8 +314,8 @@ class DebuggerUtility
             $objectCount = count($object);
             $dump .= $objectCount > 0 ? ' (' . $objectCount . ' items)' : ' (empty)';
         }
-        if ($object instanceof \DateTime) {
-            $dump .= ' (' . $object->format(\DateTime::RFC3339) . ', ' . $object->getTimestamp() . ')';
+        if ($object instanceof \DateTimeInterface) {
+            $dump .= ' (' . $object->format(\DateTimeInterface::RFC3339) . ', ' . $object->getTimestamp() . ')';
         }
         if ($object instanceof \TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface && !$object->_isNew()) {
             $dump .= ' (uid=' . $object->getUid() . ', pid=' . $object->getPid() . ')';
@@ -378,13 +366,16 @@ class DebuggerUtility
                     if ($parameter->isPassedByReference()) {
                         $parameterDump .= '&';
                     }
+                    if ($parameter->isVariadic()) {
+                        $parameterDump .= '...';
+                    }
                     if ($plainText) {
                         $parameterDump .= self::ansiEscapeWrap('$' . $parameter->name, '37', $ansiColors);
                     } else {
                         $parameterDump .= '<span class="extbase-debug-property">'
                             . htmlspecialchars('$' . $parameter->name) . '</span>';
                     }
-                    if ($parameter->isOptional()) {
+                    if ($parameter->isDefaultValueAvailable()) {
                         $parameterDump .= ' = ';
                         if ($plainText) {
                             $parameterDump .= self::ansiEscapeWrap(var_export($parameter->getDefaultValue(), true), '33', $ansiColors);
@@ -402,7 +393,7 @@ class DebuggerUtility
                     $dump .= '<span class="extbase-debug-closure">) {' . PHP_EOL . '</span>';
                 }
                 $lines = file($reflectionFunction->getFileName());
-                for ($l = $reflectionFunction->getStartLine(); $l < $reflectionFunction->getEndLine() -1; ++$l) {
+                for ($l = $reflectionFunction->getStartLine(); $l < $reflectionFunction->getEndLine() - 1; ++$l) {
                     $dump .= $plainText ? $lines[$l] : htmlspecialchars($lines[$l]);
                 }
                 $dump .= str_repeat(self::PLAINTEXT_INDENT, $level);
@@ -463,10 +454,16 @@ class DebuggerUtility
     {
         $dump = '';
         foreach ($collection as $key => $value) {
-            $dump .= PHP_EOL . str_repeat(self::PLAINTEXT_INDENT, $level) . ($plainText ? '' : '<span class="extbase-debug-property">') . self::ansiEscapeWrap($key, '37', $ansiColors) . ($plainText ? '' : '</span>') . ' => ';
+            $dump .= PHP_EOL . str_repeat(self::PLAINTEXT_INDENT, $level);
+            if ($plainText) {
+                $dump .= self::ansiEscapeWrap($key, '37', $ansiColors);
+            } else {
+                $dump .= '<span class="extbase-debug-property">' . htmlspecialchars($key) . '</span>';
+            }
+            $dump .= ' => ';
             $dump .= self::renderDump($value, $level, $plainText, $ansiColors);
         }
-        if ($collection instanceof \Iterator) {
+        if ($collection instanceof \Iterator && !$collection instanceof \Generator) {
             $collection->rewind();
         }
         return $dump;
@@ -484,9 +481,8 @@ class DebuggerUtility
     {
         if ($enable) {
             return '[' . $ansiColors . 'm' . $string . '[0m';
-        } else {
-            return $string;
         }
+        return $string;
     }
 
     /**
@@ -501,7 +497,6 @@ class DebuggerUtility
      * @param array $blacklistedClassNames An array of class names (RegEx) to be filtered. Default is an array of some common class names.
      * @param array $blacklistedPropertyNames An array of property names and/or array keys (RegEx) to be filtered. Default is an array of some common property names.
      * @return string if $return is TRUE, the dump is returned. By default, the dump is directly displayed, and nothing is returned.
-     * @api
      */
     public static function var_dump($variable, $title = null, $maxDepth = 8, $plainText = false, $ansiColors = true, $return = false, $blacklistedClassNames = null, $blacklistedPropertyNames = null)
     {
@@ -569,9 +564,9 @@ class DebuggerUtility
         self::$blacklistedPropertyNames = $backupBlacklistedPropertyNames;
         if ($return === true) {
             return $css . $output;
-        } else {
-            echo $css . $output;
         }
+        echo $css . $output;
+
         return '';
     }
 }

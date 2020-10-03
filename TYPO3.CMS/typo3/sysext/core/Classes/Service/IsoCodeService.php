@@ -16,6 +16,8 @@ namespace TYPO3\CMS\Core\Service;
 
 /**
  * Helper functionality for dealing with ISO codes.
+ *
+ * @internal This class is not part of the TYPO3 Core API.
  */
 class IsoCodeService
 {
@@ -247,7 +249,7 @@ class IsoCodeService
     /**
      * Returns LanguageService
      *
-     * @return \TYPO3\CMS\Lang\LanguageService
+     * @return \TYPO3\CMS\Core\Localization\LanguageService
      */
     protected function getLanguageService()
     {

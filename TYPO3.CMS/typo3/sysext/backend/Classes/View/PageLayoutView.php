@@ -1,4 +1,5 @@
 <?php
+
 namespace TYPO3\CMS\Backend\View;
 
 /*
@@ -15,39 +16,57 @@ namespace TYPO3\CMS\Backend\View;
  */
 
 use Doctrine\DBAL\Driver\Statement;
+use Psr\Log\LoggerAwareInterface;
+use Psr\Log\LoggerAwareTrait;
+use TYPO3\CMS\Backend\Configuration\TranslationConfigurationProvider;
 use TYPO3\CMS\Backend\Controller\Page\LocalizationController;
 use TYPO3\CMS\Backend\Controller\PageLayoutController;
+use TYPO3\CMS\Backend\Routing\UriBuilder;
+use TYPO3\CMS\Backend\Tree\View\PageTreeView;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Database\Query\QueryBuilder;
 use TYPO3\CMS\Core\Database\Query\QueryHelper;
 use TYPO3\CMS\Core\Database\Query\Restriction\BackendWorkspaceRestriction;
 use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
-use TYPO3\CMS\Core\Database\Query\Restriction\HiddenRestriction;
+use TYPO3\CMS\Core\Database\ReferenceIndex;
+use TYPO3\CMS\Core\Exception\SiteNotFoundException;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Messaging\FlashMessage;
 use TYPO3\CMS\Core\Messaging\FlashMessageService;
 use TYPO3\CMS\Core\Page\PageRenderer;
+use TYPO3\CMS\Core\Routing\SiteMatcher;
+use TYPO3\CMS\Core\Service\DependencyOrderingService;
+use TYPO3\CMS\Core\Service\FlexFormService;
+use TYPO3\CMS\Core\Site\Entity\SiteLanguage;
 use TYPO3\CMS\Core\Type\Bitmask\Permission;
+use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\HttpUtility;
+use TYPO3\CMS\Core\Utility\MathUtility;
 use TYPO3\CMS\Core\Utility\StringUtility;
 use TYPO3\CMS\Core\Versioning\VersionState;
-use TYPO3\CMS\Extbase\Service\FlexFormService;
 use TYPO3\CMS\Fluid\View\StandaloneView;
+use TYPO3\CMS\Recordlist\RecordList\DatabaseRecordList;
 
 /**
  * Child class for the Web > Page module
+ * @internal This class is a TYPO3 Backend implementation and is not considered part of the Public TYPO3 API.
  */
-class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRecordList
+class PageLayoutView implements LoggerAwareInterface
 {
+    use LoggerAwareTrait;
+
     /**
      * If TRUE, users/groups are shown in the page info box.
      *
-     * @var int
+     * @var bool
      */
-    public $pI_showUser = 0;
+    public $pI_showUser = false;
 
     /**
      * The number of successive records to edit when showing content elements.
@@ -59,16 +78,16 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
     /**
      * If TRUE, disables the edit-column icon for tt_content elements
      *
-     * @var int
+     * @var bool
      */
-    public $pages_noEditColumns = 0;
+    public $pages_noEditColumns = false;
 
     /**
      * If TRUE, new-wizards are linked to rather than the regular new-element list.
      *
-     * @var int
+     * @var bool
      */
-    public $option_newWizard = 1;
+    public $option_newWizard = true;
 
     /**
      * If set to "1", will link a big button to content element wizard.
@@ -80,9 +99,9 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
     /**
      * If TRUE, elements will have edit icons (probably this is whether the user has permission to edit the page content). Set externally.
      *
-     * @var int
+     * @var bool
      */
-    public $doEdit = 1;
+    public $doEdit = true;
 
     /**
      * Age prefixes for displaying times. May be set externally to localized values.
@@ -166,14 +185,375 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
     public $itemLabels = [];
 
     /**
+     * Indicates if all available fields for a user should be selected or not.
+     *
+     * @var int
+     */
+    public $allFields = 0;
+
+    /**
+     * Number of records to show
+     *
+     * @var int
+     */
+    public $showLimit = 0;
+
+    /**
+     * Shared module configuration, used by localization features
+     *
+     * @var array
+     */
+    public $modSharedTSconfig = [];
+
+    /**
+     * Tables which should not get listed
+     *
+     * @var string
+     */
+    public $hideTables = '';
+
+    /**
+     * Containing which fields to display in extended mode
+     *
+     * @var string[]
+     */
+    public $displayFields;
+
+    /**
+     * Tables which should not list their translations
+     *
+     * @var string
+     */
+    public $hideTranslations = '';
+
+    /**
+     * If set, csvList is outputted.
+     *
+     * @var bool
+     */
+    public $csvOutput = false;
+
+    /**
+     * Cache for record path
+     *
+     * @var mixed[]
+     */
+    public $recPath_cache = [];
+
+    /**
+     * Field, to sort list by
+     *
+     * @var string
+     */
+    public $sortField;
+
+    /**
+     * default Max items shown per table in "multi-table mode", may be overridden by tables.php
+     *
+     * @var int
+     */
+    public $itemsLimitPerTable = 20;
+
+    /**
+     * Page select permissions
+     *
+     * @var string
+     */
+    public $perms_clause = '';
+
+    /**
+     * Page id
+     *
+     * @var int
+     */
+    public $id;
+
+    /**
+     * Return URL
+     *
+     * @var string
+     */
+    public $returnUrl = '';
+
+    /**
+     * Tablename if single-table mode
+     *
+     * @var string
+     */
+    public $table = '';
+
+    /**
+     * Some permissions...
+     *
+     * @var int
+     */
+    public $calcPerms = 0;
+
+    /**
+     * Mode for what happens when a user clicks the title of a record.
+     *
+     * @var string
+     */
+    public $clickTitleMode = '';
+
+    /**
+     * Levels to search down.
+     *
+     * @var int
+     */
+    public $searchLevels = '';
+
+    /**
+     * "LIMIT " in SQL...
+     *
+     * @var int
+     */
+    public $iLimit = 0;
+
+    /**
+     * Set to the total number of items for a table when selecting.
+     *
+     * @var string
+     */
+    public $totalItems = '';
+
+    /**
+     * TSconfig which overwrites TCA-Settings
+     *
+     * @var mixed[][]
+     */
+    public $tableTSconfigOverTCA = [];
+
+    /**
+     * Loaded with page record with version overlay if any.
+     *
+     * @var string[]
+     */
+    public $pageRecord = [];
+
+    /**
+     * Used for tracking duplicate values of fields
+     *
+     * @var string[]
+     */
+    public $duplicateStack = [];
+
+    /**
+     * Fields to display for the current table
+     *
+     * @var string[]
+     */
+    public $setFields = [];
+
+    /**
+     * Current script name
+     *
+     * @var string
+     */
+    public $script = 'index.php';
+
+    /**
+     * If TRUE, records are listed only if a specific table is selected.
+     *
+     * @var bool
+     */
+    public $listOnlyInSingleTableMode = false;
+
+    /**
+     * JavaScript code accumulation
+     *
+     * @var string
+     */
+    public $JScode = '';
+
+    /**
+     * Pointer for browsing list
+     *
+     * @var int
+     */
+    public $firstElementNumber = 0;
+
+    /**
+     * Counting the elements no matter what...
+     *
+     * @var int
+     */
+    public $eCounter = 0;
+
+    /**
+     * Search string
+     *
+     * @var string
+     */
+    public $searchString = '';
+
+    /**
+     * default Max items shown per table in "single-table mode", may be overridden by tables.php
+     *
+     * @var int
+     */
+    public $itemsLimitSingleTable = 100;
+
+    /**
+     * Field, indicating to sort in reverse order.
+     *
+     * @var bool
+     */
+    public $sortRev;
+
+    /**
+     * String, can contain the field name from a table which must have duplicate values marked.
+     *
+     * @var string
+     */
+    public $duplicateField;
+
+    /**
+     * Specify a list of tables which are the only ones allowed to be displayed.
+     *
+     * @var string
+     */
+    public $tableList = '';
+
+    /**
+     * Array of collapsed / uncollapsed tables in multi table view
+     *
+     * @var int[][]
+     */
+    public $tablesCollapsed = [];
+
+    /**
+     * @var array[] Module configuration
+     */
+    public $modTSconfig;
+
+    /**
+     * HTML output
+     *
+     * @var string
+     */
+    public $HTMLcode = '';
+
+    /**
+     * Thumbnails on records containing files (pictures)
+     *
+     * @var bool
+     */
+    public $thumbs = 0;
+
+    /**
+     * Used for tracking next/prev uids
+     *
+     * @var int[][]
+     */
+    public $currentTable = [];
+
+    /**
+     * OBSOLETE - NOT USED ANYMORE. leftMargin
+     *
+     * @var int
+     */
+    public $leftMargin = 0;
+
+    /**
+     * Decides the columns shown. Filled with values that refers to the keys of the data-array. $this->fieldArray[0] is the title column.
+     *
+     * @var array
+     */
+    public $fieldArray = [];
+
+    /**
+     * Set to zero, if you don't want a left-margin with addElement function
+     *
+     * @var int
+     */
+    public $setLMargin = 1;
+
+    /**
+     * Contains page translation languages
+     *
+     * @var array
+     */
+    public $pageOverlays = [];
+
+    /**
+     * Counter increased for each element. Used to index elements for the JavaScript-code that transfers to the clipboard
+     *
+     * @var int
+     */
+    public $counter = 0;
+
+    /**
+     * Contains sys language icons and titles
+     *
+     * @var array
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Use site languages instead.
+     */
+    public $languageIconTitles = [];
+
+    /**
+     * Contains site languages for this page ID
+     *
+     * @var SiteLanguage[]
+     */
+    protected $siteLanguages = [];
+
+    /**
+     * Script URL
+     *
+     * @var string
+     */
+    public $thisScript = '';
+
+    /**
+     * If set this is <td> CSS-classname for odd columns in addElement. Used with db_layout / pages section
+     *
+     * @var string
+     */
+    public $oddColumnsCssClass = '';
+
+    /**
+     * Not used in this class - but maybe extension classes...
+     * Max length of strings
+     *
+     * @var int
+     */
+    public $fixedL = 30;
+
+    /**
+     * @var TranslationConfigurationProvider
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    public $translateTools;
+
+    /**
+     * Keys are fieldnames and values are td-parameters to add in addElement(), please use $addElement_tdCSSClass for CSS-classes;
+     *
+     * @var array
+     */
+    public $addElement_tdParams = [];
+
+    /**
+     * @var int
+     */
+    public $no_noWrap = 0;
+
+    /**
+     * @var int
+     */
+    public $showIcon = 1;
+
+    /**
+     * Keys are fieldnames and values are td-css-classes to add in addElement();
+     *
+     * @var array
+     */
+    public $addElement_tdCssClass = [];
+
+    /**
      * @var \TYPO3\CMS\Backend\Clipboard\Clipboard
      */
     protected $clipboard;
-
-    /**
-     * @var array
-     */
-    protected $plusPages = [];
 
     /**
      * User permissions
@@ -222,13 +602,50 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
     protected $localizationController;
 
     /**
+     * Override the page ids taken into account by getPageIdConstraint()
+     *
+     * @var array
+     */
+    protected $overridePageIdList = [];
+
+    /**
+     * Override/add urlparameters in listUrl() method
+     *
+     * @var string[]
+     */
+    protected $overrideUrlParameters = [];
+
+    /**
+     * Array with before/after setting for tables
+     * Structure:
+     * 'tableName' => [
+     *    'before' => ['A', ...]
+     *    'after' => []
+     *  ]
+     * @var array[]
+     */
+    protected $tableDisplayOrder = [];
+
+    /**
+     * Cache the number of references to a record
+     *
+     * @var array
+     */
+    protected $referenceCount = [];
+
+    /**
      * Construct to initialize class variables.
      */
     public function __construct()
     {
-        parent::__construct();
-        $this->localizationController = GeneralUtility::makeInstance(LocalizationController::class);
+        if (isset($GLOBALS['BE_USER']->uc['titleLen']) && $GLOBALS['BE_USER']->uc['titleLen'] > 0) {
+            $this->fixedL = $GLOBALS['BE_USER']->uc['titleLen'];
+        }
         $this->iconFactory = GeneralUtility::makeInstance(IconFactory::class);
+        // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Remove this instance along with the property.
+        $this->translateTools = GeneralUtility::makeInstance(TranslationConfigurationProvider::class);
+        $this->determineScriptUrl();
+        $this->localizationController = GeneralUtility::makeInstance(LocalizationController::class);
         $pageRenderer = GeneralUtility::makeInstance(PageRenderer::class);
         $pageRenderer->addInlineLanguageLabelFile('EXT:backend/Resources/Private/Language/locallang_layout.xlf');
         $pageRenderer->loadRequireJsModule('TYPO3/CMS/Backend/Tooltip');
@@ -252,19 +669,16 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
     {
         if (isset($this->externalTables[$table])) {
             return $this->getExternalTables($id, $table);
-        } else {
-            // Branch out based on table name:
-            switch ($table) {
+        }
+        // Branch out based on table name:
+        switch ($table) {
                 case 'pages':
                     return $this->getTable_pages($id);
-                    break;
                 case 'tt_content':
                     return $this->getTable_tt_content($id);
-                    break;
                 default:
                     return '';
             }
-        }
     }
 
     /**
@@ -319,7 +733,7 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                 ->from('pages')
                 ->where(
                     $queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($id, \PDO::PARAM_INT)),
-                    $this->getBackendUser()->getPagePermsClause(1)
+                    $this->getBackendUser()->getPagePermsClause(Permission::PAGE_SHOW)
                 )
                 ->execute()
                 ->fetch();
@@ -376,7 +790,8 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                         'columnsOnly' => $field,
                         'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI')
                     ];
-                    $url = BackendUtility::getModuleUrl('record_edit', $urlParameters);
+                    $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+                    $url = (string)$uriBuilder->buildUriFromRoute('record_edit', $urlParameters);
                     $eI = '<a class="btn btn-default" href="' . htmlspecialchars($url)
                         . '" title="' . htmlspecialchars($iTitle) . '">'
                         . $this->iconFactory->getIcon('actions-document-open', Icon::SIZE_SMALL)->render() . '</a>';
@@ -385,15 +800,15 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                 }
                 switch ($field) {
                     case 'title':
-                        $theData[$field] = '&nbsp;' . $eI . '<strong>'
+                        $theData[$field] = $eI . '&nbsp;<strong>'
                             . $lang->sL($GLOBALS['TCA']['pages']['columns'][$field]['label'])
                             . '</strong>';
                         break;
                     case 'uid':
-                        $theData[$field] = '&nbsp;<strong>ID:</strong>';
+                        $theData[$field] = '';
                         break;
                     default:
-                        if (substr($field, 0, 6) === 'table_') {
+                        if (strpos($field, 'table_') === 0) {
                             $f2 = substr($field, 6);
                             if ($GLOBALS['TCA'][$f2]) {
                                 $theData[$field] = '&nbsp;' .
@@ -404,7 +819,7 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                                     '</span>';
                             }
                         } else {
-                            $theData[$field] = '&nbsp;&nbsp;' . $eI . '<strong>'
+                            $theData[$field] = $eI . '&nbsp;<strong>'
                                 . htmlspecialchars($lang->sL($GLOBALS['TCA']['pages']['columns'][$field]['label']))
                                 . '</strong>';
                         }
@@ -432,7 +847,6 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
      */
     public function getTable_tt_content($id)
     {
-        $backendUser = $this->getBackendUser();
         $expressionBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
             ->getConnectionForTable('tt_content')
             ->getExpressionBuilder();
@@ -440,53 +854,33 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
         $this->initializeLanguages();
         $this->initializeClipboard();
         $pageTitleParamForAltDoc = '&recTitle=' . rawurlencode(BackendUtility::getRecordTitle('pages', BackendUtility::getRecordWSOL('pages', $id), true));
-        /** @var $pageRenderer PageRenderer */
+        /** @var PageRenderer $pageRenderer */
         $pageRenderer = GeneralUtility::makeInstance(PageRenderer::class);
         $pageRenderer->loadRequireJsModule('TYPO3/CMS/Backend/LayoutModule/DragDrop');
         $pageRenderer->loadRequireJsModule('TYPO3/CMS/Backend/Modal');
         $pageRenderer->loadRequireJsModule('TYPO3/CMS/Backend/LayoutModule/Paste');
-        $userCanEditPage = $this->ext_CALC_PERMS & Permission::PAGE_EDIT && !empty($this->id) && ($backendUser->isAdmin() || (int)$this->pageinfo['editlock'] === 0);
-        if ($this->tt_contentConfig['languageColsPointer'] > 0) {
-            $userCanEditPage = $this->getBackendUser()->check('tables_modify', 'pages_language_overlay');
-        }
-        if ($userCanEditPage) {
-            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
-                ->getQueryBuilderForTable('pages_language_overlay');
-            $queryBuilder->getRestrictions()
-                ->removeAll()
-                ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
-                ->add(GeneralUtility::makeInstance(BackendWorkspaceRestriction::class));
-
-            $queryBuilder->select('uid')
-                ->from('pages_language_overlay')
-                ->where(
-                    $queryBuilder->expr()->eq(
-                        'pid',
-                        $queryBuilder->createNamedParameter((int)$this->id, \PDO::PARAM_INT)
-                    ),
-                    $queryBuilder->expr()->eq(
-                        'sys_language_uid',
-                        $queryBuilder->createNamedParameter(
-                            $this->tt_contentConfig['sys_language_uid'],
-                            \PDO::PARAM_INT
-                        )
-                    )
-                )
-                ->setMaxResults(1);
-
-            $languageOverlayId = (int)$queryBuilder->execute()->fetchColumn(0);
-
-            $pageRenderer->loadRequireJsModule('TYPO3/CMS/Backend/PageActions', 'function(PageActions) {
+        $pageActionsCallback = null;
+        if ($this->isPageEditable()) {
+            $languageOverlayId = 0;
+            $pageLocalizationRecord = BackendUtility::getRecordLocalization('pages', $this->id, (int)$this->tt_contentConfig['sys_language_uid']);
+            if (is_array($pageLocalizationRecord)) {
+                $pageLocalizationRecord = reset($pageLocalizationRecord);
+            }
+            if (!empty($pageLocalizationRecord['uid'])) {
+                $languageOverlayId = $pageLocalizationRecord['uid'];
+            }
+            $pageActionsCallback = 'function(PageActions) {
                 PageActions.setPageId(' . (int)$this->id . ');
                 PageActions.setLanguageOverlayId(' . $languageOverlayId . ');
-                PageActions.initializePageTitleRenaming();
-            }');
+            }';
         }
+        $pageRenderer->loadRequireJsModule('TYPO3/CMS/Backend/PageActions', $pageActionsCallback);
         // Get labels for CTypes and tt_content element fields in general:
         $this->CType_labels = [];
         foreach ($GLOBALS['TCA']['tt_content']['columns']['CType']['config']['items'] as $val) {
             $this->CType_labels[$val[1]] = $this->getLanguageService()->sL($val[0]);
         }
+
         $this->itemLabels = [];
         foreach ($GLOBALS['TCA']['tt_content']['columns'] as $name => $val) {
             $this->itemLabels[$name] = $this->getLanguageService()->sL($val['label']);
@@ -521,21 +915,24 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
             } else {
                 $showLanguage = $expressionBuilder->eq('sys_language_uid', $lP);
             }
-            $cList = explode(',', $this->tt_contentConfig['cols']);
             $content = [];
             $head = [];
 
+            $backendLayout = $this->getBackendLayoutView()->getSelectedBackendLayout($this->id);
+            $columns = $backendLayout['__colPosList'];
             // Select content records per column
-            $contentRecordsPerColumn = $this->getContentRecordsPerColumn('table', $id, array_values($cList), $showLanguage);
+            $contentRecordsPerColumn = $this->getContentRecordsPerColumn('table', $id, $columns, $showLanguage);
+            $cList = array_keys($contentRecordsPerColumn);
             // For each column, render the content into a variable:
             foreach ($cList as $columnId) {
-                if (!isset($this->contentElementCache[$lP][$columnId])) {
-                    $this->contentElementCache[$lP][$columnId] = [];
+                if (!isset($this->contentElementCache[$lP])) {
+                    $this->contentElementCache[$lP] = [];
                 }
 
                 if (!$lP) {
                     $defaultLanguageElementsByColumn[$columnId] = [];
                 }
+
                 // Start wrapping div
                 $content[$columnId] .= '<div data-colpos="' . $columnId . '" data-language-uid="' . $lP . '" class="t3js-sortable t3js-sortable-lang t3js-sortable-lang-' . $lP . ' t3-page-ce-wrapper';
                 if (empty($contentRecordsPerColumn[$columnId])) {
@@ -544,7 +941,7 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                 $content[$columnId] .= '">';
                 // Add new content at the top most position
                 $link = '';
-                if ($this->getPageLayoutController()->contentIsNotLockedForEditors()
+                if ($this->isContentEditable()
                     && (!$this->checkIfTranslationsExistInLanguage($contentRecordsPerColumn, $lP))
                 ) {
                     if ($this->option_newWizard) {
@@ -555,11 +952,10 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                             'uid_pid' => $id,
                             'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI')
                         ];
-                        $tsConfig = BackendUtility::getModTSconfig($id, 'mod');
-                        $moduleName = isset($tsConfig['properties']['newContentElementWizard.']['override'])
-                            ? $tsConfig['properties']['newContentElementWizard.']['override']
-                            : 'new_content_element';
-                        $url = BackendUtility::getModuleUrl($moduleName, $urlParameters);
+                        $routeName = BackendUtility::getPagesTSconfig($id)['mod.']['newContentElementWizard.']['override']
+                            ?? 'new_content_element_wizard';
+                        $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+                        $url = (string)$uriBuilder->buildUriFromRoute($routeName, $urlParameters);
                     } else {
                         $urlParameters = [
                             'edit' => [
@@ -575,16 +971,19 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                             ],
                             'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI')
                         ];
-                        $url = BackendUtility::getModuleUrl('record_edit', $urlParameters);
+                        $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+                        $url = (string)$uriBuilder->buildUriFromRoute('record_edit', $urlParameters);
                     }
-
-                    $link = '<a href="' . htmlspecialchars($url) . '" title="'
-                        . htmlspecialchars($this->getLanguageService()->getLL('newContentElement')) . '" class="btn btn-default btn-sm">'
-                        . $this->iconFactory->getIcon('actions-document-new', Icon::SIZE_SMALL)->render()
+                    $title = htmlspecialchars($this->getLanguageService()->getLL('newContentElement'));
+                    $link = '<a href="' . htmlspecialchars($url) . '" '
+                        . 'title="' . $title . '"'
+                        . 'data-title="' . $title . '"'
+                        . 'class="btn btn-default btn-sm ' . ($this->option_newWizard ? 't3js-toggle-new-content-element-wizard disabled' : '') . '">'
+                        . $this->iconFactory->getIcon('actions-add', Icon::SIZE_SMALL)->render()
                         . ' '
                         . htmlspecialchars($this->getLanguageService()->getLL('content')) . '</a>';
                 }
-                if ($this->getBackendUser()->checkLanguageAccess($lP)) {
+                if ($this->getBackendUser()->checkLanguageAccess($lP) && $columnId !== 'unused') {
                     $content[$columnId] .= '
                     <div class="t3-page-ce t3js-page-ce" data-page="' . (int)$id . '" id="' . StringUtility::getUniqueId() . '">
                         <div class="t3js-page-new-ce t3-page-ce-wrapper-new-ce" id="colpos-' . $columnId . '-' . 'page-' . $id . '-' . StringUtility::getUniqueId() . '">'
@@ -613,24 +1012,14 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                         $this->contentElementCache[$lP][$columnId][$row['uid']] = $row;
                         if ($this->tt_contentConfig['languageMode']) {
                             $languageColumn[$columnId][$lP] = $head[$columnId] . $content[$columnId];
-                            if (!$this->defLangBinding) {
-                                $languageColumn[$columnId][$lP] .= $this->newLanguageButton(
-                                    $this->getNonTranslatedTTcontentUids($defaultLanguageElementsByColumn[$columnId], $id, $lP),
-                                    $lP,
-                                    $columnId
-                                );
-                            }
                         }
                         if (is_array($row) && !VersionState::cast($row['t3ver_state'])->equals(VersionState::DELETE_PLACEHOLDER)) {
-                            $singleElementHTML = '';
+                            $singleElementHTML = '<div class="t3-page-ce-dragitem" id="' . StringUtility::getUniqueId() . '">';
                             if (!$lP && ($this->defLangBinding || $row['sys_language_uid'] != -1)) {
-                                $defaultLanguageElementsByColumn[$columnId][] = (isset($row['_ORIG_uid']) ? $row['_ORIG_uid'] : $row['uid']);
+                                $defaultLanguageElementsByColumn[$columnId][] = ($row['_ORIG_uid'] ?? $row['uid']);
                             }
                             $editUidList .= $row['uid'] . ',';
-                            $disableMoveAndNewButtons = $this->defLangBinding && $lP > 0;
-                            if (!$this->tt_contentConfig['languageMode']) {
-                                $singleElementHTML .= '<div class="t3-page-ce-dragitem" id="' . StringUtility::getUniqueId() . '">';
-                            }
+                            $disableMoveAndNewButtons = $this->defLangBinding && $lP > 0 && $this->checkIfTranslationsExistInLanguage($contentRecordsPerColumn, $lP);
                             $singleElementHTML .= $this->tt_content_drawHeader(
                                 $row,
                                 $this->tt_contentConfig['showInfo'] ? 15 : 5,
@@ -640,28 +1029,28 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                             );
                             $innerContent = '<div ' . ($row['_ORIG_uid'] ? ' class="ver-element"' : '') . '>'
                                 . $this->tt_content_drawItem($row) . '</div>';
-                            $singleElementHTML .= '<div class="t3-page-ce-body-inner">' . $innerContent . '</div>'
+                            $singleElementHTML .= '<div class="t3-page-ce-body-inner">' . $innerContent . '</div></div>'
                                 . $this->tt_content_drawFooter($row);
                             $isDisabled = $this->isDisabled('tt_content', $row);
                             $statusHidden = $isDisabled ? ' t3-page-ce-hidden t3js-hidden-record' : '';
                             $displayNone = !$this->tt_contentConfig['showHidden'] && $isDisabled ? ' style="display: none;"' : '';
-                            $highlightHeader = false;
+                            $highlightHeader = '';
                             if ($this->checkIfTranslationsExistInLanguage([], (int)$row['sys_language_uid']) && (int)$row['l18n_parent'] === 0) {
-                                $highlightHeader = true;
+                                $highlightHeader = ' t3-page-ce-danger';
+                            } elseif ($columnId === 'unused') {
+                                $highlightHeader = ' t3-page-ce-warning';
                             }
-                            $singleElementHTML = '<div class="t3-page-ce ' . ($highlightHeader ? 't3-page-ce-danger' : '') . ' t3js-page-ce t3js-page-ce-sortable ' . $statusHidden . '" id="element-tt_content-'
+                            $singleElementHTML = '<div class="t3-page-ce' . $highlightHeader . ' t3js-page-ce t3js-page-ce-sortable ' . $statusHidden . '" id="element-tt_content-'
                                 . $row['uid'] . '" data-table="tt_content" data-uid="' . $row['uid'] . '"' . $displayNone . '>' . $singleElementHTML . '</div>';
 
-                            if ($this->tt_contentConfig['languageMode']) {
-                                $singleElementHTML .= '<div class="t3-page-ce t3js-page-ce">';
-                            }
+                            $singleElementHTML .= '<div class="t3-page-ce" data-colpos="' . $columnId . '">';
                             $singleElementHTML .= '<div class="t3js-page-new-ce t3-page-ce-wrapper-new-ce" id="colpos-' . $columnId . '-' . 'page-' . $id .
                                 '-' . StringUtility::getUniqueId() . '">';
                             // Add icon "new content element below"
                             if (!$disableMoveAndNewButtons
-                                && $this->getPageLayoutController()->contentIsNotLockedForEditors()
-                                && $this->getBackendUser()->checkLanguageAccess($lP)
+                                && $this->isContentEditable($lP)
                                 && (!$this->checkIfTranslationsExistInLanguage($contentRecordsPerColumn, $lP))
+                                && $columnId !== 'unused'
                             ) {
                                 // New content element:
                                 if ($this->option_newWizard) {
@@ -672,11 +1061,10 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                                         'uid_pid' => -$row['uid'],
                                         'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI')
                                     ];
-                                    $tsConfig = BackendUtility::getModTSconfig($row['pid'], 'mod');
-                                    $moduleName = isset($tsConfig['properties']['newContentElementWizard.']['override'])
-                                        ? $tsConfig['properties']['newContentElementWizard.']['override']
-                                        : 'new_content_element';
-                                    $url = BackendUtility::getModuleUrl($moduleName, $urlParameters);
+                                    $routeName = BackendUtility::getPagesTSconfig($row['pid'])['mod.']['newContentElementWizard.']['override']
+                                        ?? 'new_content_element_wizard';
+                                    $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+                                    $url = (string)$uriBuilder->buildUriFromRoute($routeName, $urlParameters);
                                 } else {
                                     $urlParameters = [
                                         'edit' => [
@@ -686,19 +1074,21 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                                         ],
                                         'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI')
                                     ];
-                                    $url = BackendUtility::getModuleUrl('record_edit', $urlParameters);
+                                    $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+                                    $url = (string)$uriBuilder->buildUriFromRoute('record_edit', $urlParameters);
                                 }
-                                $singleElementHTML .= '
-								<a href="' . htmlspecialchars($url) . '" title="'
-                                    . htmlspecialchars($this->getLanguageService()->getLL('newContentElement')) . '" class="btn btn-default btn-sm">'
-                                    . $this->iconFactory->getIcon('actions-document-new', Icon::SIZE_SMALL)->render()
+                                $title = htmlspecialchars($this->getLanguageService()->getLL('newContentElement'));
+                                $singleElementHTML .= '<a href="' . htmlspecialchars($url) . '" '
+                                    . 'title="' . $title . '"'
+                                    . 'data-title="' . $title . '"'
+                                    . 'class="btn btn-default btn-sm ' . ($this->option_newWizard ? 't3js-toggle-new-content-element-wizard disabled' : '') . '">'
+                                    . $this->iconFactory->getIcon('actions-add', Icon::SIZE_SMALL)->render()
                                     . ' '
-                                    . htmlspecialchars($this->getLanguageService()->getLL('content')) . '</a>
-							';
+                                    . htmlspecialchars($this->getLanguageService()->getLL('content')) . '</a>';
                             }
                             $singleElementHTML .= '</div></div><div class="t3-page-ce-dropzone-available t3js-page-ce-dropzone-available"></div></div>';
                             if ($this->defLangBinding && $this->tt_contentConfig['languageMode']) {
-                                $defLangBinding[$columnId][$lP][$row[$lP ? 'l18n_parent' : 'uid']] = $singleElementHTML;
+                                $defLangBinding[$columnId][$lP][$row[$lP ? 'l18n_parent' : 'uid'] ?: $row['uid']] = $singleElementHTML;
                             } else {
                                 $content[$columnId] .= $singleElementHTML;
                             }
@@ -714,9 +1104,25 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                             $colTitle = $this->getLanguageService()->sL($item[0]);
                         }
                     }
-                    $editParam = $this->doEdit && !empty($rowArr)
-                        ? '&edit[tt_content][' . $editUidList . ']=edit' . $pageTitleParamForAltDoc
-                        : '';
+                    if ($columnId === 'unused') {
+                        if (empty($unusedElementsMessage)) {
+                            $unusedElementsMessage = GeneralUtility::makeInstance(
+                                FlashMessage::class,
+                                $this->getLanguageService()->getLL('staleUnusedElementsWarning'),
+                                $this->getLanguageService()->getLL('staleUnusedElementsWarningTitle'),
+                                FlashMessage::WARNING
+                            );
+                            $service = GeneralUtility::makeInstance(FlashMessageService::class);
+                            $queue = $service->getMessageQueueByIdentifier();
+                            $queue->addMessage($unusedElementsMessage);
+                        }
+                        $colTitle = $this->getLanguageService()->sL('LLL:EXT:frontend/Resources/Private/Language/locallang_ttc.xlf:colPos.I.unused');
+                        $editParam = '';
+                    } else {
+                        $editParam = $this->doEdit && !empty($rowArr)
+                            ? '&edit[tt_content][' . $editUidList . ']=edit' . $pageTitleParamForAltDoc
+                            : '';
+                    }
                     $head[$columnId] .= $this->tt_content_drawColHeader($colTitle, $editParam);
                 }
             }
@@ -726,22 +1132,18 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                 // in language mode process the content elements, but only fill $languageColumn. output will be generated later
                 $sortedLanguageColumn = [];
                 foreach ($cList as $columnId) {
-                    if (GeneralUtility::inList($this->tt_contentConfig['activeCols'], $columnId)) {
+                    if (GeneralUtility::inList($this->tt_contentConfig['activeCols'], $columnId) || $columnId === 'unused') {
                         $languageColumn[$columnId][$lP] = $head[$columnId] . $content[$columnId];
-                        if (!$this->defLangBinding) {
-                            $languageColumn[$columnId][$lP] .= $this->newLanguageButton(
-                                $this->getNonTranslatedTTcontentUids($defaultLanguageElementsByColumn[$columnId], $id, $lP),
-                                $lP,
-                                $columnId
-                            );
-                        }
+
                         // We sort $languageColumn again according to $cList as it may contain data already from above.
                         $sortedLanguageColumn[$columnId] = $languageColumn[$columnId];
                     }
                 }
+                if (!empty($languageColumn['unused'])) {
+                    $sortedLanguageColumn['unused'] = $languageColumn['unused'];
+                }
                 $languageColumn = $sortedLanguageColumn;
             } else {
-                $backendLayout = $this->getBackendLayoutView()->getSelectedBackendLayout($this->id);
                 // GRID VIEW:
                 $grid = '<div class="t3-grid-container"><table border="0" cellspacing="0" cellpadding="0" width="100%" class="t3-page-columns t3-grid-table t3js-page-columns">';
                 // Add colgroups
@@ -752,6 +1154,10 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                     $grid .= '<col />';
                 }
                 $grid .= '</colgroup>';
+
+                // Check how to handle restricted columns
+                $hideRestrictedCols = (bool)(BackendUtility::getPagesTSconfig($id)['mod.']['web_layout.']['hideRestrictedCols'] ?? false);
+
                 // Cycle through rows
                 for ($row = 1; $row <= $rowCount; $row++) {
                     $rowConfig = $backendLayout['__config']['backend_layout.']['rows.'][$row . '.'];
@@ -774,7 +1180,7 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                             ($rowSpan > 0 ? ' rowspan="' . $rowSpan . '"' : '') .
                             ' data-colpos="' . (int)$columnConfig['colPos'] . '" data-language-uid="' . $lP . '" class="t3js-page-lang-column-' . $lP . ' t3js-page-column t3-grid-cell t3-page-column t3-page-column-' . $columnKey .
                             ((!isset($columnConfig['colPos']) || $columnConfig['colPos'] === '') ? ' t3-grid-cell-unassigned' : '') .
-                            ((isset($columnConfig['colPos']) && $columnConfig['colPos'] !== '' && !$head[$columnKey]) || !GeneralUtility::inList($this->tt_contentConfig['activeCols'], $columnConfig['colPos']) ? ' t3-grid-cell-restricted' : '') .
+                            ((isset($columnConfig['colPos']) && $columnConfig['colPos'] !== '' && !$head[$columnKey]) || !GeneralUtility::inList($this->tt_contentConfig['activeCols'], $columnConfig['colPos']) ? ($hideRestrictedCols ? ' t3-grid-cell-restricted t3-grid-cell-hidden' : ' t3-grid-cell-restricted') : '') .
                             ($colSpan > 0 ? ' t3-gridCell-width' . $colSpan : '') .
                             ($rowSpan > 0 ? ' t3-gridCell-height' . $rowSpan : '') . '">';
 
@@ -787,12 +1193,16 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                         } elseif (isset($columnConfig['colPos']) && $columnConfig['colPos'] !== ''
                             && GeneralUtility::inList($this->tt_contentConfig['activeCols'], $columnConfig['colPos'])
                         ) {
-                            $grid .= $this->tt_content_drawColHeader($this->getLanguageService()->getLL('noAccess'));
+                            if (!$hideRestrictedCols) {
+                                $grid .= $this->tt_content_drawColHeader($this->getLanguageService()->getLL('noAccess'));
+                            }
                         } elseif (isset($columnConfig['colPos']) && $columnConfig['colPos'] !== ''
                             && !GeneralUtility::inList($this->tt_contentConfig['activeCols'], $columnConfig['colPos'])
                         ) {
-                            $grid .= $this->tt_content_drawColHeader($this->getLanguageService()->sL($columnConfig['name']) .
-                                ' (' . $this->getLanguageService()->getLL('noAccess') . ')');
+                            if (!$hideRestrictedCols) {
+                                $grid .= $this->tt_content_drawColHeader($this->getLanguageService()->sL($columnConfig['name']) .
+                                  ' (' . $this->getLanguageService()->getLL('noAccess') . ')');
+                            }
                         } elseif (isset($columnConfig['name']) && $columnConfig['name'] !== '') {
                             $grid .= $this->tt_content_drawColHeader($this->getLanguageService()->sL($columnConfig['name'])
                                 . ' (' . $this->getLanguageService()->getLL('notAssigned') . ')');
@@ -804,13 +1214,28 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                     }
                     $grid .= '</tr>';
                 }
+                if (!empty($content['unused'])) {
+                    $grid .= '<tr>';
+                    // Which tt_content colPos should be displayed inside this cell
+                    $columnKey = 'unused';
+                    // Render the grid cell
+                    $colSpan = (int)$backendLayout['__config']['backend_layout.']['colCount'];
+                    $grid .= '<td valign="top"' .
+                        ($colSpan > 0 ? ' colspan="' . $colSpan . '"' : '') .
+                        ($rowSpan > 0 ? ' rowspan="' . $rowSpan . '"' : '') .
+                        ' data-colpos="unused" data-language-uid="' . $lP . '" class="t3js-page-lang-column-' . $lP . ' t3js-page-column t3-grid-cell t3-page-column t3-page-column-' . $columnKey .
+                        ($colSpan > 0 ? ' t3-gridCell-width' . $colSpan : '') . '">';
+
+                    // Draw the pre-generated header with edit and new buttons if a colPos is assigned.
+                    // If not, a new header without any buttons will be generated.
+                    $grid .= $head[$columnKey] . $content[$columnKey];
+                    $grid .= '</td></tr>';
+                }
                 $out .= $grid . '</table></div>';
             }
-            // CSH:
-            $out .= BackendUtility::cshItem($this->descrTable, 'columns_multi', null, '<span class="btn btn-default btn-sm">|</span>');
         }
         $elFromTable = $this->clipboard->elFromTable('tt_content');
-        if (!empty($elFromTable) && $this->getPageLayoutController()->pageIsNotLockedForEditors()) {
+        if (!empty($elFromTable) && $this->isContentEditable()) {
             $pasteItem = substr(key($elFromTable), 11);
             $pasteRecord = BackendUtility::getRecord('tt_content', (int)$pasteItem);
             $pasteTitle = $pasteRecord['header'] ? $pasteRecord['header'] : $pasteItem;
@@ -841,83 +1266,110 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
             $cCont = [];
             $sCont = [];
             foreach ($langListArr as $lP) {
+                $languageMode = '';
+                $labelClass = 'info';
                 // Header:
                 $lP = (int)$lP;
+                // Determine language mode
+                if ($lP > 0 && isset($this->languageHasTranslationsCache[$lP]['mode'])) {
+                    switch ($this->languageHasTranslationsCache[$lP]['mode']) {
+                        case 'mixed':
+                            $languageMode = $this->getLanguageService()->getLL('languageModeMixed');
+                            $labelClass = 'danger';
+                            break;
+                        case 'connected':
+                            $languageMode = $this->getLanguageService()->getLL('languageModeConnected');
+                            break;
+                        case 'free':
+                            $languageMode = $this->getLanguageService()->getLL('languageModeFree');
+                            break;
+                        default:
+                            // we'll let opcode optimize this intentionally empty case
+                    }
+                }
                 $cCont[$lP] = '
-					<td valign="top" class="t3-page-column" data-language-uid="' . $lP . '">
+					<td valign="top" class="t3-page-column t3-page-column-lang-name" data-language-uid="' . $lP . '">
 						<h2>' . htmlspecialchars($this->tt_contentConfig['languageCols'][$lP]) . '</h2>
+						' . ($languageMode !== '' ? '<span class="label label-' . $labelClass . '">' . $languageMode . '</span>' : '') . '
 					</td>';
 
                 // "View page" icon is added:
                 $viewLink = '';
                 if (!VersionState::cast($this->getPageLayoutController()->pageinfo['t3ver_state'])->equals(VersionState::DELETE_PLACEHOLDER)) {
-                    $onClick = BackendUtility::viewOnClick($this->id, '', BackendUtility::BEgetRootLine($this->id), '', '', ('&L=' . $lP));
-                    $viewLink = '<a href="#" class="btn btn-default btn-sm" onclick="' . htmlspecialchars($onClick) . '" title="' . htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.showPage')) . '">' . $this->iconFactory->getIcon('actions-view', Icon::SIZE_SMALL)->render() . '</a>';
+                    $onClick = BackendUtility::viewOnClick(
+                        $this->id,
+                        '',
+                        BackendUtility::BEgetRootLine($this->id),
+                        '',
+                        '',
+                        '&L=' . $lP
+                    );
+                    $viewLink = '<a href="#" class="btn btn-default btn-sm" onclick="' . htmlspecialchars($onClick) . '" title="' . htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.showPage')) . '">' . $this->iconFactory->getIcon('actions-view', Icon::SIZE_SMALL)->render() . '</a>';
                 }
                 // Language overlay page header:
                 if ($lP) {
-                    $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
-                        ->getQueryBuilderForTable('pages_language_overlay');
-                    $queryBuilder->getRestrictions()
-                        ->removeAll()
-                        ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
-                        ->add(GeneralUtility::makeInstance(BackendWorkspaceRestriction::class));
-
-                    $lpRecord = $queryBuilder->select('*')
-                        ->from('pages_language_overlay')
-                        ->where(
-                            $queryBuilder->expr()->eq(
-                                'pid',
-                                $queryBuilder->createNamedParameter($id, \PDO::PARAM_INT)
-                            ),
-                            $queryBuilder->expr()->eq(
-                                'sys_language_uid',
-                                $queryBuilder->createNamedParameter($lP, \PDO::PARAM_INT)
-                            )
-                        )
-                        ->setMaxResults(1)
-                        ->execute()
-                        ->fetch();
-
-                    BackendUtility::workspaceOL('pages_language_overlay', $lpRecord);
+                    $pageLocalizationRecord = BackendUtility::getRecordLocalization('pages', $id, $lP);
+                    if (is_array($pageLocalizationRecord)) {
+                        $pageLocalizationRecord = reset($pageLocalizationRecord);
+                    }
+                    BackendUtility::workspaceOL('pages', $pageLocalizationRecord);
                     $recordIcon = BackendUtility::wrapClickMenuOnIcon(
-                        $this->iconFactory->getIconForRecord('pages_language_overlay', $lpRecord, Icon::SIZE_SMALL)->render(),
-                        'pages_language_overlay',
-                        $lpRecord['uid']
+                        $this->iconFactory->getIconForRecord('pages', $pageLocalizationRecord, Icon::SIZE_SMALL)->render(),
+                        'pages',
+                        $pageLocalizationRecord['uid']
                     );
                     $urlParameters = [
                         'edit' => [
-                            'pages_language_overlay' => [
-                                $lpRecord['uid'] => 'edit'
+                            'pages' => [
+                                $pageLocalizationRecord['uid'] => 'edit'
                             ]
                         ],
+                        // Disallow manual adjustment of the language field for pages
                         'overrideVals' => [
-                            'pages_language_overlay' => [
+                            'pages' => [
                                 'sys_language_uid' => $lP
                             ]
                         ],
                         'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI')
                     ];
-                    $url = BackendUtility::getModuleUrl('record_edit', $urlParameters);
-                    $editLink = ($this->getBackendUser()->check('tables_modify', 'pages_language_overlay')
+                    $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+                    $url = (string)$uriBuilder->buildUriFromRoute('record_edit', $urlParameters);
+                    $editLink = (
+                        $this->getBackendUser()->check('tables_modify', 'pages')
                         ? '<a href="' . htmlspecialchars($url) . '" class="btn btn-default btn-sm"'
                         . ' title="' . htmlspecialchars($this->getLanguageService()->getLL('edit')) . '">'
                         . $this->iconFactory->getIcon('actions-open', Icon::SIZE_SMALL)->render() . '</a>'
                         : ''
                     );
 
+                    $defaultLanguageElements = [];
+                    array_walk($defaultLanguageElementsByColumn, function (array $columnContent) use (&$defaultLanguageElements) {
+                        $defaultLanguageElements = array_merge($defaultLanguageElements, $columnContent);
+                    });
+
+                    $localizationButtons = [];
+                    $localizationButtons[] = $this->newLanguageButton(
+                        $this->getNonTranslatedTTcontentUids($defaultLanguageElements, $id, $lP),
+                        $lP
+                    );
+
                     $lPLabel =
                         '<div class="btn-group">'
                             . $viewLink
                             . $editLink
+                            . (!empty($localizationButtons) ? implode(LF, $localizationButtons) : '')
                         . '</div>'
-                        . ' ' . $recordIcon . ' ' . htmlspecialchars(GeneralUtility::fixed_lgd_cs($lpRecord['title'], 20));
+                        . ' ' . $recordIcon . ' ' . htmlspecialchars(GeneralUtility::fixed_lgd_cs($pageLocalizationRecord['title'], 20))
+                        ;
                 } else {
                     $editLink = '';
                     $recordIcon = '';
                     if ($this->getBackendUser()->checkLanguageAccess(0)) {
                         $recordIcon = BackendUtility::wrapClickMenuOnIcon(
-                            $this->iconFactory->getIconForRecord('pages', $this->pageRecord, Icon::SIZE_SMALL)->render(), 'pages', $this->id);
+                            $this->iconFactory->getIconForRecord('pages', $this->pageRecord, Icon::SIZE_SMALL)->render(),
+                            'pages',
+                            $this->id
+                        );
                         $urlParameters = [
                             'edit' => [
                                 'pages' => [
@@ -926,8 +1378,10 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                             ],
                             'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI')
                         ];
-                        $url = BackendUtility::getModuleUrl('record_edit', $urlParameters);
-                        $editLink = ($this->getBackendUser()->check('tables_modify', 'pages_language_overlay')
+                        $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+                        $url = (string)$uriBuilder->buildUriFromRoute('record_edit', $urlParameters);
+                        $editLink = (
+                            $this->getBackendUser()->check('tables_modify', 'pages')
                             ? '<a href="' . htmlspecialchars($url) . '" class="btn btn-default btn-sm"'
                             . ' title="' . htmlspecialchars($this->getLanguageService()->getLL('edit')) . '">'
                             . $this->iconFactory->getIcon('actions-open', Icon::SIZE_SMALL)->render() . '</a>'
@@ -946,32 +1400,39 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
 					<td class="t3-page-column t3-page-lang-label nowrap">' . $lPLabel . '</td>';
             }
             // Add headers:
-            $out .= '<tr>' . implode($cCont) . '</tr>';
-            $out .= '<tr>' . implode($sCont) . '</tr>';
+            $out .= '<tr>' . implode('', $cCont) . '</tr>';
+            $out .= '<tr>' . implode('', $sCont) . '</tr>';
             unset($cCont, $sCont);
 
             // Traverse previously built content for the columns:
             foreach ($languageColumn as $cKey => $cCont) {
                 $out .= '<tr>';
                 foreach ($cCont as $languageId => $columnContent) {
-                    $out .= '<td valign="top" class="t3-grid-cell t3-page-column t3js-page-column t3js-page-lang-column t3js-page-lang-column-' . $languageId . '">' . $columnContent . '</td>';
+                    $out .= '<td valign="top" data-colpos="' . $cKey . '" class="t3-grid-cell t3-page-column t3js-page-column t3js-page-lang-column t3js-page-lang-column-' . $languageId . '">' . $columnContent . '</td>';
                 }
                 $out .= '</tr>';
-                if ($this->defLangBinding) {
-                    // "defLangBinding" mode
-                    foreach ($defaultLanguageElementsByColumn[$cKey] as $defUid) {
+                if ($this->defLangBinding && !empty($defLangBinding[$cKey])) {
+                    $maxItemsCount = max(array_map('count', $defLangBinding[$cKey]));
+                    for ($i = 0; $i < $maxItemsCount; $i++) {
+                        $defUid = $defaultLanguageElementsByColumn[$cKey][$i] ?? 0;
                         $cCont = [];
                         foreach ($langListArr as $lP) {
-                            $cCont[] = $defLangBinding[$cKey][$lP][$defUid] . $this->newLanguageButton(
-                                $this->getNonTranslatedTTcontentUids([$defUid], $id, $lP),
-                                $lP,
-                                $cKey
-                            );
+                            if ($lP > 0
+                                && is_array($defLangBinding[$cKey][$lP])
+                                && !$this->checkIfTranslationsExistInLanguage($defaultLanguageElementsByColumn[$cKey], $lP)
+                                && count($defLangBinding[$cKey][$lP]) > $i
+                            ) {
+                                $slice = array_slice($defLangBinding[$cKey][$lP], $i, 1);
+                                $element = $slice[0] ?? '';
+                            } else {
+                                $element = $defLangBinding[$cKey][$lP][$defUid] ?? '';
+                            }
+                            $cCont[] = $element;
                         }
                         $out .= '
                         <tr>
-							<td valign="top" class="t3-grid-cell">' . implode(('</td>' . '
-							<td valign="top" class="t3-grid-cell">'), $cCont) . '</td>
+							<td valign="top" class="t3-grid-cell">' . implode('</td>' . '
+							<td valign="top" class="t3-grid-cell">', $cCont) . '</td>
 						</tr>';
                     }
                 }
@@ -983,8 +1444,6 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
 						' . $out . '
                     </table>
 				</div>';
-            // CSH:
-            $out .= BackendUtility::cshItem($this->descrTable, 'language_list', null, '<span class="btn btn-default btn-sm">|</span>');
         }
 
         return $out;
@@ -1017,7 +1476,7 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
         if ($this->totalItems) {
             $result = $queryBuilder->execute();
             // Will return FALSE, if $result is invalid
-            $dbCount = $result->rowCount();
+            $dbCount = $queryBuilder->count('uid')->execute()->fetchColumn(0);
         }
         // If records were found, render the list
         if (!$dbCount) {
@@ -1044,10 +1503,13 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                 ],
                 'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI')
             ];
-            $url = BackendUtility::getModuleUrl('record_edit', $urlParameters);
-            $theData['__cmds__'] = '<a href="' . htmlspecialchars($url) . '" '
-                . 'title="' . htmlspecialchars($this->getLanguageService()->getLL('new')) . '">'
-                . $this->iconFactory->getIcon('actions-document-new', Icon::SIZE_SMALL)->render() . '</a>';
+            $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+            $url = (string)$uriBuilder->buildUriFromRoute('record_edit', $urlParameters);
+            $title = htmlspecialchars($this->getLanguageService()->getLL('new'));
+            $theData['__cmds__'] = '<a href="' . htmlspecialchars($url) . '" class="' . ($this->option_newWizard ? 't3js-toggle-new-content-element-wizard disabled' : '') . '" '
+                . 'title="' . $title . '"'
+                . 'data-title="' . $title . '">'
+                . $this->iconFactory->getIcon('actions-add', Icon::SIZE_SMALL)->render() . '</a>';
         }
         $out .= $this->addElement(1, '', $theData, ' class="c-headLine"', 15, '', 'th');
         // Render Items
@@ -1066,7 +1528,7 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                     // Get values:
                     $Nrow = $this->dataFields($this->fieldArray, $table, $row, $Nrow);
                     // Attach edit icon
-                    if ($this->doEdit && $this->getBackendUser()->doesUserHaveAccess($this->pageinfo, Permission::CONTENT_EDIT)) {
+                    if ($this->doEdit) {
                         $urlParameters = [
                             'edit' => [
                                 $table => [
@@ -1075,7 +1537,8 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                             ],
                             'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI')
                         ];
-                        $url = BackendUtility::getModuleUrl('record_edit', $urlParameters);
+                        $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+                        $url = (string)$uriBuilder->buildUriFromRoute('record_edit', $urlParameters);
                         $Nrow['__editIconLink__'] = '<a class="btn btn-default" href="' . htmlspecialchars($url)
                             . '" title="' . htmlspecialchars($this->getLanguageService()->getLL('edit')) . '">'
                             . $this->iconFactory->getIcon('actions-open', Icon::SIZE_SMALL)->render() . '</a>';
@@ -1192,30 +1655,36 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
      */
     protected function getContentRecordsPerColumn($table, $id, array $columns, $additionalWhereClause = '')
     {
-        $columns = array_map('intval', $columns);
         $contentRecordsPerColumn = array_fill_keys($columns, []);
-
-        $expressionBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
-            ->getQueryBuilderForTable('tt_content')
-            ->expr();
-
+        $columns = array_flip($columns);
         $queryBuilder = $this->getQueryBuilder(
             'tt_content',
             $id,
             [
-                $expressionBuilder->in('colPos', $columns),
                 $additionalWhereClause
             ]
         );
 
         // Traverse any selected elements and render their display code:
         $results = $this->getResult($queryBuilder->execute());
-
+        $unused = [];
+        $hookArray = $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['cms/layout/class.tx_cms_layout.php']['record_is_used'] ?? [];
         foreach ($results as $record) {
-            $columnValue = $record['colPos'];
-            $contentRecordsPerColumn[$columnValue][] = $record;
+            $used = isset($columns[$record['colPos']]);
+            foreach ($hookArray as $_funcRef) {
+                $_params = ['columns' => $columns, 'record' => $record, 'used' => $used];
+                $used = GeneralUtility::callUserFunction($_funcRef, $_params, $this);
+            }
+            if ($used) {
+                $columnValue = (string)$record['colPos'];
+                $contentRecordsPerColumn[$columnValue][] = $record;
+            } else {
+                $unused[] = $record;
+            }
         }
-
+        if (!empty($unused)) {
+            $contentRecordsPerColumn['unused'] = $unused;
+        }
         return $contentRecordsPerColumn;
     }
 
@@ -1248,7 +1717,8 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
             ->from('pages')
             ->where(
                 $queryBuilder->expr()->eq('pid', $queryBuilder->createNamedParameter($pid, \PDO::PARAM_INT)),
-                $this->getBackendUser()->getPagePermsClause(1)
+                $queryBuilder->expr()->eq('sys_language_uid', $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT)),
+                $this->getBackendUser()->getPagePermsClause(Permission::PAGE_SHOW)
             );
 
         if (!empty($GLOBALS['TCA']['pages']['ctrl']['sortby'])) {
@@ -1257,7 +1727,7 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
 
         if ($depth >= 0) {
             $result = $queryBuilder->execute();
-            $rowCount = $result->rowCount();
+            $rowCount = $queryBuilder->count('uid')->execute()->fetchColumn(0);
             $count = 0;
             while ($row = $result->fetch()) {
                 BackendUtility::workspaceOL('pages', $row);
@@ -1280,70 +1750,9 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                     );
                 }
             }
-        } else {
-            $count = (int)$queryBuilder->count('uid')->execute()->fetchColumn(0);
-            if ($count) {
-                $this->plusPages[$pid] = $count;
-            }
         }
 
         return $rows;
-    }
-
-    /**
-     * Adds pages-rows to an array, selecting recursively in the page tree.
-     *
-     * @param array $theRows Array which will accumulate page rows
-     * @param int $pid Pid to select from
-     * @param string $qWhere Query-where clause
-     * @param string $treeIcons Prefixed icon code.
-     * @param int $depth Depth (decreasing)
-     * @return array $theRows, but with added rows.
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function pages_getTree($theRows, $pid, $qWhere, $treeIcons, $depth)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $depth--;
-        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
-        $queryBuilder->getRestrictions()
-            ->removeAll();
-        $queryBuilder
-            ->select('*')
-            ->from('pages')
-            ->where($queryBuilder->expr()->eq('pid', $queryBuilder->createNamedParameter($pid, \PDO::PARAM_INT)));
-
-        if (!empty($GLOBALS['TCA']['pages']['ctrl']['sortby'])) {
-            $queryBuilder->orderBy($GLOBALS['TCA']['pages']['ctrl']['sortby']);
-        }
-
-        if (!empty($qWhere)) {
-            $queryBuilder->andWhere(QueryHelper::stripLogicalOperatorPrefix($qWhere));
-        }
-
-        if ($depth >= 0) {
-            $result = $queryBuilder->execute();
-            $rc = $result->rowCount();
-            $c = 0;
-            while ($row = $result->fetch()) {
-                BackendUtility::workspaceOL('pages', $row);
-                if (is_array($row)) {
-                    $c++;
-                    $row['treeIcons'] = $treeIcons . '<span class="treeline-icon treeline-icon-join' . ($rc === $c ? 'bottom' : '') . '"></span>';
-                    $theRows[] = $row;
-                    // Get the branch
-                    $spaceOutIcons = '<span class="treeline-icon treeline-icon-' . ($rc === $c ? 'clear' : 'line') . '"></span>';
-                    $theRows = $this->pages_getTree($theRows, $row['uid'], $qWhere, $treeIcons . $spaceOutIcons,
-                        $row['php_tree_stop'] ? 0 : $depth);
-                }
-            }
-        } else {
-            $count = (int)$queryBuilder->count('uid')->execute()->fetchColumn(0);
-            if ($count) {
-                $this->plusPages[$pid] = $count;
-            }
-        }
-        return $theRows;
     }
 
     /**
@@ -1355,6 +1764,8 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
      */
     public function pages_drawItem($row, $fieldArr)
     {
+        $userTsConfig = $this->getBackendUser()->getTSConfig();
+
         // Initialization
         $theIcon = $this->getIcon('pages', $row);
         // Preparing and getting the data-array
@@ -1362,19 +1773,14 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
         foreach ($fieldArr as $field) {
             switch ($field) {
                 case 'title':
-                    $red = $this->plusPages[$row['uid']] ? '<span class="text-danger"><strong>+</strong></span>' : '';
+                    $showPageId = !empty($userTsConfig['options.']['pageTree.']['showPageIdWithTitle']);
                     $pTitle = htmlspecialchars(BackendUtility::getProcessedValue('pages', $field, $row[$field], 20));
-                    if ($red) {
-                        $pTitle = '<a href="'
-                            . htmlspecialchars($this->script . ((strpos($this->script, '?') !== false) ? '&' : '?')
-                            . 'id=' . $row['uid']) . '">' . $pTitle . '</a>';
-                    }
-                    $theData[$field] = $row['treeIcons'] . $theIcon . $red . $pTitle . '&nbsp;&nbsp;';
+                    $theData[$field] = $row['treeIcons'] . $theIcon . ($showPageId ? '[' . $row['uid'] . '] ' : '') . $pTitle;
                     break;
                 case 'php_tree_stop':
                     // Intended fall through
                 case 'TSconfig':
-                    $theData[$field] = $row[$field] ? '&nbsp;<strong>x</strong>' : '&nbsp;';
+                    $theData[$field] = $row[$field] ? '<strong>x</strong>' : '&nbsp;';
                     break;
                 case 'uid':
                     if ($this->getBackendUser()->doesUserHaveAccess($row, 2) && $row['uid'] > 0) {
@@ -1386,14 +1792,24 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                             ],
                             'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI')
                         ];
-                        $url = BackendUtility::getModuleUrl('record_edit', $urlParameters);
-                        $eI = '<a class="btn btn-default" href="' . htmlspecialchars($url)
-                            . '" title="' . htmlspecialchars($this->getLanguageService()->getLL('editThisPage')) . '">'
-                            . $this->iconFactory->getIcon('actions-page-open', Icon::SIZE_SMALL)->render() . '</a>';
+                        $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+                        $url = (string)$uriBuilder->buildUriFromRoute('record_edit', $urlParameters);
+                        $onClick = BackendUtility::viewOnClick($row['uid'], '', BackendUtility::BEgetRootLine($row['uid']));
+
+                        $eI =
+                            '<a href="#" onclick="' . htmlspecialchars($onClick) . '" class="btn btn-default" title="' .
+                            $this->getLanguageService()->sL('LLL:EXT:frontend/Resources/Private/Language/locallang_webinfo.xlf:lang_renderl10n_viewPage') . '">' .
+                            $this->iconFactory->getIcon('actions-view-page', Icon::SIZE_SMALL)->render() .
+                            '</a>';
+                        $eI .=
+                            '<a class="btn btn-default" href="' . htmlspecialchars($url) . '" title="' .
+                            htmlspecialchars($this->getLanguageService()->getLL('editThisPage')) . '">' .
+                            $this->iconFactory->getIcon('actions-page-open', Icon::SIZE_SMALL)->render() .
+                            '</a>';
                     } else {
                         $eI = '';
                     }
-                    $theData[$field] = $eI . '<span align="right">' . $row['uid'] . '</span>';
+                    $theData[$field] = '<div class="btn-group" role="group">' . $eI . '</div>';
                     break;
                 case 'shortcut':
                 case 'shortcut_mode':
@@ -1402,11 +1818,11 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                     }
                     break;
                 default:
-                    if (substr($field, 0, 6) === 'table_') {
+                    if (strpos($field, 'table_') === 0) {
                         $f2 = substr($field, 6);
                         if ($GLOBALS['TCA'][$f2]) {
                             $c = $this->numberOfRecords($f2, $row['uid']);
-                            $theData[$field] = '&nbsp;&nbsp;' . ($c ? $c : '');
+                            $theData[$field] = ($c ? $c : '');
                         }
                     } else {
                         $theData[$field] = $this->getPagesTableFieldValue($field, $row);
@@ -1427,7 +1843,7 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
      */
     protected function getPagesTableFieldValue($field, array $row)
     {
-        return '&nbsp;&nbsp;' . htmlspecialchars(BackendUtility::getProcessedValue('pages', $field, $row[$field]));
+        return htmlspecialchars(BackendUtility::getProcessedValue('pages', $field, $row[$field]));
     }
 
     /**********************************
@@ -1483,10 +1899,12 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
         $pasteIcon = json_encode(
             ' <a data-content="' . htmlspecialchars($pasteItem) . '"'
             . ' data-title="' . htmlspecialchars($pasteTitle) . '"'
+            . ' data-severity="warning"'
             . ' class="t3js-paste t3js-paste' . htmlspecialchars($copyMode) . ' ' . htmlspecialchars($cssClass) . ' btn btn-default btn-sm"'
             . ' title="' . htmlspecialchars($this->getLanguageService()->getLL($title)) . '">'
             . $this->iconFactory->getIcon('actions-document-paste-into', Icon::SIZE_SMALL)->render()
-            . '</a>');
+            . '</a>'
+        );
         return $pasteIcon;
     }
 
@@ -1502,23 +1920,20 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
         $content = '';
         // Get processed values:
         $info = [];
-        $this->getProcessedValue('tt_content', 'starttime,endtime,fe_group,spaceBefore,spaceAfter', $row, $info);
+        $this->getProcessedValue('tt_content', 'starttime,endtime,fe_group,space_before_class,space_after_class', $row, $info);
 
         // Content element annotation
-        if (!empty($GLOBALS['TCA']['tt_content']['ctrl']['descriptionColumn'])) {
+        if (!empty($GLOBALS['TCA']['tt_content']['ctrl']['descriptionColumn']) && !empty($row[$GLOBALS['TCA']['tt_content']['ctrl']['descriptionColumn']])) {
             $info[] = htmlspecialchars($row[$GLOBALS['TCA']['tt_content']['ctrl']['descriptionColumn']]);
         }
 
-            // Call drawFooter hooks
-        $drawFooterHooks = &$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['cms/layout/class.tx_cms_layout.php']['tt_content_drawFooter'];
-        if (is_array($drawFooterHooks)) {
-            foreach ($drawFooterHooks as $hookClass) {
-                $hookObject = GeneralUtility::getUserObj($hookClass);
-                if (!$hookObject instanceof PageLayoutViewDrawFooterHookInterface) {
-                    throw new \UnexpectedValueException($hookClass . ' must implement interface ' . PageLayoutViewDrawFooterHookInterface::class, 1404378171);
-                }
-                $hookObject->preProcess($this, $info, $row);
+        // Call drawFooter hooks
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['cms/layout/class.tx_cms_layout.php']['tt_content_drawFooter'] ?? [] as $className) {
+            $hookObject = GeneralUtility::makeInstance($className);
+            if (!$hookObject instanceof PageLayoutViewDrawFooterHookInterface) {
+                throw new \UnexpectedValueException($className . ' must implement interface ' . PageLayoutViewDrawFooterHookInterface::class, 1404378171);
             }
+            $hookObject->preProcess($this, $info, $row);
         }
 
         // Display info from records fields:
@@ -1546,11 +1961,12 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
      */
     public function tt_content_drawHeader($row, $space = 0, $disableMoveAndNewButtons = false, $langMode = false, $dragDropEnabled = false)
     {
+        $backendUser = $this->getBackendUser();
         $out = '';
         // If show info is set...;
-        if ($this->tt_contentConfig['showInfo'] && $this->getBackendUser()->recordEditAccessInternals('tt_content', $row)) {
+        if ($this->tt_contentConfig['showInfo'] && $backendUser->recordEditAccessInternals('tt_content', $row)) {
             // Render control panel for the element:
-            if ($this->tt_contentConfig['showCommands'] && $this->doEdit) {
+            if ($this->tt_contentConfig['showCommands'] && $this->isContentEditable($row['sys_language_uid'])) {
                 // Edit content element:
                 $urlParameters = [
                     'edit' => [
@@ -1560,7 +1976,8 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                     ],
                     'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI') . '#element-tt_content-' . $row['uid'],
                 ];
-                $url = BackendUtility::getModuleUrl('record_edit', $urlParameters) . '#element-tt_content-' . $row['uid'];
+                $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+                $url = (string)$uriBuilder->buildUriFromRoute('record_edit', $urlParameters) . '#element-tt_content-' . $row['uid'];
 
                 $out .= '<a class="btn btn-default" href="' . htmlspecialchars($url)
                     . '" title="' . htmlspecialchars($this->nextThree > 1
@@ -1571,7 +1988,7 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                 $hiddenField = $GLOBALS['TCA']['tt_content']['ctrl']['enablecolumns']['disabled'];
                 if ($hiddenField && $GLOBALS['TCA']['tt_content']['columns'][$hiddenField]
                     && (!$GLOBALS['TCA']['tt_content']['columns'][$hiddenField]['exclude']
-                        || $this->getBackendUser()->check('non_exclude_fields', 'tt_content:' . $hiddenField))
+                        || $backendUser->check('non_exclude_fields', 'tt_content:' . $hiddenField))
                 ) {
                     if ($row[$hiddenField]) {
                         $value = 0;
@@ -1587,21 +2004,33 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                         . $this->iconFactory->getIcon('actions-edit-' . strtolower($label), Icon::SIZE_SMALL)->render() . '</a>';
                 }
                 // Delete
-                $disableDeleteTS = $this->getBackendUser()->getTSConfig('options.disableDelete');
-                $disableDelete = (bool) trim(isset($disableDeleteTS['properties']['tt_content']) ? $disableDeleteTS['properties']['tt_content'] : $disableDeleteTS['value']);
+                $disableDelete = (bool)\trim(
+                    $backendUser->getTSConfig()['options.']['disableDelete.']['tt_content']
+                    ?? $backendUser->getTSConfig()['options.']['disableDelete']
+                    ?? '0'
+                );
                 if (!$disableDelete) {
                     $params = '&cmd[tt_content][' . $row['uid'] . '][delete]=1';
+                    $refCountMsg = BackendUtility::referenceCount(
+                        'tt_content',
+                        $row['uid'],
+                        ' ' . $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.referencesToRecord'),
+                        $this->getReferenceCount('tt_content', $row['uid'])
+                    ) . BackendUtility::translationCount(
+                        'tt_content',
+                        $row['uid'],
+                        ' ' . $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.translationsOfRecord')
+                    );
                     $confirm = $this->getLanguageService()->getLL('deleteWarning')
-                        . BackendUtility::translationCount('tt_content', $row['uid'], (' '
-                                                                                       . $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.translationsOfRecord')));
+                        . $refCountMsg;
                     $out .= '<a class="btn btn-default t3js-modal-trigger" href="' . htmlspecialchars(BackendUtility::getLinkToDataHandlerAction($params)) . '"'
                         . ' data-severity="warning"'
-                        . ' data-title="' . htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_alt_doc.xlf:label.confirm.delete_record.title')) . '"'
+                        . ' data-title="' . htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:backend/Resources/Private/Language/locallang_alt_doc.xlf:label.confirm.delete_record.title')) . '"'
                         . ' data-content="' . htmlspecialchars($confirm) . '" '
-                        . ' data-button-close-text="' . htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_common.xlf:cancel')) . '"'
+                        . ' data-button-close-text="' . htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_common.xlf:cancel')) . '"'
                         . ' title="' . htmlspecialchars($this->getLanguageService()->getLL('deleteItem')) . '">'
                         . $this->iconFactory->getIcon('actions-edit-delete', Icon::SIZE_SMALL)->render() . '</a>';
-                    if ($out && $this->getBackendUser()->doesUserHaveAccess($this->pageinfo, Permission::CONTENT_EDIT)) {
+                    if ($out && $backendUser->doesUserHaveAccess($this->pageinfo, Permission::CONTENT_EDIT)) {
                         $out = '<div class="btn-group btn-group-sm" role="group">' . $out . '</div>';
                     } else {
                         $out = '';
@@ -1644,23 +2073,21 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
         }
         $allowDragAndDrop = $this->isDragAndDropAllowed($row);
         $additionalIcons = [];
-        if ($row['sys_language_uid'] > 0 && $this->checkIfTranslationsExistInLanguage([], (int)$row['sys_language_uid'])) {
-            $allowDragAndDrop = false;
-        }
         $additionalIcons[] = $this->getIcon('tt_content', $row) . ' ';
-        $additionalIcons[] = $langMode ? $this->languageFlag($row['sys_language_uid'], false) : '';
+        if ($langMode && isset($this->siteLanguages[(int)$row['sys_language_uid']])) {
+            $additionalIcons[] = $this->renderLanguageFlag($this->siteLanguages[(int)$row['sys_language_uid']]);
+        }
         // Get record locking status:
         if ($lockInfo = BackendUtility::isRecordLocked('tt_content', $row['uid'])) {
             $additionalIcons[] = '<a href="#" data-toggle="tooltip" data-title="' . htmlspecialchars($lockInfo['msg']) . '">'
-                . $this->iconFactory->getIcon('status-warning-in-use', Icon::SIZE_SMALL)->render() . '</a>';
+                . $this->iconFactory->getIcon('warning-in-use', Icon::SIZE_SMALL)->render() . '</a>';
         }
         // Call stats information hook
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['GLOBAL']['recStatInfoHooks'])) {
-            $_params = ['tt_content', $row['uid'], &$row];
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['GLOBAL']['recStatInfoHooks'] as $_funcRef) {
-                $additionalIcons[] = GeneralUtility::callUserFunction($_funcRef, $_params, $this);
-            }
+        $_params = ['tt_content', $row['uid'], &$row];
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['GLOBAL']['recStatInfoHooks'] ?? [] as $_funcRef) {
+            $additionalIcons[] = GeneralUtility::callUserFunction($_funcRef, $_params, $this);
         }
+
         // Wrap the whole header
         // NOTE: end-tag for <div class="t3-page-ce-body"> is in getTable_tt_content()
         return '<div class="t3-page-ce-header ' . ($allowDragAndDrop ? 't3-page-ce-header-draggable t3js-page-ce-draghandle' : '') . '">
@@ -1671,6 +2098,24 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
     }
 
     /**
+     * Gets the number of records referencing the record with the UID $uid in
+     * the table $tableName.
+     *
+     * @param string $tableName
+     * @param int $uid
+     * @return int The number of references to record $uid in table
+     */
+    protected function getReferenceCount(string $tableName, int $uid): int
+    {
+        if (!isset($this->referenceCount[$tableName][$uid])) {
+            $referenceIndex = GeneralUtility::makeInstance(ReferenceIndex::class);
+            $numberOfReferences = $referenceIndex->getNumberOfReferencedRecords($tableName, $uid);
+            $this->referenceCount[$tableName][$uid] = $numberOfReferences;
+        }
+        return $this->referenceCount[$tableName][$uid];
+    }
+
+    /**
      * Determine whether Drag & Drop should be allowed
      *
      * @param array $row
@@ -1678,10 +2123,13 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
      */
     protected function isDragAndDropAllowed(array $row)
     {
-        if ($this->getBackendUser()->user['admin']
-            || ((int)$row['editlock'] === 0 && (int)$this->pageinfo['editlock'] === 0)
-            && $this->getBackendUser()->doesUserHaveAccess($this->pageinfo, Permission::CONTENT_EDIT)
-            && $this->getBackendUser()->checkAuthMode('tt_content', 'CType', $row['CType'], $GLOBALS['TYPO3_CONF_VARS']['BE']['explicitADmode'])
+        if ((int)$row['l18n_parent'] === 0 &&
+            (
+                $this->getBackendUser()->isAdmin()
+                || ((int)$row['editlock'] === 0 && (int)$this->pageinfo['editlock'] === 0)
+                && $this->getBackendUser()->doesUserHaveAccess($this->pageinfo, Permission::CONTENT_EDIT)
+                && $this->getBackendUser()->checkAuthMode('tt_content', 'CType', $row['CType'], $GLOBALS['TYPO3_CONF_VARS']['BE']['explicitADmode'])
+            )
         ) {
             return true;
         }
@@ -1702,12 +2150,10 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
         // Make header:
 
         if ($row['header']) {
-            $infoArr = [];
-            $this->getProcessedValue('tt_content', 'header_position,header_layout,header_link', $row, $infoArr);
             $hiddenHeaderNote = '';
             // If header layout is set to 'hidden', display an accordant note:
             if ($row['header_layout'] == 100) {
-                $hiddenHeaderNote = ' <em>[' . htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.hidden')) . ']</em>';
+                $hiddenHeaderNote = ' <em>[' . htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.hidden')) . ']</em>';
             }
             $outHeader = $row['date']
                 ? htmlspecialchars($this->itemLabels['date'] . ' ' . BackendUtility::date($row['date'])) . '<br />'
@@ -1716,18 +2162,14 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                 . $hiddenHeaderNote . '</strong><br />';
         }
         // Make content:
-        $infoArr = [];
         $drawItem = true;
         // Hook: Render an own preview of a record
-        $drawItemHooks = &$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['cms/layout/class.tx_cms_layout.php']['tt_content_drawItem'];
-        if (is_array($drawItemHooks)) {
-            foreach ($drawItemHooks as $hookClass) {
-                $hookObject = GeneralUtility::getUserObj($hookClass);
-                if (!$hookObject instanceof PageLayoutViewDrawItemHookInterface) {
-                    throw new \UnexpectedValueException($hookClass . ' must implement interface ' . PageLayoutViewDrawItemHookInterface::class, 1218547409);
-                }
-                $hookObject->preProcess($this, $drawItem, $outHeader, $out, $row);
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['cms/layout/class.tx_cms_layout.php']['tt_content_drawItem'] ?? [] as $className) {
+            $hookObject = GeneralUtility::makeInstance($className);
+            if (!$hookObject instanceof PageLayoutViewDrawItemHookInterface) {
+                throw new \UnexpectedValueException($className . ' must implement interface ' . PageLayoutViewDrawItemHookInterface::class, 1218547409);
             }
+            $hookObject->preProcess($this, $drawItem, $outHeader, $out, $row);
         }
 
         // If the previous hook did not render something,
@@ -1735,35 +2177,37 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
         // and render it via Fluid. Possible option:
         // mod.web_layout.tt_content.preview.media = EXT:site_mysite/Resources/Private/Templates/Preview/Media.html
         if ($drawItem) {
-            $tsConfig = BackendUtility::getModTSconfig($row['pid'], 'mod.web_layout.tt_content.preview');
+            $tsConfig = BackendUtility::getPagesTSconfig($row['pid'])['mod.']['web_layout.']['tt_content.']['preview.'] ?? [];
             $fluidTemplateFile = '';
 
-            if (
-                $row['CType'] === 'list' && !empty($row['list_type'])
-                && !empty($tsConfig['properties']['list.'][$row['list_type']])
+            if ($row['CType'] === 'list' && !empty($row['list_type'])
+                && !empty($tsConfig['list.'][$row['list_type']])
             ) {
-                $fluidTemplateFile = $tsConfig['properties']['list.'][$row['list_type']];
-            } elseif (!empty($tsConfig['properties'][$row['CType']])) {
-                $fluidTemplateFile = $tsConfig['properties'][$row['CType']];
+                $fluidTemplateFile = $tsConfig['list.'][$row['list_type']];
+            } elseif (!empty($tsConfig[$row['CType']])) {
+                $fluidTemplateFile = $tsConfig[$row['CType']];
             }
 
             if ($fluidTemplateFile) {
                 $fluidTemplateFile = GeneralUtility::getFileAbsFileName($fluidTemplateFile);
                 if ($fluidTemplateFile) {
                     try {
-                        /** @var StandaloneView $view */
                         $view = GeneralUtility::makeInstance(StandaloneView::class);
                         $view->setTemplatePathAndFilename($fluidTemplateFile);
                         $view->assignMultiple($row);
                         if (!empty($row['pi_flexform'])) {
-                            /** @var FlexFormService $flexFormService */
                             $flexFormService = GeneralUtility::makeInstance(FlexFormService::class);
                             $view->assign('pi_flexform_transformed', $flexFormService->convertFlexFormContentToArray($row['pi_flexform']));
                         }
                         $out = $view->render();
                         $drawItem = false;
                     } catch (\Exception $e) {
-                        // Catch any exception to avoid breaking the view
+                        $this->logger->warning(sprintf(
+                            'The backend preview for content element %d can not be rendered using the Fluid template file "%s": %s',
+                            $row['uid'],
+                            $fluidTemplateFile,
+                            $e->getMessage()
+                        ));
                     }
                 }
             }
@@ -1825,18 +2269,14 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                     }
                     break;
                 case 'list':
-                    $hookArr = [];
                     $hookOut = '';
-                    if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['cms/layout/class.tx_cms_layout.php']['list_type_Info'][$row['list_type']])) {
-                        $hookArr = $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['cms/layout/class.tx_cms_layout.php']['list_type_Info'][$row['list_type']];
-                    } elseif (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['cms/layout/class.tx_cms_layout.php']['list_type_Info']['_DEFAULT'])) {
-                        $hookArr = $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['cms/layout/class.tx_cms_layout.php']['list_type_Info']['_DEFAULT'];
-                    }
-                    if (!empty($hookArr)) {
-                        $_params = ['pObj' => &$this, 'row' => $row, 'infoArr' => $infoArr];
-                        foreach ($hookArr as $_funcRef) {
-                            $hookOut .= GeneralUtility::callUserFunction($_funcRef, $_params, $this);
-                        }
+                    $_params = ['pObj' => &$this, 'row' => $row, 'infoArr' => []];
+                    foreach (
+                        $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['cms/layout/class.tx_cms_layout.php']['list_type_Info'][$row['list_type']] ??
+                        $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['cms/layout/class.tx_cms_layout.php']['list_type_Info']['_DEFAULT'] ??
+                        [] as $_funcRef
+                    ) {
+                        $hookOut .= GeneralUtility::callUserFunction($_funcRef, $_params, $this);
                     }
                     if ((string)$hookOut !== '') {
                         $out .= $hookOut;
@@ -1845,20 +2285,23 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                         if (!empty($label)) {
                             $out .= $this->linkEditContent('<strong>' . htmlspecialchars($this->getLanguageService()->sL($label)) . '</strong>', $row) . '<br />';
                         } else {
-                            $message = sprintf($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.noMatchingValue'), $row['list_type']);
+                            $message = sprintf($this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.noMatchingValue'), $row['list_type']);
                             $out .= '<span class="label label-warning">' . htmlspecialchars($message) . '</span>';
                         }
                     } else {
                         $out .= '<strong>' . $this->getLanguageService()->getLL('noPluginSelected') . '</strong>';
                     }
                     $out .= htmlspecialchars($this->getLanguageService()->sL(
-                            BackendUtility::getLabelFromItemlist('tt_content', 'pages', $row['pages'])
-                        )) . '<br />';
+                        BackendUtility::getLabelFromItemlist('tt_content', 'pages', $row['pages'])
+                    )) . '<br />';
                     break;
                 default:
                     $contentType = $this->CType_labels[$row['CType']];
+                    if (!isset($contentType)) {
+                        $contentType =  BackendUtility::getLabelFromItemListMerged($row['pid'], 'tt_content', 'CType', $row['CType']);
+                    }
 
-                    if (isset($contentType)) {
+                    if ($contentType) {
                         $out .= $this->linkEditContent('<strong>' . htmlspecialchars($contentType) . '</strong>', $row) . '<br />';
                         if ($row['bodytext']) {
                             $out .= $this->linkEditContent($this->renderText($row['bodytext']), $row) . '<br />';
@@ -1868,7 +2311,7 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                         }
                     } else {
                         $message = sprintf(
-                            $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.noMatchingValue'),
+                            $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.noMatchingValue'),
                             $row['CType']
                         );
                         $out .= '<span class="label label-warning">' . htmlspecialchars($message) . '</span>';
@@ -1883,9 +2326,8 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
         // Return values:
         if ($this->isDisabled('tt_content', $row)) {
             return '<span class="text-muted">' . $out . '</span>';
-        } else {
-            return $out;
         }
+        return $out;
     }
 
     /**
@@ -1934,7 +2376,8 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                 ->getQueryBuilderForTable('tt_content');
             $queryBuilder->getRestrictions()
                 ->removeAll()
-                ->add(GeneralUtility::makeInstance(DeletedRestriction::class));
+                ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
+                ->add(GeneralUtility::makeInstance(BackendWorkspaceRestriction::class, null, false));
             $queryBuilder
                 ->select('*')
                 ->from('tt_content')
@@ -1969,10 +2412,9 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
      *
      * @param array $defaultLanguageUids Numeric array with uids of tt_content elements in the default language
      * @param int $lP Sys language UID
-     * @param int $colPos Column position
      * @return string "Copy languages" button, if available.
      */
-    public function newLanguageButton($defaultLanguageUids, $lP, $colPos = 0)
+    public function newLanguageButton($defaultLanguageUids, $lP)
     {
         $lP = (int)$lP;
         if (!$this->doEdit || !$lP) {
@@ -1980,46 +2422,50 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
         }
         $theNewButton = '';
 
-        $allowCopy = true;
-        $allowTranslate = true;
+        $localizationTsConfig = BackendUtility::getPagesTSconfig($this->id)['mod.']['web_layout.']['localization.'] ?? [];
+        $allowCopy = (bool)($localizationTsConfig['enableCopy'] ?? true);
+        $allowTranslate = (bool)($localizationTsConfig['enableTranslate'] ?? true);
         if (!empty($this->languageHasTranslationsCache[$lP])) {
             if (isset($this->languageHasTranslationsCache[$lP]['hasStandAloneContent'])) {
                 $allowTranslate = false;
             }
             if (isset($this->languageHasTranslationsCache[$lP]['hasTranslations'])) {
-                $allowCopy = false;
+                $allowCopy = $allowCopy && !$this->languageHasTranslationsCache[$lP]['hasTranslations'];
             }
         }
 
-        if (isset($this->contentElementCache[$lP][$colPos]) && is_array($this->contentElementCache[$lP][$colPos])) {
-            foreach ($this->contentElementCache[$lP][$colPos] as $record) {
-                $key = array_search($record['l10n_source'], $defaultLanguageUids);
-                if ($key !== false) {
-                    unset($defaultLanguageUids[$key]);
+        if (isset($this->contentElementCache[$lP]) && is_array($this->contentElementCache[$lP])) {
+            foreach ($this->contentElementCache[$lP] as $column => $records) {
+                foreach ($records as $record) {
+                    $key = array_search($record['l10n_source'], $defaultLanguageUids);
+                    if ($key !== false) {
+                        unset($defaultLanguageUids[$key]);
+                    }
                 }
             }
         }
 
         if (!empty($defaultLanguageUids)) {
             $theNewButton =
-                '<input'
-                    . ' class="btn btn-default t3js-localize"'
-                    . ' type="button"'
-                    . ' disabled'
-                    . ' value="' . htmlspecialchars($this->getLanguageService()->getLL('newPageContent_translate')) . '"'
-                    . ' data-has-elements="' . (int)!empty($this->contentElementCache[$lP][$colPos]) . '"'
+                '<a'
+                    . ' href="#"'
+                    . ' class="btn btn-default btn-sm t3js-localize disabled"'
+                    . ' title="' . htmlspecialchars($this->getLanguageService()->getLL('newPageContent_translate')) . '"'
+                    . ' data-page="' . htmlspecialchars($this->getLocalizedPageTitle()) . '"'
+                    . ' data-has-elements="' . (int)!empty($this->contentElementCache[$lP]) . '"'
                     . ' data-allow-copy="' . (int)$allowCopy . '"'
                     . ' data-allow-translate="' . (int)$allowTranslate . '"'
                     . ' data-table="tt_content"'
                     . ' data-page-id="' . (int)GeneralUtility::_GP('id') . '"'
                     . ' data-language-id="' . $lP . '"'
                     . ' data-language-name="' . htmlspecialchars($this->tt_contentConfig['languageCols'][$lP]) . '"'
-                    . ' data-colpos-id="' . $colPos . '"'
-                    . ' data-colpos-name="' . BackendUtility::getProcessedValue('tt_content', 'colPos', $colPos) . '"'
-                . '/>';
+                . '>'
+                . $this->iconFactory->getIcon('actions-localize', Icon::SIZE_SMALL)->render()
+                . ' ' . htmlspecialchars($this->getLanguageService()->getLL('newPageContent_translate'))
+                . '</a>';
         }
 
-        return '<div class="t3-page-lang-copyce">' . $theNewButton . '</div>';
+        return $theNewButton;
     }
 
     /**
@@ -2027,20 +2473,24 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
      *
      * @param int $id Page id where to create the element.
      * @param int $colPos Preset: Column position value
-     * @param int $sys_language Preset: Sys langauge value
+     * @param int $sys_language Preset: Sys language value
      * @return string String for onclick attribute.
      * @see getTable_tt_content()
      */
     public function newContentElementOnClick($id, $colPos, $sys_language)
     {
         if ($this->option_newWizard) {
-            $tsConfig = BackendUtility::getModTSconfig($id, 'mod');
-            $moduleName = isset($tsConfig['properties']['newContentElementWizard.']['override'])
-                ? $tsConfig['properties']['newContentElementWizard.']['override']
-                : 'new_content_element';
-            $onClick = 'window.location.href=' . GeneralUtility::quoteJSvalue(BackendUtility::getModuleUrl($moduleName) . '&id=' . $id . '&colPos=' . $colPos
-                . '&sys_language_uid=' . $sys_language . '&uid_pid=' . $id
-                . '&returnUrl=' . rawurlencode(GeneralUtility::getIndpEnv('REQUEST_URI'))) . ';';
+            $routeName = BackendUtility::getPagesTSconfig($id)['mod.']['newContentElementWizard.']['override']
+                ?? 'new_content_element_wizard';
+            $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+            $url = $uriBuilder->buildUriFromRoute($routeName, [
+                'id' => $id,
+                'colPos' => $colPos,
+                'sys_language_uid' => $sys_language,
+                'uid_pid' => $id,
+                'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI')
+            ]);
+            $onClick = 'window.location.href=' . GeneralUtility::quoteJSvalue((string)$url) . ';';
         } else {
             $onClick = BackendUtility::editOnClick('&edit[tt_content][' . $id . ']=new&defVals[tt_content][colPos]='
                 . $colPos . '&defVals[tt_content][sys_language_uid]=' . $sys_language);
@@ -2068,12 +2518,12 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                 ],
                 'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI') . '#element-tt_content-' . $row['uid']
             ];
-            $url = BackendUtility::getModuleUrl('record_edit', $urlParameters);
+            $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+            $url = (string)$uriBuilder->buildUriFromRoute('record_edit', $urlParameters);
             // Return link
             return '<a href="' . htmlspecialchars($url) . '" title="' . htmlspecialchars($this->getLanguageService()->getLL('edit')) . '">' . $str . '</a>';
-        } else {
-            return $str;
         }
+        return $str;
     }
 
     /**
@@ -2081,122 +2531,69 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
      * Displays only languages which are not yet present for the current page and
      * that are not disabled with page TS.
      *
-     * @param int $id Page id for which to create a new language (pages_language_overlay record)
+     * @param int $id Page id for which to create a new translation record of pages
      * @return string <select> HTML element (if there were items for the box anyways...)
      * @see getTable_tt_content()
      */
     public function languageSelector($id)
     {
-        if ($this->getBackendUser()->check('tables_modify', 'pages_language_overlay')) {
-            // First, select all
-            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_language');
-            $queryBuilder->getRestrictions()->removeAll();
-            $queryBuilder->getRestrictions()->add(GeneralUtility::makeInstance(HiddenRestriction::class));
-            $statement = $queryBuilder->select('uid', 'title')
-                ->from('sys_language')
-                ->orderBy('sorting')
-                ->execute();
-            $langSelItems = [];
-            $langSelItems[0] = '
-						<option value="0"></option>';
-            while ($row = $statement->fetch()) {
-                if ($this->getBackendUser()->checkLanguageAccess($row['uid'])) {
-                    $langSelItems[$row['uid']] = '
-							<option value="' . $row['uid'] . '">' . htmlspecialchars($row['title']) . '</option>';
-                }
+        if (!$this->getBackendUser()->check('tables_modify', 'pages')) {
+            return '';
+        }
+        $id = (int)$id;
+
+        // First, select all languages that are available for the current user
+        $availableTranslations = [];
+        foreach ($this->siteLanguages as $language) {
+            if ($language->getLanguageId() === 0) {
+                continue;
             }
-            // Then, subtract the languages which are already on the page:
-            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_language');
-            $queryBuilder->getRestrictions()->removeAll();
-            $queryBuilder->select('sys_language.uid AS uid', 'sys_language.title AS title')
-                ->from('sys_language')
-                ->join(
-                    'sys_language',
-                    'pages_language_overlay',
-                    'pages_language_overlay',
-                    $queryBuilder->expr()->eq('sys_language.uid', $queryBuilder->quoteIdentifier('pages_language_overlay.sys_language_uid'))
+            $availableTranslations[$language->getLanguageId()] = $language->getTitle();
+        }
+
+        // Then, subtract the languages which are already on the page:
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
+        $queryBuilder->getRestrictions()->removeAll()
+            ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
+            ->add(GeneralUtility::makeInstance(BackendWorkspaceRestriction::class));
+        $queryBuilder->select('uid', $GLOBALS['TCA']['pages']['ctrl']['languageField'])
+            ->from('pages')
+            ->where(
+                $queryBuilder->expr()->eq(
+                    $GLOBALS['TCA']['pages']['ctrl']['transOrigPointerField'],
+                    $queryBuilder->createNamedParameter($id, \PDO::PARAM_INT)
                 )
-                ->where(
-                    $queryBuilder->expr()->eq(
-                        'pages_language_overlay.deleted', $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT)
-                    ),
-                    $queryBuilder->expr()->eq(
-                        'pages_language_overlay.pid',
-                        $queryBuilder->createNamedParameter($this->id, \PDO::PARAM_INT)
-                    ),
-                    $queryBuilder->expr()->orX(
-                        $queryBuilder->expr()->gte(
-                            'pages_language_overlay.t3ver_state',
-                            $queryBuilder->createNamedParameter(
-                                (string)new VersionState(VersionState::DEFAULT_STATE),
-                                \PDO::PARAM_INT
-                            )
-                        ),
-                        $queryBuilder->expr()->eq(
-                            'pages_language_overlay.t3ver_wsid',
-                            $queryBuilder->createNamedParameter($this->getBackendUser()->workspace, \PDO::PARAM_INT)
-                        )
-                    )
-                )
-                ->groupBy('pages_language_overlay.sys_language_uid', 'sys_language.uid', 'sys_language.pid',
-                    'sys_language.tstamp', 'sys_language.hidden', 'sys_language.title',
-                    'sys_language.language_isocode', 'sys_language.static_lang_isocode', 'sys_language.flag')
-                ->orderBy('sys_language.sorting');
-            if (!$this->getBackendUser()->isAdmin()) {
-                $queryBuilder->andWhere(
-                    $queryBuilder->expr()->eq(
-                        'sys_language.hidden',
-                        $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT)
-                    )
-                );
-            }
-            $statement = $queryBuilder->execute();
-            while ($row = $statement->fetch()) {
-                unset($langSelItems[$row['uid']]);
-            }
-            // Remove disallowed languages
-            if (count($langSelItems) > 1
-                && !$this->getBackendUser()->user['admin']
-                && $this->getBackendUser()->groupData['allowed_languages'] !== ''
-            ) {
-                $allowed_languages = array_flip(explode(',', $this->getBackendUser()->groupData['allowed_languages']));
-                if (!empty($allowed_languages)) {
-                    foreach ($langSelItems as $key => $value) {
-                        if (!isset($allowed_languages[$key]) && $key != 0) {
-                            unset($langSelItems[$key]);
-                        }
-                    }
-                }
-            }
-            // Remove disabled languages
-            $modSharedTSconfig = BackendUtility::getModTSconfig($id, 'mod.SHARED');
-            $disableLanguages = isset($modSharedTSconfig['properties']['disableLanguages'])
-                ? GeneralUtility::trimExplode(',', $modSharedTSconfig['properties']['disableLanguages'], true)
-                : [];
-            if (!empty($langSelItems) && !empty($disableLanguages)) {
-                foreach ($disableLanguages as $language) {
-                    if ($language != 0 && isset($langSelItems[$language])) {
-                        unset($langSelItems[$language]);
-                    }
-                }
-            }
-            // If any languages are left, make selector:
-            if (count($langSelItems) > 1) {
-                $url = BackendUtility::getModuleUrl('record_edit', [
-                    'edit[pages_language_overlay][' . $id . ']' => 'new',
-                    'overrideVals[pages_language_overlay][doktype]' => (int)$this->pageRecord['doktype'],
+            );
+        $statement = $queryBuilder->execute();
+        while ($row = $statement->fetch()) {
+            unset($availableTranslations[(int)$row[$GLOBALS['TCA']['pages']['ctrl']['languageField']]]);
+        }
+        // If any languages are left, make selector:
+        if (!empty($availableTranslations)) {
+            $output = '<option value="">' . htmlspecialchars($this->getLanguageService()->getLL('new_language')) . '</option>';
+            foreach ($availableTranslations as $languageUid => $languageTitle) {
+                // Build localize command URL to DataHandler (tce_db)
+                // which redirects to FormEngine (record_edit)
+                // which, when finished editing should return back to the current page (returnUrl)
+                $parameters = [
+                    'justLocalized' => 'pages:' . $id . ':' . $languageUid,
                     'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI')
-                ]);
-                $onChangeContent = 'window.location.href=' . GeneralUtility::quoteJSvalue($url . '&overrideVals[pages_language_overlay][sys_language_uid]=') . '+this.options[this.selectedIndex].value';
-                return '<div class="form-inline form-inline-spaced">'
-                . '<div class="form-group">'
-                . '<label for="createNewLanguage">'
-                . htmlspecialchars($this->getLanguageService()->getLL('new_language'))
-                . '</label>'
-                . '<select class="form-control input-sm" name="createNewLanguage" onchange="' . htmlspecialchars($onChangeContent) . '">'
-                . implode('', $langSelItems)
-                . '</select></div></div>';
+                ];
+                $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+                $redirectUrl = (string)$uriBuilder->buildUriFromRoute('record_edit', $parameters);
+                $targetUrl = BackendUtility::getLinkToDataHandlerAction(
+                    '&cmd[pages][' . $id . '][localize]=' . $languageUid,
+                    $redirectUrl
+                );
+
+                $output .= '<option value="' . htmlspecialchars($targetUrl) . '">' . htmlspecialchars($languageTitle) . '</option>';
             }
+
+            return '<div class="form-inline form-inline-spaced">'
+                . '<div class="form-group">'
+                . '<select class="form-control input-sm" name="createNewLanguage" onchange="window.location.href=this.options[this.selectedIndex].value">'
+                . $output
+                . '</select></div></div>';
         }
         return '';
     }
@@ -2204,18 +2601,15 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
     /**
      * Traverse the result pointer given, adding each record to array and setting some internal values at the same time.
      *
-     * @param Statement|\mysqli_result $result DBAL Statement or MySQLi result object
+     * @param Statement $result DBAL Statement
      * @param string $table Table name defaulting to tt_content
      * @return array The selected rows returned in this array.
      */
-    public function getResult($result, string $table = 'tt_content'): array
+    public function getResult(Statement $result, string $table = 'tt_content'): array
     {
-        if ($result instanceof \mysqli_result) {
-            GeneralUtility::deprecationLog('Using \TYPO3\CMS\Backend\View\PageLayoutView::getResult with a mysqli_result object is deprecated since TYPO3 CMS 8 and will be removed in TYPO3 CMS 9');
-        }
         $output = [];
         // Traverse the result:
-        while ($row = ($result instanceof Statement ? $result->fetch() : $result->fetch_assoc())) {
+        while ($row = $result->fetch()) {
             BackendUtility::workspaceOL($table, $row, -99, true);
             if ($row) {
                 // Add the row to the array:
@@ -2237,7 +2631,6 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
      * Initializes the clipboard for generating paste links
      *
      *
-     * @see \TYPO3\CMS\Recordlist\RecordList::main()
      * @see \TYPO3\CMS\Backend\Controller\ContextMenuController::clipboardAction()
      * @see \TYPO3\CMS\Filelist\Controller\FileListController::indexAction()
      */
@@ -2406,7 +2799,7 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
     public function noEditIcon($label = 'noEditItems')
     {
         $title = htmlspecialchars($this->getLanguageService()->getLL($label));
-        return '<span title="' . $title . '">' . $this->iconFactory->getIcon('status-status-edit-read-only', Icon::SIZE_SMALL)->render() . '</span>';
+        return '<span title="' . $title . '">' . $this->iconFactory->getIcon('status-edit-read-only', Icon::SIZE_SMALL)->render() . '</span>';
     }
 
     /*****************************************
@@ -2437,7 +2830,8 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
         foreach ($theTables as $tName) {
             // Check access and whether the proper extensions are loaded:
             if ($this->getBackendUser()->check('tables_select', $tName)
-                && (isset($this->externalTables[$tName])
+                && (
+                    isset($this->externalTables[$tName])
                     || $tName === 'fe_users' || $tName === 'tt_content'
                     || \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::isLoaded($tName)
                 )
@@ -2505,14 +2899,14 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
      * @param int $language
      * @return bool
      */
-    protected function checkIfTranslationsExistInLanguage(array $contentElements, $language)
+    protected function checkIfTranslationsExistInLanguage(array $contentElements, int $language)
     {
         // If in default language, you may always create new entries
         // Also, you may override this strict behavior via user TS Config
         // If you do so, you're on your own and cannot rely on any support by the TYPO3 core
         // We jump out here since we don't need to do the expensive loop operations
-        $allowInconsistentLanguageHandling = BackendUtility::getModTSconfig($this->id, 'mod.web_layout.allowInconsistentLanguageHandling');
-        if ($language === 0 || $allowInconsistentLanguageHandling['value'] === '1') {
+        $allowInconsistentLanguageHandling = (bool)(BackendUtility::getPagesTSconfig($this->id)['mod.']['web_layout.']['allowInconsistentLanguageHandling'] ?? false);
+        if ($language === 0 || $allowInconsistentLanguageHandling) {
             return false;
         }
         /**
@@ -2523,20 +2917,27 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                 foreach ($columns as $contentElement) {
                     if ((int)$contentElement['l18n_parent'] === 0) {
                         $this->languageHasTranslationsCache[$language]['hasStandAloneContent'] = true;
+                        $this->languageHasTranslationsCache[$language]['mode'] = 'free';
                     }
                     if ((int)$contentElement['l18n_parent'] > 0) {
                         $this->languageHasTranslationsCache[$language]['hasTranslations'] = true;
+                        $this->languageHasTranslationsCache[$language]['mode'] = 'connected';
                     }
                 }
             }
+            if (!isset($this->languageHasTranslationsCache[$language])) {
+                $this->languageHasTranslationsCache[$language]['hasTranslations'] = false;
+            }
             // Check whether we have a mix of both
-            if ($this->languageHasTranslationsCache[$language]['hasStandAloneContent']
+            if (isset($this->languageHasTranslationsCache[$language]['hasStandAloneContent'])
                 && $this->languageHasTranslationsCache[$language]['hasTranslations']
             ) {
+                $this->languageHasTranslationsCache[$language]['mode'] = 'mixed';
+                $siteLanguage = $this->siteLanguages[$language];
                 $message = GeneralUtility::makeInstance(
                     FlashMessage::class,
-                    sprintf($this->getLanguageService()->getLL('staleTranslationWarning'), $this->languageIconTitles[$language]['title']),
-                    sprintf($this->getLanguageService()->getLL('staleTranslationWarningTitle'), $this->languageIconTitles[$language]['title']),
+                    sprintf($this->getLanguageService()->getLL('staleTranslationWarning'), $siteLanguage->getTitle()),
+                    sprintf($this->getLanguageService()->getLL('staleTranslationWarningTitle'), $siteLanguage->getTitle()),
                     FlashMessage::WARNING
                 );
                 $service = GeneralUtility::makeInstance(FlashMessageService::class);
@@ -2544,10 +2945,8 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
                 $queue->addMessage($message);
             }
         }
-        if ($this->languageHasTranslationsCache[$language]['hasTranslations']) {
-            return true;
-        }
-        return false;
+
+        return $this->languageHasTranslationsCache[$language]['hasTranslations'];
     }
 
     /**
@@ -2572,5 +2971,1545 @@ class PageLayoutView extends \TYPO3\CMS\Recordlist\RecordList\AbstractDatabaseRe
     protected function getPageLayoutController()
     {
         return $GLOBALS['SOBE'];
+    }
+
+    /**
+     * Initializes the list generation
+     *
+     * @param int $id Page id for which the list is rendered. Must be >= 0
+     * @param string $table Tablename - if extended mode where only one table is listed at a time.
+     * @param int $pointer Browsing pointer.
+     * @param string $search Search word, if any
+     * @param int $levels Number of levels to search down the page tree
+     * @param int $showLimit Limit of records to be listed.
+     * @throws SiteNotFoundException
+     */
+    public function start($id, $table, $pointer, $search = '', $levels = 0, $showLimit = 0)
+    {
+        $this->resolveSiteLanguages((int)$id);
+        $backendUser = $this->getBackendUser();
+        // Setting internal variables:
+        // sets the parent id
+        $this->id = (int)$id;
+        if ($GLOBALS['TCA'][$table]) {
+            // Setting single table mode, if table exists:
+            $this->table = $table;
+        }
+        $this->firstElementNumber = $pointer;
+        $this->searchString = trim($search);
+        $this->searchLevels = (int)$levels;
+        $this->showLimit = MathUtility::forceIntegerInRange($showLimit, 0, 10000);
+        // Setting GPvars:
+        $this->csvOutput = (bool)GeneralUtility::_GP('csv');
+        $this->sortField = GeneralUtility::_GP('sortField');
+        $this->sortRev = GeneralUtility::_GP('sortRev');
+        $this->displayFields = GeneralUtility::_GP('displayFields');
+        $this->duplicateField = GeneralUtility::_GP('duplicateField');
+        if (GeneralUtility::_GP('justLocalized')) {
+            $this->localizationRedirect(GeneralUtility::_GP('justLocalized'));
+        }
+        // Init dynamic vars:
+        $this->counter = 0;
+        $this->JScode = '';
+        $this->HTMLcode = '';
+        // Limits
+        if (isset($this->modTSconfig['properties']['itemsLimitPerTable'])) {
+            $this->itemsLimitPerTable = MathUtility::forceIntegerInRange(
+                (int)$this->modTSconfig['properties']['itemsLimitPerTable'],
+                1,
+                10000
+            );
+        }
+        if (isset($this->modTSconfig['properties']['itemsLimitSingleTable'])) {
+            $this->itemsLimitSingleTable = MathUtility::forceIntegerInRange(
+                (int)$this->modTSconfig['properties']['itemsLimitSingleTable'],
+                1,
+                10000
+            );
+        }
+
+        // $table might be NULL at this point in the code. As the expressionBuilder
+        // is used to limit returned records based on the page permissions and the
+        // uid field of the pages it can hardcoded to work on the pages table.
+        $expressionBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
+            ->getQueryBuilderForTable('pages')
+            ->expr();
+        $permsClause = $expressionBuilder->andX($backendUser->getPagePermsClause(Permission::PAGE_SHOW));
+        // This will hide records from display - it has nothing to do with user rights!!
+        $pidList = GeneralUtility::intExplode(',', $backendUser->getTSConfig()['options.']['hideRecords.']['pages'] ?? '', true);
+        if (!empty($pidList)) {
+            $permsClause->add($expressionBuilder->notIn('pages.uid', $pidList));
+        }
+        $this->perms_clause = (string)$permsClause;
+
+        // Get configuration of collapsed tables from user uc and merge with sanitized GP vars
+        $this->tablesCollapsed = is_array($backendUser->uc['moduleData']['list'])
+            ? $backendUser->uc['moduleData']['list']
+            : [];
+        $collapseOverride = GeneralUtility::_GP('collapse');
+        if (is_array($collapseOverride)) {
+            foreach ($collapseOverride as $collapseTable => $collapseValue) {
+                if (is_array($GLOBALS['TCA'][$collapseTable]) && ($collapseValue == 0 || $collapseValue == 1)) {
+                    $this->tablesCollapsed[$collapseTable] = $collapseValue;
+                }
+            }
+            // Save modified user uc
+            $backendUser->uc['moduleData']['list'] = $this->tablesCollapsed;
+            $backendUser->writeUC($backendUser->uc);
+            $returnUrl = GeneralUtility::sanitizeLocalUrl(GeneralUtility::_GP('returnUrl'));
+            if ($returnUrl !== '') {
+                HttpUtility::redirect($returnUrl);
+            }
+        }
+        $this->initializeLanguages();
+    }
+
+    /**
+     * Traverses the table(s) to be listed and renders the output code for each:
+     * The HTML is accumulated in $this->HTMLcode
+     * Finishes off with a stopper-gif
+     */
+    public function generateList()
+    {
+        // Set page record in header
+        $this->pageRecord = BackendUtility::getRecordWSOL('pages', $this->id);
+        $hideTablesArray = GeneralUtility::trimExplode(',', $this->hideTables);
+
+        $backendUser = $this->getBackendUser();
+
+        // pre-process tables and add sorting instructions
+        $tableNames = array_flip(array_keys($GLOBALS['TCA']));
+        foreach ($tableNames as $tableName => &$config) {
+            $hideTable = false;
+
+            // Checking if the table should be rendered:
+            // Checks that we see only permitted/requested tables:
+            if ($this->table && $tableName !== $this->table
+                || $this->tableList && !GeneralUtility::inList($this->tableList, $tableName)
+                || !$backendUser->check('tables_select', $tableName)
+            ) {
+                $hideTable = true;
+            }
+
+            if (!$hideTable) {
+                // Don't show table if hidden by TCA ctrl section
+                // Don't show table if hidden by pageTSconfig mod.web_list.hideTables
+                $hideTable = $hideTable
+                    || !empty($GLOBALS['TCA'][$tableName]['ctrl']['hideTable'])
+                    || in_array($tableName, $hideTablesArray, true)
+                    || in_array('*', $hideTablesArray, true);
+                // Override previous selection if table is enabled or hidden by TSconfig TCA override mod.web_list.table
+                if (isset($this->tableTSconfigOverTCA[$tableName . '.']['hideTable'])) {
+                    $hideTable = (bool)$this->tableTSconfigOverTCA[$tableName . '.']['hideTable'];
+                }
+            }
+            if ($hideTable) {
+                unset($tableNames[$tableName]);
+            } else {
+                if (isset($this->tableDisplayOrder[$tableName])) {
+                    // Copy display order information
+                    $tableNames[$tableName] = $this->tableDisplayOrder[$tableName];
+                } else {
+                    $tableNames[$tableName] = [];
+                }
+            }
+        }
+        unset($config);
+
+        $orderedTableNames = GeneralUtility::makeInstance(DependencyOrderingService::class)
+            ->orderByDependencies($tableNames);
+
+        foreach ($orderedTableNames as $tableName => $_) {
+            // check if we are in single- or multi-table mode
+            if ($this->table) {
+                $this->iLimit = isset($GLOBALS['TCA'][$tableName]['interface']['maxSingleDBListItems'])
+                    ? (int)$GLOBALS['TCA'][$tableName]['interface']['maxSingleDBListItems']
+                    : $this->itemsLimitSingleTable;
+            } else {
+                // if there are no records in table continue current foreach
+                $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
+                    ->getQueryBuilderForTable($tableName);
+                $queryBuilder->getRestrictions()
+                    ->removeAll()
+                    ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
+                    ->add(GeneralUtility::makeInstance(BackendWorkspaceRestriction::class));
+                $queryBuilder = $this->addPageIdConstraint($tableName, $queryBuilder);
+                $firstRow = $queryBuilder->select('uid')
+                    ->from($tableName)
+                    ->execute()
+                    ->fetch();
+                if (!is_array($firstRow)) {
+                    continue;
+                }
+                $this->iLimit = isset($GLOBALS['TCA'][$tableName]['interface']['maxDBListItems'])
+                    ? (int)$GLOBALS['TCA'][$tableName]['interface']['maxDBListItems']
+                    : $this->itemsLimitPerTable;
+            }
+            if ($this->showLimit) {
+                $this->iLimit = $this->showLimit;
+            }
+            // Setting fields to select:
+            if ($this->allFields) {
+                $fields = $this->makeFieldList($tableName);
+                $fields[] = 'tstamp';
+                $fields[] = 'crdate';
+                $fields[] = '_PATH_';
+                $fields[] = '_CONTROL_';
+                if (is_array($this->setFields[$tableName])) {
+                    $fields = array_intersect($fields, $this->setFields[$tableName]);
+                } else {
+                    $fields = [];
+                }
+            } else {
+                $fields = [];
+            }
+
+            // Finally, render the list:
+            $this->HTMLcode .= $this->getTable($tableName, $this->id, implode(',', $fields));
+        }
+    }
+
+    /**
+     * Creates the search box
+     *
+     * @param bool $formFields If TRUE, the search box is wrapped in its own form-tags
+     * @return string HTML for the search box
+     */
+    public function getSearchBox($formFields = true)
+    {
+        $lang = $this->getLanguageService();
+        // Setting form-elements, if applicable:
+        $formElements = ['', ''];
+        if ($formFields) {
+            $formElements = [
+                '<form action="' . htmlspecialchars(
+                    $this->listURL('', '-1', 'firstElementNumber,search_field')
+                ) . '" method="post">',
+                '</form>'
+            ];
+        }
+        // Make level selector:
+        $opt = [];
+
+        // "New" generation of search levels ... based on TS config
+        $config = BackendUtility::getPagesTSconfig($this->id);
+        $searchLevelsFromTSconfig = $config['mod.']['web_list.']['searchLevel.']['items.'];
+        $searchLevelItems = [];
+
+        // get translated labels for search levels from pagets
+        foreach ($searchLevelsFromTSconfig as $keySearchLevel => $labelConfigured) {
+            $label = $lang->sL('LLL:' . $labelConfigured);
+            if ($label === '') {
+                $label = $labelConfigured;
+            }
+            $searchLevelItems[$keySearchLevel] = $label;
+        }
+
+        foreach ($searchLevelItems as $kv => $label) {
+            $opt[] = '<option value="' . $kv . '"' . ($kv === $this->searchLevels ? ' selected="selected"' : '') . '>' . htmlspecialchars(
+                $label
+            ) . '</option>';
+        }
+        $lMenu = '<select class="form-control" name="search_levels" title="' . htmlspecialchars(
+            $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.title.search_levels')
+        ) . '" id="search_levels">' . implode('', $opt) . '</select>';
+        // Table with the search box:
+        $content = '<div class="db_list-searchbox-form db_list-searchbox-toolbar module-docheader-bar module-docheader-bar-search t3js-module-docheader-bar t3js-module-docheader-bar-search" id="db_list-searchbox-toolbar" style="display: ' . ($this->searchString == '' ? 'none' : 'block') . ';">
+			' . $formElements[0] . '
+                <div id="typo3-dblist-search">
+                    <div class="panel panel-default">
+                        <div class="panel-body">
+                            <div class="row">
+                                <div class="form-group col-xs-12">
+                                    <label for="search_field">' . htmlspecialchars(
+            $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.label.searchString')
+        ) . ': </label>
+									<input class="form-control" type="search" placeholder="' . htmlspecialchars(
+            $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.enterSearchString')
+        ) . '" title="' . htmlspecialchars(
+            $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.title.searchString')
+        ) . '" name="search_field" id="search_field" value="' . htmlspecialchars($this->searchString) . '" />
+                                </div>
+                                <div class="form-group col-xs-12 col-sm-6">
+									<label for="search_levels">' . htmlspecialchars(
+            $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.label.search_levels')
+        ) . ': </label>
+									' . $lMenu . '
+                                </div>
+                                <div class="form-group col-xs-12 col-sm-6">
+									<label for="showLimit">' . htmlspecialchars(
+            $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.label.limit')
+        ) . ': </label>
+									<input class="form-control" type="number" min="0" max="10000" placeholder="10" title="' . htmlspecialchars(
+            $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.title.limit')
+        ) . '" name="showLimit" id="showLimit" value="' . htmlspecialchars(
+            ($this->showLimit ? $this->showLimit : '')
+        ) . '" />
+                                </div>
+                                <div class="form-group col-xs-12">
+                                    <div class="form-control-wrap">
+                                        <button type="submit" class="btn btn-default" name="search" title="' . htmlspecialchars(
+            $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.title.search')
+        ) . '">
+                                            ' . $this->iconFactory->getIcon('actions-search', Icon::SIZE_SMALL)->render(
+            ) . ' ' . htmlspecialchars(
+                $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.search')
+            ) . '
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+			' . $formElements[1] . '</div>';
+        return $content;
+    }
+
+    /**
+     * Setting the field names to display in extended list.
+     * Sets the internal variable $this->setFields
+     */
+    public function setDispFields()
+    {
+        $backendUser = $this->getBackendUser();
+        // Getting from session:
+        $dispFields = $backendUser->getModuleData('list/displayFields');
+        // If fields has been inputted, then set those as the value and push it to session variable:
+        if (is_array($this->displayFields)) {
+            reset($this->displayFields);
+            $tKey = key($this->displayFields);
+            $dispFields[$tKey] = $this->displayFields[$tKey];
+            $backendUser->pushModuleData('list/displayFields', $dispFields);
+        }
+        // Setting result:
+        $this->setFields = $dispFields;
+    }
+
+    /**
+     * Create thumbnail code for record/field
+     *
+     * @param mixed[] $row Record array
+     * @param string $table Table (record is from)
+     * @param string $field Field name for which thumbnail are to be rendered.
+     * @return string HTML for thumbnails, if any.
+     */
+    public function thumbCode($row, $table, $field)
+    {
+        return BackendUtility::thumbCode($row, $table, $field);
+    }
+
+    /**
+     * Returns a QueryBuilder configured to select $fields from $table where the pid is restricted
+     * depending on the current searchlevel setting.
+     *
+     * @param string $table Table name
+     * @param int $pageId Page id Only used to build the search constraints, getPageIdConstraint() used for restrictions
+     * @param string[] $additionalConstraints Additional part for where clause
+     * @param string[] $fields Field list to select, * for all
+     * @return \TYPO3\CMS\Core\Database\Query\QueryBuilder
+     */
+    public function getQueryBuilder(
+        string $table,
+        int $pageId,
+        array $additionalConstraints = [],
+        array $fields = ['*']
+    ): QueryBuilder {
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
+            ->getQueryBuilderForTable($table);
+        $queryBuilder->getRestrictions()
+            ->removeAll()
+            ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
+            ->add(GeneralUtility::makeInstance(BackendWorkspaceRestriction::class));
+        $queryBuilder
+            ->select(...$fields)
+            ->from($table);
+
+        if (!empty($additionalConstraints)) {
+            $queryBuilder->andWhere(...$additionalConstraints);
+        }
+
+        $queryBuilder = $this->prepareQueryBuilder($table, $pageId, $fields, $additionalConstraints, $queryBuilder);
+
+        return $queryBuilder;
+    }
+
+    /**
+     * Return the modified QueryBuilder object ($queryBuilder) which will be
+     * used to select the records from a table $table with pid = $this->pidList
+     *
+     * @param string $table Table name
+     * @param int $pageId Page id Only used to build the search constraints, $this->pidList is used for restrictions
+     * @param string[] $fieldList List of fields to select from the table
+     * @param string[] $additionalConstraints Additional part for where clause
+     * @param QueryBuilder $queryBuilder
+     * @param bool $addSorting
+     * @return QueryBuilder
+     */
+    protected function prepareQueryBuilder(
+        string $table,
+        int $pageId,
+        array $fieldList = ['*'],
+        array $additionalConstraints = [],
+        QueryBuilder $queryBuilder,
+        bool $addSorting = true
+    ): QueryBuilder {
+        $parameters = [
+            'table' => $table,
+            'fields' => $fieldList,
+            'groupBy' => null,
+            'orderBy' => null,
+            'firstResult' => $this->firstElementNumber ?: null,
+            'maxResults' => $this->iLimit ?: null
+        ];
+
+        if ($this->iLimit > 0) {
+            $queryBuilder->setMaxResults($this->iLimit);
+        }
+
+        if ($addSorting) {
+            if ($this->sortField && in_array($this->sortField, $this->makeFieldList($table, 1))) {
+                $queryBuilder->orderBy($this->sortField, $this->sortRev ? 'DESC' : 'ASC');
+            } else {
+                $orderBy = $GLOBALS['TCA'][$table]['ctrl']['sortby'] ?: $GLOBALS['TCA'][$table]['ctrl']['default_sortby'];
+                $orderBys = QueryHelper::parseOrderBy((string)$orderBy);
+                foreach ($orderBys as $orderBy) {
+                    $queryBuilder->addOrderBy($orderBy[0], $orderBy[1]);
+                }
+            }
+        }
+
+        // Build the query constraints
+        $queryBuilder = $this->addPageIdConstraint($table, $queryBuilder);
+        $searchWhere = $this->makeSearchString($table, $pageId);
+        if (!empty($searchWhere)) {
+            $queryBuilder->andWhere($searchWhere);
+        }
+
+        // Filtering on displayable pages (permissions):
+        if ($table === 'pages' && $this->perms_clause) {
+            $queryBuilder->andWhere($this->perms_clause);
+        }
+
+        // Filter out records that are translated, if TSconfig mod.web_list.hideTranslations is set
+        if (!empty($GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField'])
+            && (GeneralUtility::inList($this->hideTranslations, $table) || $this->hideTranslations === '*')
+        ) {
+            $queryBuilder->andWhere(
+                $queryBuilder->expr()->eq(
+                    $GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField'],
+                    0
+                )
+            );
+        }
+
+        $hookName = DatabaseRecordList::class;
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][$hookName]['buildQueryParameters'] ?? [] as $className) {
+            // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, the modifyQuery hook should be used instead.
+            trigger_error('The hook ($GLOBALS[\'TYPO3_CONF_VARS\'][\'SC_OPTIONS\'][' . $hookName . '][\'buildQueryParameters\']) will be removed in TYPO3 v10.0, the modifyQuery hook should be used instead.', E_USER_DEPRECATED);
+            $hookObject = GeneralUtility::makeInstance($className);
+            if (method_exists($hookObject, 'buildQueryParametersPostProcess')) {
+                $hookObject->buildQueryParametersPostProcess(
+                    $parameters,
+                    $table,
+                    $pageId,
+                    $additionalConstraints,
+                    $fieldList,
+                    $this,
+                    $queryBuilder
+                );
+            }
+        }
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][PageLayoutView::class]['modifyQuery'] ?? [] as $className) {
+            $hookObject = GeneralUtility::makeInstance($className);
+            if (method_exists($hookObject, 'modifyQuery')) {
+                $hookObject->modifyQuery(
+                    $parameters,
+                    $table,
+                    $pageId,
+                    $additionalConstraints,
+                    $fieldList,
+                    $queryBuilder
+                );
+            }
+        }
+
+        // array_unique / array_filter used to eliminate empty and duplicate constraints
+        // the array keys are eliminated by this as well to facilitate argument unpacking
+        // when used with the querybuilder.
+        // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
+        if (!empty($parameters['where'])) {
+            $parameters['where'] = array_unique(array_filter(array_values($parameters['where'])));
+        }
+        if (!empty($parameters['where'])) {
+            $this->logDeprecation('where');
+            $queryBuilder->where(...$parameters['where']);
+        }
+        if (!empty($parameters['orderBy'])) {
+            $this->logDeprecation('orderBy');
+            foreach ($parameters['orderBy'] as $fieldNameAndSorting) {
+                list($fieldName, $sorting) = $fieldNameAndSorting;
+                $queryBuilder->addOrderBy($fieldName, $sorting);
+            }
+        }
+        if (!empty($parameters['firstResult'])) {
+            $this->logDeprecation('firstResult');
+            $queryBuilder->setFirstResult((int)$parameters['firstResult']);
+        }
+        if (!empty($parameters['maxResults']) && $parameters['maxResults'] !== $this->iLimit) {
+            $this->logDeprecation('maxResults');
+            $queryBuilder->setMaxResults((int)$parameters['maxResults']);
+        }
+        if (!empty($parameters['groupBy'])) {
+            $this->logDeprecation('groupBy');
+            $queryBuilder->groupBy($parameters['groupBy']);
+        }
+
+        return $queryBuilder;
+    }
+
+    /**
+     * Executed a query to set $this->totalItems to the number of total
+     * items, eg. for pagination
+     *
+     * @param string $table Table name
+     * @param int $pageId Only used to build the search constraints, $this->pidList is used for restrictions
+     * @param array $constraints Additional constraints for where clause
+     */
+    public function setTotalItems(string $table, int $pageId, array $constraints)
+    {
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
+            ->getQueryBuilderForTable($table);
+
+        $queryBuilder->getRestrictions()
+            ->removeAll()
+            ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
+            ->add(GeneralUtility::makeInstance(BackendWorkspaceRestriction::class));
+        $queryBuilder
+            ->from($table);
+
+        if (!empty($constraints)) {
+            $queryBuilder->andWhere(...$constraints);
+        }
+
+        $queryBuilder = $this->prepareQueryBuilder($table, $pageId, ['*'], $constraints, $queryBuilder, false);
+        // Reset limit and offset for full count query
+        $queryBuilder->setFirstResult(0);
+        $queryBuilder->setMaxResults(1);
+
+        $this->totalItems = (int)$queryBuilder->count('*')
+            ->execute()
+            ->fetchColumn();
+    }
+
+    /**
+     * Creates part of query for searching after a word ($this->searchString)
+     * fields in input table.
+     *
+     * @param string $table Table, in which the fields are being searched.
+     * @param int $currentPid Page id for the possible search limit. -1 only if called from an old XCLASS.
+     * @return string Returns part of WHERE-clause for searching, if applicable.
+     */
+    public function makeSearchString($table, $currentPid = -1)
+    {
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
+        $expressionBuilder = $queryBuilder->expr();
+        $constraints = [];
+        $currentPid = (int)$currentPid;
+        $tablePidField = $table === 'pages' ? 'uid' : 'pid';
+        // Make query only if table is valid and a search string is actually defined
+        if (empty($this->searchString)) {
+            return '';
+        }
+
+        $searchableFields = $this->getSearchFields($table);
+        if (MathUtility::canBeInterpretedAsInteger($this->searchString)) {
+            $constraints[] = $expressionBuilder->eq('uid', (int)$this->searchString);
+            foreach ($searchableFields as $fieldName) {
+                if (!isset($GLOBALS['TCA'][$table]['columns'][$fieldName])) {
+                    continue;
+                }
+                $fieldConfig = $GLOBALS['TCA'][$table]['columns'][$fieldName]['config'];
+                $fieldType = $fieldConfig['type'];
+                $evalRules = $fieldConfig['eval'] ?: '';
+                if ($fieldType === 'input' && $evalRules && GeneralUtility::inList($evalRules, 'int')) {
+                    if (!isset($fieldConfig['search']['pidonly'])
+                        || ($fieldConfig['search']['pidonly'] && $currentPid > 0)
+                    ) {
+                        $constraints[] = $expressionBuilder->andX(
+                            $expressionBuilder->eq($fieldName, (int)$this->searchString),
+                            $expressionBuilder->eq($tablePidField, (int)$currentPid)
+                        );
+                    }
+                } elseif ($fieldType === 'text'
+                    || $fieldType === 'flex'
+                    || ($fieldType === 'input' && (!$evalRules || !preg_match('/\b(?:date|time|int)\b/', $evalRules)))
+                ) {
+                    $constraints[] = $expressionBuilder->like(
+                        $fieldName,
+                        $queryBuilder->quote('%' . (int)$this->searchString . '%')
+                    );
+                }
+            }
+        } elseif (!empty($searchableFields)) {
+            $like = $queryBuilder->quote('%' . $queryBuilder->escapeLikeWildcards($this->searchString) . '%');
+            foreach ($searchableFields as $fieldName) {
+                if (!isset($GLOBALS['TCA'][$table]['columns'][$fieldName])) {
+                    continue;
+                }
+                $fieldConfig = $GLOBALS['TCA'][$table]['columns'][$fieldName]['config'];
+                $fieldType = $fieldConfig['type'];
+                $evalRules = $fieldConfig['eval'] ?: '';
+                $searchConstraint = $expressionBuilder->andX(
+                    $expressionBuilder->comparison(
+                        'LOWER(' . $queryBuilder->quoteIdentifier($fieldName) . ')',
+                        'LIKE',
+                        'LOWER(' . $like . ')'
+                    )
+                );
+                if (is_array($fieldConfig['search'])) {
+                    $searchConfig = $fieldConfig['search'];
+                    if (in_array('case', $searchConfig)) {
+                        // Replace case insensitive default constraint
+                        $searchConstraint = $expressionBuilder->andX($expressionBuilder->like($fieldName, $like));
+                    }
+                    if (in_array('pidonly', $searchConfig) && $currentPid > 0) {
+                        $searchConstraint->add($expressionBuilder->eq($tablePidField, (int)$currentPid));
+                    }
+                    if ($searchConfig['andWhere']) {
+                        $searchConstraint->add(
+                            QueryHelper::stripLogicalOperatorPrefix($fieldConfig['search']['andWhere'])
+                        );
+                    }
+                }
+                if ($fieldType === 'text'
+                    || $fieldType === 'flex'
+                    || $fieldType === 'input' && (!$evalRules || !preg_match('/\b(?:date|time|int)\b/', $evalRules))
+                ) {
+                    if ($searchConstraint->count() !== 0) {
+                        $constraints[] = $searchConstraint;
+                    }
+                }
+            }
+        }
+        // If no search field conditions have been built ensure no results are returned
+        if (empty($constraints)) {
+            return '0=1';
+        }
+
+        return $expressionBuilder->orX(...$constraints);
+    }
+
+    /**
+     * Fetches a list of fields to use in the Backend search for the given table.
+     *
+     * @param string $tableName
+     * @return string[]
+     */
+    protected function getSearchFields($tableName)
+    {
+        $fieldArray = [];
+        $fieldListWasSet = false;
+        // Get fields from ctrl section of TCA first
+        if (isset($GLOBALS['TCA'][$tableName]['ctrl']['searchFields'])) {
+            $fieldArray = GeneralUtility::trimExplode(',', $GLOBALS['TCA'][$tableName]['ctrl']['searchFields'], true);
+            $fieldListWasSet = true;
+        }
+        // Call hook to add or change the list
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['mod_list']['getSearchFieldList'] ?? [] as $hookFunction) {
+            $hookParameters = [
+                'tableHasSearchConfiguration' => $fieldListWasSet,
+                'tableName' => $tableName,
+                'searchFields' => &$fieldArray,
+                'searchString' => $this->searchString
+            ];
+            GeneralUtility::callUserFunction($hookFunction, $hookParameters, $this);
+        }
+        return $fieldArray;
+    }
+
+    /**
+     * Returns the title (based on $code) of a table ($table) with the proper link around. For headers over tables.
+     * The link will cause the display of all extended mode or not for the table.
+     *
+     * @param string $table Table name
+     * @param string $code Table label
+     * @return string The linked table label
+     */
+    public function linkWrapTable($table, $code)
+    {
+        if ($this->table !== $table) {
+            return '<a href="' . htmlspecialchars(
+                $this->listURL('', $table, 'firstElementNumber')
+            ) . '">' . $code . '</a>';
+        }
+        return '<a href="' . htmlspecialchars(
+            $this->listURL('', '', 'sortField,sortRev,table,firstElementNumber')
+        ) . '">' . $code . '</a>';
+    }
+
+    /**
+     * Returns the title (based on $code) of a record (from table $table) with the proper link around (that is for 'pages'-records a link to the level of that record...)
+     *
+     * @param string $table Table name
+     * @param int $uid Item uid
+     * @param string $code Item title (not htmlspecialchars()'ed yet)
+     * @param mixed[] $row Item row
+     * @return string The item title. Ready for HTML output (is htmlspecialchars()'ed)
+     */
+    public function linkWrapItems($table, $uid, $code, $row)
+    {
+        $lang = $this->getLanguageService();
+        $origCode = $code;
+        // If the title is blank, make a "no title" label:
+        if ((string)$code === '') {
+            $code = '<i>[' . htmlspecialchars(
+                $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.no_title')
+            ) . ']</i> - '
+                . htmlspecialchars(BackendUtility::getRecordTitle($table, $row));
+        } else {
+            $code = htmlspecialchars($code, ENT_QUOTES, 'UTF-8', false);
+            if ($code != htmlspecialchars($origCode)) {
+                $code = '<span title="' . htmlspecialchars(
+                    $origCode,
+                    ENT_QUOTES,
+                    'UTF-8',
+                    false
+                ) . '">' . $code . '</span>';
+            }
+        }
+        switch ((string)$this->clickTitleMode) {
+            case 'edit':
+                // If the listed table is 'pages' we have to request the permission settings for each page:
+                if ($table === 'pages') {
+                    $localCalcPerms = $this->getBackendUser()->calcPerms(
+                        BackendUtility::getRecord('pages', $row['uid'])
+                    );
+                    $permsEdit = $localCalcPerms & Permission::PAGE_EDIT;
+                } else {
+                    $permsEdit = $this->calcPerms & Permission::CONTENT_EDIT;
+                }
+                // "Edit" link: ( Only if permissions to edit the page-record of the content of the parent page ($this->id)
+                if ($permsEdit) {
+                    $params = '&edit[' . $table . '][' . $row['uid'] . ']=edit';
+                    $code = '<a href="#" onclick="' . htmlspecialchars(
+                        BackendUtility::editOnClick($params, '', -1)
+                    ) . '" title="' . htmlspecialchars($lang->getLL('edit')) . '">' . $code . '</a>';
+                }
+                break;
+            case 'show':
+                // "Show" link (only pages and tt_content elements)
+                if ($table === 'pages' || $table === 'tt_content') {
+                    $code = '<a href="#" onclick="' . htmlspecialchars(
+                        BackendUtility::viewOnClick(
+                            ($table === 'tt_content' ? $this->id . '#' . $row['uid'] : $row['uid'])
+                        )
+                    ) . '" title="' . htmlspecialchars(
+                        $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.showPage')
+                    ) . '">' . $code . '</a>';
+                }
+                break;
+            case 'info':
+                // "Info": (All records)
+                $code = '<a href="#" onclick="' . htmlspecialchars(
+                    'top.TYPO3.InfoWindow.showItem(\'' . $table . '\', \'' . $row['uid'] . '\'); return false;'
+                ) . '" title="' . htmlspecialchars($lang->getLL('showInfo')) . '">' . $code . '</a>';
+                break;
+            default:
+                // Output the label now:
+                if ($table === 'pages') {
+                    $code = '<a href="' . htmlspecialchars(
+                        $this->listURL($uid, '', 'firstElementNumber')
+                    ) . '" onclick="setHighlight(' . $uid . ')">' . $code . '</a>';
+                } else {
+                    $code = $this->linkUrlMail($code, $origCode);
+                }
+        }
+        return $code;
+    }
+
+    /**
+     * Wrapping input code in link to URL or email if $testString is either.
+     *
+     * @param string $code code to wrap
+     * @param string $testString String which is tested for being a URL or email and which will be used for the link if so.
+     * @return string Link-Wrapped $code value, if $testString was URL or email.
+     */
+    public function linkUrlMail($code, $testString)
+    {
+        // Check for URL:
+        $scheme = parse_url($testString, PHP_URL_SCHEME);
+        if ($scheme === 'http' || $scheme === 'https' || $scheme === 'ftp') {
+            return '<a href="' . htmlspecialchars($testString) . '" target="_blank">' . $code . '</a>';
+        }
+        // Check for email:
+        if (GeneralUtility::validEmail($testString)) {
+            return '<a href="mailto:' . htmlspecialchars($testString) . '" target="_blank">' . $code . '</a>';
+        }
+        // Return if nothing else...
+        return $code;
+    }
+
+    /**
+     * Creates the URL to this script, including all relevant GPvars
+     * Fixed GPvars are id, table, imagemode, returnUrl, search_field, search_levels and showLimit
+     * The GPvars "sortField" and "sortRev" are also included UNLESS they are found in the $exclList variable.
+     *
+     * @param string $altId Alternative id value. Enter blank string for the current id ($this->id)
+     * @param string $table Table name to display. Enter "-1" for the current table.
+     * @param string $exclList Comma separated list of fields NOT to include ("sortField", "sortRev" or "firstElementNumber")
+     * @return string URL
+     */
+    public function listURL($altId = '', $table = '-1', $exclList = '')
+    {
+        $urlParameters = [];
+        if ((string)$altId !== '') {
+            $urlParameters['id'] = $altId;
+        } else {
+            $urlParameters['id'] = $this->id;
+        }
+        if ($table === '-1') {
+            $urlParameters['table'] = $this->table;
+        } else {
+            $urlParameters['table'] = $table;
+        }
+        if ($this->thumbs) {
+            $urlParameters['imagemode'] = $this->thumbs;
+        }
+        if ($this->returnUrl) {
+            $urlParameters['returnUrl'] = $this->returnUrl;
+        }
+        if ((!$exclList || !GeneralUtility::inList($exclList, 'search_field')) && $this->searchString) {
+            $urlParameters['search_field'] = $this->searchString;
+        }
+        if ($this->searchLevels) {
+            $urlParameters['search_levels'] = $this->searchLevels;
+        }
+        if ($this->showLimit) {
+            $urlParameters['showLimit'] = $this->showLimit;
+        }
+        if ((!$exclList || !GeneralUtility::inList($exclList, 'firstElementNumber')) && $this->firstElementNumber) {
+            $urlParameters['pointer'] = $this->firstElementNumber;
+        }
+        if ((!$exclList || !GeneralUtility::inList($exclList, 'sortField')) && $this->sortField) {
+            $urlParameters['sortField'] = $this->sortField;
+        }
+        if ((!$exclList || !GeneralUtility::inList($exclList, 'sortRev')) && $this->sortRev) {
+            $urlParameters['sortRev'] = $this->sortRev;
+        }
+
+        $urlParameters = array_merge_recursive($urlParameters, $this->overrideUrlParameters);
+
+        if ($routePath = GeneralUtility::_GP('route')) {
+            $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+            $url = (string)$uriBuilder->buildUriFromRoutePath($routePath, $urlParameters);
+        } else {
+            $url = GeneralUtility::getIndpEnv('SCRIPT_NAME') . HttpUtility::buildQueryString($urlParameters, '?');
+        }
+        return $url;
+    }
+
+    /**
+     * Returns "requestUri" - which is basically listURL
+     * @return string Content of ->listURL()
+     */
+    public function requestUri()
+    {
+        return $this->listURL();
+    }
+
+    /**
+     * Makes the list of fields to select for a table
+     *
+     * @param string $table Table name
+     * @param bool $dontCheckUser If set, users access to the field (non-exclude-fields) is NOT checked.
+     * @param bool $addDateFields If set, also adds crdate and tstamp fields (note: they will also be added if user is admin or dontCheckUser is set)
+     * @return string[] Array, where values are fieldnames to include in query
+     */
+    public function makeFieldList($table, $dontCheckUser = false, $addDateFields = false)
+    {
+        $backendUser = $this->getBackendUser();
+        // Init fieldlist array:
+        $fieldListArr = [];
+        // Check table:
+        if (is_array($GLOBALS['TCA'][$table]) && isset($GLOBALS['TCA'][$table]['columns']) && is_array(
+            $GLOBALS['TCA'][$table]['columns']
+        )) {
+            if (isset($GLOBALS['TCA'][$table]['columns']) && is_array($GLOBALS['TCA'][$table]['columns'])) {
+                // Traverse configured columns and add them to field array, if available for user.
+                foreach ($GLOBALS['TCA'][$table]['columns'] as $fN => $fieldValue) {
+                    if ($dontCheckUser || (!$fieldValue['exclude'] || $backendUser->check(
+                        'non_exclude_fields',
+                        $table . ':' . $fN
+                    )) && $fieldValue['config']['type'] !== 'passthrough') {
+                        $fieldListArr[] = $fN;
+                    }
+                }
+
+                $fieldListArr[] = 'uid';
+                $fieldListArr[] = 'pid';
+
+                // Add date fields
+                if ($dontCheckUser || $backendUser->isAdmin() || $addDateFields) {
+                    if ($GLOBALS['TCA'][$table]['ctrl']['tstamp']) {
+                        $fieldListArr[] = $GLOBALS['TCA'][$table]['ctrl']['tstamp'];
+                    }
+                    if ($GLOBALS['TCA'][$table]['ctrl']['crdate']) {
+                        $fieldListArr[] = $GLOBALS['TCA'][$table]['ctrl']['crdate'];
+                    }
+                }
+                // Add more special fields:
+                if ($dontCheckUser || $backendUser->isAdmin()) {
+                    if ($GLOBALS['TCA'][$table]['ctrl']['cruser_id']) {
+                        $fieldListArr[] = $GLOBALS['TCA'][$table]['ctrl']['cruser_id'];
+                    }
+                    if ($GLOBALS['TCA'][$table]['ctrl']['sortby']) {
+                        $fieldListArr[] = $GLOBALS['TCA'][$table]['ctrl']['sortby'];
+                    }
+                    if (ExtensionManagementUtility::isLoaded('workspaces')
+                        && $GLOBALS['TCA'][$table]['ctrl']['versioningWS']) {
+                        $fieldListArr[] = 't3ver_id';
+                        $fieldListArr[] = 't3ver_state';
+                        $fieldListArr[] = 't3ver_wsid';
+                    }
+                }
+            } else {
+                $this->logger->error('TCA is broken for the table "' . $table . '": no required "columns" entry in TCA.');
+            }
+        }
+        return $fieldListArr;
+    }
+
+    /**
+     * Redirects to FormEngine if a record is just localized.
+     *
+     * @param string $justLocalized String with table, orig uid and language separated by ":
+     */
+    public function localizationRedirect($justLocalized)
+    {
+        list($table, $orig_uid, $language) = explode(':', $justLocalized);
+        if ($GLOBALS['TCA'][$table]
+            && $GLOBALS['TCA'][$table]['ctrl']['languageField']
+            && $GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField']
+        ) {
+            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
+            $queryBuilder->getRestrictions()
+                ->removeAll()
+                ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
+                ->add(GeneralUtility::makeInstance(BackendWorkspaceRestriction::class));
+
+            $localizedRecordUid = $queryBuilder->select('uid')
+                ->from($table)
+                ->where(
+                    $queryBuilder->expr()->eq(
+                        $GLOBALS['TCA'][$table]['ctrl']['languageField'],
+                        $queryBuilder->createNamedParameter($language, \PDO::PARAM_INT)
+                    ),
+                    $queryBuilder->expr()->eq(
+                        $GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField'],
+                        $queryBuilder->createNamedParameter($orig_uid, \PDO::PARAM_INT)
+                    )
+                )
+                ->setMaxResults(1)
+                ->execute()
+                ->fetchColumn();
+
+            if ($localizedRecordUid !== false) {
+                // Create parameters and finally run the classic page module for creating a new page translation
+                $url = $this->listURL();
+                $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+                $editUserAccountUrl = (string)$uriBuilder->buildUriFromRoute(
+                    'record_edit',
+                    [
+                        'edit[' . $table . '][' . $localizedRecordUid . ']' => 'edit',
+                        'returnUrl' => $url
+                    ]
+                );
+                HttpUtility::redirect($editUserAccountUrl);
+            }
+        }
+    }
+
+    /**
+     * Set URL parameters to override or add in the listUrl() method.
+     *
+     * @param string[] $urlParameters
+     */
+    public function setOverrideUrlParameters(array $urlParameters)
+    {
+        $this->overrideUrlParameters = $urlParameters;
+    }
+
+    /**
+     * Set table display order information
+     *
+     * Structure of $orderInformation:
+     *   'tableName' => [
+     *      'before' => // comma-separated string list or array of table names
+     *      'after' => // comma-separated string list or array of table names
+     * ]
+     *
+     * @param array $orderInformation
+     * @throws \UnexpectedValueException
+     */
+    public function setTableDisplayOrder(array $orderInformation)
+    {
+        foreach ($orderInformation as $tableName => &$configuration) {
+            if (isset($configuration['before'])) {
+                if (is_string($configuration['before'])) {
+                    $configuration['before'] = GeneralUtility::trimExplode(',', $configuration['before'], true);
+                } elseif (!is_array($configuration['before'])) {
+                    throw new \UnexpectedValueException(
+                        'The specified "before" order configuration for table "' . $tableName . '" is invalid.',
+                        1504870805
+                    );
+                }
+            }
+            if (isset($configuration['after'])) {
+                if (is_string($configuration['after'])) {
+                    $configuration['after'] = GeneralUtility::trimExplode(',', $configuration['after'], true);
+                } elseif (!is_array($configuration['after'])) {
+                    throw new \UnexpectedValueException(
+                        'The specified "after" order configuration for table "' . $tableName . '" is invalid.',
+                        1504870806
+                    );
+                }
+            }
+        }
+        $this->tableDisplayOrder = $orderInformation;
+    }
+
+    /**
+     * @return array
+     */
+    public function getOverridePageIdList(): array
+    {
+        return $this->overridePageIdList;
+    }
+
+    /**
+     * @param int[]|array $overridePageIdList
+     */
+    public function setOverridePageIdList(array $overridePageIdList)
+    {
+        $this->overridePageIdList = array_map('intval', $overridePageIdList);
+    }
+
+    /**
+     * Get all allowed mount pages to be searched in.
+     *
+     * @param int $id Page id
+     * @param int $depth Depth to go down
+     * @param string $perms_clause select clause
+     * @return int[]
+     */
+    protected function getSearchableWebmounts($id, $depth, $perms_clause)
+    {
+        $backendUser = $this->getBackendUser();
+        /** @var PageTreeView $tree */
+        $tree = GeneralUtility::makeInstance(PageTreeView::class);
+        $tree->init('AND ' . $perms_clause);
+        $tree->makeHTML = 0;
+        $tree->fieldArray = ['uid', 'php_tree_stop'];
+        $idList = [];
+
+        $allowedMounts = !$backendUser->isAdmin() && $id === 0
+            ? $backendUser->returnWebmounts()
+            : [$id];
+
+        foreach ($allowedMounts as $allowedMount) {
+            $idList[] = $allowedMount;
+            if ($depth) {
+                $tree->getTree($allowedMount, $depth, '');
+            }
+            $idList = array_merge($idList, $tree->ids);
+        }
+
+        return $idList;
+    }
+
+    /**
+     * Add conditions to the QueryBuilder object ($queryBuilder) to limit a
+     * query to a list of page IDs based on the current search level setting.
+     *
+     * @param string $tableName
+     * @param QueryBuilder $queryBuilder
+     * @return QueryBuilder Modified QueryBuilder object
+     */
+    protected function addPageIdConstraint(string $tableName, QueryBuilder $queryBuilder): QueryBuilder
+    {
+        // Set search levels:
+        $searchLevels = $this->searchLevels;
+
+        // Set search levels to 999 instead of -1 as the following methods
+        // do not support -1 as valid value for infinite search.
+        if ($searchLevels === -1) {
+            $searchLevels = 999;
+        }
+
+        if ($searchLevels === 0) {
+            $queryBuilder->andWhere(
+                $queryBuilder->expr()->eq(
+                    $tableName . '.pid',
+                    $queryBuilder->createNamedParameter($this->id, \PDO::PARAM_INT)
+                )
+            );
+        } elseif ($searchLevels > 0) {
+            $allowedMounts = $this->getSearchableWebmounts($this->id, $searchLevels, $this->perms_clause);
+            $queryBuilder->andWhere(
+                $queryBuilder->expr()->in(
+                    $tableName . '.pid',
+                    $queryBuilder->createNamedParameter($allowedMounts, Connection::PARAM_INT_ARRAY)
+                )
+            );
+        }
+
+        if (!empty($this->getOverridePageIdList())) {
+            $queryBuilder->andWhere(
+                $queryBuilder->expr()->in(
+                    $tableName . '.pid',
+                    $queryBuilder->createNamedParameter($this->getOverridePageIdList(), Connection::PARAM_INT_ARRAY)
+                )
+            );
+        }
+
+        return $queryBuilder;
+    }
+
+    /**
+     * Method used to log deprecated usage of old buildQueryParametersPostProcess hook arguments
+     *
+     * @param string $index
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected function logDeprecation(string $index)
+    {
+        trigger_error(
+            '[index: ' . $index . '] $parameters in "buildQueryParameters"-Hook will be removed in TYPO3 v10.0, use $queryBuilder instead',
+            E_USER_DEPRECATED
+        );
+    }
+
+    /**
+     * Sets the script url depending on being a module or script request
+     */
+    protected function determineScriptUrl()
+    {
+        if ($routePath = GeneralUtility::_GP('route')) {
+            $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+            $this->thisScript = (string)$uriBuilder->buildUriFromRoutePath($routePath);
+        } else {
+            $this->thisScript = GeneralUtility::getIndpEnv('SCRIPT_NAME');
+        }
+    }
+
+    /**
+     * Returns a table-row with the content from the fields in the input data array.
+     * OBS: $this->fieldArray MUST be set! (represents the list of fields to display)
+     *
+     * @param int $h Is an integer >=0 and denotes how tall an element is. Set to '0' makes a halv line, -1 = full line, set to 1 makes a 'join' and above makes 'line'
+     * @param string $icon Is the <img>+<a> of the record. If not supplied the first 'join'-icon will be a 'line' instead
+     * @param array $data Is the dataarray, record with the fields. Notice: These fields are (currently) NOT htmlspecialchar'ed before being wrapped in <td>-tags
+     * @param string $rowParams Is insert in the <tr>-tags. Must carry a ' ' as first character
+     * @param string $_ OBSOLETE - NOT USED ANYMORE. $lMargin is the leftMargin (int)
+     * @param string $_2 OBSOLETE - NOT USED ANYMORE. Is the HTML <img>-tag for an alternative 'gfx/ol/line.gif'-icon (used in the top)
+     * @param string $colType Defines the tag being used for the columns. Default is td.
+     *
+     * @return string HTML content for the table row
+     */
+    public function addElement($h, $icon, $data, $rowParams = '', $_ = '', $_2 = '', $colType = 'td')
+    {
+        $colType = ($colType === 'th') ? 'th' : 'td';
+        $noWrap = $this->no_noWrap ? '' : ' nowrap';
+        // Start up:
+        $l10nParent = isset($data['_l10nparent_']) ? (int)$data['_l10nparent_'] : 0;
+        $out = '
+		<!-- Element, begin: -->
+		<tr ' . $rowParams . ' data-uid="' . (int)$data['uid'] . '" data-l10nparent="' . $l10nParent . '">';
+        // Show icon and lines
+        if ($this->showIcon) {
+            $out .= '
+			<' . $colType . ' class="col-icon nowrap">';
+            if (!$h) {
+                $out .= '&nbsp;';
+            } else {
+                for ($a = 0; $a < $h; $a++) {
+                    if (!$a) {
+                        if ($icon) {
+                            $out .= $icon;
+                        }
+                    }
+                }
+            }
+            $out .= '</' . $colType . '>
+			';
+        }
+        // Init rendering.
+        $colsp = '';
+        $lastKey = '';
+        $c = 0;
+        $ccount = 0;
+        // __label is used as the label key to circumvent problems with uid used as label (see #67756)
+        // as it was introduced later on, check if it really exists before using it
+        $fields = $this->fieldArray;
+        if ($colType === 'td' && array_key_exists('__label', $data)) {
+            $fields[0] = '__label';
+        }
+        // Traverse field array which contains the data to present:
+        foreach ($fields as $vKey) {
+            if (isset($data[$vKey])) {
+                if ($lastKey) {
+                    $cssClass = $this->addElement_tdCssClass[$lastKey];
+                    if ($this->oddColumnsCssClass && $ccount % 2 == 0) {
+                        $cssClass = implode(' ', [$this->addElement_tdCssClass[$lastKey], $this->oddColumnsCssClass]);
+                    }
+                    $out .= '
+						<' . $colType . ' class="' . $cssClass . $noWrap . '"' . $colsp . $this->addElement_tdParams[$lastKey] . '>' . $data[$lastKey] . '</' . $colType . '>';
+                }
+                $lastKey = $vKey;
+                $c = 1;
+                $ccount++;
+            } else {
+                if (!$lastKey) {
+                    $lastKey = $vKey;
+                }
+                $c++;
+            }
+            if ($c > 1) {
+                $colsp = ' colspan="' . $c . '"';
+            } else {
+                $colsp = '';
+            }
+        }
+        if ($lastKey) {
+            $cssClass = $this->addElement_tdCssClass[$lastKey];
+            if ($this->oddColumnsCssClass) {
+                $cssClass = implode(' ', [$this->addElement_tdCssClass[$lastKey], $this->oddColumnsCssClass]);
+            }
+            $out .= '
+				<' . $colType . ' class="' . $cssClass . $noWrap . '"' . $colsp . $this->addElement_tdParams[$lastKey] . '>' . $data[$lastKey] . '</' . $colType . '>';
+        }
+        // End row
+        $out .= '
+		</tr>';
+        // Return row.
+        return $out;
+    }
+
+    /**
+     * Dummy function, used to write the top of a table listing.
+     */
+    public function writeTop()
+    {
+    }
+
+    /**
+     * Creates a forward/reverse button based on the status of ->eCounter, ->firstElementNumber, ->iLimit
+     *
+     * @param string $table Table name
+     * @return array array([boolean], [HTML]) where [boolean] is 1 for reverse element, [HTML] is the table-row code for the element
+     */
+    public function fwd_rwd_nav($table = '')
+    {
+        $code = '';
+        if ($this->eCounter >= $this->firstElementNumber && $this->eCounter < $this->firstElementNumber + $this->iLimit) {
+            if ($this->firstElementNumber && $this->eCounter == $this->firstElementNumber) {
+                // Reverse
+                $theData = [];
+                $titleCol = $this->fieldArray[0];
+                $theData[$titleCol] = $this->fwd_rwd_HTML('fwd', $this->eCounter, $table);
+                $code = $this->addElement(1, '', $theData, 'class="fwd_rwd_nav"');
+            }
+            return [1, $code];
+        }
+        if ($this->eCounter == $this->firstElementNumber + $this->iLimit) {
+            // Forward
+            $theData = [];
+            $titleCol = $this->fieldArray[0];
+            $theData[$titleCol] = $this->fwd_rwd_HTML('rwd', $this->eCounter, $table);
+            $code = $this->addElement(1, '', $theData, 'class="fwd_rwd_nav"');
+        }
+        return [0, $code];
+    }
+
+    /**
+     * Creates the button with link to either forward or reverse
+     *
+     * @param string $type Type: "fwd" or "rwd
+     * @param int $pointer Pointer
+     * @param string $table Table name
+     * @return string
+     * @internal
+     */
+    public function fwd_rwd_HTML($type, $pointer, $table = '')
+    {
+        $content = '';
+        $tParam = $table ? '&table=' . rawurlencode($table) : '';
+        switch ($type) {
+            case 'fwd':
+                $href = $this->listURL() . '&pointer=' . ($pointer - $this->iLimit) . $tParam;
+                $content = '<a href="' . htmlspecialchars($href) . '">' . $this->iconFactory->getIcon(
+                    'actions-move-up',
+                    Icon::SIZE_SMALL
+                )->render() . '</a> <i>[' . (max(0, $pointer - $this->iLimit) + 1) . ' - ' . $pointer . ']</i>';
+                break;
+            case 'rwd':
+                $href = $this->listURL() . '&pointer=' . $pointer . $tParam;
+                $content = '<a href="' . htmlspecialchars($href) . '">' . $this->iconFactory->getIcon(
+                    'actions-move-down',
+                    Icon::SIZE_SMALL
+                )->render() . '</a> <i>[' . ($pointer + 1) . ' - ' . $this->totalItems . ']</i>';
+                break;
+        }
+        return $content;
+    }
+
+    /**
+     * @return string
+     */
+    protected function getThisScript()
+    {
+        return strpos($this->thisScript, '?') === false ? $this->thisScript . '?' : $this->thisScript . '&';
+    }
+
+    /**
+     * Returning JavaScript for ClipBoard functionality.
+     *
+     * @return string
+     */
+    public function CBfunctions()
+    {
+        return '
+		// checkOffCB()
+	function checkOffCB(listOfCBnames, link) {	//
+		var checkBoxes, flag, i;
+		var checkBoxes = listOfCBnames.split(",");
+		if (link.rel === "") {
+			link.rel = "allChecked";
+			flag = true;
+		} else {
+			link.rel = "";
+			flag = false;
+		}
+		for (i = 0; i < checkBoxes.length; i++) {
+			setcbValue(checkBoxes[i], flag);
+		}
+	}
+		// cbValue()
+	function cbValue(CBname) {	//
+		var CBfullName = "CBC["+CBname+"]";
+		return (document.dblistForm[CBfullName] && document.dblistForm[CBfullName].checked ? 1 : 0);
+	}
+		// setcbValue()
+	function setcbValue(CBname,flag) {	//
+		CBfullName = "CBC["+CBname+"]";
+		if(document.dblistForm[CBfullName]) {
+			document.dblistForm[CBfullName].checked = flag ? "on" : 0;
+		}
+	}
+
+		';
+    }
+
+    /**
+     * Initializes page languages
+     */
+    public function initializeLanguages()
+    {
+        // Look up page overlays:
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
+            ->getQueryBuilderForTable('pages');
+        $queryBuilder->getRestrictions()
+            ->removeAll()
+            ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
+            ->add(GeneralUtility::makeInstance(BackendWorkspaceRestriction::class));
+        $result = $queryBuilder
+            ->select('*')
+            ->from('pages')
+            ->where(
+                $queryBuilder->expr()->andX(
+                    $queryBuilder->expr()->eq(
+                        $GLOBALS['TCA']['pages']['ctrl']['transOrigPointerField'],
+                        $queryBuilder->createNamedParameter($this->id, \PDO::PARAM_INT)
+                    ),
+                    $queryBuilder->expr()->gt(
+                        $GLOBALS['TCA']['pages']['ctrl']['languageField'],
+                        $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT)
+                    )
+                )
+            )
+            ->execute();
+
+        $this->pageOverlays = [];
+        while ($row = $result->fetch()) {
+            $this->pageOverlays[$row[$GLOBALS['TCA']['pages']['ctrl']['languageField']]] = $row;
+        }
+        // @deprecated $this->languageIconTitles can be removed in TYPO3 v10.0.
+        foreach ($this->siteLanguages as $language) {
+            $this->languageIconTitles[$language->getLanguageId()] = [
+                'title' => $language->getTitle(),
+                'flagIcon' => $language->getFlagIdentifier()
+            ];
+        }
+    }
+
+    /**
+     * Return the icon for the language
+     *
+     * @param int $sys_language_uid Sys language uid
+     * @param bool $addAsAdditionalText If set to true, only the flag is returned
+     * @return string Language icon
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0. Use Site Languages instead.
+     */
+    public function languageFlag($sys_language_uid, $addAsAdditionalText = true)
+    {
+        trigger_error('This method will be removed in TYPO3 v10.0.', E_USER_DEPRECATED);
+        $out = '';
+        $title = htmlspecialchars($this->languageIconTitles[$sys_language_uid]['title']);
+        if ($this->languageIconTitles[$sys_language_uid]['flagIcon']) {
+            $out .= '<span title="' . $title . '">' . $this->iconFactory->getIcon(
+                $this->languageIconTitles[$sys_language_uid]['flagIcon'],
+                Icon::SIZE_SMALL
+            )->render() . '</span>';
+            if (!$addAsAdditionalText) {
+                return $out;
+            }
+            $out .= '&nbsp;';
+        }
+        $out .= $title;
+        return $out;
+    }
+
+    /**
+     * Renders the language flag and language title, but only if a icon is given, otherwise just the language
+     *
+     * @param SiteLanguage $language
+     * @return string
+     */
+    protected function renderLanguageFlag(SiteLanguage $language)
+    {
+        $title = htmlspecialchars($language->getTitle());
+        if ($language->getFlagIdentifier()) {
+            $icon = $this->iconFactory->getIcon(
+                $language->getFlagIdentifier(),
+                Icon::SIZE_SMALL
+            )->render();
+            return '<span title="' . $title . '">' . $icon . '</span>&nbsp;' . $title;
+        }
+        return $title;
+    }
+
+    /**
+     * Fetch the site language objects for the given $pageId and store it in $this->siteLanguages
+     *
+     * @param int $pageId
+     * @throws SiteNotFoundException
+     */
+    protected function resolveSiteLanguages(int $pageId)
+    {
+        $site = GeneralUtility::makeInstance(SiteMatcher::class)->matchByPageId($pageId);
+        $this->siteLanguages = $site->getAvailableLanguages($this->getBackendUser(), false, $pageId);
+    }
+
+    /**
+     * Generates HTML code for a Reference tooltip out of
+     * sys_refindex records you hand over
+     *
+     * @param int $references number of records from sys_refindex table
+     * @param string $launchViewParameter JavaScript String, which will be passed as parameters to top.TYPO3.InfoWindow.showItem
+     * @return string
+     */
+    protected function generateReferenceToolTip($references, $launchViewParameter = '')
+    {
+        if (!$references) {
+            $htmlCode = '-';
+        } else {
+            $htmlCode = '<a href="#"';
+            if ($launchViewParameter !== '') {
+                $htmlCode .= ' onclick="' . htmlspecialchars(
+                    'top.TYPO3.InfoWindow.showItem(' . $launchViewParameter . '); return false;'
+                ) . '"';
+            }
+            $htmlCode .= ' title="' . htmlspecialchars(
+                $this->getLanguageService()->sL(
+                    'LLL:EXT:backend/Resources/Private/Language/locallang.xlf:show_references'
+                ) . ' (' . $references . ')'
+            ) . '">';
+            $htmlCode .= $references;
+            $htmlCode .= '</a>';
+        }
+        return $htmlCode;
+    }
+
+    /**
+     * @return string $title
+     */
+    protected function getLocalizedPageTitle(): string
+    {
+        if (($this->tt_contentConfig['sys_language_uid'] ?? 0) > 0) {
+            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
+                ->getQueryBuilderForTable('pages');
+            $queryBuilder->getRestrictions()
+                ->removeAll()
+                ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
+                ->add(GeneralUtility::makeInstance(BackendWorkspaceRestriction::class));
+            $localizedPage = $queryBuilder
+                ->select('*')
+                ->from('pages')
+                ->where(
+                    $queryBuilder->expr()->eq(
+                        $GLOBALS['TCA']['pages']['ctrl']['transOrigPointerField'],
+                        $queryBuilder->createNamedParameter($this->id, \PDO::PARAM_INT)
+                    ),
+                    $queryBuilder->expr()->eq(
+                        $GLOBALS['TCA']['pages']['ctrl']['languageField'],
+                        $queryBuilder->createNamedParameter($this->tt_contentConfig['sys_language_uid'], \PDO::PARAM_INT)
+                    )
+                )
+                ->setMaxResults(1)
+                ->execute()
+                ->fetch();
+            BackendUtility::workspaceOL('pages', $localizedPage);
+            return $localizedPage['title'];
+        }
+        return $this->pageinfo['title'];
+    }
+
+    /**
+     * Check if page can be edited by current user
+     *
+     * @return bool
+     */
+    protected function isPageEditable()
+    {
+        if ($this->getBackendUser()->isAdmin()) {
+            return true;
+        }
+        return !$this->pageinfo['editlock'] && $this->getBackendUser()->doesUserHaveAccess($this->pageinfo, Permission::PAGE_EDIT);
+    }
+
+    /**
+     * Check if content can be edited by current user
+     *
+     * @param int|null $languageId
+     * @return bool
+     */
+    protected function isContentEditable(?int $languageId = null)
+    {
+        if ($this->getBackendUser()->isAdmin()) {
+            return true;
+        }
+        return !$this->pageinfo['editlock']
+            && $this->getBackendUser()->doesUserHaveAccess($this->pageinfo, Permission::CONTENT_EDIT)
+            && ($languageId === null || $this->getBackendUser()->checkLanguageAccess($languageId));
+    }
+
+    /**
+     * Returns the language service
+     * @return LanguageService
+     */
+    protected function getLanguageService()
+    {
+        return $GLOBALS['LANG'];
     }
 }

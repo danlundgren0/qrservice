@@ -14,8 +14,10 @@ namespace TYPO3\CMS\Core\Locking;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Locking\Exception\LockAcquireException;
 use TYPO3\CMS\Core\Locking\Exception\LockCreateException;
+use TYPO3\CMS\Core\Security\BlockSerializationTrait;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -23,7 +25,9 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  */
 class SemaphoreLockStrategy implements LockingStrategyInterface
 {
-    const FILE_LOCK_FOLDER = 'typo3temp/var/locks/';
+    use BlockSerializationTrait;
+
+    const FILE_LOCK_FOLDER = 'lock/';
 
     /**
      * @var mixed Identifier used for this lock
@@ -51,7 +55,7 @@ class SemaphoreLockStrategy implements LockingStrategyInterface
      */
     public function __construct($subject)
     {
-        $path = PATH_site . self::FILE_LOCK_FOLDER;
+        $path = Environment::getVarPath() . '/' . self::FILE_LOCK_FOLDER;
         if (!is_dir($path)) {
             // Not using mkdir_deep on purpose here, if typo3temp/var itself
             // does not exist, this issue should be solved on a different

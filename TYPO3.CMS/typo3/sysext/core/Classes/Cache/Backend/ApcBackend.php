@@ -14,6 +14,10 @@ namespace TYPO3\CMS\Core\Cache\Backend;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Cache\Exception;
+use TYPO3\CMS\Core\Cache\Exception\InvalidDataException;
+use TYPO3\CMS\Core\Cache\Frontend\FrontendInterface;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -32,14 +36,11 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  * Each key is prepended with a prefix. By default prefix consists from two parts
  * separated by underscore character and ends in yet another underscore character:
  * - "TYPO3"
- * - MD5 of path to TYPO3 and user running TYPO3
+ * - MD5 of path to TYPO3 project folder and user running TYPO3
  * This prefix makes sure that keys from the different installations do not
  * conflict.
- *
- * This file is a backport from FLOW3
- * @api
  */
-class ApcBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implements \TYPO3\CMS\Core\Cache\Backend\TaggableBackendInterface
+class ApcBackend extends AbstractBackend implements TaggableBackendInterface
 {
     /**
      * A prefix to separate stored data from other data possible stored in the APC
@@ -71,17 +72,17 @@ class ApcBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
     /**
      * Constructs this backend
      *
-     * @param string $context FLOW3's application context
+     * @param string $context Unused, for backward compatibility only
      * @param array $options Configuration options - unused here
-     * @throws \TYPO3\CMS\Core\Cache\Exception
+     * @throws Exception
      */
     public function __construct($context, array $options = [])
     {
         if (!extension_loaded('apc')) {
-            throw new \TYPO3\CMS\Core\Cache\Exception('The PHP extension "apc" or "apcu" must be installed and loaded in order to use the APC backend.', 1232985414);
+            throw new Exception('The PHP extension "apc" or "apcu" must be installed and loaded in order to use the APC backend.', 1232985414);
         }
         if (PHP_SAPI === 'cli' && ini_get('apc.enable_cli') == 0) {
-            throw new \TYPO3\CMS\Core\Cache\Exception('The APC backend cannot be used because apc is disabled on CLI.', 1232985415);
+            throw new Exception('The APC backend cannot be used because apc is disabled on CLI.', 1232985415);
         }
         parent::__construct($context, $options);
     }
@@ -89,13 +90,13 @@ class ApcBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
     /**
      * Initializes the identifier prefix when setting the cache.
      *
-     * @param \TYPO3\CMS\Core\Cache\Frontend\FrontendInterface $cache
+     * @param FrontendInterface $cache
      */
-    public function setCache(\TYPO3\CMS\Core\Cache\Frontend\FrontendInterface $cache)
+    public function setCache(FrontendInterface $cache)
     {
         parent::setCache($cache);
         $processUser = $this->getCurrentUserData();
-        $pathHash = \TYPO3\CMS\Core\Utility\GeneralUtility::shortMD5($this->getPathSite() . $processUser['name'] . $this->context . $cache->getIdentifier(), 12);
+        $pathHash = GeneralUtility::shortMD5(Environment::getProjectPath() . $processUser['name'] . $this->context . $cache->getIdentifier(), 12);
         $this->setIdentifierPrefix('TYPO3_' . $pathHash);
     }
 
@@ -111,43 +112,31 @@ class ApcBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
     }
 
     /**
-     * Returns the PATH_site constant.
-     *
-     * @return string
-     */
-    protected function getPathSite()
-    {
-        return PATH_site;
-    }
-
-    /**
      * Saves data in the cache.
      *
      * @param string $entryIdentifier An identifier for this specific cache entry
      * @param string $data The data to be stored
      * @param array $tags Tags to associate with this cache entry
      * @param int $lifetime Lifetime of this cache entry in seconds. If NULL is specified, the default lifetime is used. "0" means unlimited lifetime.
-     * @throws \TYPO3\CMS\Core\Cache\Exception if no cache frontend has been set.
-     * @throws \TYPO3\CMS\Core\Cache\Exception\InvalidDataException if $data is not a string
-     * @api
+     * @throws Exception if no cache frontend has been set.
+     * @throws InvalidDataException if $data is not a string
      */
     public function set($entryIdentifier, $data, array $tags = [], $lifetime = null)
     {
-        if (!$this->cache instanceof \TYPO3\CMS\Core\Cache\Frontend\FrontendInterface) {
-            throw new \TYPO3\CMS\Core\Cache\Exception('No cache frontend has been set yet via setCache().', 1232986818);
+        if (!$this->cache instanceof FrontendInterface) {
+            throw new Exception('No cache frontend has been set yet via setCache().', 1232986818);
         }
         if (!is_string($data)) {
-            throw new \TYPO3\CMS\Core\Cache\Exception\InvalidDataException('The specified data is of type "' . gettype($data) . '" but a string is expected.', 1232986825);
+            throw new InvalidDataException('The specified data is of type "' . gettype($data) . '" but a string is expected.', 1232986825);
         }
         $tags[] = '%APCBE%' . $this->cacheIdentifier;
-        $expiration = $lifetime !== null ? $lifetime : $this->defaultLifetime;
+        $expiration = $lifetime ?? $this->defaultLifetime;
         $success = apc_store($this->getIdentifierPrefix() . $entryIdentifier, $data, $expiration);
         if ($success === true) {
             $this->removeIdentifierFromAllTags($entryIdentifier);
             $this->addIdentifierToTags($entryIdentifier, $tags);
         } else {
-            $errorMessage = 'Error using APCu: Could not save data in the cache.';
-            GeneralUtility::sysLog($errorMessage, 'core', GeneralUtility::SYSLOG_SEVERITY_ERROR);
+            $this->logger->alert('Error using APCu: Could not save data in the cache.');
         }
     }
 
@@ -156,7 +145,6 @@ class ApcBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
      *
      * @param string $entryIdentifier An identifier which describes the cache entry to load
      * @return mixed The cache entry's content as a string or FALSE if the cache entry could not be loaded
-     * @api
      */
     public function get($entryIdentifier)
     {
@@ -170,7 +158,6 @@ class ApcBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
      *
      * @param string $entryIdentifier An identifier specifying the cache entry
      * @return bool TRUE if such an entry exists, FALSE if not
-     * @api
      */
     public function has($entryIdentifier)
     {
@@ -186,7 +173,6 @@ class ApcBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
      *
      * @param string $entryIdentifier Specifies the cache entry to remove
      * @return bool TRUE if (at least) an entry could be removed or FALSE if no entry was found
-     * @api
      */
     public function remove($entryIdentifier)
     {
@@ -200,7 +186,6 @@ class ApcBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
      *
      * @param string $tag The tag to search for
      * @return array An array with identifiers of all matching entries. An empty array if no entries matched
-     * @api
      */
     public function findIdentifiersByTag($tag)
     {
@@ -208,9 +193,8 @@ class ApcBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
         $identifiers = apc_fetch($this->getIdentifierPrefix() . 'tag_' . $tag, $success);
         if ($success === false) {
             return [];
-        } else {
-            return (array)$identifiers;
         }
+        return (array)$identifiers;
     }
 
     /**
@@ -230,13 +214,12 @@ class ApcBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
     /**
      * Removes all cache entries of this cache.
      *
-     * @throws \TYPO3\CMS\Core\Cache\Exception
-     * @api
+     * @throws Exception
      */
     public function flush()
     {
-        if (!$this->cache instanceof \TYPO3\CMS\Core\Cache\Frontend\FrontendInterface) {
-            throw new \TYPO3\CMS\Core\Cache\Exception('Yet no cache frontend has been set via setCache().', 1232986971);
+        if (!$this->cache instanceof FrontendInterface) {
+            throw new Exception('Yet no cache frontend has been set via setCache().', 1232986971);
         }
         $this->flushByTag('%APCBE%' . $this->cacheIdentifier);
     }
@@ -245,7 +228,6 @@ class ApcBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
      * Removes all cache entries of this cache which are tagged by the specified tag.
      *
      * @param string $tag The tag the entries must have
-     * @api
      */
     public function flushByTag($tag)
     {

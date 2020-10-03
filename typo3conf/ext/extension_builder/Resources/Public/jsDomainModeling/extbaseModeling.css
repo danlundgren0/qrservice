@@ -3,15 +3,13 @@ div.propertyGroup textarea, div.propertyGroup input[type=text], div.propertyGrou
   color: #666;
   cursor: pointer; }
 
-.module-body.index #typo3-inner-docbody {
-  min-height: 900px;
-  padding: 0 !important;
-  position: relative !important; }
-.module-body.index a {
-  color: #666;
-  font-weight: 700; }
-.module-body.domainmodelling #typo3-inner-docbody {
-  padding: 0 !important; }
+.module-body.index {
+  min-height: 900px; }
+  .module-body.index a {
+    color: #666;
+    font-weight: 700; }
+.module-body.domainmodelling {
+  padding: 89px 0 0 0 !important; }
 
 .yui-layout-unit-left {
   background-color: #eee; }
@@ -71,7 +69,6 @@ div#typo3-docbody {
   padding: 0; }
 div#domainModelEditor {
   height: 100%;
-  margin-top: 65px;
   width: 100%; }
 div.WireIt-Container-ddhandle {
   background-color: #ccc;
@@ -113,6 +110,7 @@ div.propertyGroup {
   padding: 1px 6px 0;
   width: 149px; }
   div.propertyGroup textarea {
+    border: 1px solid #ddd;
     width: 100%; }
     div.propertyGroup textarea:focus {
       font-weight: 400; }
@@ -192,7 +190,8 @@ div.relationGroup {
   div.relationGroup .advancedSettings div.inputEx-label {
     text-align: left; }
   div.relationGroup textarea {
-    width: 100%; }
+    width: 100%;
+    border: 1px solid #ddd; }
   div.relationGroup input[type=text] {
     margin-left: 30px;
     width: 120px;
@@ -317,7 +316,7 @@ div:hover > .deleteButton {
   display: inline-block; }
 
 #modelingLayer {
-  height: 95%; }
+  height: 100%; }
 
 #domainModelEditor legend {
   font-size: 11px; }
@@ -340,11 +339,15 @@ div:hover > .deleteButton {
   display: none; }
 #domainModelEditor .inputEx-fieldWrapper.dependant {
   display: none; }
-  #domainModelEditor .inputEx-fieldWrapper.dependant.advancedMode {
-    display: none; }
+#domainModelEditor .inputEx-fieldWrapper.dependant.advancedMode {
+  display: none; }
+#domainModelEditor .relationGroup fieldset.zeroToOne .advancedSettings .inputEx-Expanded .dependant.renderType {
+  display: block; }
 #domainModelEditor .relationGroup fieldset.manyToMany .advancedSettings .inputEx-Expanded .dependant.renderType {
   display: block; }
 #domainModelEditor .relationGroup fieldset.zeroToMany .advancedSettings .inputEx-Expanded .dependant.renderType {
+  display: block; }
+#domainModelEditor .relationGroup fieldset.manyToOne .advancedSettings .inputEx-Expanded .dependant.renderType {
   display: block; }
 
 #moduleBar {
@@ -573,5 +576,3 @@ label.helpAvailable {
 
 .selectFieldWrapper .inputEx-label {
   float: none; }
-
-/*# sourceMappingURL=extbaseModeling.css.map */

@@ -14,10 +14,10 @@ namespace TYPO3\CMS\Extbase\Domain\Model;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Extbase\Annotation as Extbase;
+
 /**
  * This model represents a backend usergroup.
- *
- * @api
  */
 class BackendUserGroup extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
 {
@@ -28,7 +28,7 @@ class BackendUserGroup extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
 
     /**
      * @var string
-     * @validate notEmpty
+     * @Extbase\Validate("NotEmpty")
      */
     protected $title = '';
 
@@ -96,11 +96,6 @@ class BackendUserGroup extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
      * @var string
      */
     protected $lockToDomain = '';
-
-    /**
-     * @var bool
-     */
-    protected $hideInList = false;
 
     /**
      * @var string
@@ -503,26 +498,6 @@ class BackendUserGroup extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     public function getLockToDomain()
     {
         return $this->lockToDomain;
-    }
-
-    /**
-     * Setter for hide in list
-     *
-     * @param bool $hideInList
-     */
-    public function setHideInList($hideInList)
-    {
-        $this->hideInList = $hideInList;
-    }
-
-    /**
-     * Getter for hide in list
-     *
-     * @return bool
-     */
-    public function getHideInList()
-    {
-        return $this->hideInList;
     }
 
     /**

@@ -1,4 +1,5 @@
 <?php
+
 namespace TYPO3\CMS\Backend\Configuration;
 
 /*
@@ -15,15 +16,20 @@ namespace TYPO3\CMS\Backend\Configuration;
  */
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Restriction\BackendWorkspaceRestriction;
 use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
+use TYPO3\CMS\Core\Exception\SiteNotFoundException;
+use TYPO3\CMS\Core\Localization\LanguageService;
+use TYPO3\CMS\Core\Routing\SiteMatcher;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Contains translation tools
+ *
+ * @internal The whole class is subject to be removed, fetch all language info from the current site object.
  */
 class TranslationConfigurationProvider
 {
@@ -44,47 +50,67 @@ class TranslationConfigurationProvider
      */
     public function getSystemLanguages($pageId = 0)
     {
-        $modSharedTSconfig = BackendUtility::getModTSconfig($pageId, 'mod.SHARED');
+        try {
+            $site = GeneralUtility::makeInstance(SiteMatcher::class)->matchByPageId((int)$pageId);
+            $siteLanguages = $site->getAvailableLanguages($this->getBackendUserAuthentication(), true);
 
-        // default language and "all languages" are always present
-        $languages = [
-            // 0: default language
-            0 => [
-                'uid' => 0,
-                'title' => $this->getDefaultLanguageLabel($modSharedTSconfig),
-                'ISOcode' => 'DEF',
-                'flagIcon' => $this->getDefaultLanguageFlag($modSharedTSconfig),
-            ],
-            // -1: all languages
-            -1 => [
-                'uid' => -1,
-                'title' => $this->getLanguageService()->getLL('multipleLanguages'),
-                'ISOcode' => 'DEF',
-                'flagIcon' => 'flags-multiple',
-            ],
-        ];
+            if (!isset($siteLanguages[0])) {
+                $siteLanguages[0] = $site->getDefaultLanguage();
+                ksort($siteLanguages);
+            }
 
-        // add the additional languages from database records
-        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_language');
-        $languageRecords = $queryBuilder
-            ->select('*')
-            ->from('sys_language')
-            ->orderBy('sorting')
-            ->execute()
-            ->fetchAll();
-        foreach ($languageRecords as $languageRecord) {
-            $languages[$languageRecord['uid']] = $languageRecord;
-            // @todo: this should probably resolve language_isocode too and throw a deprecation if not filled
-            if ($languageRecord['static_lang_isocode'] && ExtensionManagementUtility::isLoaded('static_info_tables')) {
-                $staticLangRow = BackendUtility::getRecord('static_languages', $languageRecord['static_lang_isocode'], 'lg_iso_2');
-                if ($staticLangRow['lg_iso_2']) {
-                    $languages[$languageRecord['uid']]['ISOcode'] = $staticLangRow['lg_iso_2'];
+            $languages = [];
+            foreach ($siteLanguages as $id => $siteLanguage) {
+                $languages[$id] = [
+                    'uid' => $id,
+                    'title' => $siteLanguage->getTitle(),
+                    'ISOcode' => $siteLanguage->getTwoLetterIsoCode(),
+                    'flagIcon' => $siteLanguage->getFlagIdentifier(),
+                ];
+            }
+        } catch (SiteNotFoundException $e) {
+            // default language and "all languages" are always present
+            $modSharedTSconfig = BackendUtility::getPagesTSconfig($pageId)['mod.']['SHARED.'] ?? [];
+            $languages = [
+                // 0: default language
+                0 => [
+                    'uid' => 0,
+                    'title' => $this->getDefaultLanguageLabel($modSharedTSconfig),
+                    'ISOcode' => 'DEF',
+                    'flagIcon' => $this->getDefaultLanguageFlag($modSharedTSconfig),
+                ],
+                // -1: all languages
+                -1 => [
+                    'uid' => -1,
+                    'title' => $this->getLanguageService()->getLL('multipleLanguages'),
+                    'ISOcode' => 'DEF',
+                    'flagIcon' => 'flags-multiple',
+                ],
+            ];
+
+            // add the additional languages from database records
+            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_language');
+            $languageRecords = $queryBuilder
+                ->select('*')
+                ->from('sys_language')
+                ->orderBy('sorting')
+                ->execute()
+                ->fetchAll();
+            foreach ($languageRecords as $languageRecord) {
+                $languages[$languageRecord['uid']] = $languageRecord;
+                // @todo: this should probably resolve language_isocode too and throw a deprecation if not filled
+                if ($languageRecord['static_lang_isocode'] && ExtensionManagementUtility::isLoaded('static_info_tables')) {
+                    $staticLangRow = BackendUtility::getRecord('static_languages', $languageRecord['static_lang_isocode'], 'lg_iso_2');
+                    if ($staticLangRow['lg_iso_2']) {
+                        $languages[$languageRecord['uid']]['ISOcode'] = $staticLangRow['lg_iso_2'];
+                    }
+                }
+                if ($languageRecord['flag'] !== '') {
+                    $languages[$languageRecord['uid']]['flagIcon'] = 'flags-' . $languageRecord['flag'];
                 }
             }
-            if ($languageRecord['flag'] !== '') {
-                $languages[$languageRecord['uid']]['flagIcon'] = 'flags-' . $languageRecord['flag'];
-            }
         }
+
         return $languages;
     }
 
@@ -110,37 +136,36 @@ class TranslationConfigurationProvider
         if (!is_array($row)) {
             return 'Record "' . $table . '_' . $uid . '" was not found';
         }
-        $translationTable = $this->getTranslationTable($table);
-        if ($translationTable === '') {
+        if (!BackendUtility::isTableLocalizable($table)) {
             return 'Translation is not supported for this table!';
         }
-        if ($translationTable === $table && $row[$GLOBALS['TCA'][$table]['ctrl']['languageField']] > 0) {
+        if ($row[$GLOBALS['TCA'][$table]['ctrl']['languageField']] > 0) {
             return 'Record "' . $table . '_' . $uid . '" seems to be a translation already (has a language value "' . $row[$GLOBALS['TCA'][$table]['ctrl']['languageField']] . '", relation to record "' . $row[$GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField']] . '")';
         }
-        if ($translationTable === $table && $row[$GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField']] != 0) {
+        if ($row[$GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField']] != 0) {
             return 'Record "' . $table . '_' . $uid . '" seems to be a translation already (has a relation to record "' . $row[$GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField']] . '")';
         }
         // Look for translations of this record, index by language field value:
         if (!$selFieldList) {
-            $selFieldList = 'uid,' . $GLOBALS['TCA'][$translationTable]['ctrl']['languageField'];
+            $selFieldList = 'uid,' . $GLOBALS['TCA'][$table]['ctrl']['languageField'];
         }
-        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($translationTable);
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
         $queryBuilder->getRestrictions()
             ->removeAll()
             ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
             ->add(GeneralUtility::makeInstance(BackendWorkspaceRestriction::class));
         $queryBuilder
             ->select(...GeneralUtility::trimExplode(',', $selFieldList))
-            ->from($translationTable)
+            ->from($table)
             ->where(
                 $queryBuilder->expr()->eq(
-                    $GLOBALS['TCA'][$translationTable]['ctrl']['transOrigPointerField'],
+                    $GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField'],
                     $queryBuilder->createNamedParameter($uid, \PDO::PARAM_INT)
                 ),
                 $queryBuilder->expr()->eq(
                     'pid',
                     $queryBuilder->createNamedParameter(
-                        ($table === 'pages' ? $row['uid'] : $row['pid']),
+                        $row['pid'],
                         \PDO::PARAM_INT
                     )
                 )
@@ -148,7 +173,7 @@ class TranslationConfigurationProvider
         if (!$languageUid) {
             $queryBuilder->andWhere(
                 $queryBuilder->expr()->gt(
-                    $GLOBALS['TCA'][$translationTable]['ctrl']['languageField'],
+                    $GLOBALS['TCA'][$table]['ctrl']['languageField'],
                     $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT)
                 )
             );
@@ -156,7 +181,7 @@ class TranslationConfigurationProvider
             $queryBuilder
                 ->andWhere(
                     $queryBuilder->expr()->eq(
-                        $GLOBALS['TCA'][$translationTable]['ctrl']['languageField'],
+                        $GLOBALS['TCA'][$table]['ctrl']['languageField'],
                         $queryBuilder->createNamedParameter($languageUid, \PDO::PARAM_INT)
                     )
                 );
@@ -168,10 +193,10 @@ class TranslationConfigurationProvider
         $translations = [];
         $translationsErrors = [];
         foreach ($translationRecords as $translationRecord) {
-            if (!isset($translations[$translationRecord[$GLOBALS['TCA'][$translationTable]['ctrl']['languageField']]])) {
-                $translations[$translationRecord[$GLOBALS['TCA'][$translationTable]['ctrl']['languageField']]] = $translationRecord;
+            if (!isset($translations[$translationRecord[$GLOBALS['TCA'][$table]['ctrl']['languageField']]])) {
+                $translations[$translationRecord[$GLOBALS['TCA'][$table]['ctrl']['languageField']]] = $translationRecord;
             } else {
-                $translationsErrors[$translationRecord[$GLOBALS['TCA'][$translationTable]['ctrl']['languageField']]][] = $translationRecord;
+                $translationsErrors[$translationRecord[$GLOBALS['TCA'][$table]['ctrl']['languageField']]][] = $translationRecord;
             }
         }
         return [
@@ -179,7 +204,6 @@ class TranslationConfigurationProvider
             'uid' => $uid,
             'CType' => $row['CType'],
             'sys_language_uid' => $row[$GLOBALS['TCA'][$table]['ctrl']['languageField']],
-            'translation_table' => $translationTable,
             'translations' => $translations,
             'excessive_translations' => $translationsErrors
         ];
@@ -190,10 +214,12 @@ class TranslationConfigurationProvider
      *
      * @param string $table The table name
      * @return string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0 as foreign translation table is not supported anymore
      */
     public function getTranslationTable($table)
     {
-        return $this->isTranslationInOwnTable($table) ? $table : $this->foreignTranslationTable($table);
+        trigger_error('TranslationConfigurationProvider->getTranslationTable() will be removed in TYPO3 v10.0, as the translation table is always the same as the original table.', E_USER_DEPRECATED);
+        return BackendUtility::isTableLocalizable($table) ? $table : '';
     }
 
     /**
@@ -201,21 +227,27 @@ class TranslationConfigurationProvider
      *
      * @param string $table The table name
      * @return bool
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0 as foreign translation table is not supported anymore
      */
     public function isTranslationInOwnTable($table)
     {
-        return $GLOBALS['TCA'][$table]['ctrl']['languageField'] && $GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField'] && $table !== 'pages_language_overlay';
+        trigger_error('TranslationConfigurationProvider->isTranslationInOwnTable() will be removed in TYPO3 v10.0, as the translation table is always the same as the original table.', E_USER_DEPRECATED);
+        return $GLOBALS['TCA'][$table]['ctrl']['languageField'] && $GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField'];
     }
 
     /**
-     * Returns foreign translation table, if any
+     * Returns foreign translation table, if any.
+     * Since TYPO3 v9, even "pages" translations are stored in the same table, having this method return always
+     * empty, as with other tables as well.
      *
      * @param string $table The table name
      * @return string Translation foreign table
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0 as foreign translation table is not supported anymore
      */
     public function foreignTranslationTable($table)
     {
-        return $table === 'pages' ? 'pages_language_overlay' : '';
+        trigger_error('TranslationConfigurationProvider->foreignTranslationTable() will be removed in TYPO3 v10.0, as the translation table is always the same as the original table.', E_USER_DEPRECATED);
+        return '';
     }
 
     /**
@@ -224,8 +256,8 @@ class TranslationConfigurationProvider
      */
     protected function getDefaultLanguageFlag(array $modSharedTSconfig)
     {
-        if (strlen($modSharedTSconfig['properties']['defaultLanguageFlag'])) {
-            $defaultLanguageFlag = 'flags-' . $modSharedTSconfig['properties']['defaultLanguageFlag'];
+        if (strlen($modSharedTSconfig['defaultLanguageFlag'])) {
+            $defaultLanguageFlag = 'flags-' . $modSharedTSconfig['defaultLanguageFlag'];
         } else {
             $defaultLanguageFlag = 'empty-empty';
         }
@@ -238,11 +270,16 @@ class TranslationConfigurationProvider
      */
     protected function getDefaultLanguageLabel(array $modSharedTSconfig)
     {
-        if (strlen($modSharedTSconfig['properties']['defaultLanguageLabel'])) {
-            $defaultLanguageLabel = $modSharedTSconfig['properties']['defaultLanguageLabel'] . ' (' . $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_mod_web_list.xlf:defaultLanguage') . ')';
+        if (strlen($modSharedTSconfig['defaultLanguageLabel'])) {
+            $defaultLanguageLabel = $modSharedTSconfig['defaultLanguageLabel'] . ' (' . $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_mod_web_list.xlf:defaultLanguage') . ')';
         } else {
-            $defaultLanguageLabel = $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_mod_web_list.xlf:defaultLanguage');
+            $defaultLanguageLabel = $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_mod_web_list.xlf:defaultLanguage');
         }
         return $defaultLanguageLabel;
+    }
+
+    protected function getBackendUserAuthentication(): BackendUserAuthentication
+    {
+        return $GLOBALS['BE_USER'];
     }
 }

@@ -17,12 +17,12 @@ namespace TYPO3\CMS\Backend\Template\Components;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsException;
 use TYPO3\CMS\Core\Resource\Exception\ResourceDoesNotExistException;
 use TYPO3\CMS\Core\Resource\FolderInterface;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * MetaInformation
@@ -57,7 +57,7 @@ class MetaInformation
         $pageRecord = $this->recordArray;
         $title = '';
         // Is this a real page
-        if (is_array($pageRecord) && $pageRecord['uid']) {
+        if (is_array($pageRecord) && !empty($pageRecord['uid'])) {
             $title = substr($pageRecord['_thePathFull'], 0, -1);
             // Remove current page title
             $pos = strrpos($title, $pageRecord['title']);
@@ -66,7 +66,7 @@ class MetaInformation
             }
         } elseif (!empty($pageRecord['combined_identifier'])) {
             try {
-                $resourceObject = ResourceFactory::getInstance()->getInstance()->getObjectFromCombinedIdentifier($pageRecord['combined_identifier']);
+                $resourceObject = ResourceFactory::getInstance()->getObjectFromCombinedIdentifier($pageRecord['combined_identifier']);
                 $title = $resourceObject->getStorage()->getName() . ':';
                 $title .= $resourceObject->getParentFolder()->getReadablePath();
             } catch (ResourceDoesNotExistException $e) {
@@ -143,7 +143,7 @@ class MetaInformation
     /**
      * Setting page uid
      *
-     * @return null|int Record uid
+     * @return int|null Record uid
      */
     public function getRecordInformationUid()
     {
@@ -154,6 +154,17 @@ class MetaInformation
             $recordInformationUid = null;
         }
         return $recordInformationUid;
+    }
+
+    /**
+     * Returns record additional information
+     *
+     * @return string Record additional information
+     */
+    public function getRecordInformationAdditionalInfo(): string
+    {
+        $recordInformations = $this->getRecordInformations();
+        return $recordInformations['additionalInfo'] ?? '';
     }
 
     /**
@@ -174,18 +185,18 @@ class MetaInformation
         $additionalInfo = (!empty($pageRecord['_additional_info']) ? $pageRecord['_additional_info'] : '');
         // Add icon with context menu, etc:
         // If there IS a real page
-        if (is_array($pageRecord) && $pageRecord['uid']) {
+        if (is_array($pageRecord) && !empty($pageRecord['uid'])) {
             $toolTip = BackendUtility::getRecordToolTip($pageRecord, 'pages');
             $iconImg = '<span ' . $toolTip . '>' . $iconFactory->getIconForRecord('pages', $pageRecord, Icon::SIZE_SMALL)->render() . '</span>';
             // Make Icon:
             $theIcon = BackendUtility::wrapClickMenuOnIcon($iconImg, 'pages', $pageRecord['uid']);
             $uid = $pageRecord['uid'];
             $title = BackendUtility::getRecordTitle('pages', $pageRecord);
-        // If the module is about a FAL resource
         } elseif (is_array($pageRecord) && !empty($pageRecord['combined_identifier'])) {
+            // If the module is about a FAL resource
             try {
-                $resourceObject = ResourceFactory::getInstance()->getInstance()->getObjectFromCombinedIdentifier($pageRecord['combined_identifier']);
-                $fileMountTitle = $resourceObject->getStorage()->getFileMounts()[$resourceObject->getIdentifier()]['title'];
+                $resourceObject = ResourceFactory::getInstance()->getObjectFromCombinedIdentifier($pageRecord['combined_identifier']);
+                $fileMountTitle = $resourceObject->getStorage()->getFileMounts()[$resourceObject->getIdentifier()]['title'] ?? '';
                 $title = $fileMountTitle ?: $resourceObject->getName();
                 // If this is a folder but not in within file mount boundaries this is the root folder
                 if ($resourceObject instanceof FolderInterface && !$resourceObject->getStorage()->isWithinFileMountBoundaries($resourceObject)) {
@@ -201,7 +212,9 @@ class MetaInformation
                         Icon::SIZE_SMALL
                     )->render() . '</span>';
                 }
-                $theIcon = BackendUtility::wrapClickMenuOnIcon($iconImg, 'sys_file', $pageRecord['combined_identifier']);
+                $tableName = ($resourceObject->getIdentifier() === $resourceObject->getStorage()->getRootLevelFolder()->getIdentifier())
+                    ? 'sys_filemounts' : 'sys_file';
+                $theIcon = BackendUtility::wrapClickMenuOnIcon($iconImg, $tableName, $pageRecord['combined_identifier']);
             } catch (ResourceDoesNotExistException $e) {
                 $theIcon = '';
             }
@@ -213,7 +226,7 @@ class MetaInformation
                 '">' .
                 $iconFactory->getIcon('apps-pagetree-root', Icon::SIZE_SMALL)->render() . '</span>';
             if ($this->getBackendUser()->isAdmin()) {
-                $theIcon = BackendUtility::wrapClickMenuOnIcon($iconImg, 'pages', 0);
+                $theIcon = BackendUtility::wrapClickMenuOnIcon($iconImg, 'pages');
             } else {
                 $theIcon = $iconImg;
             }

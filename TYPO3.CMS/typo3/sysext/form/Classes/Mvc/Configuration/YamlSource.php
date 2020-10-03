@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Mvc\Configuration;
 
 /*
@@ -19,11 +19,15 @@ namespace TYPO3\CMS\Form\Mvc\Configuration;
 
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
+use TYPO3\CMS\Core\Resource\Exception\InsufficientFileAccessPermissionsException;
 use TYPO3\CMS\Core\Resource\File;
+use TYPO3\CMS\Core\Resource\FolderInterface;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Form\Mvc\Configuration\Exception\FileWriteException;
 use TYPO3\CMS\Form\Mvc\Configuration\Exception\NoSuchFileException;
 use TYPO3\CMS\Form\Mvc\Configuration\Exception\ParseErrorException;
+use TYPO3\CMS\Form\Slot\FilePersistenceSlot;
 
 /**
  * Configuration source based on YAML files
@@ -34,23 +38,16 @@ use TYPO3\CMS\Form\Mvc\Configuration\Exception\ParseErrorException;
 class YamlSource
 {
     /**
-     * Will be set if the PHP YAML Extension is installed.
-     * Having this installed massively improves YAML parsing performance.
-     *
-     * @var bool
-     * @see http://pecl.php.net/package/yaml
+     * @var FilePersistenceSlot
      */
-    protected $usePhpYamlExtension = false;
+    protected $filePersistenceSlot;
 
     /**
-     * Use PHP YAML Extension if installed.
-     * @internal
+     * @param FilePersistenceSlot $filePersistenceSlot
      */
-    public function __construct()
+    public function injectFilePersistenceSlot(FilePersistenceSlot $filePersistenceSlot)
     {
-        if (extension_loaded('yaml')) {
-            $this->usePhpYamlExtension = true;
-        }
+        $this->filePersistenceSlot = $filePersistenceSlot;
     }
 
     /**
@@ -70,6 +67,12 @@ class YamlSource
             if ($fileToLoad instanceof File) {
                 $fileIdentifier = $fileToLoad->getIdentifier();
                 $rawYamlContent = $fileToLoad->getContents();
+                if ($rawYamlContent === false) {
+                    throw new NoSuchFileException(
+                        'The file "' . $fileIdentifier . '" does not exist.',
+                        1498802253
+                    );
+                }
             } else {
                 $fileIdentifier = $fileToLoad;
                 $fileToLoad = GeneralUtility::getFileAbsFileName($fileToLoad);
@@ -84,24 +87,14 @@ class YamlSource
             }
 
             try {
-                if ($this->usePhpYamlExtension) {
-                    $loadedConfiguration = @yaml_parse($rawYamlContent);
-                    if ($loadedConfiguration === false) {
-                        throw new ParseErrorException(
-                            'A parse error occurred while parsing file "' . $fileIdentifier . '".',
-                            1391894094
-                        );
-                    }
-                } else {
-                    $loadedConfiguration = Yaml::parse($rawYamlContent);
-                }
+                $loadedConfiguration = Yaml::parse($rawYamlContent);
 
                 if (is_array($loadedConfiguration)) {
-                    ArrayUtility::mergeRecursiveWithOverrule($configuration, $loadedConfiguration);
+                    $configuration = array_replace_recursive($configuration, $loadedConfiguration);
                 }
             } catch (ParseException $exception) {
                 throw new ParseErrorException(
-                    'A parse error occurred while parsing file "' . $fileIdentifier . '". Error message: ' . $exception->getMessage(),
+                    'An error occurred while parsing file "' . $fileIdentifier . '": ' . $exception->getMessage(),
                     1480195405
                 );
             }
@@ -116,17 +109,46 @@ class YamlSource
      *
      * @param File|string $fileToSave The file to write to.
      * @param array $configuration The configuration to save
+     * @return mixed
+     * @throws FileWriteException if the file could not be written
      * @internal
      */
     public function save($fileToSave, array $configuration)
     {
-        $header = $this->getHeaderFromFile($fileToSave);
-        $yaml = Yaml::dump($configuration, 99, 2);
-        if ($fileToSave instanceof File) {
-            $fileToSave->setContents($header . LF . $yaml);
-        } else {
-            @file_put_contents($fileToSave, $header . LF . $yaml);
+        try {
+            $header = $this->getHeaderFromFile($fileToSave);
+        } catch (InsufficientFileAccessPermissionsException  $e) {
+            throw new FileWriteException($e->getMessage(), 1512584488, $e);
         }
+
+        $yaml = Yaml::dump($configuration, 99, 2);
+
+        if ($fileToSave instanceof File) {
+            try {
+                $this->filePersistenceSlot->allowInvocation(
+                    FilePersistenceSlot::COMMAND_FILE_SET_CONTENTS,
+                    $this->buildCombinedIdentifier(
+                        $fileToSave->getParentFolder(),
+                        $fileToSave->getName()
+                    ),
+                    $this->filePersistenceSlot->getContentSignature(
+                        $header . LF . $yaml
+                    )
+                );
+                $fileToSave->setContents($header . LF . $yaml);
+            } catch (InsufficientFileAccessPermissionsException $e) {
+                throw new FileWriteException($e->getMessage(), 1512582753, $e);
+            }
+        } else {
+            $byteCount = @file_put_contents($fileToSave, $header . LF . $yaml);
+
+            if ($byteCount === false) {
+                $error = error_get_last();
+                throw new FileWriteException($error['message'], 1512582929);
+            }
+        }
+
+        return $return;
     }
 
     /**
@@ -155,5 +177,20 @@ class YamlSource
             }
         }
         return $header;
+    }
+
+    /**
+     * @param FolderInterface $folder
+     * @param string $fileName
+     * @return string
+     */
+    protected function buildCombinedIdentifier(FolderInterface $folder, string $fileName): string
+    {
+        return sprintf(
+            '%d:%s%s',
+            $folder->getStorage()->getUid(),
+            $folder->getIdentifier(),
+            $fileName
+        );
     }
 }

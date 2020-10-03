@@ -15,11 +15,12 @@ namespace TYPO3\CMS\Recordlist\RecordList;
  */
 
 use TYPO3\CMS\Backend\RecordList\AbstractRecordList;
-use TYPO3\CMS\Backend\Routing\Router;
 use TYPO3\CMS\Backend\Routing\UriBuilder;
 use TYPO3\CMS\Backend\Tree\View\PageTreeView;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Cache\CacheManager;
+use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\QueryBuilder;
 use TYPO3\CMS\Core\Database\Query\QueryHelper;
@@ -27,6 +28,7 @@ use TYPO3\CMS\Core\Database\Query\Restriction\BackendWorkspaceRestriction;
 use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Log\LogManager;
 use TYPO3\CMS\Core\Service\DependencyOrderingService;
 use TYPO3\CMS\Core\Type\Bitmask\Permission;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
@@ -38,6 +40,7 @@ use TYPO3\CMS\Core\Utility\MathUtility;
  * Child class for rendering of Web > List (not the final class)
  * Shared between Web>List and Web>Page
  * @see \TYPO3\CMS\Recordlist\RecordList\DatabaseRecordList
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
  */
 class AbstractDatabaseRecordList extends AbstractRecordList
 {
@@ -45,6 +48,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Specify a list of tables which are the only ones allowed to be displayed.
      *
      * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $tableList = '';
 
@@ -52,6 +56,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Return URL
      *
      * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $returnUrl = '';
 
@@ -59,6 +64,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Thumbnails on records containing files (pictures)
      *
      * @var bool
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $thumbs = 0;
 
@@ -66,6 +72,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * default Max items shown per table in "multi-table mode", may be overridden by tables.php
      *
      * @var int
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $itemsLimitPerTable = 20;
 
@@ -73,6 +80,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * default Max items shown per table in "single-table mode", may be overridden by tables.php
      *
      * @var int
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $itemsLimitSingleTable = 100;
 
@@ -80,6 +88,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Current script name
      *
      * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $script = 'index.php';
 
@@ -87,20 +96,15 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Indicates if all available fields for a user should be selected or not.
      *
      * @var int
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $allFields = 0;
-
-    /**
-     * Whether to show localization view or not
-     *
-     * @var bool
-     */
-    public $localizationView = false;
 
     /**
      * If set, csvList is outputted.
      *
      * @var bool
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $csvOutput = false;
 
@@ -108,6 +112,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Field, to sort list by
      *
      * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $sortField;
 
@@ -115,6 +120,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Field, indicating to sort in reverse order.
      *
      * @var bool
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $sortRev;
 
@@ -122,6 +128,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Containing which fields to display in extended mode
      *
      * @var string[]
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $displayFields;
 
@@ -129,6 +136,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * String, can contain the field name from a table which must have duplicate values marked.
      *
      * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $duplicateField;
 
@@ -136,6 +144,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Page id
      *
      * @var int
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $id;
 
@@ -143,6 +152,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Tablename if single-table mode
      *
      * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $table = '';
 
@@ -150,6 +160,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * If TRUE, records are listed only if a specific table is selected.
      *
      * @var bool
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $listOnlyInSingleTableMode = false;
 
@@ -157,6 +168,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Pointer for browsing list
      *
      * @var int
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $firstElementNumber = 0;
 
@@ -164,6 +176,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Search string
      *
      * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $searchString = '';
 
@@ -171,6 +184,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Levels to search down.
      *
      * @var int
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $searchLevels = '';
 
@@ -178,6 +192,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Number of records to show
      *
      * @var int
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $showLimit = 0;
 
@@ -185,6 +200,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Page select permissions
      *
      * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $perms_clause = '';
 
@@ -192,6 +208,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Some permissions...
      *
      * @var int
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $calcPerms = 0;
 
@@ -199,6 +216,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Mode for what happens when a user clicks the title of a record.
      *
      * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $clickTitleMode = '';
 
@@ -206,6 +224,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Shared module configuration, used by localization features
      *
      * @var array
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $modSharedTSconfig = [];
 
@@ -213,6 +232,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Loaded with page record with version overlay if any.
      *
      * @var string[]
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $pageRecord = [];
 
@@ -220,6 +240,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Tables which should not get listed
      *
      * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $hideTables = '';
 
@@ -227,6 +248,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Tables which should not list their translations
      *
      * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $hideTranslations = '';
 
@@ -234,6 +256,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * TSconfig which overwrites TCA-Settings
      *
      * @var mixed[][]
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $tableTSconfigOverTCA = [];
 
@@ -241,6 +264,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Array of collapsed / uncollapsed tables in multi table view
      *
      * @var int[][]
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $tablesCollapsed = [];
 
@@ -248,6 +272,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * JavaScript code accumulation
      *
      * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $JScode = '';
 
@@ -255,6 +280,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * HTML output
      *
      * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $HTMLcode = '';
 
@@ -262,6 +288,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * "LIMIT " in SQL...
      *
      * @var int
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $iLimit = 0;
 
@@ -269,6 +296,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Counting the elements no matter what...
      *
      * @var int
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $eCounter = 0;
 
@@ -276,6 +304,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Set to the total number of items for a table when selecting.
      *
      * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $totalItems = '';
 
@@ -283,6 +312,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Cache for record path
      *
      * @var mixed[]
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $recPath_cache = [];
 
@@ -290,6 +320,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Fields to display for the current table
      *
      * @var string[]
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $setFields = [];
 
@@ -297,6 +328,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Used for tracking next/prev uids
      *
      * @var int[][]
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $currentTable = [];
 
@@ -304,17 +336,20 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Used for tracking duplicate values of fields
      *
      * @var string[]
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $duplicateStack = [];
 
     /**
      * @var array[] Module configuration
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public $modTSconfig;
 
     /**
      * Override/add urlparameters in listUrl() method
      * @var string[]
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     protected $overrideUrlParameters = [];
 
@@ -322,6 +357,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Override the page ids taken into account by getPageIdConstraint()
      *
      * @var array
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     protected $overridePageIdList = [];
 
@@ -333,6 +369,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      *    'after' => []
      *  ]
      * @var array[]
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     protected $tableDisplayOrder = [];
 
@@ -345,6 +382,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * @param string $search Search word, if any
      * @param int $levels Number of levels to search down the page tree
      * @param int $showLimit Limit of records to be listed.
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function start($id, $table, $pointer, $search = '', $levels = 0, $showLimit = 0)
     {
@@ -395,13 +433,11 @@ class AbstractDatabaseRecordList extends AbstractRecordList
         $expressionBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
             ->getQueryBuilderForTable('pages')
             ->expr();
-        $permsClause = $expressionBuilder->andX($backendUser->getPagePermsClause(1));
+        $permsClause = $expressionBuilder->andX($backendUser->getPagePermsClause(Permission::PAGE_SHOW));
         // This will hide records from display - it has nothing to do with user rights!!
-        if ($pidList = $backendUser->getTSConfigVal('options.hideRecords.pages')) {
-            $pidList = GeneralUtility::intExplode(',', $pidList, true);
-            if (!empty($pidList)) {
-                $permsClause->add($expressionBuilder->notIn('pages.uid', $pidList));
-            }
+        $pidList = GeneralUtility::intExplode(',', $backendUser->getTSConfig()['options.']['hideRecords.']['pages'] ?? '', true);
+        if (!empty($pidList)) {
+            $permsClause->add($expressionBuilder->notIn('pages.uid', $pidList));
         }
         $this->perms_clause = (string)$permsClause;
 
@@ -424,17 +460,14 @@ class AbstractDatabaseRecordList extends AbstractRecordList
                 HttpUtility::redirect($returnUrl);
             }
         }
-
-        // Initialize languages:
-        if ($this->localizationView) {
-            $this->initializeLanguages();
-        }
+        $this->initializeLanguages();
     }
 
     /**
      * Traverses the table(s) to be listed and renders the output code for each:
      * The HTML is accumulated in $this->HTMLcode
      * Finishes off with a stopper-gif
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function generateList()
     {
@@ -500,9 +533,9 @@ class AbstractDatabaseRecordList extends AbstractRecordList
                     ->removeAll()
                     ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
                     ->add(GeneralUtility::makeInstance(BackendWorkspaceRestriction::class));
+                $queryBuilder = $this->addPageIdConstraint($tableName, $queryBuilder);
                 $firstRow = $queryBuilder->select('uid')
                     ->from($tableName)
-                    ->where($this->getPageIdConstraint($tableName))
                     ->execute()
                     ->fetch();
                 if (!is_array($firstRow)) {
@@ -543,6 +576,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * @param int $id
      * @param string $fields List of fields to show in the listing. Pseudo fields will be added including the record header.
      * @return string HTML code
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function getTable($tableName, $id, $fields = '')
     {
@@ -554,10 +588,11 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      *
      * @param bool $formFields If TRUE, the search box is wrapped in its own form-tags
      * @return string HTML for the search box
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function getSearchBox($formFields = true)
     {
-        /** @var $iconFactory IconFactory */
+        /** @var IconFactory $iconFactory */
         $iconFactory = GeneralUtility::makeInstance(IconFactory::class);
         $lang = $this->getLanguageService();
         // Setting form-elements, if applicable:
@@ -575,7 +610,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
 
         // get translated labels for search levels from pagets
         foreach ($searchLevelsFromTSconfig as $keySearchLevel => $labelConfigured) {
-            $label = $lang->sL('LLL:' . $labelConfigured, false);
+            $label = $lang->sL('LLL:' . $labelConfigured);
             if ($label === '') {
                 $label = $labelConfigured;
             }
@@ -585,7 +620,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
         foreach ($searchLevelItems as $kv => $label) {
             $opt[] = '<option value="' . $kv . '"' . ($kv === $this->searchLevels ? ' selected="selected"' : '') . '>' . htmlspecialchars($label) . '</option>';
         }
-        $lMenu = '<select class="form-control" name="search_levels" title="' . htmlspecialchars($lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.title.search_levels')) . '" id="search_levels">' . implode('', $opt) . '</select>';
+        $lMenu = '<select class="form-control" name="search_levels" title="' . htmlspecialchars($lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.title.search_levels')) . '" id="search_levels">' . implode('', $opt) . '</select>';
         // Table with the search box:
         $content = '<div class="db_list-searchbox-form db_list-searchbox-toolbar module-docheader-bar module-docheader-bar-search t3js-module-docheader-bar t3js-module-docheader-bar-search" id="db_list-searchbox-toolbar" style="display: ' . ($this->searchString == '' ? 'none' : 'block') . ';">
 			' . $formElements[0] . '
@@ -594,21 +629,21 @@ class AbstractDatabaseRecordList extends AbstractRecordList
                         <div class="panel-body">
                             <div class="row">
                                 <div class="form-group col-xs-12">
-                                    <label for="search_field">' . htmlspecialchars($lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.label.searchString')) . ': </label>
-									<input class="form-control" type="search" placeholder="' . htmlspecialchars($lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.enterSearchString')) . '" title="' . htmlspecialchars($lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.title.searchString')) . '" name="search_field" id="search_field" value="' . htmlspecialchars($this->searchString) . '" />
+                                    <label for="search_field">' . htmlspecialchars($lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.label.searchString')) . ': </label>
+									<input class="form-control" type="search" placeholder="' . htmlspecialchars($lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.enterSearchString')) . '" title="' . htmlspecialchars($lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.title.searchString')) . '" name="search_field" id="search_field" value="' . htmlspecialchars($this->searchString) . '" />
                                 </div>
                                 <div class="form-group col-xs-12 col-sm-6">
-									<label for="search_levels">' . htmlspecialchars($lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.label.search_levels')) . ': </label>
+									<label for="search_levels">' . htmlspecialchars($lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.label.search_levels')) . ': </label>
 									' . $lMenu . '
                                 </div>
                                 <div class="form-group col-xs-12 col-sm-6">
-									<label for="showLimit">' . htmlspecialchars($lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.label.limit')) . ': </label>
-									<input class="form-control" type="number" min="0" max="10000" placeholder="10" title="' . htmlspecialchars($lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.title.limit')) . '" name="showLimit" id="showLimit" value="' . htmlspecialchars(($this->showLimit ? $this->showLimit : '')) . '" />
+									<label for="showLimit">' . htmlspecialchars($lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.label.limit')) . ': </label>
+									<input class="form-control" type="number" min="0" max="10000" placeholder="10" title="' . htmlspecialchars($lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.title.limit')) . '" name="showLimit" id="showLimit" value="' . htmlspecialchars(($this->showLimit ? $this->showLimit : '')) . '" />
                                 </div>
                                 <div class="form-group col-xs-12">
                                     <div class="form-control-wrap">
-                                        <button type="submit" class="btn btn-default" name="search" title="' . htmlspecialchars($lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.title.search')) . '">
-                                            ' . $iconFactory->getIcon('actions-search', Icon::SIZE_SMALL)->render() . ' ' . htmlspecialchars($lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.search')) . '
+                                        <button type="submit" class="btn btn-default" name="search" title="' . htmlspecialchars($lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.title.search')) . '">
+                                            ' . $iconFactory->getIcon('actions-search', Icon::SIZE_SMALL)->render() . ' ' . htmlspecialchars($lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.search')) . '
                                         </button>
                                     </div>
                                 </div>
@@ -628,6 +663,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
     /**
      * Setting the field names to display in extended list.
      * Sets the internal variable $this->setFields
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function setDispFields()
     {
@@ -652,84 +688,11 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * @param string $table Table (record is from)
      * @param string $field Field name for which thumbnail are to be rendered.
      * @return string HTML for thumbnails, if any.
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function thumbCode($row, $table, $field)
     {
         return BackendUtility::thumbCode($row, $table, $field);
-    }
-
-    /**
-     * Returns the SQL-query array to select the records from a table $table with pid = $id
-     *
-     * @param string $table Table name
-     * @param int $id Page id (NOT USED! $this->pidSelect is used instead)
-     * @param string $addWhere Additional part for where clause
-     * @param string $fieldList Field list to select, * for all (for "SELECT [fieldlist] FROM ...")
-     * @return string[] Returns query array
-     *
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9. Please use getQueryBuilder()
-     */
-    public function makeQueryArray($table, $id, $addWhere = '', $fieldList = '*')
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $hookObjectsArr = [];
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/class.db_list.inc']['makeQueryArray'])) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/class.db_list.inc']['makeQueryArray'] as $classRef) {
-                $hookObjectsArr[] = GeneralUtility::getUserObj($classRef);
-            }
-        }
-        // Set ORDER BY:
-        $orderBy = $GLOBALS['TCA'][$table]['ctrl']['sortby'] ? 'ORDER BY ' . $GLOBALS['TCA'][$table]['ctrl']['sortby'] : $GLOBALS['TCA'][$table]['ctrl']['default_sortby'];
-        if ($this->sortField) {
-            if (in_array($this->sortField, $this->makeFieldList($table, 1))) {
-                $orderBy = 'ORDER BY ' . $this->sortField;
-                if ($this->sortRev) {
-                    $orderBy .= ' DESC';
-                }
-            }
-        }
-        // Set LIMIT:
-        $limit = $this->iLimit ? ($this->firstElementNumber ? $this->firstElementNumber . ',' : '') . $this->iLimit : '';
-        // Filtering on displayable pages (permissions):
-        $pC = $table === 'pages' && $this->perms_clause ? ' AND ' . $this->perms_clause : '';
-        // Adding search constraints:
-        $search = $this->makeSearchString($table, $id);
-        // Compiling query array:
-        $queryParts = [
-            'SELECT' => $fieldList,
-            'FROM' => $table,
-            'WHERE' => $this->getPageIdConstraint($table) . ' ' . $pC . BackendUtility::deleteClause($table) . BackendUtility::versioningPlaceholderClause($table) . ' ' . $addWhere . ' ' . $search,
-            'GROUPBY' => '',
-            'LIMIT' => $limit
-        ];
-        $tempOrderBy = [];
-        foreach (QueryHelper::parseOrderBy($orderBy) as $orderPair) {
-            list($fieldName, $order) = $orderPair;
-            if ($order !== null) {
-                $tempOrderBy[] = implode(' ', $orderPair);
-            } else {
-                $tempOrderBy[] = $fieldName;
-            }
-        }
-        $queryParts['ORDERBY'] = implode(',', $tempOrderBy);
-        // Filter out records that are translated, if TSconfig mod.web_list.hideTranslations is set
-        if ((in_array($table, GeneralUtility::trimExplode(',', $this->hideTranslations)) || $this->hideTranslations === '*') && !empty($GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField']) && $table !== 'pages_language_overlay') {
-            $queryParts['WHERE'] .= ' AND ' . $GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField'] . '=0 ';
-        }
-        // Apply hook as requested in http://forge.typo3.org/issues/16634
-        foreach ($hookObjectsArr as $hookObj) {
-            if (method_exists($hookObj, 'makeQueryArray_post')) {
-                $_params = [
-                    'orderBy' => $orderBy,
-                    'limit' => $limit,
-                    'pC' => $pC,
-                    'search' => $search
-                ];
-                $hookObj->makeQueryArray_post($queryParts, $this, $table, $id, $addWhere, $fieldList, $_params);
-            }
-        }
-        // Return query:
-        return $queryParts;
     }
 
     /**
@@ -741,6 +704,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * @param string[] $additionalConstraints Additional part for where clause
      * @param string[] $fields Field list to select, * for all
      * @return \TYPO3\CMS\Core\Database\Query\QueryBuilder
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function getQueryBuilder(
         string $table,
@@ -748,104 +712,99 @@ class AbstractDatabaseRecordList extends AbstractRecordList
         array $additionalConstraints = [],
         array $fields = ['*']
     ): QueryBuilder {
-        $queryParameters = $this->buildQueryParameters($table, $pageId, $fields, $additionalConstraints);
-
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
-            ->getQueryBuilderForTable($queryParameters['table']);
+            ->getQueryBuilderForTable($table);
         $queryBuilder->getRestrictions()
             ->removeAll()
             ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
             ->add(GeneralUtility::makeInstance(BackendWorkspaceRestriction::class));
         $queryBuilder
-            ->select(...$queryParameters['fields'])
-            ->from($queryParameters['table'])
-            ->where(...$queryParameters['where']);
+            ->select(...$fields)
+            ->from($table);
 
-        if (!empty($queryParameters['orderBy'])) {
-            foreach ($queryParameters['orderBy'] as $fieldNameAndSorting) {
-                list($fieldName, $sorting) = $fieldNameAndSorting;
-                $queryBuilder->addOrderBy($fieldName, $sorting);
-            }
+        if (!empty($additionalConstraints)) {
+            $queryBuilder->andWhere(...$additionalConstraints);
         }
 
-        if (!empty($queryParameters['firstResult'])) {
-            $queryBuilder->setFirstResult((int)$queryParameters['firstResult']);
-        }
-
-        if (!empty($queryParameters['maxResults'])) {
-            $queryBuilder->setMaxResults((int)$queryParameters['maxResults']);
-        }
-
-        if (!empty($queryParameters['groupBy'])) {
-            $queryBuilder->groupBy($queryParameters['groupBy']);
-        }
+        $queryBuilder = $this->prepareQueryBuilder($table, $pageId, $fields, $additionalConstraints, $queryBuilder);
 
         return $queryBuilder;
     }
 
     /**
-     * Return the query parameters to select the records from a table $table with pid = $this->pidList
+     * Return the modified QueryBuilder object ($queryBuilder) which will be
+     * used to select the records from a table $table with pid = $this->pidList
      *
      * @param string $table Table name
      * @param int $pageId Page id Only used to build the search constraints, $this->pidList is used for restrictions
      * @param string[] $fieldList List of fields to select from the table
      * @param string[] $additionalConstraints Additional part for where clause
-     * @return array
+     * @param QueryBuilder $queryBuilder
+     * @param bool $addSorting
+     * @return QueryBuilder
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
-    protected function buildQueryParameters(
+    protected function prepareQueryBuilder(
         string $table,
         int $pageId,
         array $fieldList = ['*'],
-        array $additionalConstraints = []
-    ): array {
-        $expressionBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
-            ->getQueryBuilderForTable($table)
-            ->expr();
-
+        array $additionalConstraints = [],
+        QueryBuilder $queryBuilder,
+        bool $addSorting = true
+    ): QueryBuilder {
         $parameters = [
             'table' => $table,
             'fields' => $fieldList,
             'groupBy' => null,
             'orderBy' => null,
             'firstResult' => $this->firstElementNumber ?: null,
-            'maxResults' => $this->iLimit ? $this->iLimit : null,
+            'maxResults' => $this->iLimit ?: null
         ];
 
-        if ($this->sortField && in_array($this->sortField, $this->makeFieldList($table, 1))) {
-            $parameters['orderBy'][] = $this->sortRev ? [$this->sortField, 'DESC'] : [$this->sortField, 'ASC'];
-        } else {
-            $orderBy = $GLOBALS['TCA'][$table]['ctrl']['sortby'] ?: $GLOBALS['TCA'][$table]['ctrl']['default_sortby'];
-            $parameters['orderBy'] = QueryHelper::parseOrderBy((string)$orderBy);
+        if ($this->iLimit > 0) {
+            $queryBuilder->setMaxResults($this->iLimit);
+        }
+
+        if ($addSorting) {
+            if ($this->sortField && in_array($this->sortField, $this->makeFieldList($table, 1))) {
+                $queryBuilder->orderBy($this->sortField, $this->sortRev ? 'DESC' : 'ASC');
+            } else {
+                $orderBy = $GLOBALS['TCA'][$table]['ctrl']['sortby'] ?: $GLOBALS['TCA'][$table]['ctrl']['default_sortby'];
+                $orderBys = QueryHelper::parseOrderBy((string)$orderBy);
+                foreach ($orderBys as $orderBy) {
+                    $queryBuilder->addOrderBy($orderBy[0], $orderBy[1]);
+                }
+            }
         }
 
         // Build the query constraints
-        $constraints = [
-            'pidSelect' => $this->getPageIdConstraint($table),
-            'search' => $this->makeSearchString($table, $pageId)
-        ];
+        $queryBuilder = $this->addPageIdConstraint($table, $queryBuilder);
+        $searchWhere = $this->makeSearchString($table, $pageId);
+        if (!empty($searchWhere)) {
+            $queryBuilder->andWhere($searchWhere);
+        }
 
         // Filtering on displayable pages (permissions):
         if ($table === 'pages' && $this->perms_clause) {
-            $constraints['pagePermsClause'] = $this->perms_clause;
+            $queryBuilder->andWhere($this->perms_clause);
         }
 
         // Filter out records that are translated, if TSconfig mod.web_list.hideTranslations is set
-        if ((GeneralUtility::inList($this->hideTranslations, $table) || $this->hideTranslations === '*')
-            && !empty($GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField'])
-            && $table !== 'pages_language_overlay'
+        if (!empty($GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField'])
+            && (GeneralUtility::inList($this->hideTranslations, $table) || $this->hideTranslations === '*')
         ) {
-            $constraints['transOrigPointerField'] = $expressionBuilder->eq(
+            $queryBuilder->andWhere($queryBuilder->expr()->eq(
                 $GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField'],
                 0
-            );
+            ));
         }
-
-        $parameters['where'] = array_merge($constraints, $additionalConstraints);
 
         $hookName = DatabaseRecordList::class;
         if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][$hookName]['buildQueryParameters'])) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][$hookName]['buildQueryParameters'] as $classRef) {
-                $hookObject = GeneralUtility::getUserObj($classRef);
+            // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, the modifyQuery hook should be used instead.
+            trigger_error('The hook ($GLOBALS[\'TYPO3_CONF_VARS\'][\'SC_OPTIONS\'][' . $hookName . '][\'buildQueryParameters\']) will be removed in TYPO3 v10.0, the modifyQuery hook should be used instead.', E_USER_DEPRECATED);
+            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][$hookName]['buildQueryParameters'] as $className) {
+                $hookObject = GeneralUtility::makeInstance($className);
                 if (method_exists($hookObject, 'buildQueryParametersPostProcess')) {
                     $hookObject->buildQueryParametersPostProcess(
                         $parameters,
@@ -853,7 +812,8 @@ class AbstractDatabaseRecordList extends AbstractRecordList
                         $pageId,
                         $additionalConstraints,
                         $fieldList,
-                        $this
+                        $this,
+                        $queryBuilder
                     );
                 }
             }
@@ -862,30 +822,66 @@ class AbstractDatabaseRecordList extends AbstractRecordList
         // array_unique / array_filter used to eliminate empty and duplicate constraints
         // the array keys are eliminated by this as well to facilitate argument unpacking
         // when used with the querybuilder.
-        $parameters['where'] = array_unique(array_filter(array_values($parameters['where'])));
+        // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
+        if (!empty($parameters['where'])) {
+            $parameters['where'] = array_unique(array_filter(array_values($parameters['where'])));
+        }
+        if (!empty($parameters['where'])) {
+            $this->logDeprecation('where');
+            $queryBuilder->where(...$parameters['where']);
+        }
+        if (!empty($parameters['orderBy'])) {
+            $this->logDeprecation('orderBy');
+            foreach ($parameters['orderBy'] as $fieldNameAndSorting) {
+                list($fieldName, $sorting) = $fieldNameAndSorting;
+                $queryBuilder->addOrderBy($fieldName, $sorting);
+            }
+        }
+        if (!empty($parameters['firstResult'])) {
+            $this->logDeprecation('firstResult');
+            $queryBuilder->setFirstResult((int)$parameters['firstResult']);
+        }
+        if (!empty($parameters['maxResults']) && $parameters['maxResults'] !== $this->iLimit) {
+            $this->logDeprecation('maxResults');
+            $queryBuilder->setMaxResults((int)$parameters['maxResults']);
+        }
+        if (!empty($parameters['groupBy'])) {
+            $this->logDeprecation('groupBy');
+            $queryBuilder->groupBy($parameters['groupBy']);
+        }
 
-        return $parameters;
+        return $queryBuilder;
     }
 
     /**
-     * Set the total items for the record list
+     * Executed a query to set $this->totalItems to the number of total
+     * items, eg. for pagination
      *
      * @param string $table Table name
      * @param int $pageId Only used to build the search constraints, $this->pidList is used for restrictions
      * @param array $constraints Additional constraints for where clause
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function setTotalItems(string $table, int $pageId, array $constraints)
     {
-        $queryParameters = $this->buildQueryParameters($table, $pageId, ['*'], $constraints);
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
-            ->getQueryBuilderForTable($queryParameters['table']);
+            ->getQueryBuilderForTable($table);
+
         $queryBuilder->getRestrictions()
             ->removeAll()
             ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
             ->add(GeneralUtility::makeInstance(BackendWorkspaceRestriction::class));
         $queryBuilder
-            ->from($queryParameters['table'])
-            ->where(...$queryParameters['where']);
+            ->from($table);
+
+        if (!empty($constraints)) {
+            $queryBuilder->andWhere(...$constraints);
+        }
+
+        $queryBuilder = $this->prepareQueryBuilder($table, $pageId, ['*'], $constraints, $queryBuilder, false);
+        // Reset limit and offset for full count query
+        $queryBuilder->setFirstResult(0);
+        $queryBuilder->setMaxResults(1);
 
         $this->totalItems = (int)$queryBuilder->count('*')
             ->execute()
@@ -899,6 +895,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * @param string $table Table, in which the fields are being searched.
      * @param int $currentPid Page id for the possible search limit. -1 only if called from an old XCLASS.
      * @return string Returns part of WHERE-clause for searching, if applicable.
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function makeSearchString($table, $currentPid = -1)
     {
@@ -907,15 +904,12 @@ class AbstractDatabaseRecordList extends AbstractRecordList
         $constraints = [];
         $currentPid = (int)$currentPid;
         $tablePidField = $table === 'pages' ? 'uid' : 'pid';
-        // Make query, only if table is valid and a search string is actually defined:
+        // Make query only if table is valid and a search string is actually defined
         if (empty($this->searchString)) {
             return '';
         }
 
         $searchableFields = $this->getSearchFields($table);
-        if (empty($searchableFields)) {
-            return '';
-        }
         if (MathUtility::canBeInterpretedAsInteger($this->searchString)) {
             $constraints[] = $expressionBuilder->eq('uid', (int)$this->searchString);
             foreach ($searchableFields as $fieldName) {
@@ -945,7 +939,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
                     );
                 }
             }
-        } else {
+        } elseif (!empty($searchableFields)) {
             $like = $queryBuilder->quote('%' . $queryBuilder->escapeLikeWildcards($this->searchString) . '%');
             foreach ($searchableFields as $fieldName) {
                 if (!isset($GLOBALS['TCA'][$table]['columns'][$fieldName])) {
@@ -986,7 +980,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
                 }
             }
         }
-        // If no search field conditions have been build ensure no results are returned
+        // If no search field conditions have been built ensure no results are returned
         if (empty($constraints)) {
             return '0=1';
         }
@@ -999,6 +993,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      *
      * @param string $tableName
      * @return string[]
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     protected function getSearchFields($tableName)
     {
@@ -1010,16 +1005,14 @@ class AbstractDatabaseRecordList extends AbstractRecordList
             $fieldListWasSet = true;
         }
         // Call hook to add or change the list
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['mod_list']['getSearchFieldList'])) {
-            $hookParameters = [
-                'tableHasSearchConfiguration' => $fieldListWasSet,
-                'tableName' => $tableName,
-                'searchFields' => &$fieldArray,
-                'searchString' => $this->searchString
-            ];
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['mod_list']['getSearchFieldList'] as $hookFunction) {
-                GeneralUtility::callUserFunction($hookFunction, $hookParameters, $this);
-            }
+        $hookParameters = [
+            'tableHasSearchConfiguration' => $fieldListWasSet,
+            'tableName' => $tableName,
+            'searchFields' => &$fieldArray,
+            'searchString' => $this->searchString
+        ];
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['mod_list']['getSearchFieldList'] ?? [] as $hookFunction) {
+            GeneralUtility::callUserFunction($hookFunction, $hookParameters, $this);
         }
         return $fieldArray;
     }
@@ -1031,6 +1024,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * @param string $table Table name
      * @param string $code Table label
      * @return string The linked table label
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function linkWrapTable($table, $code)
     {
@@ -1048,6 +1042,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * @param string $code Item title (not htmlspecialchars()'ed yet)
      * @param mixed[] $row Item row
      * @return string The item title. Ready for HTML output (is htmlspecialchars()'ed)
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function linkWrapItems($table, $uid, $code, $row)
     {
@@ -1055,7 +1050,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
         $origCode = $code;
         // If the title is blank, make a "no title" label:
         if ((string)$code === '') {
-            $code = '<i>[' . htmlspecialchars($lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.no_title')) . ']</i> - '
+            $code = '<i>[' . htmlspecialchars($lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.no_title')) . ']</i> - '
                 . htmlspecialchars(BackendUtility::getRecordTitle($table, $row));
         } else {
             $code = htmlspecialchars($code, ENT_QUOTES, 'UTF-8', false);
@@ -1083,12 +1078,12 @@ class AbstractDatabaseRecordList extends AbstractRecordList
                 if ($table === 'pages' || $table === 'tt_content') {
                     $code = '<a href="#" onclick="' . htmlspecialchars(
                         BackendUtility::viewOnClick(($table === 'tt_content' ? $this->id . '#' . $row['uid'] : $row['uid']))
-                    ) . '" title="' . htmlspecialchars($lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.showPage')) . '">' . $code . '</a>';
+                    ) . '" title="' . htmlspecialchars($lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.showPage')) . '">' . $code . '</a>';
                 }
                 break;
             case 'info':
                 // "Info": (All records)
-                $code = '<a href="#" onclick="' . htmlspecialchars(('top.launchView(\'' . $table . '\', \'' . $row['uid'] . '\'); return false;')) . '" title="' . htmlspecialchars($lang->getLL('showInfo')) . '">' . $code . '</a>';
+                $code = '<a href="#" onclick="' . htmlspecialchars('top.TYPO3.InfoWindow.showItem(\'' . $table . '\', \'' . $row['uid'] . '\'); return false;') . '" title="' . htmlspecialchars($lang->getLL('showInfo')) . '">' . $code . '</a>';
                 break;
             default:
                 // Output the label now:
@@ -1107,6 +1102,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * @param string $code code to wrap
      * @param string $testString String which is tested for being a URL or email and which will be used for the link if so.
      * @return string Link-Wrapped $code value, if $testString was URL or email.
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function linkUrlMail($code, $testString)
     {
@@ -1132,6 +1128,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * @param string $table Table name to display. Enter "-1" for the current table.
      * @param string $exclList Comma separated list of fields NOT to include ("sortField", "sortRev" or "firstElementNumber")
      * @return string URL
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function listURL($altId = '', $table = '-1', $exclList = '')
     {
@@ -1174,22 +1171,18 @@ class AbstractDatabaseRecordList extends AbstractRecordList
         $urlParameters = array_merge_recursive($urlParameters, $this->overrideUrlParameters);
 
         if ($routePath = GeneralUtility::_GP('route')) {
-            $router = GeneralUtility::makeInstance(Router::class);
-            $route = $router->match($routePath);
             $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
-            $url = (string)$uriBuilder->buildUriFromRoute($route->getOption('_identifier'), $urlParameters);
-        } elseif ($moduleName = GeneralUtility::_GP('M')) {
-            $url = BackendUtility::getModuleUrl($moduleName, $urlParameters);
+            $url = (string)$uriBuilder->buildUriFromRoutePath($routePath, $urlParameters);
         } else {
-            $url = GeneralUtility::getIndpEnv('SCRIPT_NAME') . '?' . ltrim(GeneralUtility::implodeArrayForUrl('', $urlParameters), '&');
+            $url = GeneralUtility::getIndpEnv('SCRIPT_NAME') . HttpUtility::buildQueryString($urlParameters, '?');
         }
         return $url;
     }
 
     /**
      * Returns "requestUri" - which is basically listURL
-     *
      * @return string Content of ->listURL()
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function requestUri()
     {
@@ -1203,6 +1196,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * @param bool $dontCheckUser If set, users access to the field (non-exclude-fields) is NOT checked.
      * @param bool $addDateFields If set, also adds crdate and tstamp fields (note: they will also be added if user is admin or dontCheckUser is set)
      * @return string[] Array, where values are fieldnames to include in query
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function makeFieldList($table, $dontCheckUser = false, $addDateFields = false)
     {
@@ -1239,14 +1233,16 @@ class AbstractDatabaseRecordList extends AbstractRecordList
                     if ($GLOBALS['TCA'][$table]['ctrl']['sortby']) {
                         $fieldListArr[] = $GLOBALS['TCA'][$table]['ctrl']['sortby'];
                     }
-                    if (ExtensionManagementUtility::isLoaded('version') && $GLOBALS['TCA'][$table]['ctrl']['versioningWS']) {
+                    if (ExtensionManagementUtility::isLoaded('workspaces') && $GLOBALS['TCA'][$table]['ctrl']['versioningWS']) {
                         $fieldListArr[] = 't3ver_id';
                         $fieldListArr[] = 't3ver_state';
                         $fieldListArr[] = 't3ver_wsid';
                     }
                 }
             } else {
-                GeneralUtility::sysLog(sprintf('$TCA is broken for the table "%s": no required "columns" entry in $TCA.', $table), 'core', GeneralUtility::SYSLOG_SEVERITY_ERROR);
+                GeneralUtility::makeInstance(LogManager::class)
+                    ->getLogger(__CLASS__)
+                    ->error('TCA is broken for the table "' . $table . '": no required "columns" entry in TCA.');
             }
         }
         return $fieldListArr;
@@ -1259,9 +1255,17 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * @param int $depth Depth to go down
      * @param string $perms_clause select clause
      * @return int[]
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     protected function getSearchableWebmounts($id, $depth, $perms_clause)
     {
+        $runtimeCache = GeneralUtility::makeInstance(CacheManager::class)->getCache('cache_runtime');
+        $cacheIdentifier = md5('pidList_' . $id . '_' . $depth . '_' . $perms_clause);
+        $idList = $runtimeCache->get($cacheIdentifier);
+        if ($idList) {
+            return $idList;
+        }
+
         $backendUser = $this->getBackendUserAuthentication();
         /** @var PageTreeView $tree */
         $tree = GeneralUtility::makeInstance(PageTreeView::class);
@@ -1281,7 +1285,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
             }
             $idList = array_merge($idList, $tree->ids);
         }
-
+        $runtimeCache->set($cacheIdentifier, $idList);
         return $idList;
     }
 
@@ -1289,6 +1293,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Redirects to FormEngine if a record is just localized.
      *
      * @param string $justLocalized String with table, orig uid and language separated by ":
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function localizationRedirect($justLocalized)
     {
@@ -1322,7 +1327,9 @@ class AbstractDatabaseRecordList extends AbstractRecordList
             if ($localizedRecordUid !== false) {
                 // Create parameters and finally run the classic page module for creating a new page translation
                 $url = $this->listURL();
-                $editUserAccountUrl = BackendUtility::getModuleUrl(
+                /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+                $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
+                $editUserAccountUrl = (string)$uriBuilder->buildUriFromRoute(
                     'record_edit',
                     [
                         'edit[' . $table . '][' . $localizedRecordUid . ']' => 'edit',
@@ -1338,6 +1345,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      * Set URL parameters to override or add in the listUrl() method.
      *
      * @param string[] $urlParameters
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function setOverrideUrlParameters(array $urlParameters)
     {
@@ -1355,6 +1363,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
      *
      * @param array $orderInformation
      * @throws \UnexpectedValueException
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function setTableDisplayOrder(array $orderInformation)
     {
@@ -1379,6 +1388,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
 
     /**
      * @return array
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function getOverridePageIdList(): array
     {
@@ -1387,6 +1397,7 @@ class AbstractDatabaseRecordList extends AbstractRecordList
 
     /**
      * @param int[]|array $overridePageIdList
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function setOverridePageIdList(array $overridePageIdList)
     {
@@ -1394,13 +1405,15 @@ class AbstractDatabaseRecordList extends AbstractRecordList
     }
 
     /**
-     * Build SQL fragment to limit a query to a list of page IDs based on
-     * the current search level setting.
+     * Add conditions to the QueryBuilder object ($queryBuilder) to limit a
+     * query to a list of page IDs based on the current search level setting.
      *
      * @param string $tableName
-     * @return string
+     * @param QueryBuilder $queryBuilder
+     * @return QueryBuilder Modified QueryBuilder object
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
-    protected function getPageIdConstraint(string $tableName): string
+    protected function addPageIdConstraint(string $tableName, QueryBuilder $queryBuilder): QueryBuilder
     {
         // Set search levels:
         $searchLevels = $this->searchLevels;
@@ -1411,32 +1424,49 @@ class AbstractDatabaseRecordList extends AbstractRecordList
             $searchLevels = 999;
         }
 
-        // Default is to search everywhere
-        $constraint = '1=1';
-
-        $expressionBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
-            ->getConnectionForTable($tableName)
-            ->getExpressionBuilder();
-
         if ($searchLevels === 0) {
-            $constraint = $expressionBuilder->eq($tableName . '.pid', (int)$this->id);
+            $queryBuilder->andWhere(
+                $queryBuilder->expr()->eq(
+                    $tableName . '.pid',
+                    $queryBuilder->createNamedParameter($this->id, \PDO::PARAM_INT)
+                )
+            );
         } elseif ($searchLevels > 0) {
-            $allowedMounts = $this->getSearchableWebmounts($this->id, $searchLevels, $this->perms_clause);
-            $constraint = $expressionBuilder->in($tableName . '.pid', array_map('intval', $allowedMounts));
-        }
-
-        if (!empty($this->getOverridePageIdList())) {
-            $constraint = $expressionBuilder->in(
-                $tableName . '.pid',
-                $this->getOverridePageIdList()
+            $allowedPidList = $this->getSearchableWebmounts($this->id, $searchLevels, $this->perms_clause);
+            $queryBuilder->andWhere(
+                $queryBuilder->expr()->in(
+                    $tableName . '.pid',
+                    $queryBuilder->createNamedParameter($allowedPidList, Connection::PARAM_INT_ARRAY)
+                )
             );
         }
 
-        return (string)$constraint;
+        if (!empty($this->getOverridePageIdList())) {
+            $queryBuilder->andWhere(
+                $queryBuilder->expr()->in(
+                    $tableName . '.pid',
+                    $queryBuilder->createNamedParameter($this->getOverridePageIdList(), Connection::PARAM_INT_ARRAY)
+                )
+            );
+        }
+
+        return $queryBuilder;
+    }
+
+    /**
+     * Method used to log deprecated usage of old buildQueryParametersPostProcess hook arguments
+     *
+     * @param string $index
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
+     */
+    protected function logDeprecation(string $index)
+    {
+        trigger_error('[index: ' . $index . '] $parameters in "buildQueryParameters"-Hook will be removed in TYPO3 v10.0, use $queryBuilder instead.', E_USER_DEPRECATED);
     }
 
     /**
      * @return BackendUserAuthentication
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     protected function getBackendUserAuthentication()
     {

@@ -26,11 +26,20 @@ namespace DanLundgren\DlQrcodesgenerator\Domain\Model;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
+/***
+ *
+ * This file is part of the "QRcodes Generator" Extension for TYPO3 CMS.
+ *
+ * For the full copyright and license information, please read the
+ * LICENSE.txt file that was distributed with this source code.
+ *
+ *  (c) 2020 Dan Lundgren <danlundgren0@gmail.com>, Dan Lundgren
+ *
+ ***/
+
 /**
  * Generate QR-Codes for current page-tree
  */
 class QRcodesGenerator extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
 {
-
-    
-}
+    }

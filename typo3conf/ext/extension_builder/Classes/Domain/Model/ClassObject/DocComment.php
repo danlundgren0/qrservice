@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Domain\Model\ClassObject;
 
 /*
@@ -134,8 +135,8 @@ class DocComment extends Comment
      * parseDocComment() before tags are available.
      *
      * @param string $tagName The tag name to retrieve the values for
-     * @throws \InvalidArgumentException
      * @return array The tag's values
+     * @throws \InvalidArgumentException
      */
     public function getTagValues($tagName)
     {
@@ -249,10 +250,10 @@ class DocComment extends Comment
 
         if ($singleLineCommentAllowed && count($docCommentLines) === 1) {
             return '/** ' . $docCommentLines[0] . ' */';
-        } else {
-            $docCommentLines = preg_replace('/\\s+$/', '', $docCommentLines);
-            $docCommentLines = preg_replace('/^/', ' * ', $docCommentLines);
-            return '/**' . PHP_EOL . implode(PHP_EOL, $docCommentLines) . PHP_EOL . ' */';
         }
+
+        $docCommentLines = preg_replace('/\\s+$/', '', $docCommentLines);
+        $docCommentLines = preg_replace('/^/', ' * ', $docCommentLines);
+        return '/**' . PHP_EOL . implode(PHP_EOL, $docCommentLines) . PHP_EOL . ' */';
     }
 }

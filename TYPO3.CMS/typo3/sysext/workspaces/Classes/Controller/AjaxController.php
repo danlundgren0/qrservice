@@ -17,9 +17,14 @@ namespace TYPO3\CMS\Workspaces\Controller;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Http\JsonResponse;
+use TYPO3\CMS\Core\Type\Bitmask\Permission;
+use TYPO3\CMS\Workspaces\Service\WorkspaceService;
 
 /**
  * Implements the AJAX functionality for the various asynchronous calls
+ * @internal This is a specific Backend Controller implementation and is not considered part of the Public TYPO3 API.
  */
 class AjaxController
 {
@@ -28,25 +33,28 @@ class AjaxController
      * called by the Backend toolbar menu
      *
      * @param ServerRequestInterface $request
-     * @param ResponseInterface $response
      * @return ResponseInterface
      */
-    public function switchWorkspaceAction(ServerRequestInterface $request, ResponseInterface $response)
+    public function switchWorkspaceAction(ServerRequestInterface $request): ResponseInterface
     {
         $parsedBody = $request->getParsedBody();
         $queryParams = $request->getQueryParams();
-        $workspaceId = (int)(isset($parsedBody['workspaceId']) ? $parsedBody['workspaceId'] : $queryParams['workspaceId']);
-        $pageId = (int)(isset($parsedBody['pageId']) ? $parsedBody['pageId'] : $queryParams['pageId']);
+        $workspaceId = (int)($parsedBody['workspaceId'] ?? $queryParams['workspaceId']);
+        $pageId = (int)($parsedBody['pageId'] ?? $queryParams['pageId']);
         $finalPageUid = 0;
         $originalPageId = $pageId;
 
         $this->getBackendUser()->setWorkspace($workspaceId);
 
         while ($pageId) {
-            $page = BackendUtility::getRecordWSOL('pages', $pageId, '*',
-                ' AND pages.t3ver_wsid IN (0, ' . $workspaceId . ')');
+            $page = BackendUtility::getRecordWSOL(
+                'pages',
+                $pageId,
+                '*',
+                ' AND pages.t3ver_wsid IN (0, ' . $workspaceId . ')'
+            );
             if ($page) {
-                if ($this->getBackendUser()->doesUserHaveAccess($page, 1)) {
+                if ($this->getBackendUser()->doesUserHaveAccess($page, Permission::PAGE_SHOW)) {
                     break;
                 }
             } else {
@@ -60,16 +68,15 @@ class AjaxController
         }
 
         $ajaxResponse = [
-            'title'       => \TYPO3\CMS\Workspaces\Service\WorkspaceService::getWorkspaceTitle($workspaceId),
+            'title'       => WorkspaceService::getWorkspaceTitle($workspaceId),
             'workspaceId' => $workspaceId,
             'pageId'      => ($finalPageUid && $originalPageId == $finalPageUid) ? null : $finalPageUid
         ];
-        $response->getBody()->write(json_encode($ajaxResponse));
-        return $response;
+        return new JsonResponse($ajaxResponse);
     }
 
     /**
-     * @return \TYPO3\CMS\Core\Authentication\BackendUserAuthentication
+     * @return BackendUserAuthentication
      */
     protected function getBackendUser()
     {

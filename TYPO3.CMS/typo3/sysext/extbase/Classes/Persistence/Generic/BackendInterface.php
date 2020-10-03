@@ -37,7 +37,6 @@ interface BackendInterface
      * Sets the deleted entities
      *
      * @param \TYPO3\CMS\Extbase\Persistence\ObjectStorage $entities
-     * @api
      */
     public function setDeletedEntities(\TYPO3\CMS\Extbase\Persistence\ObjectStorage $entities);
 
@@ -60,7 +59,7 @@ interface BackendInterface
      * backend. Otherwise NULL is returned.
      *
      * @param object $object
-     * @return string|NULL The identifier for the object if it is known, or NULL
+     * @return string|null The identifier for the object if it is known, or NULL
      */
     public function getIdentifierByObject($object);
 
@@ -70,7 +69,7 @@ interface BackendInterface
      *
      * @param string $identifier
      * @param string $className
-     * @return object|NULL The object for the identifier if it is known, or NULL
+     * @return object|null The object for the identifier if it is known, or NULL
      */
     public function getObjectByIdentifier($identifier, $className);
 
@@ -87,7 +86,6 @@ interface BackendInterface
      *
      * @param \TYPO3\CMS\Extbase\Persistence\QueryInterface $query
      * @return int
-     * @api
      */
     public function getObjectCountByQuery(\TYPO3\CMS\Extbase\Persistence\QueryInterface $query);
 
@@ -96,7 +94,6 @@ interface BackendInterface
      *
      * @param \TYPO3\CMS\Extbase\Persistence\QueryInterface $query
      * @return array
-     * @api
      */
     public function getObjectDataByQuery(\TYPO3\CMS\Extbase\Persistence\QueryInterface $query);
 }

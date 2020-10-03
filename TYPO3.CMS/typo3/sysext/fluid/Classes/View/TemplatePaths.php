@@ -14,8 +14,6 @@ namespace TYPO3\CMS\Fluid\View;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Core\Cache\CacheManager;
-use TYPO3\CMS\Core\Cache\Frontend\VariableFrontend;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -29,14 +27,11 @@ use TYPO3\CMS\Extbase\Object\ObjectManager;
  * Custom implementation for template paths resolving, one which differs from the base
  * implementation in that it is capable of resolving template paths based on TypoScript
  * configuration when given a package name, and is aware of the Frontend/Backend contexts of TYPO3.
+ *
+ * @internal This is for internal Fluid use only.
  */
 class TemplatePaths extends \TYPO3Fluid\Fluid\View\TemplatePaths
 {
-    /**
-     * @var array
-     */
-    protected $typoScript = [];
-
     /**
      * @var string
      */
@@ -49,7 +44,7 @@ class TemplatePaths extends \TYPO3Fluid\Fluid\View\TemplatePaths
 
     /**
      * @param string $extensionKey
-     * @return string|NULL
+     * @return string|null
      */
     protected function getExtensionPrivateResourcesPath($extensionKey)
     {
@@ -79,12 +74,6 @@ class TemplatePaths extends \TYPO3Fluid\Fluid\View\TemplatePaths
         if (empty($extensionKey)) {
             return [];
         }
-        $cache = $this->getRuntimeCache();
-        $cacheIdentifier = 'viewpaths_' . $extensionKey;
-        $configuration = $cache->get($cacheIdentifier);
-        if (!empty($configuration)) {
-            return $configuration;
-        }
 
         $resources = $this->getExtensionPrivateResourcesPath($extensionKey);
         $paths = [
@@ -102,16 +91,14 @@ class TemplatePaths extends \TYPO3Fluid\Fluid\View\TemplatePaths
                 self::CONFIG_LAYOUTROOTPATHS => $this->layoutRootPaths,
             ];
         } else {
-            if (empty($this->typoScript)) {
-                $this->typoScript = GeneralUtility::removeDotsFromTS(
-                    (array)$this->getConfigurationManager()->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT)
-                );
-            }
+            $typoScript = (array)$this->getConfigurationManager()->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
             $signature = str_replace('_', '', $extensionKey);
-            if ($this->isBackendMode() && isset($this->typoScript['module']['tx_' . $signature]['view'])) {
-                $configuredPaths = (array)$this->typoScript['module']['tx_' . $signature]['view'];
-            } elseif ($this->isFrontendMode() && isset($this->typoScript['plugin']['tx_' . $signature]['view'])) {
-                $configuredPaths = (array)$this->typoScript['plugin']['tx_' . $signature]['view'];
+            if ($this->isBackendMode() && isset($typoScript['module.']['tx_' . $signature . '.']['view.'])) {
+                $configuredPaths = (array)$typoScript['module.']['tx_' . $signature . '.']['view.'];
+                $configuredPaths = GeneralUtility::removeDotsFromTS($configuredPaths);
+            } elseif ($this->isFrontendMode() && isset($typoScript['plugin.']['tx_' . $signature . '.']['view.'])) {
+                $configuredPaths = (array)$typoScript['plugin.']['tx_' . $signature . '.']['view.'];
+                $configuredPaths = GeneralUtility::removeDotsFromTS($configuredPaths);
             }
         }
 
@@ -124,8 +111,6 @@ class TemplatePaths extends \TYPO3Fluid\Fluid\View\TemplatePaths
                 $paths[$name] = array_merge($defaultPaths, ArrayUtility::sortArrayWithIntegerKeys((array)$configuredPaths[$name]));
             }
         }
-
-        $cache->set($cacheIdentifier, $paths);
 
         return $paths;
     }
@@ -234,13 +219,5 @@ class TemplatePaths extends \TYPO3Fluid\Fluid\View\TemplatePaths
     protected function isFrontendMode()
     {
         return TYPO3_MODE === 'FE';
-    }
-
-    /**
-     * @return VariableFrontend
-     */
-    protected function getRuntimeCache()
-    {
-        return GeneralUtility::makeInstance(CacheManager::class)->getCache('cache_runtime');
     }
 }

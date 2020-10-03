@@ -14,12 +14,12 @@ namespace TYPO3\CMS\Extbase\Persistence\Generic;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Extbase\Object\ObjectManagerInterface;
+use TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper;
 use TYPO3\CMS\Extbase\Persistence\QueryResultInterface;
 
 /**
  * A lazy result list that is returned by Query::execute()
- *
- * @api
  */
 class QueryResult implements QueryResultInterface
 {
@@ -34,7 +34,7 @@ class QueryResult implements QueryResultInterface
     protected $persistenceManager;
 
     /**
-     * @var int|NULL
+     * @var int|null
      */
     protected $numberOfResults;
 
@@ -45,16 +45,20 @@ class QueryResult implements QueryResultInterface
 
     /**
      * @var array
-     * @transient
      */
     protected $queryResult;
 
     /**
-     * @param \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper $dataMapper
+     * @var ObjectManagerInterface
      */
-    public function injectDataMapper(\TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper $dataMapper)
+    protected $objectManager;
+
+    /**
+     * @param ObjectManagerInterface $objectManager
+     */
+    public function injectObjectManager(ObjectManagerInterface $objectManager)
     {
-        $this->dataMapper = $dataMapper;
+        $this->objectManager = $objectManager;
     }
 
     /**
@@ -76,6 +80,14 @@ class QueryResult implements QueryResultInterface
     }
 
     /**
+     * Object initialization called when object is created with ObjectManager, after constructor
+     */
+    public function initializeObject()
+    {
+        $this->dataMapper = $this->objectManager->get(DataMapper::class, $this->query);
+    }
+
+    /**
      * Loads the objects this QueryResult is supposed to hold
      */
     protected function initialize()
@@ -89,7 +101,6 @@ class QueryResult implements QueryResultInterface
      * Returns a clone of the query object
      *
      * @return \TYPO3\CMS\Extbase\Persistence\QueryInterface
-     * @api
      */
     public function getQuery()
     {
@@ -100,7 +111,6 @@ class QueryResult implements QueryResultInterface
      * Returns the first object in the result set
      *
      * @return object
-     * @api
      */
     public function getFirst()
     {
@@ -123,7 +133,6 @@ class QueryResult implements QueryResultInterface
      * Returns the number of objects in the result
      *
      * @return int The number of matching objects
-     * @api
      */
     public function count()
     {
@@ -141,7 +150,6 @@ class QueryResult implements QueryResultInterface
      * Returns an array with the objects in the result set
      *
      * @return array
-     * @api
      */
     public function toArray()
     {
@@ -171,7 +179,7 @@ class QueryResult implements QueryResultInterface
     public function offsetGet($offset)
     {
         $this->initialize();
-        return isset($this->queryResult[$offset]) ? $this->queryResult[$offset] : null;
+        return $this->queryResult[$offset] ?? null;
     }
 
     /**
@@ -184,6 +192,7 @@ class QueryResult implements QueryResultInterface
     public function offsetSet($offset, $value)
     {
         $this->initialize();
+        $this->numberOfResults = null;
         $this->queryResult[$offset] = $value;
     }
 
@@ -196,6 +205,7 @@ class QueryResult implements QueryResultInterface
     public function offsetUnset($offset)
     {
         $this->initialize();
+        $this->numberOfResults = null;
         unset($this->queryResult[$offset]);
     }
 
@@ -250,16 +260,18 @@ class QueryResult implements QueryResultInterface
     /**
      * Ensures that the objectManager, persistenceManager and dataMapper are back when loading the QueryResult
      * from the cache
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function __wakeup()
     {
         $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Extbase\Object\ObjectManager::class);
         $this->persistenceManager = $objectManager->get(\TYPO3\CMS\Extbase\Persistence\PersistenceManagerInterface::class);
-        $this->dataMapper = $objectManager->get(\TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper::class);
+        $this->dataMapper = $objectManager->get(DataMapper::class);
     }
 
     /**
      * @return array
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function __sleep()
     {

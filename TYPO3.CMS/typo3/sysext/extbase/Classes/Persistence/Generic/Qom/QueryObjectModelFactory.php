@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Extbase\Persistence\Generic\Qom;
 
 /**
  * The Query Object Model Factory
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 class QueryObjectModelFactory implements \TYPO3\CMS\Core\SingletonInterface
 {
@@ -51,7 +52,7 @@ class QueryObjectModelFactory implements \TYPO3\CMS\Core\SingletonInterface
     /**
      * Sets a statement as constraint. This is not part of the JCR 2.0 Specification!
      *
-     * @param string|\TYPO3\CMS\Core\Database\PreparedStatement $statement The statement
+     * @param string $statement The statement
      * @param array $boundVariables An array of variables to bind to the statement
      * @return \TYPO3\CMS\Extbase\Persistence\Generic\Qom\Statement
      */

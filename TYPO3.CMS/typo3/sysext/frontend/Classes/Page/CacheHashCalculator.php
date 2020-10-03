@@ -15,6 +15,7 @@ namespace TYPO3\CMS\Frontend\Page;
  */
 
 use TYPO3\CMS\Core\SingletonInterface;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Logic for cHash calculation
@@ -48,10 +49,13 @@ class CacheHashCalculator implements SingletonInterface
 
     /**
      * Initialise class properties by using the relevant TYPO3 configuration
+     *
+     * @param array $configuration
      */
-    public function __construct()
+    public function __construct(array $configuration = null)
     {
-        $this->setConfiguration($GLOBALS['TYPO3_CONF_VARS']['FE']['cacheHash']);
+        $configuration = $configuration ?? $GLOBALS['TYPO3_CONF_VARS']['FE']['cacheHash'] ?? [];
+        $this->setConfiguration($configuration);
     }
 
     /**
@@ -107,7 +111,7 @@ class CacheHashCalculator implements SingletonInterface
      * @param string $queryString Query-parameters: "&xxx=yyy&zzz=uuu
      * @return array Array with key/value pairs of query-parameters WITHOUT a certain list of
      * @throws \RuntimeException
-     * @see \TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController::makeCacheHash(), \TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer::typoLink()
+     * @see \TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer::typoLink()
      */
     public function getRelevantParameters($queryString)
     {
@@ -151,7 +155,10 @@ class CacheHashCalculator implements SingletonInterface
         $parameters = array_filter(explode('&', ltrim($queryString, '?')));
         $parameterArray = [];
         foreach ($parameters as $parameter) {
-            list($parameterName, $parameterValue) = explode('=', $parameter);
+            // should not remove empty values with trimExplode, otherwise cases like &=value, value is used as parameterName.
+            $parts = GeneralUtility::trimExplode('=', $parameter, false);
+            $parameterName = $parts[0];
+            $parameterValue = $parts[1] ?? '';
             if (trim($parameterName) === '') {
                 // This parameter cannot appear in $_GET in PHP even if its value is not empty, so it should be ignored!
                 continue;
@@ -171,7 +178,7 @@ class CacheHashCalculator implements SingletonInterface
     protected function isAdminPanelParameter($key)
     {
         return $key === 'ADMCMD_noBeUser' || $key === 'ADMCMD_view' || $key === 'ADMCMD_editIcons'
-            || $key === 'ADMCMD_simUser' || $key === 'ADMCMD_simTime' || $key === 'ADMCMD_previewWS'
+            || $key === 'ADMCMD_simUser' || $key === 'ADMCMD_simTime' || $key === 'ADMCMD_prev'
             || stripos($key, 'TSFE_ADMIN_PANEL') !== false && preg_match('/TSFE_ADMIN_PANEL\\[.*?\\]/', $key);
     }
 

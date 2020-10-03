@@ -1,4 +1,6 @@
 <?php
+declare(strict_types = 1);
+
 namespace TYPO3\CMS\Extbase\Mvc\View;
 
 /*
@@ -15,12 +17,13 @@ namespace TYPO3\CMS\Extbase\Mvc\View;
  */
 
 use TYPO3\CMS\Extbase\Mvc\Web\Response as WebResponse;
+use TYPO3\CMS\Extbase\Persistence\PersistenceManagerInterface;
+use TYPO3\CMS\Extbase\Reflection\ObjectAccess;
+use TYPO3\CMS\Extbase\Reflection\ReflectionService;
 use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
 
 /**
  * A JSON view
- *
- * @api
  */
 class JsonView extends AbstractView
 {
@@ -41,7 +44,7 @@ class JsonView extends AbstractView
     const EXPOSE_CLASSNAME_UNQUALIFIED = 2;
 
     /**
-     * @var \TYPO3\CMS\Extbase\Reflection\ReflectionService
+     * @var ReflectionService
      */
     protected $reflectionService;
 
@@ -53,7 +56,7 @@ class JsonView extends AbstractView
     /**
      * Only variables whose name is contained in this array will be rendered
      *
-     * @var array
+     * @var string[]
      */
     protected $variablesToRender = ['value'];
 
@@ -65,27 +68,27 @@ class JsonView extends AbstractView
      *
      * Example 1:
      *
-     * array(
-     *		'variable1' => array(
-     *			'_only' => array('property1', 'property2', ...)
-     *		),
-     *		'variable2' => array(
-     *	 		'_exclude' => array('property3', 'property4, ...)
-     *		),
-     *		'variable3' => array(
-     *			'_exclude' => array('secretTitle'),
-     *			'_descend' => array(
-     *				'customer' => array(
-     *					'_only' => array('firstName', 'lastName')
-     *				)
-     *			)
-     *		),
-     *		'somearrayvalue' => array(
-     *			'_descendAll' => array(
-     *				'_only' => array('property1')
-     *			)
-     *		)
-     * )
+     * [
+     *      'variable1' => [
+     *          '_only' => ['property1', 'property2', ...]
+     *      ],
+     *      'variable2' => [
+     *          '_exclude' => ['property3', 'property4, ...]
+     *      ],
+     *      'variable3' => [
+     *          '_exclude' => ['secretTitle'],
+     *          '_descend' => [
+     *              'customer' => [
+     *                  '_only' => [array(]'firstName', 'lastName']
+     *              ]
+     *          ]
+     *      ],
+     *      'somearrayvalue' => [
+     *          '_descendAll' => [
+     *              '_only' => ['property1']
+     *          ]
+     *      ]
+     * ]
      *
      * Of variable1 only property1 and property2 will be included.
      * Of variable2 all properties except property3 and property4
@@ -108,18 +111,18 @@ class JsonView extends AbstractView
      *
      * Example 2: exposing object identifier
      *
-     * array(
-     *		'variableFoo' => array(
-     *			'_exclude' => array('secretTitle'),
-     *			'_descend' => array(
-     *				'customer' => array(    // consider 'customer' being a persisted entity
-     *					'_only' => array('firstName'),
-     * 					'_exposeObjectIdentifier' => TRUE,
-     * 					'_exposedObjectIdentifierKey' => 'guid'
-     *				)
-     *			)
-     *		)
-     * )
+     * [
+     *      'variableFoo' => [
+     *          '_exclude' => ['secretTitle'],
+     *          '_descend' => [
+     *              'customer' => [    // consider 'customer' being a persisted entity
+     *                  '_only' => ['firstName'],
+     *                  '_exposeObjectIdentifier' => TRUE,
+     *                  '_exposedObjectIdentifierKey' => 'guid'
+     *              ]
+     *          ]
+     *      ]
+     * ]
      *
      * Note for entity objects you are able to expose the object's identifier
      * also, just add an "_exposeObjectIdentifier" directive set to TRUE and
@@ -132,17 +135,17 @@ class JsonView extends AbstractView
      *
      * Example 3: exposing object's class name
      *
-     * array(
-     *		'variableFoo' => array(
-     *			'_exclude' => array('secretTitle'),
-     *			'_descend' => array(
-     *				'customer' => array(    // consider 'customer' being an object
-     *					'_only' => array('firstName'),
-     * 					'_exposeClassName' => TYPO3\Flow\Mvc\View\JsonView::EXPOSE_CLASSNAME_FULLY_QUALIFIED
-     *				)
-     *			)
-     *		)
-     * )
+     * [
+     *      'variableFoo' => [
+     *          '_exclude' => ['secretTitle'],
+     *          '_descend' => [
+     *              'customer' => [    // consider 'customer' being an object
+     *                  '_only' => ['firstName'],
+     *                  '_exposeClassName' => \TYPO3\CMS\Extbase\Mvc\View\JsonView::EXPOSE_CLASSNAME_FULLY_QUALIFIED
+     *              ]
+     *          ]
+     *      ]
+     * ]
      *
      * The ``_exposeClassName`` is similar to the objectIdentifier one, but the class name is added to the
      * JSON object output, for example (summarized):
@@ -158,22 +161,24 @@ class JsonView extends AbstractView
     protected $configuration = [];
 
     /**
-     * @var \TYPO3\CMS\Extbase\Persistence\PersistenceManagerInterface
+     * @var PersistenceManagerInterface
      */
     protected $persistenceManager;
 
     /**
-     * @param \TYPO3\CMS\Extbase\Persistence\PersistenceManagerInterface $persistenceManager
+     * @param PersistenceManagerInterface $persistenceManager
+     * @internal
      */
-    public function injectPersistenceManager(\TYPO3\CMS\Extbase\Persistence\PersistenceManagerInterface $persistenceManager)
+    public function injectPersistenceManager(PersistenceManagerInterface $persistenceManager): void
     {
         $this->persistenceManager = $persistenceManager;
     }
 
     /**
-     * @param \TYPO3\CMS\Extbase\Reflection\ReflectionService $reflectionService
+     * @param ReflectionService $reflectionService
+     * @internal
      */
-    public function injectReflectionService(\TYPO3\CMS\Extbase\Reflection\ReflectionService $reflectionService)
+    public function injectReflectionService(ReflectionService $reflectionService): void
     {
         $this->reflectionService = $reflectionService;
     }
@@ -183,9 +188,8 @@ class JsonView extends AbstractView
      * By default only the variable 'value' will be rendered
      *
      * @param array $variablesToRender
-     * @api
      */
-    public function setVariablesToRender(array $variablesToRender)
+    public function setVariablesToRender(array $variablesToRender): void
     {
         $this->variablesToRender = $variablesToRender;
     }
@@ -193,7 +197,7 @@ class JsonView extends AbstractView
     /**
      * @param array $configuration The rendering configuration for this JSON view
      */
-    public function setConfiguration(array $configuration)
+    public function setConfiguration(array $configuration): void
     {
         $this->configuration = $configuration;
     }
@@ -204,9 +208,8 @@ class JsonView extends AbstractView
      * the result.
      *
      * @return string The JSON encoded variables
-     * @api
      */
-    public function render()
+    public function render(): string
     {
         $response = $this->controllerContext->getResponse();
         if ($response instanceof WebResponse) {
@@ -229,26 +232,25 @@ class JsonView extends AbstractView
             }
         }
         $propertiesToRender = $this->renderArray();
-        return json_encode($propertiesToRender);
+        return json_encode($propertiesToRender, JSON_UNESCAPED_UNICODE);
     }
 
     /**
      * Loads the configuration and transforms the value to a serializable
      * array.
      *
-     * @return array An array containing the values, ready to be JSON encoded
-     * @api
+     * @return mixed
      */
     protected function renderArray()
     {
         if (count($this->variablesToRender) === 1) {
             $variableName = current($this->variablesToRender);
-            $valueToRender = isset($this->variables[$variableName]) ? $this->variables[$variableName] : null;
-            $configuration = isset($this->configuration[$variableName]) ? $this->configuration[$variableName] : [];
+            $valueToRender = $this->variables[$variableName] ?? null;
+            $configuration = $this->configuration[$variableName] ?? [];
         } else {
             $valueToRender = [];
             foreach ($this->variablesToRender as $variableName) {
-                $valueToRender[$variableName] = isset($this->variables[$variableName]) ? $this->variables[$variableName] : null;
+                $valueToRender[$variableName] = $this->variables[$variableName] ?? null;
             }
             $configuration = $this->configuration;
         }
@@ -261,7 +263,7 @@ class JsonView extends AbstractView
      *
      * @param mixed $value The value to transform
      * @param array $configuration Configuration for transforming the value
-     * @return array The transformed value
+     * @return mixed The transformed value
      */
     protected function transformValue($value, array $configuration)
     {
@@ -271,21 +273,21 @@ class JsonView extends AbstractView
                 if (isset($configuration['_descendAll']) && is_array($configuration['_descendAll'])) {
                     $array[$key] = $this->transformValue($element, $configuration['_descendAll']);
                 } else {
-                    if (isset($configuration['_only']) && is_array($configuration['_only']) && !in_array($key, $configuration['_only'])) {
+                    if (isset($configuration['_only']) && is_array($configuration['_only']) && !in_array($key, $configuration['_only'], true)) {
                         continue;
                     }
-                    if (isset($configuration['_exclude']) && is_array($configuration['_exclude']) && in_array($key, $configuration['_exclude'])) {
+                    if (isset($configuration['_exclude']) && is_array($configuration['_exclude']) && in_array($key, $configuration['_exclude'], true)) {
                         continue;
                     }
-                    $array[$key] = $this->transformValue($element, isset($configuration[$key]) ? $configuration[$key] : []);
+                    $array[$key] = $this->transformValue($element, $configuration[$key] ?? []);
                 }
             }
             return $array;
-        } elseif (is_object($value)) {
-            return $this->transformObject($value, $configuration);
-        } else {
-            return $value;
         }
+        if (is_object($value)) {
+            return $this->transformObject($value, $configuration);
+        }
+        return $value;
     }
 
     /**
@@ -294,47 +296,46 @@ class JsonView extends AbstractView
      *
      * @param object $object Object to traverse
      * @param array $configuration Configuration for transforming the given object or NULL
-     * @return array Object structure as an array
+     * @return array|string Object structure as an array or as a rendered string (for a DateTime instance)
      */
-    protected function transformObject($object, array $configuration)
+    protected function transformObject(object $object, array $configuration)
     {
         if ($object instanceof \DateTime) {
             return $object->format(\DateTime::ATOM);
-        } else {
-            $propertyNames = \TYPO3\CMS\Extbase\Reflection\ObjectAccess::getGettablePropertyNames($object);
-
-            $propertiesToRender = [];
-            foreach ($propertyNames as $propertyName) {
-                if (isset($configuration['_only']) && is_array($configuration['_only']) && !in_array($propertyName, $configuration['_only'])) {
-                    continue;
-                }
-                if (isset($configuration['_exclude']) && is_array($configuration['_exclude']) && in_array($propertyName, $configuration['_exclude'])) {
-                    continue;
-                }
-
-                $propertyValue = \TYPO3\CMS\Extbase\Reflection\ObjectAccess::getProperty($object, $propertyName);
-
-                if (!is_array($propertyValue) && !is_object($propertyValue)) {
-                    $propertiesToRender[$propertyName] = $propertyValue;
-                } elseif (isset($configuration['_descend']) && array_key_exists($propertyName, $configuration['_descend'])) {
-                    $propertiesToRender[$propertyName] = $this->transformValue($propertyValue, $configuration['_descend'][$propertyName]);
-                }
-            }
-            if (isset($configuration['_exposeObjectIdentifier']) && $configuration['_exposeObjectIdentifier'] === true) {
-                if (isset($configuration['_exposedObjectIdentifierKey']) && strlen($configuration['_exposedObjectIdentifierKey']) > 0) {
-                    $identityKey = $configuration['_exposedObjectIdentifierKey'];
-                } else {
-                    $identityKey = '__identity';
-                }
-                $propertiesToRender[$identityKey] = $this->persistenceManager->getIdentifierByObject($object);
-            }
-            if (isset($configuration['_exposeClassName']) && ($configuration['_exposeClassName'] === self::EXPOSE_CLASSNAME_FULLY_QUALIFIED || $configuration['_exposeClassName'] === self::EXPOSE_CLASSNAME_UNQUALIFIED)) {
-                $className = get_class($object);
-                $classNameParts = explode('\\', $className);
-                $propertiesToRender['__class'] = ($configuration['_exposeClassName'] === self::EXPOSE_CLASSNAME_FULLY_QUALIFIED ? $className : array_pop($classNameParts));
-            }
-
-            return $propertiesToRender;
         }
+        $propertyNames = ObjectAccess::getGettablePropertyNames($object);
+
+        $propertiesToRender = [];
+        foreach ($propertyNames as $propertyName) {
+            if (isset($configuration['_only']) && is_array($configuration['_only']) && !in_array($propertyName, $configuration['_only'], true)) {
+                continue;
+            }
+            if (isset($configuration['_exclude']) && is_array($configuration['_exclude']) && in_array($propertyName, $configuration['_exclude'], true)) {
+                continue;
+            }
+
+            $propertyValue = ObjectAccess::getProperty($object, $propertyName);
+
+            if (!is_array($propertyValue) && !is_object($propertyValue)) {
+                $propertiesToRender[$propertyName] = $propertyValue;
+            } elseif (isset($configuration['_descend']) && array_key_exists($propertyName, $configuration['_descend'])) {
+                $propertiesToRender[$propertyName] = $this->transformValue($propertyValue, $configuration['_descend'][$propertyName]);
+            }
+        }
+        if (isset($configuration['_exposeObjectIdentifier']) && $configuration['_exposeObjectIdentifier'] === true) {
+            if (isset($configuration['_exposedObjectIdentifierKey']) && strlen($configuration['_exposedObjectIdentifierKey']) > 0) {
+                $identityKey = $configuration['_exposedObjectIdentifierKey'];
+            } else {
+                $identityKey = '__identity';
+            }
+            $propertiesToRender[$identityKey] = $this->persistenceManager->getIdentifierByObject($object);
+        }
+        if (isset($configuration['_exposeClassName']) && ($configuration['_exposeClassName'] === self::EXPOSE_CLASSNAME_FULLY_QUALIFIED || $configuration['_exposeClassName'] === self::EXPOSE_CLASSNAME_UNQUALIFIED)) {
+            $className = get_class($object);
+            $classNameParts = explode('\\', $className);
+            $propertiesToRender['__class'] = ($configuration['_exposeClassName'] === self::EXPOSE_CLASSNAME_FULLY_QUALIFIED ? $className : array_pop($classNameParts));
+        }
+
+        return $propertiesToRender;
     }
 }

@@ -17,16 +17,16 @@ namespace TYPO3\CMS\Extensionmanager\ViewHelpers;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Fluid\ViewHelpers\Link\ActionViewHelper;
 
 /**
- * View helper for update script link
+ * ViewHelper for update script link
  * @internal
  */
-class UpdateScriptViewHelper extends Link\ActionViewHelper
+class UpdateScriptViewHelper extends ActionViewHelper
 {
-    /**
-     * @var \TYPO3\CMS\Extbase\Object\ObjectManagerInterface
-     */
+
+    /** @var \TYPO3\CMS\Extbase\Object\ObjectManager */
     protected $objectManager;
 
     /**
@@ -54,15 +54,14 @@ class UpdateScriptViewHelper extends Link\ActionViewHelper
     public function render()
     {
         $extensionKey = $this->arguments['extensionKey'];
-        $tag = '';
 
         // If the "class.ext_update.php" file exists, build link to the update script screen
-        /** @var $updateScriptUtility \TYPO3\CMS\Extensionmanager\Utility\UpdateScriptUtility */
+        /** @var \TYPO3\CMS\Extensionmanager\Utility\UpdateScriptUtility $updateScriptUtility */
         $updateScriptUtility = $this->objectManager->get(\TYPO3\CMS\Extensionmanager\Utility\UpdateScriptUtility::class);
         /** @var IconFactory $iconFactory */
         $iconFactory = GeneralUtility::makeInstance(IconFactory::class);
         if ($updateScriptUtility->checkUpdateScriptExists($extensionKey)) {
-            $uriBuilder = $this->controllerContext->getUriBuilder();
+            $uriBuilder = $this->renderingContext->getControllerContext()->getUriBuilder();
             $action = 'show';
             $uri = $uriBuilder->reset()->uriFor(
                 $action,
@@ -71,7 +70,7 @@ class UpdateScriptViewHelper extends Link\ActionViewHelper
             );
             $this->tag->addAttribute('href', $uri);
             $this->tag->addAttribute('title', \TYPO3\CMS\Extbase\Utility\LocalizationUtility::translate('extensionList.update.script', 'extensionmanager'));
-            $this->tag->setContent($iconFactory->getIcon('extensions-extensionmanager-update-script', Icon::SIZE_SMALL)->render());
+            $this->tag->setContent($iconFactory->getIcon('actions-refresh', Icon::SIZE_SMALL)->render());
             $tag = $this->tag->render();
         } else {
             return '<span class="btn btn-default disabled">' . $iconFactory->getIcon('empty-empty', Icon::SIZE_SMALL)->render() . '</span>';

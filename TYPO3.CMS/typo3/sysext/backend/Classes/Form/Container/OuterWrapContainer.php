@@ -18,9 +18,10 @@ use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Localization\LanguageService;
+use TYPO3\CMS\Core\Type\Bitmask\Permission;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Fluid\View\StandaloneView;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Render header and footer row.
@@ -58,7 +59,7 @@ class OuterWrapContainer extends AbstractContainer
         $recordPath = '';
         // @todo: what is this >= 0 check for? wsol cases?!
         if ($this->data['effectivePid'] >= 0) {
-            $permissionsClause = $backendUser->getPagePermsClause(1);
+            $permissionsClause = $backendUser->getPagePermsClause(Permission::PAGE_SHOW);
             $recordPath = BackendUtility::getRecordPath($this->data['effectivePid'], $permissionsClause, 15);
         }
 
@@ -69,18 +70,18 @@ class OuterWrapContainer extends AbstractContainer
         $tableTitle = $languageService->sL($this->data['processedTca']['ctrl']['title']);
 
         if ($this->data['command'] === 'new') {
-            $newOrUid = ' <span class="typo3-TCEforms-newToken">' . htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.new')) . '</span>';
+            $newOrUid = ' <span class="typo3-TCEforms-newToken">' . htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.new')) . '</span>';
 
             // @todo: There is quite some stuff do to for WS overlays ...
             $workspacedPageRecord = BackendUtility::getRecordWSOL('pages', $this->data['effectivePid'], 'title');
             $pageTitle = BackendUtility::getRecordTitle('pages', $workspacedPageRecord, true, false);
             if ($table === 'pages') {
-                $label = htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.createNewPage'));
+                $label = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.createNewPage'));
                 $pageTitle = sprintf($label, $tableTitle);
             } else {
-                $label = htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.createNewRecord'));
+                $label = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.createNewRecord'));
                 if ($this->data['effectivePid'] === 0) {
-                    $label = htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.createNewRecordRootLevel'));
+                    $label = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.createNewRecordRootLevel'));
                 }
                 $pageTitle = sprintf($label, $tableTitle, $pageTitle);
             }
@@ -91,17 +92,17 @@ class OuterWrapContainer extends AbstractContainer
             // @todo: getRecordTitlePrep applies an htmlspecialchars here
             $recordLabel = BackendUtility::getRecordTitlePrep($this->data['recordTitle']);
             if ($table === 'pages') {
-                $label = htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.editPage'));
+                $label = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.editPage'));
                 $pageTitle = sprintf($label, $tableTitle, $recordLabel);
             } else {
-                $label = htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.editRecord'));
+                $label = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.editRecord'));
                 $workspacedPageRecord = BackendUtility::getRecordWSOL('pages', $row['pid'], 'uid,title');
                 $pageTitle = BackendUtility::getRecordTitle('pages', $workspacedPageRecord, true, false);
                 if (empty($recordLabel)) {
-                    $label = htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.editRecordNoTitle'));
+                    $label = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.editRecordNoTitle'));
                 }
                 if ($this->data['effectivePid'] === 0) {
-                    $label = htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.editRecordRootLevel'));
+                    $label = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.editRecordRootLevel'));
                 }
                 if (!empty($recordLabel)) {
                     // Use record title and prepend an edit label.
@@ -121,14 +122,13 @@ class OuterWrapContainer extends AbstractContainer
         $descriptionColumn = !empty($this->data['processedTca']['ctrl']['descriptionColumn'])
             ? $this->data['processedTca']['ctrl']['descriptionColumn'] : null;
         if ($descriptionColumn !== null) {
-            $title = $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.recordInformation');
-            $content = $this->data['databaseRow'][$descriptionColumn];
-            $view->assignMultiple([
-                'infoBoxMessageTitle' => $title,
-                'infoBoxMessage' => $content
-            ]);
+            $view->assign('recordDescription', $this->data['databaseRow'][$descriptionColumn]);
         }
-
+        $readOnlyRecord = !empty($this->data['processedTca']['ctrl']['readOnly'])
+            ? (bool)$this->data['processedTca']['ctrl']['readOnly'] : null;
+        if ($readOnlyRecord === true) {
+            $view->assign('recordReadonly', true);
+        }
         $fieldInformationResult = $this->renderFieldInformation();
         $fieldInformationHtml = $fieldInformationResult['html'];
         $result = $this->mergeChildReturnIntoExistingResult($result, $fieldInformationResult, false);
@@ -144,7 +144,8 @@ class OuterWrapContainer extends AbstractContainer
             'childHtml' => $childHtml,
             'icon' => $icon,
             'tableTitle' => $tableTitle,
-            'newOrUid' => $newOrUid
+            'newOrUid' => $newOrUid,
+            'isNewRecord' => $this->data['command'] === 'new'
         ]);
         $result['html'] = $view->render();
         return $result;

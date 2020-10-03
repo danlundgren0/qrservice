@@ -14,19 +14,19 @@ namespace TYPO3\CMS\Core\Cache\Backend;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Cache;
+
 /**
  * A contract for a Cache Backend
- * @api
  */
 interface BackendInterface
 {
     /**
      * Sets a reference to the cache frontend which uses this backend
      *
-     * @param \TYPO3\CMS\Core\Cache\Frontend\FrontendInterface $cache The frontend for this backend
-     * @api
+     * @param Cache\Frontend\FrontendInterface $cache The frontend for this backend
      */
-    public function setCache(\TYPO3\CMS\Core\Cache\Frontend\FrontendInterface $cache);
+    public function setCache(Cache\Frontend\FrontendInterface $cache);
 
     /**
      * Saves data in the cache.
@@ -37,7 +37,6 @@ interface BackendInterface
      * @param int $lifetime Lifetime of this cache entry in seconds. If NULL is specified, the default lifetime is used. "0" means unlimited lifetime.
      * @throws \TYPO3\CMS\Core\Cache\Exception if no cache frontend has been set.
      * @throws \TYPO3\CMS\Core\Cache\Exception\InvalidDataException if the data is not a string
-     * @api
      */
     public function set($entryIdentifier, $data, array $tags = [], $lifetime = null);
 
@@ -46,7 +45,6 @@ interface BackendInterface
      *
      * @param string $entryIdentifier An identifier which describes the cache entry to load
      * @return mixed The cache entry's content as a string or FALSE if the cache entry could not be loaded
-     * @api
      */
     public function get($entryIdentifier);
 
@@ -55,7 +53,6 @@ interface BackendInterface
      *
      * @param string $entryIdentifier An identifier specifying the cache entry
      * @return bool TRUE if such an entry exists, FALSE if not
-     * @api
      */
     public function has($entryIdentifier);
 
@@ -66,21 +63,16 @@ interface BackendInterface
      *
      * @param string $entryIdentifier Specifies the cache entry to remove
      * @return bool TRUE if (at least) an entry could be removed or FALSE if no entry was found
-     * @api
      */
     public function remove($entryIdentifier);
 
     /**
      * Removes all cache entries of this cache.
-     *
-     * @api
      */
     public function flush();
 
     /**
      * Does garbage collection
-     *
-     * @api
      */
     public function collectGarbage();
 }

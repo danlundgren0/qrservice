@@ -14,13 +14,13 @@ namespace TYPO3\CMS\Lowlevel\Utility;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
 
 /**
  * Class for displaying an array as a tree
  * See the extension 'lowlevel' /config (Backend module 'Tools > Configuration')
+ * @internal just a helper class for internal usage
  */
 class ArrayBrowser
 {
@@ -98,6 +98,8 @@ class ArrayBrowser
         if ($positionKey) {
             $positionKey = $positionKey . '.';
         }
+        /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
         foreach ($array as $key => $value) {
             $depth = $positionKey . $key;
             if (is_object($value) && !$value instanceof \Traversable) {
@@ -107,11 +109,11 @@ class ArrayBrowser
             $isResult = (bool)$this->searchKeys[$depth];
             $isExpanded = $isArray && ($this->depthKeys[$depth] || $this->expAll);
             $output .= '<li' . ($isResult ? ' class="active"' : '') . '>';
+            $output .= '<span class="list-tree-group">';
             if ($isArray && !$this->expAll) {
                 $goto = 'a' . substr(md5($depth), 0, 6);
-                $output .= '<a class="list-tree-control' . ($isExpanded ? ' list-tree-control-open' : ' list-tree-control-closed') . '" id="' . $goto . '" href="' . htmlspecialchars((BackendUtility::getModuleUrl(GeneralUtility::_GP('M')) . '&node[' . $depth . ']=' . ($isExpanded ? 0 : 1) . '#' . $goto)) . '"><i class="fa"></i></a> ';
+                $output .= '<a class="list-tree-control' . ($isExpanded ? ' list-tree-control-open' : ' list-tree-control-closed') . '" id="' . $goto . '" href="' . htmlspecialchars((string)$uriBuilder->buildUriFromRoutePath(GeneralUtility::_GP('route')) . '&node[' . rawurlencode($depth) . ']=' . ($isExpanded ? 0 : 1) . '#' . $goto) . '"><i class="fa"></i></a> ';
             }
-            $output .= '<span class="list-tree-group">';
             $output .= $this->wrapArrayKey($key, $depth, !$isArray ? $value : '');
             if (!$isArray) {
                 $output .= ' = <span class="list-tree-value">' . htmlspecialchars($value) . '</span>';
@@ -132,23 +134,6 @@ class ArrayBrowser
     /**
      * Wrapping the value in bold tags etc.
      *
-     * @param string $theValue The title string
-     * @return string Title string, htmlspecialchars()'ed
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function wrapValue($theValue)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $wrappedValue = '';
-        if ((string)$theValue !== '') {
-            $wrappedValue = htmlspecialchars($theValue);
-        }
-        return $wrappedValue;
-    }
-
-    /**
-     * Wrapping the value in bold tags etc.
-     *
      * @param string $label The title string
      * @param string $depth Depth path
      * @param string $theValue The value for the array entry.
@@ -158,7 +143,8 @@ class ArrayBrowser
     {
         // Protect label:
         $label = htmlspecialchars($label);
-
+        /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
         // If varname is set:
         if ($this->varName && !$this->dontLinkVar) {
             $variableName = $this->varName
@@ -166,8 +152,8 @@ class ArrayBrowser
                 . (!MathUtility::canBeInterpretedAsInteger($theValue) ? '\''
                 . addslashes($theValue) . '\'' : $theValue) . '; ';
             $label = '<a class="list-tree-label" href="'
-                . htmlspecialchars((BackendUtility::getModuleUrl(GeneralUtility::_GP('M'))
-                . '&varname=' . urlencode($variableName)))
+                . htmlspecialchars((string)$uriBuilder->buildUriFromRoutePath(GeneralUtility::_GP('route'))
+                . '&varname=' . urlencode($variableName))
                 . '#varname">' . $label . '</a>';
         }
         return '<span class="list-tree-label">' . $label . '</span>';

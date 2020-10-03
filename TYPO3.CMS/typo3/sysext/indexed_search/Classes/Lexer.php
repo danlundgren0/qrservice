@@ -14,12 +14,27 @@ namespace TYPO3\CMS\IndexedSearch;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Charset\CharsetConverter;
+use TYPO3\CMS\Core\Compatibility\PublicPropertyDeprecationTrait;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+
 /**
  * Lexer class for indexed_search
  * A lexer splits the text into words
+ * @internal
  */
 class Lexer
 {
+    use PublicPropertyDeprecationTrait;
+
+    /**
+     * List of all deprecated public properties
+     * @var array
+     */
+    protected $deprecatedPublicProperties = [
+        'csObj' => 'Using $csObj within Indexing is discouraged, the property will be removed in TYPO3 v10.0 - if needed instantiate CharsetConverter yourself.',
+    ];
+
     /**
      * Debugging options:
      *
@@ -37,7 +52,8 @@ class Lexer
     /**
      * Charset class object
      *
-     * @var \TYPO3\CMS\Core\Charset\CharsetConverter
+     * @var CharsetConverter
+     * @deprecated since TYPO3 v9.3, will be removed in TYPO3 v10.0 (also the instantiation in the init() method).
      */
     public $csObj;
 
@@ -59,7 +75,8 @@ class Lexer
      */
     public function __construct()
     {
-        $this->csObj = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Core\Charset\CharsetConverter::class);
+        // @deprecated, can be removed in TYPO3 v10.0.
+        $this->csObj = GeneralUtility::makeInstance(CharsetConverter::class);
     }
 
     /**
@@ -88,7 +105,11 @@ class Lexer
             if ($len) {
                 $this->addWords($words, $wordString, $start, $len);
                 if ($this->debug) {
-                    $this->debugString .= '<span style="color:red">' . htmlspecialchars(substr($wordString, $pos, ($start - $pos))) . '</span>' . htmlspecialchars(substr($wordString, $start, $len));
+                    $this->debugString .= '<span style="color:red">' . htmlspecialchars(substr(
+                        $wordString,
+                        $pos,
+                        $start - $pos
+                    )) . '</span>' . htmlspecialchars(substr($wordString, $start, $len));
                 }
                 $pos = $start + $len;
             } else {
@@ -144,8 +165,9 @@ class Lexer
         } else {
             // Normal "single-byte" chars:
             // Remove chars:
+            $charsetConverter = GeneralUtility::makeInstance(CharsetConverter::class);
             foreach ($this->lexerConf['removeChars'] as $skipJoin) {
-                $theWord = str_replace($this->csObj->UnumberToChar($skipJoin), '', $theWord);
+                $theWord = str_replace($charsetConverter->UnumberToChar($skipJoin), '', $theWord);
             }
             // Add word:
             $words[] = $theWord;
@@ -215,11 +237,10 @@ class Lexer
                                 $len = $printJoinLgd;
                             }
                             return true;
-                        } else {
-                            // If a printJoin char is found, record the length if it has not been recorded already:
-                            if (!$printJoinLgd) {
-                                $printJoinLgd = $len;
-                            }
+                        }
+                        // If a printJoin char is found, record the length if it has not been recorded already:
+                        if (!$printJoinLgd) {
+                            $printJoinLgd = $len;
                         }
                     } else {
                         // When a true letter is found, reset printJoinLgd counter:

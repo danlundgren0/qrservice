@@ -18,10 +18,12 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use TYPO3\CMS\Backend\Search\LiveSearch\LiveSearch;
 use TYPO3\CMS\Backend\Search\LiveSearch\QueryParser;
+use TYPO3\CMS\Core\Http\JsonResponse;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Returns the results for any live searches, e.g. in the toolbar
+ * @internal This class is a specific Backend controller implementation and is not considered part of the Public TYPO3 API.
  */
 class LiveSearchController
 {
@@ -34,12 +36,11 @@ class LiveSearchController
      * Processes all AJAX calls and sends back a JSON object
      *
      * @param ServerRequestInterface $request
-     * @param ResponseInterface $response
      * @return ResponseInterface
      */
-    public function liveSearchAction(ServerRequestInterface $request, ResponseInterface $response)
+    public function liveSearchAction(ServerRequestInterface $request): ResponseInterface
     {
-        $queryString = $request->getQueryParams()['q'];
+        $queryString = trim($request->getQueryParams()['q']);
         $liveSearch = GeneralUtility::makeInstance(LiveSearch::class);
         $queryParser = GeneralUtility::makeInstance(QueryParser::class);
 
@@ -59,7 +60,6 @@ class LiveSearchController
                 $searchResults[] = $item;
             }
         }
-        $response->getBody()->write(json_encode($searchResults));
-        return $response;
+        return (new JsonResponse())->setPayload($searchResults);
     }
 }

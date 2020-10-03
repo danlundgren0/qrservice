@@ -139,7 +139,7 @@ class TcaFlexProcess implements FormDataProviderInterface
                             }
                         }
                     }
-                } elseif (isset($dataStructureFieldDefinition['type']) || isset($dataStructureFieldDefinition['section'])) {
+                } elseif (isset($dataStructureFieldDefinition['type']) xor isset($dataStructureFieldDefinition['section'])) {
                     // type without section is not ok
                     throw new \UnexpectedValueException(
                         'Broken data structure on field name ' . $fieldName . '. section without type or vice versa is not allowed',
@@ -363,43 +363,6 @@ class TcaFlexProcess implements FormDataProviderInterface
                 $pageTsConfig['TCEFORM.'][$tableName . '.'] = $pageTsConfig[$dataStructureSheetName . '.'];
             }
 
-            // It is possible to have a flex field field with of foreign_table (eg. type=select) that has markers in
-            // a foreign_table_where like ###PAGE_TSCONFIG_ID###. It was possible to set this in page TSConfig for flex fields like this:
-            // TCEFORM.theTable.theFlexfield.PAGE_TSCONFIG_ID = 42
-            // This hands over this PAGE_TSCONFIG_ID to all flex fields that have this foreign_table_where marker.
-            // This is a contradiction to the "usual" page TSConfig flex configuration that should be done for single flex fields:
-            // TCEFORM.theTable.theFlexfield.theDataStructure.theSheet.theField.PAGE_TSCONFIG_ID = 42
-            // The below code is a hack to still simulate the old behavior that is now deprecated.
-            // @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-            // When deleting this code and comment block, the according code within AbstractItemProvider can be removed, too.
-            if (isset($result['pageTsConfig']['TCEFORM.'][$tableName . '.'][$fieldName . '.']['PAGE_TSCONFIG_ID'])) {
-                GeneralUtility::deprecationLog(
-                    'The page TSConfig setting TCEFORM.' . $tableName . '.' . $fieldName . '.PAGE_TSCONFIG_ID for flex forms'
-                    . ' is deprecated. Use this setting for single flex fields instead, example: TCEFORM.' . $tableName . '.'
-                    . $fieldName . '.theDataStructureName.theSheet.theFieldName.PAGE_TSCONFIG_ID. Be aware these settings are'
-                    . ' no longer allowed for fields within flex form section container elements.'
-                );
-                $pageTsConfig['flexHack.']['PAGE_TSCONFIG_ID'] = $result['pageTsConfig']['TCEFORM.'][$tableName . '.'][$fieldName . '.']['PAGE_TSCONFIG_ID'];
-            }
-            if (isset($result['pageTsConfig']['TCEFORM.'][$tableName . '.'][$fieldName . '.']['PAGE_TSCONFIG_IDLIST'])) {
-                GeneralUtility::deprecationLog(
-                    'The page TSConfig setting TCEFORM.' . $tableName . '.' . $fieldName . '.PAGE_TSCONFIG_IDLIST for flex forms'
-                    . ' is deprecated. Use this setting for single flex fields instead, example: TCEFORM.' . $tableName . '.'
-                    . $fieldName . '.theDataStructureName.theSheet.theFieldName.PAGE_TSCONFIG_IDLIST. Be aware these settings are'
-                    . ' no longer allowed for fields within flex form section container elements.'
-                );
-                $pageTsConfig['flexHack.']['PAGE_TSCONFIG_IDLIST'] = $result['pageTsConfig']['TCEFORM.'][$tableName . '.'][$fieldName . '.']['PAGE_TSCONFIG_IDLIST'];
-            }
-            if (isset($result['pageTsConfig']['TCEFORM.'][$tableName . '.'][$fieldName . '.']['PAGE_TSCONFIG_STR'])) {
-                GeneralUtility::deprecationLog(
-                    'The page TSConfig setting TCEFORM.' . $tableName . '.' . $fieldName . '.PAGE_TSCONFIG_STR for flex forms'
-                    . ' is deprecated. Use this setting for single flex fields instead, example: TCEFORM.' . $tableName . '.'
-                    . $fieldName . '.theDataStructureName.theSheet.theFieldName.PAGE_TSCONFIG_STR.  Be aware these settings are'
-                    . ' no longer allowed for fields within flex form section container elements.'
-                );
-                $pageTsConfig['flexHack.']['PAGE_TSCONFIG_STR'] = $result['pageTsConfig']['TCEFORM.'][$tableName . '.'][$fieldName . '.']['PAGE_TSCONFIG_STR'];
-            }
-
             // List of "new" tca fields that have no value within the flexform, yet. Those will be compiled in one go later.
             $tcaNewColumns = [];
             // List of "edit" tca fields that have a value in flexform, already. Those will be compiled in one go later.
@@ -471,6 +434,7 @@ class TcaFlexProcess implements FormDataProviderInterface
                                         ],
                                         'selectTreeCompileItems' => $result['selectTreeCompileItems'],
                                         'flexParentDatabaseRow' => $result['databaseRow'],
+                                        'effectivePid' => $result['effectivePid'],
                                     ];
 
                                     if (!empty($newColumns)) {
@@ -518,9 +482,8 @@ class TcaFlexProcess implements FormDataProviderInterface
                             ['sheets'][$dataStructureSheetName]['ROOT']['el']
                             [$dataStructureFieldName]['children'] = [];
                     }
-
-                // A "normal" TCA flex form element, no section
                 } else {
+                    // A "normal" TCA flex form element, no section
                     if (isset($dataValues['data'][$dataStructureSheetName]['lDEF'][$dataStructureFieldName])
                         && array_key_exists('vDEF', $dataValues['data'][$dataStructureSheetName]['lDEF'][$dataStructureFieldName])
                     ) {
@@ -545,6 +508,7 @@ class TcaFlexProcess implements FormDataProviderInterface
                 'flexParentDatabaseRow' => $result['databaseRow'],
                 // Whether to compile TCA tree items - inherit from parent
                 'selectTreeCompileItems' => $result['selectTreeCompileItems'],
+                'effectivePid' => $result['effectivePid'],
             ];
 
             if (!empty($tcaNewColumns)) {
@@ -625,6 +589,7 @@ class TcaFlexProcess implements FormDataProviderInterface
                 ],
                 'selectTreeCompileItems' => $result['selectTreeCompileItems'],
                 'flexParentDatabaseRow' => $result['databaseRow'],
+                'effectivePid' => $result['effectivePid'],
             ];
             $flexSegmentResult = $formDataCompiler->compile($inputToFlexFormSegment);
 

@@ -17,7 +17,7 @@ namespace TYPO3\CMS\Extbase\Mvc\Cli;
 /**
  * Builds a CLI request object from the raw command call
  *
- * @license http://www.gnu.org/licenses/lgpl.html GNU Lesser General Public License, version 3 or later
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Use symfony/console commands instead.
  */
 class RequestBuilder implements \TYPO3\CMS\Core\SingletonInterface
 {
@@ -128,7 +128,9 @@ class RequestBuilder implements \TYPO3\CMS\Core\SingletonInterface
         $commandLineArguments = [];
         $exceedingArguments = [];
         $commandMethodName = $controllerCommandName . 'Command';
-        $commandMethodParameters = $this->reflectionService->getMethodParameters($controllerObjectName, $commandMethodName);
+        $commandMethodParameters = $this->reflectionService
+            ->getClassSchema($controllerObjectName)
+            ->getMethod($commandMethodName)['params'] ?? [];
         $requiredArguments = [];
         $optionalArguments = [];
         $argumentNames = [];
@@ -216,10 +218,10 @@ class RequestBuilder implements \TYPO3\CMS\Core\SingletonInterface
                 if ($expectedArgumentType !== 'boolean') {
                     return $possibleValue;
                 }
-                if (array_search($possibleValue, ['on', '1', 'y', 'yes', 'true', 'TRUE']) !== false) {
+                if (in_array($possibleValue, ['on', '1', 'y', 'yes', 'true', 'TRUE'], true)) {
                     return true;
                 }
-                if (array_search($possibleValue, ['off', '0', 'n', 'no', 'false', 'FALSE']) !== false) {
+                if (in_array($possibleValue, ['off', '0', 'n', 'no', 'false', 'FALSE'], true)) {
                     return false;
                 }
                 array_unshift($rawCommandLineArguments, $possibleValue);
@@ -232,7 +234,7 @@ class RequestBuilder implements \TYPO3\CMS\Core\SingletonInterface
             $currentArgument .= array_shift($rawCommandLineArguments);
             $splitArgument = explode('=', $currentArgument);
         }
-        $value = isset($splitArgument[1]) ? $splitArgument[1] : '';
+        $value = $splitArgument[1] ?? '';
         return $value;
     }
 }

@@ -13,12 +13,12 @@
 			</div>
 			<div class="form-group">
 				<select name="depth" class="form-control">
-					<option value="0"><f:translate key="LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_0" /></option>
-					<option value="1"><f:translate key="LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_1" /></option>
-					<option value="2"><f:translate key="LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_2" /></option>
-					<option value="3"><f:translate key="LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_3" /></option>
-					<option value="4"><f:translate key="LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_4" /></option>
-					<option value="999"><f:translate key="LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_infi" /></option>
+					<option value="0"><f:translate key="LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_0" /></option>
+					<option value="1"><f:translate key="LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_1" /></option>
+					<option value="2"><f:translate key="LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_2" /></option>
+					<option value="3"><f:translate key="LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_3" /></option>
+					<option value="4"><f:translate key="LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_4" /></option>
+					<option value="999"><f:translate key="LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_infi" /></option>
 				</select>
 			</div>
 			<div class="form-group">
@@ -45,14 +45,14 @@
 			</table>
 		</div>
 		<div>
-			<button class="btn btn-default disabled" data-action="massundo">
+			<button class="btn btn-default disabled" data-action="massundo" disabled>
 				<core:icon identifier="actions-edit-undo" />
 				<span class="text">
 					<f:translate key="button.undo" />
 				</span>
 			</button>
 			<f:if condition="{allowDelete}">
-				<button class="btn btn-default disabled" data-action="massdelete">
+				<button class="btn btn-default disabled" data-action="massdelete" disabled>
 					<core:icon identifier="actions-edit-delete" />
 					<span class="text">
 						<f:translate key="button.delete" />

@@ -15,30 +15,47 @@ namespace TYPO3\CMS\Install\Updates;
  */
 
 use TYPO3\CMS\Core\Database\ConnectionPool;
-use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Split menu types into dedicated content elements
+ * @internal This class is only meant to be used within EXT:install and is not part of the TYPO3 Core API.
  */
-class SplitMenusUpdate extends AbstractUpdate
+class SplitMenusUpdate implements UpgradeWizardInterface
 {
     /**
-     * @var string
+     * @return string Unique identifier of this updater
      */
-    protected $title = 'Split menu types into dedicated content elements';
+    public function getIdentifier(): string
+    {
+        return 'splitMenusUpdate';
+    }
+
+    /**
+     * @return string Title of this updater
+     */
+    public function getTitle(): string
+    {
+        return 'Split menu types into dedicated content elements';
+    }
+
+    /**
+     * @return string Longer description of this updater
+     */
+    public function getDescription(): string
+    {
+        return 'Menus have been split into dedicated content elements to provide '
+            . 'a better maintainability and more easy to adjustable template with single '
+            . 'responsibility for the rendering.';
+    }
 
     /**
      * Checks if an update is needed
      *
-     * @param string &$description The description for the update
      * @return bool Whether an update is needed (TRUE) or not (FALSE)
      */
-    public function checkForUpdate(&$description)
+    public function updateNecessary(): bool
     {
-        if ($this->isWizardDone()) {
-            return false;
-        }
         $connection = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tt_content');
         $tableColumns = $connection->getSchemaManager()->listTableColumns('tt_content');
         // Only proceed if menu_type field still exists
@@ -46,33 +63,36 @@ class SplitMenusUpdate extends AbstractUpdate
             return false;
         }
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tt_content');
-        $queryBuilder->getRestrictions()->removeAll()->add(GeneralUtility::makeInstance(DeletedRestriction::class));
+        $queryBuilder->getRestrictions()->removeAll();
         $elementCount = $queryBuilder->count('uid')
             ->from('tt_content')
             ->where(
                 $queryBuilder->expr()->eq('CType', $queryBuilder->createNamedParameter('menu', \PDO::PARAM_STR))
             )
             ->execute()->fetchColumn(0);
-        if ($elementCount) {
-            $description = 'Menus have been splitted into dedicated content elements to provide '
-                . 'a better maintainability and more easy to adjustable template with single '
-                . 'responsibility for the rendering.';
-        }
         return (bool)$elementCount;
+    }
+
+    /**
+     * @return string[] All new fields and tables must exist
+     */
+    public function getPrerequisites(): array
+    {
+        return [
+            DatabaseUpdatedPrerequisite::class
+        ];
     }
 
     /**
      * Performs the database update
      *
-     * @param array &$databaseQueries Queries done in this update
-     * @param string &$customMessage Custom message
      * @return bool
      */
-    public function performUpdate(array &$databaseQueries, &$customMessage)
+    public function executeUpdate(): bool
     {
         $connection = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tt_content');
         $queryBuilder = $connection->createQueryBuilder();
-        $queryBuilder->getRestrictions()->removeAll()->add(GeneralUtility::makeInstance(DeletedRestriction::class));
+        $queryBuilder->getRestrictions()->removeAll();
         $statement = $queryBuilder->select('uid', 'header', 'menu_type')
             ->from('tt_content')
             ->where(
@@ -92,10 +112,8 @@ class SplitMenusUpdate extends AbstractUpdate
                     )
                 )
                 ->set('CType', $this->mapMenuTypes($record['menu_type']));
-            $databaseQueries[] = $queryBuilder->getSQL();
             $queryBuilder->execute();
         }
-        $this->markWizardAsDone();
         return true;
     }
 

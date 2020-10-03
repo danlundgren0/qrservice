@@ -16,17 +16,19 @@ namespace TYPO3\CMS\Impexp;
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsException;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
+use TYPO3\CMS\Core\Type\Bitmask\Permission;
 use TYPO3\CMS\Core\Utility\DebugUtility;
 use TYPO3\CMS\Core\Utility\DiffUtility;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\File\ExtendedFileUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\PathUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * EXAMPLE for using the impexp-class for exporting stuff:
@@ -56,6 +58,7 @@ use TYPO3\CMS\Lang\LanguageService;
  *
  * Write export
  * $out = $this->export->compileMemoryToFileContent();
+ * @internal this is not part of TYPO3's Core API.
  */
 
 /**
@@ -241,7 +244,7 @@ abstract class ImportExport
      *
      * @var ExtendedFileUtility
      */
-    protected $fileProcObj = null;
+    protected $fileProcObj;
 
     /**
      * @var array
@@ -321,7 +324,6 @@ abstract class ImportExport
             if (!empty($lines)) {
                 foreach ($lines as &$r) {
                     $r['controls'] = $this->renderControls($r);
-                    $r['fileSize'] = GeneralUtility::formatSize($r['size']);
                     $r['message'] = ($r['msg'] && !$this->doesImport ? '<span class="text-danger">' . htmlspecialchars($r['msg']) . '</span>' : '');
                 }
                 $viewData['pagetreeLines'] = $lines;
@@ -339,7 +341,6 @@ abstract class ImportExport
             if (!empty($lines)) {
                 foreach ($lines as &$r) {
                     $r['controls'] = $this->renderControls($r);
-                    $r['fileSize'] = GeneralUtility::formatSize($r['size']);
                     $r['message'] = ($r['msg'] && !$this->doesImport ? '<span class="text-danger">' . htmlspecialchars($r['msg']) . '</span>' : '');
                 }
                 $viewData['remainingRecords'] = $lines;
@@ -604,7 +605,6 @@ abstract class ImportExport
             }
         }
         $pInfo['type'] = 'record';
-        $pInfo['size'] = (int)$record['size'];
         $lines[] = $pInfo;
         // File relations:
         if (is_array($record['filerefs'])) {
@@ -620,7 +620,7 @@ abstract class ImportExport
             $preCode_B = $preCode . '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
             foreach ($record['softrefs'] as $info) {
                 $pInfo = [];
-                $pInfo['preCode'] = $preCode_A . $this->iconFactory->getIcon('status-status-reference-soft', Icon::SIZE_SMALL)->render();
+                $pInfo['preCode'] = $preCode_A . $this->iconFactory->getIcon('status-reference-soft', Icon::SIZE_SMALL)->render();
                 $pInfo['title'] = '<em>' . $info['field'] . ', "' . $info['spKey'] . '" </em>: <span title="' . htmlspecialchars($info['matchString']) . '">' . htmlspecialchars(GeneralUtility::fixed_lgd_cs($info['matchString'], 60)) . '</span>';
                 if ($info['subst']['type']) {
                     if (strlen($info['subst']['title'])) {
@@ -632,7 +632,6 @@ abstract class ImportExport
                     $pInfo['title'] .= '<br/>' . $preCode_B . ($info['subst']['type'] === 'file' ? htmlspecialchars($lang->getLL('impexpcore_singlereco_filename')) . ' <strong>' . $info['subst']['relFileName'] . '</strong>' : '') . ($info['subst']['type'] === 'string' ? htmlspecialchars($lang->getLL('impexpcore_singlereco_value')) . ' <strong>' . $info['subst']['tokenValue'] . '</strong>' : '') . ($info['subst']['type'] === 'db' ? htmlspecialchars($lang->getLL('impexpcore_softrefsel_record')) . ' <strong>' . $info['subst']['recordRef'] . '</strong>' : '');
                 }
                 $pInfo['ref'] = 'SOFTREF';
-                $pInfo['size'] = 0;
                 $pInfo['type'] = 'softref';
                 $pInfo['_softRefInfo'] = $info;
                 $pInfo['type'] = 'softref';
@@ -662,7 +661,7 @@ abstract class ImportExport
      * @param string $preCode Pre-HTML code
      * @param array $recurCheck Recursivity check stack
      * @param string $htmlColorClass Alternative HTML color class to use.
-     * @access private
+     * @internal
      * @see singleRecordLines()
      */
     public function addRelations($rels, &$lines, $preCode, $recurCheck = [], $htmlColorClass = '')
@@ -726,7 +725,7 @@ abstract class ImportExport
      * @param string $preCode Pre-HTML code
      * @param string $htmlColorClass Alternative HTML color class to use.
      * @param string $tokenID Token ID if this is a softreference (in which case it only makes sense with a single element in the $rels array!)
-     * @access private
+     * @internal
      * @see singleRecordLines()
      */
     public function addFiles($rels, &$lines, $preCode, $htmlColorClass = '', $tokenID = '')
@@ -743,10 +742,9 @@ abstract class ImportExport
                     return;
                 }
             }
-            $pInfo['preCode'] = $preCode . '&nbsp;&nbsp;&nbsp;&nbsp;' . $this->iconFactory->getIcon('status-status-reference-hard', Icon::SIZE_SMALL)->render();
+            $pInfo['preCode'] = $preCode . '&nbsp;&nbsp;&nbsp;&nbsp;' . $this->iconFactory->getIcon('status-reference-hard', Icon::SIZE_SMALL)->render();
             $pInfo['title'] = htmlspecialchars($fI['filename']);
             $pInfo['ref'] = 'FILE';
-            $pInfo['size'] = $fI['filesize'];
             $pInfo['type'] = 'file';
             // If import mode and there is a non-RTE softreference, check the destination directory:
             if ($this->mode === 'import' && $tokenID && !$fI['RTE_ORIG_ID']) {
@@ -762,7 +760,7 @@ abstract class ImportExport
                     }
                 }
                 // Check if file exists:
-                if (file_exists(PATH_site . $fI['relFileName'])) {
+                if (file_exists(Environment::getPublicPath() . '/' . $fI['relFileName'])) {
                     if ($this->update) {
                         $pInfo['updatePath'] .= 'File exists.';
                     } else {
@@ -772,7 +770,7 @@ abstract class ImportExport
                 // Check extension:
                 $fileProcObj = $this->getFileProcObj();
                 if ($fileProcObj->actionPerms['addFile']) {
-                    $testFI = GeneralUtility::split_fileref(PATH_site . $fI['relFileName']);
+                    $testFI = GeneralUtility::split_fileref(Environment::getPublicPath() . '/' . $fI['relFileName']);
                     if (!$this->allowPHPScripts && !$fileProcObj->checkIfAllowed($testFI['fileext'], $testFI['path'], $testFI['file'])) {
                         $pInfo['msg'] .= 'File extension was not allowed!';
                     }
@@ -793,10 +791,9 @@ abstract class ImportExport
                     $this->error('MISSING RTE original FILE: ' . $ID);
                 }
                 $pInfo['showDiffContent'] = PathUtility::stripPathSitePrefix($this->fileIDMap[$ID]);
-                $pInfo['preCode'] = $preCode . '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' . $this->iconFactory->getIcon('status-status-reference-hard', Icon::SIZE_SMALL)->render();
+                $pInfo['preCode'] = $preCode . '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' . $this->iconFactory->getIcon('status-reference-hard', Icon::SIZE_SMALL)->render();
                 $pInfo['title'] = htmlspecialchars($fI['filename']) . ' <em>(Original)</em>';
                 $pInfo['ref'] = 'FILE';
-                $pInfo['size'] = $fI['filesize'];
                 $pInfo['type'] = 'file';
                 $lines[] = $pInfo;
                 unset($this->remainHeader['files'][$ID]);
@@ -816,7 +813,6 @@ abstract class ImportExport
                     $pInfo['preCode'] = $preCode . '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' . $this->iconFactory->getIcon('actions-insert-reference', Icon::SIZE_SMALL)->render();
                     $pInfo['title'] = htmlspecialchars($fI['filename']) . ' <em>(Resource)</em>';
                     $pInfo['ref'] = 'FILE';
-                    $pInfo['size'] = $fI['filesize'];
                     $pInfo['type'] = 'file';
                     $lines[] = $pInfo;
                     unset($this->remainHeader['files'][$extID]);
@@ -834,7 +830,7 @@ abstract class ImportExport
      */
     public function checkDokType($checkTable, $doktype)
     {
-        $allowedTableList = isset($GLOBALS['PAGES_TYPES'][$doktype]['allowedTables']) ? $GLOBALS['PAGES_TYPES'][$doktype]['allowedTables'] : $GLOBALS['PAGES_TYPES']['default']['allowedTables'];
+        $allowedTableList = $GLOBALS['PAGES_TYPES'][$doktype]['allowedTables'] ?? $GLOBALS['PAGES_TYPES']['default']['allowedTables'];
         $allowedArray = GeneralUtility::trimExplode(',', $allowedTableList, true);
         // If all tables or the table is listed as an allowed type, return TRUE
         if (strstr($allowedTableList, '*') || in_array($checkTable, $allowedArray)) {
@@ -854,21 +850,20 @@ abstract class ImportExport
         if ($this->mode === 'export') {
             if ($r['type'] === 'record') {
                 return '<input type="checkbox" class="t3js-exclude-checkbox" name="tx_impexp[exclude][' . $r['ref'] . ']" id="checkExclude' . $r['ref'] . '" value="1" /> <label for="checkExclude' . $r['ref'] . '">' . htmlspecialchars($this->getLanguageService()->getLL('impexpcore_singlereco_exclude')) . '</label>';
-            } else {
-                return  $r['type'] === 'softref' ? $this->softrefSelector($r['_softRefInfo']) : '';
             }
-        } else {
-            // During import
-            // For softreferences with editable fields:
-            if ($r['type'] === 'softref' && is_array($r['_softRefInfo']['subst']) && $r['_softRefInfo']['subst']['tokenID']) {
-                $tokenID = $r['_softRefInfo']['subst']['tokenID'];
-                $cfg = $this->softrefCfg[$tokenID];
-                if ($cfg['mode'] === 'editable') {
-                    return (strlen($cfg['title']) ? '<strong>' . htmlspecialchars($cfg['title']) . '</strong><br/>' : '') . htmlspecialchars($cfg['description']) . '<br/>
-						<input type="text" name="tx_impexp[softrefInputValues][' . $tokenID . ']" value="' . htmlspecialchars((isset($this->softrefInputValues[$tokenID]) ? $this->softrefInputValues[$tokenID] : $cfg['defValue'])) . '" />';
-                }
+            return  $r['type'] === 'softref' ? $this->softrefSelector($r['_softRefInfo']) : '';
+        }
+        // During import
+        // For softreferences with editable fields:
+        if ($r['type'] === 'softref' && is_array($r['_softRefInfo']['subst']) && $r['_softRefInfo']['subst']['tokenID']) {
+            $tokenID = $r['_softRefInfo']['subst']['tokenID'];
+            $cfg = $this->softrefCfg[$tokenID];
+            if ($cfg['mode'] === 'editable') {
+                return (strlen($cfg['title']) ? '<strong>' . htmlspecialchars($cfg['title']) . '</strong><br/>' : '') . htmlspecialchars($cfg['description']) . '<br/>
+						<input type="text" name="tx_impexp[softrefInputValues][' . $tokenID . ']" value="' . htmlspecialchars($this->softrefInputValues[$tokenID] ?? $cfg['defValue']) . '" />';
             }
         }
+
         return '';
     }
 
@@ -892,7 +887,7 @@ abstract class ImportExport
             // Get current value:
             $value = $this->softrefCfg[$cfg['subst']['tokenID']]['mode'];
             // Render options selector:
-            $selectorbox = $this->renderSelectBox(('tx_impexp[softrefCfg][' . $cfg['subst']['tokenID'] . '][mode]'), $value, $optValues) . '<br/>';
+            $selectorbox = $this->renderSelectBox('tx_impexp[softrefCfg][' . $cfg['subst']['tokenID'] . '][mode]', $value, $optValues) . '<br/>';
             if ($value === 'editable') {
                 $descriptionField = '';
                 // Title:
@@ -922,16 +917,16 @@ abstract class ImportExport
     }
 
     /**
-     * Verifies that the input path (relative to PATH_site) is found in the backend users filemounts.
+     * Verifies that the input path relative to public web path is found in the backend users filemounts.
      * If it doesn't it will try to find another relative filemount for the user and return an alternative path prefix for the file.
      *
-     * @param string $dirPrefix Path relative to PATH_site
+     * @param string $dirPrefix Path relative to public web path
      * @param bool $noAlternative If set, Do not look for alternative path! Just return FALSE
      * @return string|bool If a path is available that will be returned, otherwise FALSE.
      */
     public function verifyFolderAccess($dirPrefix, $noAlternative = false)
     {
-        // Check the absolute path for PATH_site, if the user has access - no problem
+        // Check the absolute path for public web path, if the user has access - no problem
         try {
             ResourceFactory::getInstance()->getFolderObjectFromCombinedIdentifier($dirPrefix);
             return $dirPrefix;
@@ -960,7 +955,7 @@ abstract class ImportExport
      */
     protected function getTemporaryFolderName()
     {
-        $temporaryPath = PATH_site . 'typo3temp/var/transient/';
+        $temporaryPath = Environment::getVarPath() . '/transient/';
         do {
             $temporaryFolderName = $temporaryPath . 'export_temp_files_' . mt_rand(1, PHP_INT_MAX);
         } while (is_dir($temporaryFolderName));
@@ -1089,7 +1084,7 @@ abstract class ImportExport
     public function getRecordPath($pid)
     {
         if (!isset($this->cache_getRecordPath[$pid])) {
-            $clause = $this->getBackendUser()->getPagePermsClause(1);
+            $clause = $this->getBackendUser()->getPagePermsClause(Permission::PAGE_SHOW);
             $this->cache_getRecordPath[$pid] = (string)BackendUtility::getRecordPath($pid, $clause, 20);
         }
         return $this->cache_getRecordPath[$pid];
@@ -1115,7 +1110,7 @@ abstract class ImportExport
             $opt[] = '<option value="' . htmlspecialchars($k) . '"' . $sel . '>' . htmlspecialchars($v) . '</option>';
         }
         if (!$isSelFlag && (string)$value !== '') {
-            $opt[] = '<option value="' . htmlspecialchars($value) . '" selected="selected">' . htmlspecialchars(('[\'' . $value . '\']')) . '</option>';
+            $opt[] = '<option value="' . htmlspecialchars($value) . '" selected="selected">' . htmlspecialchars('[\'' . $value . '\']') . '</option>';
         }
         return '<select name="' . $prefix . '">' . implode('', $opt) . '</select>';
     }
@@ -1170,7 +1165,7 @@ abstract class ImportExport
             } else {
                 $output = 'Match';
             }
-            return '<strong class="text-nowrap">[' . htmlspecialchars(($table . ':' . $importRecord['uid'] . ' => ' . $databaseRecord['uid'])) . ']:</strong> ' . $output;
+            return '<strong class="text-nowrap">[' . htmlspecialchars($table . ':' . $importRecord['uid'] . ' => ' . $databaseRecord['uid']) . ']:</strong> ' . $output;
         }
         return 'ERROR: One of the inputs were not an array!';
     }
@@ -1179,7 +1174,7 @@ abstract class ImportExport
      * Creates the original file name for a copy-RTE image (magic type)
      *
      * @param string $string RTE copy filename, eg. "RTEmagicC_user_pm_icon_01.gif.gif
-     * @return string|NULL RTE original filename, eg. "RTEmagicP_user_pm_icon_01.gif". If the input filename was NOT prefixed RTEmagicC_ as RTE images would be, NULL is returned!
+     * @return string|null RTE original filename, eg. "RTEmagicP_user_pm_icon_01.gif". If the input filename was NOT prefixed RTEmagicC_ as RTE images would be, NULL is returned!
      */
     public function getRTEoriginalFilename($string)
     {
@@ -1187,7 +1182,7 @@ abstract class ImportExport
         if (GeneralUtility::isFirstPartOfStr($string, 'RTEmagicC_')) {
             // Find original file:
             $pI = pathinfo(substr($string, strlen('RTEmagicC_')));
-            $filename = substr($pI['basename'], 0, -strlen(('.' . $pI['extension'])));
+            $filename = substr($pI['basename'], 0, -strlen('.' . $pI['extension']));
             $origFilePath = 'RTEmagicP_' . $filename;
             return $origFilePath;
         }
@@ -1216,10 +1211,8 @@ abstract class ImportExport
      */
     public function callHook($name, $params)
     {
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/impexp/class.tx_impexp.php'][$name])) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/impexp/class.tx_impexp.php'][$name] as $hook) {
-                GeneralUtility::callUserFunction($hook, $params, $this);
-            }
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/impexp/class.tx_impexp.php'][$name] ?? [] as $hook) {
+            GeneralUtility::callUserFunction($hook, $params, $this);
         }
     }
 

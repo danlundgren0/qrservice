@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Messaging\Renderer;
 
 /*
@@ -28,5 +28,5 @@ interface FlashMessageRendererInterface
      * @param FlashMessage[] $flashMessages
      * @return string Representation of the flash message
      */
-    public function render(array $flashMessages) : string;
+    public function render(array $flashMessages): string;
 }

@@ -71,8 +71,20 @@ class WizardItems implements NewContentElementWizardHookInterface
         )) {
             return;
         }
-        $pageID = $parentObject->id;
-        $this->init($pageID);
+
+        if (method_exists($parentObject, 'getPageInfo')) {
+            $pageInfo = $parentObject->getPageInfo();
+            $pageId = (int)$pageInfo['uid'];
+        } else {
+            $pageId = $parentObject->id;
+        }
+        if (method_exists($parentObject, 'getColPos')) {
+            $colPos = $parentObject->getColPos();
+        } else {
+            $colPos = $parentObject->colPos;
+        }
+
+        $this->init($pageId);
 
         $container = (int)GeneralUtility::_GP('tx_gridelements_container');
         $column = (int)GeneralUtility::_GP('tx_gridelements_columns');
@@ -109,10 +121,10 @@ class WizardItems implements NewContentElementWizardHookInterface
         ) {
             $allowedGridTypes = $allowed['tx_gridelements_backend_layout'] ?: [];
             $disallowedGridTypes = $disallowed['tx_gridelements_backend_layout'] ?: [];
-            $excludeLayouts = $this->getExcludeLayouts($container, $parentObject);
+            $excludeLayouts = $this->getExcludeLayouts($container, $pageId);
 
             $gridItems = $this->layoutSetup->getLayoutWizardItems(
-                $parentObject->colPos,
+                $colPos,
                 $excludeLayouts,
                 $allowedGridTypes,
                 $disallowedGridTypes
@@ -184,18 +196,16 @@ class WizardItems implements NewContentElementWizardHookInterface
      * retrieve layouts to exclude from pageTSconfig
      *
      * @param int $container
-     * @param NewContentElementController $parentObject The parent object that triggered this hook
+     * @param int $pageId The ID of the page that triggered this hook
      *
      * @return array
      */
-    public function getExcludeLayouts($container, NewContentElementController $parentObject)
+    public function getExcludeLayouts($container, $pageId)
     {
         $excludeLayouts = 0;
         $excludeArray = [];
 
-        $pageID = $parentObject->id;
-
-        $TSconfig = BackendUtility::getPagesTSconfig($pageID);
+        $TSconfig = BackendUtility::getPagesTSconfig($pageId);
 
         if ($container && $TSconfig['TCEFORM.']['tt_content.']['tx_gridelements_backend_layout.']['itemsProcFunc.']['topLevelLayouts']) {
             $excludeArray[] = trim($TSconfig['TCEFORM.']['tt_content.']['tx_gridelements_backend_layout.']['itemsProcFunc.']['topLevelLayouts']);
@@ -287,11 +297,10 @@ class WizardItems implements NewContentElementWizardHookInterface
 
             // Traverse defVals
             $defVals = '';
+
             if ($item['tt_content_defValues']) {
                 foreach ($item['tt_content_defValues'] as $field => $value) {
-                    if ($field == 'header') {
-                        $value = $GLOBALS['LANG']->sL($value);
-                    }
+                    $value = $this->getLanguageService()->sL($value);
                     $defVals .= '&defVals[tt_content][' . $field . ']=' . $value;
                 }
             }

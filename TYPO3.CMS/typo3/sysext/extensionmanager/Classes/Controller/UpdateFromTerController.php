@@ -13,11 +13,12 @@ namespace TYPO3\CMS\Extensionmanager\Controller;
  *
  * The TYPO3 project - inspiring people to share!
  */
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Extbase\Mvc\View\JsonView;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Controller for actions relating to update of full extension list from TER
+ * @internal This class is a specific controller implementation and is not considered part of the Public TYPO3 API.
  */
 class UpdateFromTerController extends AbstractController
 {
@@ -95,18 +96,18 @@ class UpdateFromTerController extends AbstractController
                 $errorMessage = $e->getMessage();
             }
         }
-        /** @var $repository \TYPO3\CMS\Extensionmanager\Domain\Model\Repository */
-        $repository = $this->repositoryRepository->findByUid((int)$this->settings['repositoryUid']);
+        /** @var \TYPO3\CMS\Extensionmanager\Domain\Model\Repository $repository */
+        $repository = $this->repositoryRepository->findOneTypo3OrgRepository();
 
         $timeFormat = $this->getLanguageService()->sL('LLL:EXT:extensionmanager/Resources/Private/Language/locallang.xlf:extensionList.updateFromTer.lastUpdate.fullTimeFormat');
-        $lastUpdateTime = $repository->getLastUpdate();
+        $lastUpdateTime = $repository ? $repository->getLastUpdate() : null;
         if (null === $lastUpdateTime) {
             $lastUpdatedSince = $this->getLanguageService()->sL('LLL:EXT:extensionmanager/Resources/Private/Language/locallang.xlf:extensionList.updateFromTer.never');
             $lastUpdateTime = date($timeFormat);
         } else {
             $lastUpdatedSince = \TYPO3\CMS\Backend\Utility\BackendUtility::calcAge(
                 time() - $lastUpdateTime->format('U'),
-                $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.minutesHoursDaysYears')
+                $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.minutesHoursDaysYears')
             );
             $lastUpdateTime = $lastUpdateTime->format($timeFormat);
         }

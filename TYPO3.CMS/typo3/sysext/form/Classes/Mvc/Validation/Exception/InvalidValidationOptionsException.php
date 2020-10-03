@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Mvc\Validation\Exception;
 
 /*
@@ -18,7 +18,6 @@ namespace TYPO3\CMS\Form\Mvc\Validation\Exception;
 use TYPO3\CMS\Form\Exception;
 
 /**
- * @api
  */
 class InvalidValidationOptionsException extends Exception
 {

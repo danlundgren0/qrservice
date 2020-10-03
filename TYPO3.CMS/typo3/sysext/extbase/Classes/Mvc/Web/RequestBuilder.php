@@ -14,11 +14,16 @@ namespace TYPO3\CMS\Extbase\Mvc\Web;
  * The TYPO3 project - inspiring people to share!
  */
 
+use Psr\Http\Message\ServerRequestInterface;
+use TYPO3\CMS\Core\Routing\PageArguments;
+use TYPO3\CMS\Core\Utility\ArrayUtility;
+use TYPO3\CMS\Core\Utility\Exception\MissingArrayPathException;
 use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
 use TYPO3\CMS\Extbase\Mvc\Exception as MvcException;
 
 /**
  * Builds a web request.
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 class RequestBuilder implements \TYPO3\CMS\Core\SingletonInterface
 {
@@ -138,13 +143,12 @@ class RequestBuilder implements \TYPO3\CMS\Core\SingletonInterface
         $this->defaultControllerName = (string)current(array_keys($configuration['controllerConfiguration']));
         $this->allowedControllerActions = [];
         foreach ($configuration['controllerConfiguration'] as $controllerName => $controllerActions) {
-            $this->allowedControllerActions[$controllerName] = $controllerActions['actions'];
+            $this->allowedControllerActions[$controllerName] = $controllerActions['actions'] ?? null;
         }
         if (!empty($configuration['format'])) {
             $this->defaultFormat = $configuration['format'];
         }
     }
-
     /**
      * Builds a web request object from the raw HTTP information and the configuration
      *
@@ -154,14 +158,30 @@ class RequestBuilder implements \TYPO3\CMS\Core\SingletonInterface
     {
         $this->loadDefaultValues();
         $pluginNamespace = $this->extensionService->getPluginNamespace($this->extensionName, $this->pluginName);
-        $parameters = \TYPO3\CMS\Core\Utility\GeneralUtility::_GPmerged($pluginNamespace);
+        /** @var \TYPO3\CMS\Core\Http\ServerRequest $typo3Request */
+        $typo3Request = $GLOBALS['TYPO3_REQUEST'] ?? null;
+        if ($typo3Request instanceof ServerRequestInterface) {
+            $queryArguments = $typo3Request->getAttribute('routing');
+            if ($queryArguments instanceof PageArguments) {
+                $getParameters = $queryArguments->get($pluginNamespace) ?? [];
+            } else {
+                $getParameters = $typo3Request->getQueryParams()[$pluginNamespace] ?? [];
+            }
+            $bodyParameters = $typo3Request->getParsedBody()[$pluginNamespace] ?? [];
+            $parameters = $getParameters;
+            ArrayUtility::mergeRecursiveWithOverrule($parameters, $bodyParameters);
+        } else {
+            $parameters = \TYPO3\CMS\Core\Utility\GeneralUtility::_GPmerged($pluginNamespace);
+        }
+
         $files = $this->untangleFilesArray($_FILES);
-        if (isset($files[$pluginNamespace]) && is_array($files[$pluginNamespace])) {
+        if (is_array($files[$pluginNamespace] ?? null)) {
             $parameters = array_replace_recursive($parameters, $files[$pluginNamespace]);
         }
+
         $controllerName = $this->resolveControllerName($parameters);
         $actionName = $this->resolveActionName($controllerName, $parameters);
-        /** @var $request \TYPO3\CMS\Extbase\Mvc\Web\Request */
+        /** @var \TYPO3\CMS\Extbase\Mvc\Web\Request $request */
         $request = $this->objectManager->get(\TYPO3\CMS\Extbase\Mvc\Web\Request::class);
         if ($this->vendorName !== null) {
             $request->setControllerVendorName($this->vendorName);
@@ -170,10 +190,11 @@ class RequestBuilder implements \TYPO3\CMS\Core\SingletonInterface
         $request->setControllerExtensionName($this->extensionName);
         $request->setControllerName($controllerName);
         $request->setControllerActionName($actionName);
+        // @todo Use Environment
         $request->setRequestUri(\TYPO3\CMS\Core\Utility\GeneralUtility::getIndpEnv('TYPO3_REQUEST_URL'));
         $request->setBaseUri(\TYPO3\CMS\Core\Utility\GeneralUtility::getIndpEnv('TYPO3_SITE_URL'));
         $request->setMethod($this->environmentService->getServerRequestMethod());
-        if (is_string($parameters['format']) && $parameters['format'] !== '') {
+        if (isset($parameters['format']) && is_string($parameters['format']) && $parameters['format'] !== '') {
             $request->setFormat(filter_var($parameters['format'], FILTER_SANITIZE_STRING));
         } else {
             $request->setFormat($this->defaultFormat);
@@ -208,7 +229,8 @@ class RequestBuilder implements \TYPO3\CMS\Core\SingletonInterface
             $configuration = $this->configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FRAMEWORK);
             if (isset($configuration['mvc']['throwPageNotFoundExceptionIfActionCantBeResolved']) && (bool)$configuration['mvc']['throwPageNotFoundExceptionIfActionCantBeResolved']) {
                 throw new \TYPO3\CMS\Core\Error\Http\PageNotFoundException('The requested resource was not found', 1313857897);
-            } elseif (isset($configuration['mvc']['callDefaultActionIfActionCantBeResolved']) && (bool)$configuration['mvc']['callDefaultActionIfActionCantBeResolved']) {
+            }
+            if (isset($configuration['mvc']['callDefaultActionIfActionCantBeResolved']) && (bool)$configuration['mvc']['callDefaultActionIfActionCantBeResolved']) {
                 return $this->defaultControllerName;
             }
             throw new \TYPO3\CMS\Extbase\Mvc\Exception\InvalidControllerNameException(
@@ -246,10 +268,11 @@ class RequestBuilder implements \TYPO3\CMS\Core\SingletonInterface
             $configuration = $this->configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FRAMEWORK);
             if (isset($configuration['mvc']['throwPageNotFoundExceptionIfActionCantBeResolved']) && (bool)$configuration['mvc']['throwPageNotFoundExceptionIfActionCantBeResolved']) {
                 throw new \TYPO3\CMS\Core\Error\Http\PageNotFoundException('The requested resource was not found', 1313857898);
-            } elseif (isset($configuration['mvc']['callDefaultActionIfActionCantBeResolved']) && (bool)$configuration['mvc']['callDefaultActionIfActionCantBeResolved']) {
+            }
+            if (isset($configuration['mvc']['callDefaultActionIfActionCantBeResolved']) && (bool)$configuration['mvc']['callDefaultActionIfActionCantBeResolved']) {
                 return $defaultActionName;
             }
-            throw new \TYPO3\CMS\Extbase\Mvc\Exception\InvalidActionNameException('The action "' . $actionName . '" (controller "' . $controllerName . '") is not allowed by this plugin. Please check TYPO3\\CMS\\Extbase\\Utility\\ExtensionUtility::configurePlugin() in your ext_localconf.php.', 1313855175);
+            throw new \TYPO3\CMS\Extbase\Mvc\Exception\InvalidActionNameException('The action "' . $actionName . '" (controller "' . $controllerName . '") is not allowed by this plugin / module. Please check TYPO3\\CMS\\Extbase\\Utility\\ExtensionUtility::configurePlugin() in your ext_localconf.php / TYPO3\\CMS\\Extbase\\Utility\\ExtensionUtility::configureModule() in your ext_tables.php.', 1313855175);
         }
         return filter_var($actionName, FILTER_SANITIZE_STRING);
     }
@@ -259,7 +282,6 @@ class RequestBuilder implements \TYPO3\CMS\Core\SingletonInterface
      *
      * @param array $convolutedFiles The _FILES superglobal
      * @return array Untangled files
-     * @see TYPO3\Flow\Utility\Environment
      */
     protected function untangleFilesArray(array $convolutedFiles)
     {
@@ -283,13 +305,13 @@ class RequestBuilder implements \TYPO3\CMS\Core\SingletonInterface
                 $fileInformation = [];
                 foreach ($convolutedFiles[$fieldPath[0]] as $key => $subStructure) {
                     try {
-                        $fileInformation[$key] = \TYPO3\CMS\Core\Utility\ArrayUtility::getValueByPath($subStructure, array_slice($fieldPath, 1));
-                    } catch (\RuntimeException $e) {
+                        $fileInformation[$key] = ArrayUtility::getValueByPath($subStructure, array_slice($fieldPath, 1));
+                    } catch (MissingArrayPathException $e) {
                         // do nothing if the path is invalid
                     }
                 }
             }
-            $untangledFiles = \TYPO3\CMS\Core\Utility\ArrayUtility::setValueByPath($untangledFiles, $fieldPath, $fileInformation);
+            $untangledFiles = ArrayUtility::setValueByPath($untangledFiles, $fieldPath, $fileInformation);
         }
         return $untangledFiles;
     }

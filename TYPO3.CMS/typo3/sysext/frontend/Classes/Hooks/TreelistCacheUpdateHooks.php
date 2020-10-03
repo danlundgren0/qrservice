@@ -23,6 +23,7 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 /**
  * Class that hooks into DataHandler and listens for updates to pages to update the
  * treelist cache
+ * @internal this is a concrete TYPO3 hook implementation and solely used for EXT:frontend and not part of TYPO3's Core API.
  */
 class TreelistCacheUpdateHooks
 {
@@ -322,9 +323,9 @@ class TreelistCacheUpdateHooks
      *
      * @param string $status DataHandler operation status, either 'new' or 'update'
      * @param array $updatedFields Array of updated fields
-     * @return string List of actions that happened to the page record
+     * @return array List of actions that happened to the page record
      */
-    protected function determineClearCacheActions($status, $updatedFields)
+    protected function determineClearCacheActions($status, $updatedFields): array
     {
         $actions = [];
         if ($status === 'new') {

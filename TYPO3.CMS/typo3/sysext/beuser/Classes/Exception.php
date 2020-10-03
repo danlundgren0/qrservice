@@ -14,9 +14,12 @@ namespace TYPO3\CMS\Beuser;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Exception as CoreException;
+
 /**
  * Generic Beuser exception
+ * @internal
  */
-class Exception extends \Exception
+class Exception extends CoreException
 {
 }

@@ -14,14 +14,18 @@ namespace TYPO3\CMS\Core\Cache\Backend;
  * The TYPO3 project - inspiring people to share!
  */
 
+use Psr\Log\LoggerAwareInterface;
+use Psr\Log\LoggerAwareTrait;
+use TYPO3\CMS\Core\Log\LogManager;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+
 /**
  * An abstract caching backend
- *
- * This file is a backport from FLOW3
- * @api
  */
-abstract class AbstractBackend implements \TYPO3\CMS\Core\Cache\Backend\BackendInterface
+abstract class AbstractBackend implements BackendInterface, LoggerAwareInterface
 {
+    use LoggerAwareTrait;
+
     const DATETIME_EXPIRYTIME_UNLIMITED = '9999-12-31T23:59:59+0000';
     const UNLIMITED_LIFETIME = 0;
     /**
@@ -39,9 +43,8 @@ abstract class AbstractBackend implements \TYPO3\CMS\Core\Cache\Backend\BackendI
     /**
      * The current application context
      *
-     * TYPO3 v4 note: This variable is currently unused in v4 context and set to
-     * "production" always. It is only kept to stay in sync with
-     * FLOW3 code.
+     * This variable is currently unused and set to "production" always.
+     * It is only kept to keep backwards compatibility.
      *
      * @var string
      */
@@ -57,10 +60,9 @@ abstract class AbstractBackend implements \TYPO3\CMS\Core\Cache\Backend\BackendI
     /**
      * Constructs this backend
      *
-     * @param string $context FLOW3's application context
+     * @param string $context Unused, for backward compatibility only
      * @param array $options Configuration options - depends on the actual backend
      * @throws \InvalidArgumentException
-     * @api
      */
     public function __construct($context, array $options = [])
     {
@@ -71,9 +73,15 @@ abstract class AbstractBackend implements \TYPO3\CMS\Core\Cache\Backend\BackendI
                 if (method_exists($this, $methodName)) {
                     $this->{$methodName}($optionValue);
                 } else {
-                    throw new \InvalidArgumentException('Invalid cache backend option "' . $optionKey . '" for backend of type "' . get_class($this) . '"', 1231267498);
+                    throw new \InvalidArgumentException('Invalid cache backend option "' . $optionKey . '" for backend of type "' . static::class . '"', 1231267498);
                 }
             }
+        }
+        if ($this->logger === null) {
+            $this->setLogger(
+                GeneralUtility::makeInstance(LogManager::class)
+                    ->getLogger(static::class)
+            );
         }
     }
 
@@ -81,7 +89,6 @@ abstract class AbstractBackend implements \TYPO3\CMS\Core\Cache\Backend\BackendI
      * Sets a reference to the cache frontend which uses this backend
      *
      * @param \TYPO3\CMS\Core\Cache\Frontend\FrontendInterface $cache The frontend for this backend
-     * @api
      */
     public function setCache(\TYPO3\CMS\Core\Cache\Frontend\FrontendInterface $cache)
     {
@@ -94,7 +101,6 @@ abstract class AbstractBackend implements \TYPO3\CMS\Core\Cache\Backend\BackendI
      *
      * @param int $defaultLifetime Default lifetime of this cache backend in seconds. If NULL is specified, the default lifetime is used. "0" means unlimited lifetime.
      * @throws \InvalidArgumentException
-     * @api
      */
     public function setDefaultLifetime($defaultLifetime)
     {
@@ -113,7 +119,6 @@ abstract class AbstractBackend implements \TYPO3\CMS\Core\Cache\Backend\BackendI
      * delegate to a less efficient linear flushing behavior.
      *
      * @param string[] $tags
-     * @api
      */
     public function flushByTags(array $tags)
     {

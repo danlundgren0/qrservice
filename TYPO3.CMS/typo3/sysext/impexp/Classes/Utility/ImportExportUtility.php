@@ -22,6 +22,7 @@ use TYPO3\CMS\Impexp\Import;
 /**
  * Utility for import / export
  * Can be used for API access for simple importing of files
+ * @internal
  */
 class ImportExportUtility
 {
@@ -42,9 +43,9 @@ class ImportExportUtility
         if (!is_int($pid)) {
             throw new \InvalidArgumentException('Input parameter $int has to be of type integer', 1377625646);
         }
-        /** @var $import Import */
+        /** @var Import $import */
         $import = GeneralUtility::makeInstance(Import::class);
-        $import->init(0, 'import');
+        $import->init();
 
         $this->emitAfterImportExportInitialisationSignal($import);
 
@@ -62,7 +63,6 @@ class ImportExportUtility
         // Check for errors during the import process:
         $errors = $import->printErrorLog();
         if ($errors !== '') {
-            /** @var \TYPO3\CMS\Core\Log\Logger $logger */
             $logger = GeneralUtility::makeInstance(LogManager::class)->getLogger(__CLASS__);
             $logger->warning($errors);
 

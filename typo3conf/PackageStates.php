@@ -11,6 +11,9 @@ return [
         'core' => [
             'packagePath' => 'typo3/sysext/core/',
         ],
+        'scheduler' => [
+            'packagePath' => 'typo3/sysext/scheduler/',
+        ],
         'extbase' => [
             'packagePath' => 'typo3/sysext/extbase/',
         ],
@@ -23,74 +26,23 @@ return [
         'fluid_styled_content' => [
             'packagePath' => 'typo3/sysext/fluid_styled_content/',
         ],
-        'info' => [
-            'packagePath' => 'typo3/sysext/info/',
-        ],
-        'info_pagetsconfig' => [
-            'packagePath' => 'typo3/sysext/info_pagetsconfig/',
-        ],
-        'extensionmanager' => [
-            'packagePath' => 'typo3/sysext/extensionmanager/',
-        ],
-        'lang' => [
-            'packagePath' => 'typo3/sysext/lang/',
-        ],
-        'rsaauth' => [
-            'packagePath' => 'typo3/sysext/rsaauth/',
-        ],
-        'saltedpasswords' => [
-            'packagePath' => 'typo3/sysext/saltedpasswords/',
-        ],
-        'func' => [
-            'packagePath' => 'typo3/sysext/func/',
-        ],
-        'wizard_crpages' => [
-            'packagePath' => 'typo3/sysext/wizard_crpages/',
-        ],
-        'wizard_sortpages' => [
-            'packagePath' => 'typo3/sysext/wizard_sortpages/',
-        ],
-        'about' => [
-            'packagePath' => 'typo3/sysext/about/',
-        ],
-        'backend' => [
-            'packagePath' => 'typo3/sysext/backend/',
-        ],
-        'belog' => [
-            'packagePath' => 'typo3/sysext/belog/',
-        ],
-        'beuser' => [
-            'packagePath' => 'typo3/sysext/beuser/',
-        ],
-        'context_help' => [
-            'packagePath' => 'typo3/sysext/context_help/',
-        ],
-        'cshmanual' => [
-            'packagePath' => 'typo3/sysext/cshmanual/',
-        ],
-        'documentation' => [
-            'packagePath' => 'typo3/sysext/documentation/',
-        ],
-        'felogin' => [
-            'packagePath' => 'typo3/sysext/felogin/',
-        ],
         'filelist' => [
             'packagePath' => 'typo3/sysext/filelist/',
-        ],
-        'form' => [
-            'packagePath' => 'typo3/sysext/form/',
         ],
         'impexp' => [
             'packagePath' => 'typo3/sysext/impexp/',
         ],
+        'form' => [
+            'packagePath' => 'typo3/sysext/form/',
+        ],
         'install' => [
             'packagePath' => 'typo3/sysext/install/',
         ],
-        'lowlevel' => [
-            'packagePath' => 'typo3/sysext/lowlevel/',
-        ],
         'recordlist' => [
             'packagePath' => 'typo3/sysext/recordlist/',
+        ],
+        'backend' => [
+            'packagePath' => 'typo3/sysext/backend/',
         ],
         'recycler' => [
             'packagePath' => 'typo3/sysext/recycler/',
@@ -98,14 +50,32 @@ return [
         'reports' => [
             'packagePath' => 'typo3/sysext/reports/',
         ],
-        'scheduler' => [
-            'packagePath' => 'typo3/sysext/scheduler/',
+        'about' => [
+            'packagePath' => 'typo3/sysext/about/',
+        ],
+        'belog' => [
+            'packagePath' => 'typo3/sysext/belog/',
+        ],
+        'beuser' => [
+            'packagePath' => 'typo3/sysext/beuser/',
+        ],
+        'extensionmanager' => [
+            'packagePath' => 'typo3/sysext/extensionmanager/',
+        ],
+        'felogin' => [
+            'packagePath' => 'typo3/sysext/felogin/',
+        ],
+        'info' => [
+            'packagePath' => 'typo3/sysext/info/',
+        ],
+        'lowlevel' => [
+            'packagePath' => 'typo3/sysext/lowlevel/',
+        ],
+        'rsaauth' => [
+            'packagePath' => 'typo3/sysext/rsaauth/',
         ],
         'setup' => [
             'packagePath' => 'typo3/sysext/setup/',
-        ],
-        'sv' => [
-            'packagePath' => 'typo3/sysext/sv/',
         ],
         'sys_note' => [
             'packagePath' => 'typo3/sysext/sys_note/',
@@ -133,9 +103,6 @@ return [
         ],
         'pdfviewhelpers' => [
             'packagePath' => 'typo3conf/ext/pdfviewhelpers/',
-        ],
-        'realurl' => [
-            'packagePath' => 'typo3conf/ext/realurl/',
         ],
         'vhs' => [
             'packagePath' => 'typo3conf/ext/vhs/',

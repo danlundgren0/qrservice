@@ -14,22 +14,25 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Widget;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractTagBasedViewHelper;
+
 /**
- * A view helper for creating Links to extbase actions within widets.
+ * A ViewHelper for creating Links to Extbase actions within widgets.
  *
- * = Examples =
+ * Examples
+ * ========
  *
- * <code title="URI to the show-action of the current controller">
- * <f:widget.link action="show">link</f:widget.link>
- * </code>
- * <output>
- * <a href="index.php?id=123&tx_myextension_plugin[widgetIdentifier][action]=show&tx_myextension_plugin[widgetIdentifier][controller]=Standard&cHash=xyz">link</a>
- * (depending on the current page, widget and your TS configuration)
- * </output>
+ * URI to the show-action of the current controller::
  *
- * @api
+ *    <f:widget.link action="show">link</f:widget.link>
+ *
+ * Output::
+ *
+ *    <a href="index.php?id=123&tx_myextension_plugin[widgetIdentifier][action]=show&tx_myextension_plugin[widgetIdentifier][controller]=Standard&cHash=xyz">link</a>
+ *
+ * Depending on current page, routing and page path configuration.
  */
-class LinkViewHelper extends \TYPO3\CMS\Fluid\Core\ViewHelper\AbstractTagBasedViewHelper
+class LinkViewHelper extends AbstractTagBasedViewHelper
 {
     /**
      * @var string
@@ -38,8 +41,6 @@ class LinkViewHelper extends \TYPO3\CMS\Fluid\Core\ViewHelper\AbstractTagBasedVi
 
     /**
      * Initialize arguments
-     *
-     * @api
      */
     public function initializeArguments()
     {
@@ -49,6 +50,7 @@ class LinkViewHelper extends \TYPO3\CMS\Fluid\Core\ViewHelper\AbstractTagBasedVi
         $this->registerTagAttribute('rel', 'string', 'Specifies the relationship between the current document and the linked document');
         $this->registerTagAttribute('rev', 'string', 'Specifies the relationship between the linked document and the current document');
         $this->registerTagAttribute('target', 'string', 'Specifies where to open the linked document');
+        $this->registerArgument('useCacheHash', 'bool', 'True whether the cache hash should be appended to the URL', false, false);
         $this->registerArgument('addQueryStringMethod', 'string', 'Method to be used for query string');
         $this->registerArgument('action', 'string', 'Target action');
         $this->registerArgument('arguments', 'array', 'Arguments', false, []);
@@ -61,7 +63,6 @@ class LinkViewHelper extends \TYPO3\CMS\Fluid\Core\ViewHelper\AbstractTagBasedVi
      * Render the link.
      *
      * @return string The rendered link
-     * @api
      */
     public function render()
     {
@@ -87,12 +88,12 @@ class LinkViewHelper extends \TYPO3\CMS\Fluid\Core\ViewHelper\AbstractTagBasedVi
         $action = $this->arguments['action'];
         $arguments = $this->arguments['arguments'];
         if ($action === null) {
-            $action = $this->controllerContext->getRequest()->getControllerActionName();
+            $action = $this->renderingContext->getControllerContext()->getRequest()->getControllerActionName();
         }
         $arguments['id'] = $GLOBALS['TSFE']->id;
         // @todo page type should be configurable
         $arguments['type'] = 7076;
-        $arguments['fluid-widget-id'] = $this->controllerContext->getRequest()->getWidgetContext()->getAjaxWidgetIdentifier();
+        $arguments['fluid-widget-id'] = $this->renderingContext->getControllerContext()->getRequest()->getWidgetContext()->getAjaxWidgetIdentifier();
         $arguments['action'] = $action;
         return '?' . http_build_query($arguments, null, '&');
     }
@@ -104,8 +105,8 @@ class LinkViewHelper extends \TYPO3\CMS\Fluid\Core\ViewHelper\AbstractTagBasedVi
      */
     protected function getWidgetUri()
     {
-        $uriBuilder = $this->controllerContext->getUriBuilder();
-        $argumentPrefix = $this->controllerContext->getRequest()->getArgumentPrefix();
+        $uriBuilder = $this->renderingContext->getControllerContext()->getUriBuilder();
+        $argumentPrefix = $this->renderingContext->getControllerContext()->getRequest()->getArgumentPrefix();
         $arguments = $this->hasArgument('arguments') ? $this->arguments['arguments'] : [];
         if ($this->hasArgument('action')) {
             $arguments['action'] = $this->arguments['action'];
@@ -116,6 +117,7 @@ class LinkViewHelper extends \TYPO3\CMS\Fluid\Core\ViewHelper\AbstractTagBasedVi
         return $uriBuilder->reset()
             ->setArguments([$argumentPrefix => $arguments])
             ->setSection($this->arguments['section'])
+            ->setUseCacheHash($this->arguments['useCacheHash'])
             ->setAddQueryString(true)
             ->setAddQueryStringMethod($this->arguments['addQueryStringMethod'])
             ->setArgumentsToBeExcludedFromQueryString([$argumentPrefix, 'cHash'])

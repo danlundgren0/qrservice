@@ -15,11 +15,15 @@ namespace TYPO3\CMS\Extbase\Scheduler;
  */
 
 use TYPO3\CMS\Extbase\Utility\TypeHandlingUtility;
+use TYPO3\CMS\Scheduler\AdditionalFieldProviderInterface;
+use TYPO3\CMS\Scheduler\Controller\SchedulerModuleController;
+use TYPO3\CMS\Scheduler\Task\AbstractTask;
 
 /**
  * Field provider for Extbase CommandController Scheduler task
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Use symfony/console commands instead.
  */
-class FieldProvider implements \TYPO3\CMS\Scheduler\AdditionalFieldProviderInterface
+class FieldProvider implements AdditionalFieldProviderInterface
 {
     /**
      * @var \TYPO3\CMS\Extbase\Mvc\Cli\CommandManager
@@ -50,21 +54,21 @@ class FieldProvider implements \TYPO3\CMS\Scheduler\AdditionalFieldProviderInter
      */
     public function __construct(\TYPO3\CMS\Extbase\Object\ObjectManagerInterface $objectManager = null, \TYPO3\CMS\Extbase\Mvc\Cli\CommandManager $commandManager = null, \TYPO3\CMS\Extbase\Reflection\ReflectionService $reflectionService = null)
     {
-        $this->objectManager = $objectManager !== null ? $objectManager : \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Extbase\Object\ObjectManager::class);
-        $this->commandManager = $commandManager !== null ? $commandManager : $this->objectManager->get(\TYPO3\CMS\Extbase\Mvc\Cli\CommandManager::class);
-        $this->reflectionService = $reflectionService !== null ? $reflectionService : $this->objectManager->get(\TYPO3\CMS\Extbase\Reflection\ReflectionService::class);
+        $this->objectManager = $objectManager ?? \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Extbase\Object\ObjectManager::class);
+        $this->commandManager = $commandManager ?? $this->objectManager->get(\TYPO3\CMS\Extbase\Mvc\Cli\CommandManager::class);
+        $this->reflectionService = $reflectionService ?? $this->objectManager->get(\TYPO3\CMS\Extbase\Reflection\ReflectionService::class);
     }
 
     /**
      * Render additional information fields within the scheduler backend.
      *
      * @param array &$taskInfo Array information of task to return
-     * @param mixed $task \TYPO3\CMS\Scheduler\Task\AbstractTask or \TYPO3\CMS\Scheduler\Execution instance
-     * @param \TYPO3\CMS\Scheduler\Controller\SchedulerModuleController $schedulerModule Reference to the calling object (BE module of the Scheduler)
+     * @param AbstractTask|null $task When editing, reference to the current task. NULL when adding.
+     * @param SchedulerModuleController $schedulerModule Reference to the calling object (BE module of the Scheduler)
      * @return array Additional fields
      * @see \TYPO3\CMS\Scheduler\AdditionalFieldProvider#getAdditionalFields($taskInfo, $task, $schedulerModule)
      */
-    public function getAdditionalFields(array &$taskInfo, $task, \TYPO3\CMS\Scheduler\Controller\SchedulerModuleController $schedulerModule)
+    public function getAdditionalFields(array &$taskInfo, $task, SchedulerModuleController $schedulerModule)
     {
         $this->task = $task;
         if ($this->task !== null) {
@@ -86,10 +90,10 @@ class FieldProvider implements \TYPO3\CMS\Scheduler\AdditionalFieldProviderInter
      * Validates additional selected fields
      *
      * @param array &$submittedData
-     * @param \TYPO3\CMS\Scheduler\Controller\SchedulerModuleController $schedulerModule
+     * @param SchedulerModuleController $schedulerModule
      * @return bool
      */
-    public function validateAdditionalFields(array &$submittedData, \TYPO3\CMS\Scheduler\Controller\SchedulerModuleController $schedulerModule)
+    public function validateAdditionalFields(array &$submittedData, SchedulerModuleController $schedulerModule)
     {
         return true;
     }
@@ -98,10 +102,10 @@ class FieldProvider implements \TYPO3\CMS\Scheduler\AdditionalFieldProviderInter
      * Saves additional field values
      *
      * @param array $submittedData
-     * @param \TYPO3\CMS\Scheduler\Task\AbstractTask $task
+     * @param AbstractTask $task
      * @return bool
      */
-    public function saveAdditionalFields(array $submittedData, \TYPO3\CMS\Scheduler\Task\AbstractTask $task)
+    public function saveAdditionalFields(array $submittedData, AbstractTask $task)
     {
         $task->setCommandIdentifier($submittedData['task_extbase']['action']);
         $task->setArguments((array)$submittedData['task_extbase']['arguments']);
@@ -111,7 +115,7 @@ class FieldProvider implements \TYPO3\CMS\Scheduler\AdditionalFieldProviderInter
     /**
      * Get description of selected command
      *
-     * @return string
+     * @return array
      */
     protected function getCommandControllerActionDescriptionField()
     {
@@ -136,22 +140,16 @@ class FieldProvider implements \TYPO3\CMS\Scheduler\AdditionalFieldProviderInter
                 continue;
             }
             $className = $command->getControllerClassName();
-            if (strpos($className, '\\')) {
-                $classNameParts = explode('\\', $className);
-                // Skip vendor and product name for core classes
-                if (strpos($className, 'TYPO3\\CMS\\') === 0) {
-                    $classPartsToSkip = 2;
-                } else {
-                    $classPartsToSkip = 1;
-                }
-                $classNameParts = array_slice($classNameParts, $classPartsToSkip);
-                $extensionName = $classNameParts[0];
-                $controllerName = $classNameParts[2];
+            $classNameParts = explode('\\', $className);
+            // Skip vendor and product name for core classes
+            if (strpos($className, 'TYPO3\\CMS\\') === 0) {
+                $classPartsToSkip = 2;
             } else {
-                $classNameParts = explode('_', $className);
-                $extensionName = $classNameParts[1];
-                $controllerName = $classNameParts[3];
+                $classPartsToSkip = 1;
             }
+            $classNameParts = array_slice($classNameParts, $classPartsToSkip);
+            $extensionName = $classNameParts[0];
+            $controllerName = $classNameParts[2];
             $identifier = $command->getCommandIdentifier();
             $options[$identifier] = $extensionName . ' ' . str_replace('CommandController', '', $controllerName) . ': ' . $command->getControllerCommandName();
         }
@@ -179,7 +177,7 @@ class FieldProvider implements \TYPO3\CMS\Scheduler\AdditionalFieldProviderInter
             $name = $argument->getName();
             $defaultValue = $this->getDefaultArgumentValue($argument);
             $this->task->addDefaultValue($name, $defaultValue);
-            $value = isset($argumentValues[$name]) ? $argumentValues[$name] : $defaultValue;
+            $value = $argumentValues[$name] ?? $defaultValue;
             $fields[$name] = [
                 'code' => $this->renderField($argument, $value),
                 'label' => $this->getArgumentLabel($argument)
@@ -216,8 +214,11 @@ class FieldProvider implements \TYPO3\CMS\Scheduler\AdditionalFieldProviderInter
         $command = $this->commandManager->getCommandByIdentifier($this->task->getCommandIdentifier());
         $controllerClassName = $command->getControllerClassName();
         $methodName = $command->getControllerCommandName() . 'Command';
-        $tags = $this->reflectionService->getMethodTagsValues($controllerClassName, $methodName);
-        foreach ($tags['param'] as $tag) {
+
+        $tags = $this->reflectionService
+                ->getClassSchema($controllerClassName)
+                ->getMethod($methodName)['tags']['param'] ?? [];
+        foreach ($tags as $tag) {
             list($argumentType, $argumentVariableName) = explode(' ', $tag);
             if (substr($argumentVariableName, 1) === $argument->getName()) {
                 return $argumentType;
@@ -264,7 +265,11 @@ class FieldProvider implements \TYPO3\CMS\Scheduler\AdditionalFieldProviderInter
         $type = $this->getArgumentType($argument);
         $argumentName = $argument->getName();
         $command = $this->commandManager->getCommandByIdentifier($this->task->getCommandIdentifier());
-        $argumentReflection = $this->reflectionService->getMethodParameters($command->getControllerClassName(), $command->getControllerCommandName() . 'Command');
+
+        $argumentReflection = $this->reflectionService
+            ->getClassSchema($command->getControllerClassName())
+            ->getMethod($command->getControllerCommandName() . 'Command')['params'] ?? [];
+
         $defaultValue = $argumentReflection[$argumentName]['defaultValue'];
         if (TypeHandlingUtility::normalizeType($type) === 'boolean') {
             $defaultValue = (bool)$defaultValue ? 1 : 0;

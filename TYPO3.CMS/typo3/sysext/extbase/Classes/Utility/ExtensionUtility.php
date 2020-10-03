@@ -30,7 +30,6 @@ class ExtensionUtility
      * of tt_content table AND to the TypoScript template which must initiate the rendering.
      * Including the plugin code after "defaultContentRendering" adds the necessary TypoScript
      * for calling the appropriate controller and action of your plugin.
-     * This means, it will also work for the extension "css_styled_content"
      * FOR USE IN ext_localconf.php FILES
      * Usage: 2
      *
@@ -60,7 +59,7 @@ class ExtensionUtility
         $extensionName = str_replace(' ', '', ucwords(str_replace('_', ' ', $extensionName)));
 
         $pluginSignature = strtolower($extensionName . '_' . $pluginName);
-        if (!is_array($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['extensions'][$extensionName]['plugins'][$pluginName])) {
+        if (!is_array($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['extensions'][$extensionName]['plugins'][$pluginName] ?? false)) {
             $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['extensions'][$extensionName]['plugins'][$pluginName] = [];
         }
         foreach ($controllerActions as $controllerName => $actionsList) {
@@ -104,15 +103,15 @@ tt_content.' . $pluginSignature . ' {
 
     /**
      * Register an Extbase PlugIn into backend's list of plugins
-     * FOR USE IN ext_tables.php FILES
+     * FOR USE IN Configuration/TCA/Overrides/tt_content.php
      *
      * @param string $extensionName The extension name (in UpperCamelCase) or the extension key (in lower_underscore)
      * @param string $pluginName must be a unique id for your plugin in UpperCamelCase (the string length of the extension key added to the length of the plugin name should be less than 32!)
      * @param string $pluginTitle is a speaking title of the plugin that will be displayed in the drop down menu in the backend
-     * @param string $pluginIconPathAndFilename is a path to an icon file (relative to TYPO3_mainDir), that will be displayed in the drop down menu in the backend (optional)
+     * @param string $pluginIcon is an icon identifier or file path prepended with "EXT:", that will be displayed in the drop down menu in the backend (optional)
      * @throws \InvalidArgumentException
      */
-    public static function registerPlugin($extensionName, $pluginName, $pluginTitle, $pluginIconPathAndFilename = null)
+    public static function registerPlugin($extensionName, $pluginName, $pluginTitle, $pluginIcon = null)
     {
         self::checkPluginNameFormat($pluginName);
         self::checkExtensionNameFormat($extensionName);
@@ -129,12 +128,10 @@ tt_content.' . $pluginSignature . ' {
         $extensionKey = \TYPO3\CMS\Core\Utility\GeneralUtility::camelCaseToLowerCaseUnderscored($extensionName);
 
         // pluginType is usually defined by configurePlugin() in the global array. Use this or fall back to default "list_type".
-        $pluginType = isset($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['extensions'][$extensionName]['plugins'][$pluginName]['pluginType'])
-            ? $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['extensions'][$extensionName]['plugins'][$pluginName]['pluginType']
-            : 'list_type';
+        $pluginType = $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['extensions'][$extensionName]['plugins'][$pluginName]['pluginType'] ?? 'list_type';
 
         \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::addPlugin(
-            [$pluginTitle, $pluginSignature, $pluginIconPathAndFilename],
+            [$pluginTitle, $pluginSignature, $pluginIcon],
             $pluginType,
             $extensionKey
         );
@@ -180,7 +177,7 @@ tt_content.' . $pluginSignature . ' {
         }
         // add mandatory parameter to use new pagetree
         if ($mainModuleName === 'web') {
-            $defaultModuleConfiguration['navigationComponentId'] = 'typo3-pagetree';
+            $defaultModuleConfiguration['navigationComponentId'] = 'TYPO3/CMS/Backend/PageTree/PageTreeElement';
         }
         \TYPO3\CMS\Core\Utility\ArrayUtility::mergeRecursiveWithOverrule($defaultModuleConfiguration, $moduleConfiguration);
         $moduleConfiguration = $defaultModuleConfiguration;
@@ -194,9 +191,8 @@ tt_content.' . $pluginSignature . ' {
             $moduleConfiguration['vendorName'] = $vendorName;
         }
         $moduleConfiguration['extensionName'] = $extensionName;
-        $moduleConfiguration['configureModuleFunction'] = [\TYPO3\CMS\Core\Utility\ExtensionManagementUtility::class, 'configureModule'];
-        $GLOBALS['TBE_MODULES']['_configuration'][$moduleSignature] = $moduleConfiguration;
-        if (!is_array($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['extensions'][$extensionName]['modules'][$moduleSignature])) {
+        $moduleConfiguration['routeTarget'] = \TYPO3\CMS\Extbase\Core\Bootstrap::class . '::handleBackendRequest';
+        if (!is_array($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['extensions'][$extensionName]['modules'][$moduleSignature] ?? false)) {
             $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['extensions'][$extensionName]['modules'][$moduleSignature] = [];
         }
         foreach ($controllerActions as $controllerName => $actions) {
@@ -204,21 +200,24 @@ tt_content.' . $pluginSignature . ' {
                 'actions' => \TYPO3\CMS\Core\Utility\GeneralUtility::trimExplode(',', $actions)
             ];
         }
-        \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::addModule($mainModuleName, $subModuleName, $position);
+        \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::addModule($mainModuleName, $subModuleName, $position, null, $moduleConfiguration);
     }
 
     /**
      * Register a type converter by class name.
      *
      * @param string $typeConverterClassName
-     * @api
      */
     public static function registerTypeConverter($typeConverterClassName)
     {
-        if (!is_array($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['typeConverters'])) {
+        if (!isset($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['typeConverters']) ||
+            !is_array($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['typeConverters'])
+        ) {
             $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['typeConverters'] = [];
         }
-        $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['typeConverters'][] = $typeConverterClassName;
+        if (!in_array($typeConverterClassName, $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['typeConverters'])) {
+            $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['typeConverters'][] = $typeConverterClassName;
+        }
     }
 
     /**
@@ -231,7 +230,7 @@ tt_content.' . $pluginSignature . ' {
     protected static function checkVendorNameFormat($vendorName, $extensionName)
     {
         if (preg_match('/^[A-Z]/', $vendorName) !== 1) {
-            \TYPO3\CMS\Core\Utility\GeneralUtility::deprecationLog('The vendor name from tx_' . $extensionName . ' must begin with a capital letter.');
+            trigger_error('The vendor name from tx_' . $extensionName . ' must begin with a capital letter.', E_USER_DEPRECATED);
         }
     }
 

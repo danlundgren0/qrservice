@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Extensionmanager\Utility\Parser;
 
 /**
  * Abstract parser for EM related TYPO3 xml files.
+ * @internal This class is a specific ExtensionManager implementation and is not part of the Public TYPO3 API.
  */
 abstract class AbstractXmlParser implements \SplSubject
 {
@@ -69,7 +70,6 @@ abstract class AbstractXmlParser implements \SplSubject
     /**
      * Method notifies attached observers.
      *
-     * @access public
      * @see $observers, attach(), detach()
      */
     public function notify()
@@ -84,7 +84,6 @@ abstract class AbstractXmlParser implements \SplSubject
      *
      * Method tries to load the extension if necessary and possible.
      *
-     * @access public
      * @return bool TRUE, if PHP extension is available, otherwise FALSE
      */
     public function isAvailable()

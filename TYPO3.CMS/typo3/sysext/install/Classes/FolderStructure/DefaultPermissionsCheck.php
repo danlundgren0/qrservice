@@ -14,10 +14,12 @@ namespace TYPO3\CMS\Install\FolderStructure;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Install\Status;
+use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Messaging\FlashMessage;
 
 /**
  * Service class to check the default folder permissions
+ * @internal This class is only meant to be used within EXT:install and is not part of the TYPO3 Core API.
  */
 class DefaultPermissionsCheck
 {
@@ -51,52 +53,51 @@ class DefaultPermissionsCheck
      * If it permits only user read/write: Ok
      *
      * @param string $which fileCreateMask or folderCreateMask
-     * @return \TYPO3\CMS\Install\Status\StatusInterface
+     * @return FlashMessage
      */
-    public function getMaskStatus($which)
+    public function getMaskStatus($which): FlashMessage
     {
         $octal = '0' . $GLOBALS['TYPO3_CONF_VARS']['SYS'][$which];
         $dec = octdec($octal);
         $perms = [
-            'ox' => (($dec & 001) == 001),
-            'ow' => (($dec & 002) == 002),
-            'or' => (($dec & 004) == 004),
-            'gx' => (($dec & 010) == 010),
-            'gw' => (($dec & 020) == 020),
-            'gr' => (($dec & 040) == 040),
-            'ux' => (($dec & 0100) == 0100),
-            'uw' => (($dec & 0200) == 0200),
-            'ur' => (($dec & 0400) == 0400),
-            'setgid' => (($dec & 02000) == 02000),
+            'ox' => ($dec & 001) == 001,
+            'ow' => ($dec & 002) == 002,
+            'or' => ($dec & 004) == 004,
+            'gx' => ($dec & 010) == 010,
+            'gw' => ($dec & 020) == 020,
+            'gr' => ($dec & 040) == 040,
+            'ux' => ($dec & 0100) == 0100,
+            'uw' => ($dec & 0200) == 0200,
+            'ur' => ($dec & 0400) == 0400,
+            'setgid' => ($dec & 02000) == 02000,
         ];
         $extraMessage = '';
         $groupPermissions = false;
         if (!$perms['uw'] || !$perms['ur']) {
-            $permissionStatus = new Status\ErrorStatus();
+            $permissionStatus = FlashMessage::ERROR;
             $extraMessage = ' (not read or writable by the user)';
         } elseif ($perms['ow']) {
-            if (TYPO3_OS === 'WIN') {
-                $permissionStatus = new Status\InfoStatus();
+            if (Environment::isWindows()) {
+                $permissionStatus = FlashMessage::INFO;
                 $extraMessage = ' (writable by anyone on the server). This is the default behavior on a Windows system';
             } else {
-                $permissionStatus = new Status\ErrorStatus();
+                $permissionStatus = FlashMessage::ERROR;
                 $extraMessage = ' (writable by anyone on the server)';
             }
         } elseif ($perms['or']) {
-            $permissionStatus = new Status\NoticeStatus();
+            $permissionStatus = FlashMessage::NOTICE;
             $extraMessage = ' (readable by anyone on the server). This is the default set by TYPO3 CMS to be as much compatible as possible but if your system allows, please consider to change rights';
         } elseif ($perms['gw']) {
-            $permissionStatus = new Status\OkStatus();
+            $permissionStatus = FlashMessage::OK;
             $extraMessage = ' (group writable)';
             $groupPermissions = true;
         } elseif ($perms['gr']) {
-            $permissionStatus = new Status\OkStatus();
+            $permissionStatus = FlashMessage::OK;
             $extraMessage = ' (group readable)';
             $groupPermissions = true;
         } else {
-            $permissionStatus = new Status\OkStatus();
+            $permissionStatus = FlashMessage::OK;
         }
-        $permissionStatus->setTitle($this->names[$which] . ' (SYS/' . $which . ')');
         $message = 'Recommended: ' . $this->recommended[$which] . '.';
         $message .= ' Currently configured as ';
         if ($GLOBALS['TYPO3_CONF_VARS']['SYS'][$which] === $this->recommended[$which]) {
@@ -111,7 +112,10 @@ class DefaultPermissionsCheck
                 $message .= ' Your site is configured (SYS/createGroup) to write as group \'' . $GLOBALS['TYPO3_CONF_VARS']['SYS']['createGroup'] . '\'.';
             }
         }
-        $permissionStatus->setMessage($message);
-        return $permissionStatus;
+        return new FlashMessage(
+            $message,
+            $this->names[$which] . ' (SYS/' . $which . ')',
+            $permissionStatus
+        );
     }
 }

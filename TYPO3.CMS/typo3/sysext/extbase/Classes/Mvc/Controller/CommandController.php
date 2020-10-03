@@ -15,7 +15,6 @@ namespace TYPO3\CMS\Extbase\Mvc\Controller;
  */
 
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
-use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Mvc\Cli\CommandArgumentDefinition;
 use TYPO3\CMS\Extbase\Mvc\Cli\ConsoleOutput;
 use TYPO3\CMS\Extbase\Mvc\Cli\Request;
@@ -32,7 +31,7 @@ use TYPO3\CMS\Extbase\Reflection\ReflectionService;
 /**
  * A controller which processes requests from the command line
  *
- * @license http://www.gnu.org/licenses/lgpl.html GNU Lesser General Public License, version 3 or later
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Use symfony/console commands instead.
  */
 class CommandController implements CommandControllerInterface
 {
@@ -62,7 +61,6 @@ class CommandController implements CommandControllerInterface
      * Whether the command needs admin access to perform its job
      *
      * @var bool
-     * @api
      */
     protected $requestAdminPermissions = false;
 
@@ -80,6 +78,11 @@ class CommandController implements CommandControllerInterface
      * @var ConsoleOutput
      */
     protected $output;
+
+    public function __construct()
+    {
+        trigger_error('Extbase Command Controllers will be removed in TYPO3 v10.0. Migrate to symfony/console commands instead.', E_USER_DEPRECATED);
+    }
 
     /**
      * @param \TYPO3\CMS\Extbase\Object\ObjectManagerInterface $objectManager
@@ -114,12 +117,11 @@ class CommandController implements CommandControllerInterface
      * @param RequestInterface $request The request object
      * @param ResponseInterface $response The response, modified by this handler
      * @throws UnsupportedRequestTypeException if the controller doesn't support the current request type
-     * @api
      */
     public function processRequest(RequestInterface $request, ResponseInterface $response)
     {
         if (!$this->canProcessRequest($request)) {
-            throw new UnsupportedRequestTypeException(sprintf('%s only supports command line requests – requests of type "%s" given.', get_class($this), get_class($request)), 1300787096);
+            throw new UnsupportedRequestTypeException(sprintf('%s only supports command line requests – requests of type "%s" given.', static::class, get_class($request)), 1300787096);
         }
 
         $this->request = $request;
@@ -131,6 +133,7 @@ class CommandController implements CommandControllerInterface
         $this->arguments = $this->objectManager->get(Arguments::class);
         $this->initializeCommandMethodArguments();
         $this->mapRequestArgumentsToControllerArguments();
+        $this->initializeBackendAuthentication();
         $this->callCommandMethod();
     }
 
@@ -148,7 +151,7 @@ class CommandController implements CommandControllerInterface
     {
         $commandMethodName = $this->request->getControllerCommandName() . 'Command';
         if (!is_callable([$this, $commandMethodName])) {
-            throw new NoSuchCommandException(sprintf('A command method "%s()" does not exist in controller "%s".', $commandMethodName, get_class($this)), 1300902143);
+            throw new NoSuchCommandException(sprintf('A command method "%s()" does not exist in controller "%s".', $commandMethodName, static::class), 1300902143);
         }
         return $commandMethodName;
     }
@@ -162,7 +165,9 @@ class CommandController implements CommandControllerInterface
      */
     protected function initializeCommandMethodArguments()
     {
-        $methodParameters = $this->reflectionService->getMethodParameters(get_class($this), $this->commandMethodName);
+        $methodParameters = $this->reflectionService
+            ->getClassSchema(static::class)
+            ->getMethod($this->commandMethodName)['params'] ?? [];
 
         foreach ($methodParameters as $parameterName => $parameterInfo) {
             $dataType = null;
@@ -172,10 +177,10 @@ class CommandController implements CommandControllerInterface
                 $dataType = 'array';
             }
             if ($dataType === null) {
-                throw new InvalidArgumentTypeException(sprintf('The argument type for parameter $%s of method %s->%s() could not be detected.', $parameterName, get_class($this), $this->commandMethodName), 1306755296);
+                throw new InvalidArgumentTypeException(sprintf('The argument type for parameter $%s of method %s->%s() could not be detected.', $parameterName, static::class, $this->commandMethodName), 1306755296);
             }
-            $defaultValue = (isset($parameterInfo['defaultValue']) ? $parameterInfo['defaultValue'] : null);
-            $this->arguments->addNewArgument($parameterName, $dataType, ($parameterInfo['optional'] === false), $defaultValue);
+            $defaultValue = ($parameterInfo['defaultValue'] ?? null);
+            $this->arguments->addNewArgument($parameterName, $dataType, $parameterInfo['optional'] === false, $defaultValue);
         }
     }
 
@@ -200,6 +205,17 @@ class CommandController implements CommandControllerInterface
                 $argumentValue = $this->output->ask(sprintf('<comment>Please specify the required argument "%s":</comment> ', $commandArgumentDefinition->getDashedName()));
             }
             $argument->setValue($argumentValue);
+        }
+    }
+
+    /**
+     * Initializes and ensures authenticated backend access
+     */
+    protected function initializeBackendAuthentication()
+    {
+        $backendUserAuthentication = $this->getBackendUserAuthentication();
+        if ($backendUserAuthentication !== null) {
+            $backendUserAuthentication->backendCheckLogin();
         }
     }
 
@@ -246,43 +262,6 @@ class CommandController implements CommandControllerInterface
             $this->response->appendContent($commandResult);
         } elseif (is_object($commandResult) && method_exists($commandResult, '__toString')) {
             $this->response->appendContent((string)$commandResult);
-        }
-    }
-
-    /**
-     * Set admin permissions for currently authenticated user if requested
-     * and returns the original state or NULL
-     *
-     * @return NULL|int
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9, because admin role is always used in CLI mode
-     */
-    protected function ensureAdminRoleIfRequested()
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $userAuthentication = $this->getBackendUserAuthentication();
-
-        if (!$this->requestAdminPermissions || $userAuthentication === null || !isset($userAuthentication->user['admin'])) {
-            return null;
-        }
-
-        $originalRole = $userAuthentication->user['admin'];
-        $userAuthentication->user['admin'] = 1;
-        return $originalRole;
-    }
-
-    /**
-     * Restores the original user role
-     *
-     * @param NULL|int $originalRole
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9, because admin role is always used in CLI mode
-     */
-    protected function restoreUserRole($originalRole)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $userAuthentication = $this->getBackendUserAuthentication();
-
-        if ($originalRole !== null && $userAuthentication !== null) {
-            $userAuthentication->user['admin'] = $originalRole;
         }
     }
 
@@ -357,6 +336,6 @@ class CommandController implements CommandControllerInterface
      */
     protected function getBackendUserAuthentication()
     {
-        return isset($GLOBALS['BE_USER']) ? $GLOBALS['BE_USER'] : null;
+        return $GLOBALS['BE_USER'] ?? null;
     }
 }

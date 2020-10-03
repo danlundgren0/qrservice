@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Lowlevel\Command;
 
 /*
@@ -21,9 +21,11 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use TYPO3\CMS\Core\Core\Bootstrap;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\ReferenceIndex;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\PathUtility;
 
 /**
  * Finds files within uploads/ which are not needed anymore
@@ -45,11 +47,11 @@ Assumptions:
 - index.html, .htaccess files and RTEmagic* image files (ignored)
 - Files found in deleted records are included (otherwise you would see a false list of lost files)
 
-The assumptions are not requirements by the TYPO3 API but reflects the de facto implementation of most TYPO3 installations and therefore a practical approach to cleaning up the uploads/ folder.
+The assumptions are not requirements by the TYPO3 API but reflects the de facto implementation of most TYPO3 installations and therefore a practical approach to cleaning up the uploads/ or costum folder.
 Therefore, if all "group" type fields in TCA and flexforms are positioned inside the uploads/ folder and if no files inside are managed manually it should be safe to clean out files with no relations found in the system.
-Under such circumstances there should theoretically be no lost files in the uploads/ folder since DataHandler should have managed relations automatically including adding and deleting files.
+Under such circumstances there should theoretically be no lost files in the uploads/ or custom folder since DataHandler should have managed relations automatically including adding and deleting files.
 However, there is at least one reason known to why files might be found lost and that is when FlexForms are used. In such a case a change of/in the Data Structure XML (or the ability of the system to find the Data Structure definition!) used for the flexform could leave lost files behind. This is not unlikely to happen when records are deleted. More details can be found in a note to the function FlexFormTools->getDataStructureIdentifier()
-Another scenario could of course be de-installation of extensions which managed files in the uploads/ folders.
+Another scenario could of course be de-installation of extensions which managed files in the uploads/ or custom folders.
 
 If the option "--dry-run" is not set, the files are then deleted automatically.
 Warning: First, make sure those files are not used somewhere TYPO3 does not know about! See the assumptions above.
@@ -72,6 +74,12 @@ If you want to get more detailed information, use the --verbose option.')
                 null,
                 InputOption::VALUE_NONE,
                 'Setting this option automatically updates the reference index and does not ask on command line. Alternatively, use -n to avoid the interactive mode'
+            )
+            ->addOption(
+                'custom-path',
+                null,
+                InputOption::VALUE_REQUIRED,
+                'Comma separated list of paths to process. Example: "fileadmin/[path1],fileadmin/[path2],...", if not passed, uploads/ will be used by default.'
             );
     }
 
@@ -87,7 +95,7 @@ If you want to get more detailed information, use the --verbose option.')
     protected function execute(InputInterface $input, OutputInterface $output)
     {
         // Make sure the _cli_ user is loaded
-        Bootstrap::getInstance()->initializeBackendAuthentication();
+        Bootstrap::initializeBackendAuthentication();
 
         $io = new SymfonyStyle($input, $output);
         $io->title($this->getDescription());
@@ -102,7 +110,14 @@ If you want to get more detailed information, use the --verbose option.')
         } else {
             $excludedPaths = [];
         }
-        $lostFiles = $this->findLostFiles($excludedPaths);
+
+        // Use custom-path
+        $customPaths = '';
+        if ($input->hasOption('custom-path') && !empty($input->getOption('custom-path'))) {
+            $customPaths = $input->getOption('custom-path');
+        }
+
+        $lostFiles = $this->findLostFiles($excludedPaths, $customPaths);
 
         if (count($lostFiles)) {
             if (!$io->isQuiet()) {
@@ -151,19 +166,32 @@ If you want to get more detailed information, use the --verbose option.')
     }
 
     /**
-     * Find lost files in uploads/ folder
+     * Find lost files in uploads/ or custom folder
      *
      * @param array $excludedPaths list of paths to be excluded, can be uploads/pics/
-     * @return array an array of files (relative to PATH_site) that are not connected
+     * @param string $customPaths list of paths to be checked instead of uploads/
+     * @return array an array of files (relative to Environment::getPublicPath()) that are not connected
      */
-    protected function findLostFiles($excludedPaths = []): array
+    protected function findLostFiles($excludedPaths = [], $customPaths = ''): array
     {
         $lostFiles = [];
 
         // Get all files
         $files = [];
-        $files = GeneralUtility::getAllFilesAndFoldersInPath($files, PATH_site . 'uploads/');
-        $files = GeneralUtility::removePrefixPathFromList($files, PATH_site);
+        if (!empty($customPaths)) {
+            $customPaths = GeneralUtility::trimExplode(',', $customPaths, true);
+            foreach ($customPaths as $customPath) {
+                if (false === realpath(Environment::getPublicPath() . '/' . $customPath)
+                    || !GeneralUtility::isFirstPartOfStr(realpath(Environment::getPublicPath() . '/' . $customPath), realpath(Environment::getPublicPath()))) {
+                    throw new \Exception('The path: "' . $customPath . '" is invalid', 1450086736);
+                }
+                $files = GeneralUtility::getAllFilesAndFoldersInPath($files, Environment::getPublicPath() . '/' . $customPath);
+            }
+        } else {
+            $files = GeneralUtility::getAllFilesAndFoldersInPath($files, Environment::getPublicPath() . '/uploads/');
+        }
+
+        $files = GeneralUtility::removePrefixPathFromList($files, Environment::getPublicPath() . '/');
 
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
             ->getQueryBuilderForTable('sys_refindex');
@@ -177,7 +205,7 @@ If you want to get more detailed information, use the --verbose option.')
             }
 
             // If the file is a RTEmagic-image name and if so, we allow it
-            if (preg_match('/^RTEmagic[P|C]_/', basename($value))) {
+            if (preg_match('/^RTEmagic[P|C]_/', PathUtility::basenameDuringBootstrap($value))) {
                 continue;
             }
 
@@ -194,7 +222,7 @@ If you want to get more detailed information, use the --verbose option.')
             }
 
             // Looking for a reference from a field which is NOT a soft reference (thus, only fields with a proper TCA/Flexform configuration)
-            $result = $queryBuilder
+            $queryBuilder
                 ->select('hash')
                 ->from('sys_refindex')
                 ->where(
@@ -214,8 +242,9 @@ If you want to get more detailed information, use the --verbose option.')
                 ->orderBy('sorting', 'DESC')
                 ->execute();
 
+            $rowCount = $queryBuilder->count('hash')->execute()->fetchColumn(0);
             // We conclude that the file is lost
-            if ($result->rowCount() === 0) {
+            if ($rowCount === 0) {
                 $lostFiles[] = $value;
             }
         }

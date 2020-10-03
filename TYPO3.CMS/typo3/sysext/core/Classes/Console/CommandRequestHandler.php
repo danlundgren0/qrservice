@@ -1,4 +1,5 @@
 <?php
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Console;
 
 /*
@@ -20,7 +21,6 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\ConsoleOutput;
 use TYPO3\CMS\Core\Authentication\CommandLineUserAuthentication;
 use TYPO3\CMS\Core\Core\Bootstrap;
-use TYPO3\CMS\Core\Package\PackageManager;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -29,25 +29,16 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 class CommandRequestHandler implements RequestHandlerInterface
 {
     /**
-     * Instance of the current TYPO3 bootstrap
-     * @var Bootstrap
-     */
-    protected $bootstrap;
-
-    /**
      * Instance of the symfony application
      * @var Application
      */
     protected $application;
 
     /**
-     * Constructor handing over the bootstrap
-     *
-     * @param Bootstrap $bootstrap
+     * Constructor initializing the symfony application
      */
-    public function __construct(Bootstrap $bootstrap)
+    public function __construct()
     {
-        $this->bootstrap = $bootstrap;
         $this->application = new Application('TYPO3 CMS', TYPO3_version);
     }
 
@@ -60,33 +51,14 @@ class CommandRequestHandler implements RequestHandlerInterface
     {
         $output = new ConsoleOutput();
 
-        $this->bootstrap
-            ->loadBaseTca()
-            ->loadExtTables()
-            // create the BE_USER object (not logged in yet)
-            ->initializeBackendUser(CommandLineUserAuthentication::class)
-            ->initializeLanguageObject()
-            // Make sure output is not buffered, so command-line output and interaction can take place
-            ->endOutputBufferingAndCleanPreviousOutput();
+        Bootstrap::loadExtTables();
+        // create the BE_USER object (not logged in yet)
+        Bootstrap::initializeBackendUser(CommandLineUserAuthentication::class);
+        Bootstrap::initializeLanguageObject();
+        // Make sure output is not buffered, so command-line output and interaction can take place
+        ob_clean();
 
         $this->populateAvailableCommands();
-
-        // Check if the command to run needs a backend user to be loaded
-        $command = $this->getCommandToRun($input);
-
-        if (!$command) {
-            // Using old "cliKeys" is marked as deprecated and will be removed in TYPO3 v9
-            $cliKeys = array_keys($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['GLOBAL']['cliKeys']);
-
-            $output->writeln('Using old "cliKeys" ($GLOBALS[TYPO3_CONF_VARS][SC_OPTIONS][GLOBAL][cliKeys]) is marked as deprecated and will be removed in TYPO3 v9:');
-            $output->writeln('Old entrypoint keys available:');
-            asort($cliKeys);
-            foreach ($cliKeys as $key => $value) {
-                $output->writeln('  ' . $value);
-            }
-            $output->writeln('');
-            $output->writeln('TYPO3 Console Commands:');
-        }
 
         $exitCode = $this->application->run($input, $output);
         exit($exitCode);
@@ -98,7 +70,7 @@ class CommandRequestHandler implements RequestHandlerInterface
      * @param InputInterface $input
      * @return bool Always TRUE
      */
-    public function canHandleRequest(InputInterface $input)
+    public function canHandleRequest(InputInterface $input): bool
     {
         return true;
     }
@@ -108,49 +80,22 @@ class CommandRequestHandler implements RequestHandlerInterface
      *
      * @return int The priority of the request handler.
      */
-    public function getPriority()
+    public function getPriority(): int
     {
         return 50;
     }
 
     /**
-     * @param InputInterface $input
-     * @return bool|Command
-     */
-    protected function getCommandToRun(InputInterface $input)
-    {
-        $firstArgument = $input->getFirstArgument();
-        try {
-            return $this->application->find($firstArgument);
-        } catch (\InvalidArgumentException $e) {
-            return false;
-        }
-    }
-
-    /**
      * Put all available commands inside the application
+     * @throws \TYPO3\CMS\Core\Console\CommandNameAlreadyInUseException
      */
     protected function populateAvailableCommands()
     {
-        /** @var PackageManager $packageManager */
-        $packageManager = Bootstrap::getInstance()->getEarlyInstance(PackageManager::class);
+        $commands = GeneralUtility::makeInstance(CommandRegistry::class);
 
-        foreach ($packageManager->getActivePackages() as $package) {
-            $commandsOfExtension = $package->getPackagePath() . 'Configuration/Commands.php';
-            if (@is_file($commandsOfExtension)) {
-                $commands = require_once $commandsOfExtension;
-                if (is_array($commands)) {
-                    foreach ($commands as $commandName => $commandDescription) {
-                        /** @var Command $cmd */
-                        $cmd = GeneralUtility::makeInstance($commandDescription['class'], $commandName);
-                        // Check if the command name is already in use
-                        if ($this->application->has($commandName)) {
-                            throw new CommandNameAlreadyInUseException('Command "' . $commandName . '" registered by "' . $package->getPackageKey() . '" is already in use', 1484486383);
-                        }
-                        $this->application->add($cmd);
-                    }
-                }
-            }
+        foreach ($commands as $commandName => $command) {
+            /** @var Command $command */
+            $this->application->add($command);
         }
     }
 }

@@ -23,6 +23,7 @@ use TYPO3\CMS\Extbase\Persistence\ObjectStorage;
  * - if public getter/setter method exists, call it.
  * - if public property exists, return/set the value of it.
  * - else, throw exception
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 class ObjectAccess
 {
@@ -81,8 +82,9 @@ class ObjectAccess
         // type check and conversion of iterator to numerically indexed array
         if ($subject === null || is_scalar($subject)) {
             return null;
-        } elseif (!$forceDirectAccess && ($subject instanceof \SplObjectStorage || $subject instanceof ObjectStorage)) {
-            $subject = iterator_to_array($subject, false);
+        }
+        if (!$forceDirectAccess && ($subject instanceof \SplObjectStorage || $subject instanceof ObjectStorage)) {
+            $subject = iterator_to_array(clone $subject, false);
         }
 
         // value get based on data type of $subject (possibly converted above)
@@ -95,11 +97,14 @@ class ObjectAccess
         } elseif (is_object($subject)) {
             if ($forceDirectAccess) {
                 if (property_exists($subject, $propertyName)) {
-                    $propertyReflection = new PropertyReflection($subject, $propertyName);
+                    $propertyReflection = new \ReflectionProperty($subject, $propertyName);
+                    if ($propertyReflection->isPublic()) {
+                        return $propertyReflection->getValue($subject);
+                    }
+                    $propertyReflection->setAccessible(true);
                     return $propertyReflection->getValue($subject);
-                } else {
-                    throw new Exception\PropertyNotAccessibleException('The property "' . $propertyName . '" on the subject does not exist.', 1302855001);
                 }
+                throw new Exception\PropertyNotAccessibleException('The property "' . $propertyName . '" on the subject does not exist.', 1302855001);
             }
             $upperCasePropertyName = ucfirst($propertyName);
             $getterMethodName = 'get' . $upperCasePropertyName;
@@ -116,9 +121,8 @@ class ObjectAccess
             }
             if (property_exists($subject, $propertyName)) {
                 return $subject->{$propertyName};
-            } else {
-                throw new Exception\PropertyNotAccessibleException('The property "' . $propertyName . '" on the subject does not exist.', 1476109666);
             }
+            throw new Exception\PropertyNotAccessibleException('The property "' . $propertyName . '" on the subject does not exist.', 1476109666);
         }
 
         return null;
@@ -184,7 +188,7 @@ class ObjectAccess
         $result = true;
         if ($forceDirectAccess) {
             if (property_exists($subject, $propertyName)) {
-                $propertyReflection = new PropertyReflection($subject, $propertyName);
+                $propertyReflection = new \ReflectionProperty($subject, $propertyName);
                 $propertyReflection->setAccessible(true);
                 $propertyReflection->setValue($subject, $propertyValue);
             } else {
@@ -196,7 +200,7 @@ class ObjectAccess
         if (is_callable([$subject, $setterMethodName])) {
             $subject->{$setterMethodName}($propertyValue);
         } elseif (property_exists($subject, $propertyName)) {
-            $reflection = new PropertyReflection($subject, $propertyName);
+            $reflection = new \ReflectionProperty($subject, $propertyName);
             if ($reflection->isPublic()) {
                 $subject->{$propertyName} = $propertyValue;
             } else {
@@ -248,13 +252,13 @@ class ObjectAccess
                 }
             }
             $methodName = $method->getName();
-            if (substr($methodName, 0, 2) === 'is') {
+            if (strpos($methodName, 'is') === 0) {
                 $declaredPropertyNames[] = lcfirst(substr($methodName, 2));
             }
-            if (substr($methodName, 0, 3) === 'get') {
+            if (strpos($methodName, 'get') === 0) {
                 $declaredPropertyNames[] = lcfirst(substr($methodName, 3));
             }
-            if (substr($methodName, 0, 3) === 'has') {
+            if (strpos($methodName, 'has') === 0) {
                 $declaredPropertyNames[] = lcfirst(substr($methodName, 3));
             }
         }
@@ -287,7 +291,7 @@ class ObjectAccess
             $declaredPropertyNames = array_keys(get_class_vars(get_class($object)));
         }
         foreach (get_class_methods($object) as $methodName) {
-            if (substr($methodName, 0, 3) === 'set' && is_callable([$object, $methodName])) {
+            if (strpos($methodName, 'set') === 0 && is_callable([$object, $methodName])) {
                 $declaredPropertyNames[] = lcfirst(substr($methodName, 3));
             }
         }
@@ -310,9 +314,10 @@ class ObjectAccess
         if (!is_object($object)) {
             throw new \InvalidArgumentException('$object must be an object, ' . gettype($object) . ' given.', 1259828920);
         }
-        if ($object instanceof \stdClass && array_search($propertyName, array_keys(get_object_vars($object))) !== false) {
+        if ($object instanceof \stdClass && array_key_exists($propertyName, get_object_vars($object))) {
             return true;
-        } elseif (array_search($propertyName, array_keys(get_class_vars(get_class($object)))) !== false) {
+        }
+        if (array_key_exists($propertyName, get_class_vars(get_class($object)))) {
             return true;
         }
         return is_callable([$object, self::buildSetterMethodName($propertyName)]);
@@ -334,7 +339,8 @@ class ObjectAccess
         }
         if ($object instanceof \ArrayAccess && isset($object[$propertyName])) {
             return true;
-        } elseif ($object instanceof \stdClass && isset($object->$propertyName)) {
+        }
+        if ($object instanceof \stdClass && isset($object->$propertyName)) {
             return true;
         }
         if (is_callable([$object, 'get' . ucfirst($propertyName)])) {
@@ -347,7 +353,7 @@ class ObjectAccess
             return true;
         }
         if (property_exists($object, $propertyName)) {
-            $propertyReflection = new PropertyReflection($object, $propertyName);
+            $propertyReflection = new \ReflectionProperty($object, $propertyName);
             return $propertyReflection->isPublic();
         }
         return false;

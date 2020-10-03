@@ -14,10 +14,13 @@ namespace TYPO3\CMS\Install\Configuration\Context;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Log\LogLevel;
+use TYPO3\CMS\Core\Log\Writer\FileWriter;
 use TYPO3\CMS\Install\Configuration;
 
 /**
  * Debug preset
+ * @internal only to be used within EXT:install
  */
 class DebugPreset extends Configuration\AbstractPreset
 {
@@ -39,11 +42,11 @@ class DebugPreset extends Configuration\AbstractPreset
         'FE/debug' => true,
         'SYS/devIPmask' => '*',
         'SYS/displayErrors' => 1,
-        'SYS/enableDeprecationLog' => 'file',
-        'SYS/sqlDebug' => 1,
         'SYS/systemLogLevel' => 0,
-        // E_WARNING | E_RECOVERABLE_ERROR | E_DEPRECATED | E_USER_DEPRECATED
-        'SYS/exceptionalErrors' => 28674,
+        // Values below are not available in UI
+        'LOG/TYPO3/CMS/deprecations/writerConfiguration/' . LogLevel::NOTICE . '/' . FileWriter::class . '/disabled' => false,
+        // E_WARNING | E_RECOVERABLE_ERROR | E_DEPRECATED
+        'SYS/exceptionalErrors' => 12290,
     ];
 
     /**

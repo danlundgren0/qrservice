@@ -14,15 +14,16 @@ namespace TYPO3\CMS\Extbase\Mvc\Web\Routing;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Backend\Routing\Exception\ResourceNotFoundException;
+use TYPO3\CMS\Backend\Routing\Exception\RouteNotFoundException;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\HttpUtility;
 use TYPO3\CMS\Extbase\Mvc\Request;
 use TYPO3\CMS\Extbase\Mvc\Web\Request as WebRequest;
 
 /**
  * An URI Builder
- *
- * @api
  */
 class UriBuilder
 {
@@ -73,7 +74,7 @@ class UriBuilder
     /**
      * @var string
      */
-    protected $absoluteUriScheme = null;
+    protected $absoluteUriScheme;
 
     /**
      * @var bool
@@ -83,7 +84,7 @@ class UriBuilder
     /**
      * @var string
      */
-    protected $addQueryStringMethod = null;
+    protected $addQueryStringMethod;
 
     /**
      * @var array
@@ -98,7 +99,7 @@ class UriBuilder
     /**
      * @var int
      */
-    protected $targetPageUid = null;
+    protected $targetPageUid;
 
     /**
      * @var int
@@ -123,7 +124,7 @@ class UriBuilder
     /**
      * @var string
      */
-    protected $argumentPrefix = null;
+    protected $argumentPrefix;
 
     /**
      * @var \TYPO3\CMS\Extbase\Service\EnvironmentService
@@ -132,6 +133,7 @@ class UriBuilder
 
     /**
      * @param \TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface $configurationManager
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function injectConfigurationManager(\TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface $configurationManager)
     {
@@ -140,6 +142,7 @@ class UriBuilder
 
     /**
      * @param \TYPO3\CMS\Extbase\Service\ExtensionService $extensionService
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function injectExtensionService(\TYPO3\CMS\Extbase\Service\ExtensionService $extensionService)
     {
@@ -148,6 +151,7 @@ class UriBuilder
 
     /**
      * @param \TYPO3\CMS\Extbase\Service\EnvironmentService $environmentService
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function injectEnvironmentService(\TYPO3\CMS\Extbase\Service\EnvironmentService $environmentService)
     {
@@ -156,6 +160,7 @@ class UriBuilder
 
     /**
      * Life-cycle method that is called by the DI container as soon as this object is completely built
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function initializeObject()
     {
@@ -167,6 +172,7 @@ class UriBuilder
      *
      * @param Request $request
      * @return \TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder the current UriBuilder to allow method chaining
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function setRequest(Request $request)
     {
@@ -176,6 +182,7 @@ class UriBuilder
 
     /**
      * @return Request
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function getRequest()
     {
@@ -189,7 +196,6 @@ class UriBuilder
      *
      * @param array $arguments
      * @return \TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder the current UriBuilder to allow method chaining
-     * @api
      */
     public function setArguments(array $arguments)
     {
@@ -199,7 +205,6 @@ class UriBuilder
 
     /**
      * @return array
-     * @api
      */
     public function getArguments()
     {
@@ -211,7 +216,6 @@ class UriBuilder
      *
      * @param string $section
      * @return \TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder the current UriBuilder to allow method chaining
-     * @api
      */
     public function setSection($section)
     {
@@ -221,7 +225,6 @@ class UriBuilder
 
     /**
      * @return string
-     * @api
      */
     public function getSection()
     {
@@ -233,7 +236,6 @@ class UriBuilder
      *
      * @param string $format
      * @return \TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder the current UriBuilder to allow method chaining
-     * @api
      */
     public function setFormat($format)
     {
@@ -243,7 +245,6 @@ class UriBuilder
 
     /**
      * @return string
-     * @api
      */
     public function getFormat()
     {
@@ -255,7 +256,6 @@ class UriBuilder
      *
      * @param bool $createAbsoluteUri
      * @return \TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder the current UriBuilder to allow method chaining
-     * @api
      */
     public function setCreateAbsoluteUri($createAbsoluteUri)
     {
@@ -265,7 +265,6 @@ class UriBuilder
 
     /**
      * @return bool
-     * @api
      */
     public function getCreateAbsoluteUri()
     {
@@ -274,6 +273,7 @@ class UriBuilder
 
     /**
      * @return string
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function getAbsoluteUriScheme()
     {
@@ -285,6 +285,7 @@ class UriBuilder
      *
      * @param string $absoluteUriScheme the scheme to be used for absolute URIs
      * @return \TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder the current UriBuilder to allow method chaining
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function setAbsoluteUriScheme($absoluteUriScheme)
     {
@@ -297,7 +298,6 @@ class UriBuilder
      *
      * @param bool $addQueryString
      * @return \TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder the current UriBuilder to allow method chaining
-     * @api
      * @see TSref/typolink.addQueryString
      */
     public function setAddQueryString($addQueryString)
@@ -308,7 +308,6 @@ class UriBuilder
 
     /**
      * @return bool
-     * @api
      */
     public function getAddQueryString()
     {
@@ -321,7 +320,6 @@ class UriBuilder
      *
      * @param string $addQueryStringMethod
      * @return \TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder the current UriBuilder to allow method chaining
-     * @api
      * @see TSref/typolink.addQueryString.method
      */
     public function setAddQueryStringMethod($addQueryStringMethod)
@@ -332,7 +330,6 @@ class UriBuilder
 
     /**
      * @return string
-     * @api
      */
     public function getAddQueryStringMethod()
     {
@@ -345,7 +342,6 @@ class UriBuilder
      *
      * @param array $argumentsToBeExcludedFromQueryString
      * @return \TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder the current UriBuilder to allow method chaining
-     * @api
      * @see TSref/typolink.addQueryString.exclude
      * @see setAddQueryString()
      */
@@ -357,7 +353,6 @@ class UriBuilder
 
     /**
      * @return array
-     * @api
      */
     public function getArgumentsToBeExcludedFromQueryString()
     {
@@ -369,6 +364,7 @@ class UriBuilder
      *
      * @param string $argumentPrefix
      * @return \TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder the current UriBuilder to allow method chaining
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function setArgumentPrefix($argumentPrefix)
     {
@@ -378,6 +374,7 @@ class UriBuilder
 
     /**
      * @return string
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function getArgumentPrefix()
     {
@@ -389,7 +386,6 @@ class UriBuilder
      *
      * @param bool $linkAccessRestrictedPages
      * @return \TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder the current UriBuilder to allow method chaining
-     * @api
      */
     public function setLinkAccessRestrictedPages($linkAccessRestrictedPages)
     {
@@ -399,7 +395,6 @@ class UriBuilder
 
     /**
      * @return bool
-     * @api
      */
     public function getLinkAccessRestrictedPages()
     {
@@ -411,7 +406,6 @@ class UriBuilder
      *
      * @param int $targetPageUid
      * @return \TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder the current UriBuilder to allow method chaining
-     * @api
      */
     public function setTargetPageUid($targetPageUid)
     {
@@ -423,7 +417,6 @@ class UriBuilder
      * returns $this->targetPageUid.
      *
      * @return int
-     * @api
      */
     public function getTargetPageUid()
     {
@@ -435,7 +428,6 @@ class UriBuilder
      *
      * @param int $targetPageType
      * @return \TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder the current UriBuilder to allow method chaining
-     * @api
      */
     public function setTargetPageType($targetPageType)
     {
@@ -445,6 +437,7 @@ class UriBuilder
 
     /**
      * @return int
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function getTargetPageType()
     {
@@ -457,7 +450,6 @@ class UriBuilder
      *
      * @param bool $noCache
      * @return \TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder the current UriBuilder to allow method chaining
-     * @api
      */
     public function setNoCache($noCache)
     {
@@ -467,7 +459,6 @@ class UriBuilder
 
     /**
      * @return bool
-     * @api
      */
     public function getNoCache()
     {
@@ -480,7 +471,6 @@ class UriBuilder
      *
      * @param bool $useCacheHash
      * @return \TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder the current UriBuilder to allow method chaining
-     * @api
      */
     public function setUseCacheHash($useCacheHash)
     {
@@ -490,7 +480,6 @@ class UriBuilder
 
     /**
      * @return bool
-     * @api
      */
     public function getUseCacheHash()
     {
@@ -502,6 +491,7 @@ class UriBuilder
      * This is only set after build() / uriFor() has been called.
      *
      * @return array The last arguments
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function getLastArguments()
     {
@@ -512,7 +502,6 @@ class UriBuilder
      * Resets all UriBuilder options to their default value
      *
      * @return \TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder the current UriBuilder to allow method chaining
-     * @api
      */
     public function reset()
     {
@@ -542,7 +531,6 @@ class UriBuilder
      * @param string $extensionName Name of the target extension, without underscores. If not set, current ExtensionName is used.
      * @param string $pluginName Name of the target plugin. If not set, current PluginName is used.
      * @return string the rendered URI
-     * @api
      * @see build()
      */
     public function uriFor($actionName = null, $controllerArguments = [], $controllerName = null, $extensionName = null, $pluginName = null)
@@ -614,7 +602,6 @@ class UriBuilder
      * Depending on the current context this calls buildBackendUri() or buildFrontendUri()
      *
      * @return string The URI
-     * @api
      * @see buildBackendUri()
      * @see buildFrontendUri()
      */
@@ -622,9 +609,8 @@ class UriBuilder
     {
         if ($this->environmentService->isEnvironmentInBackendMode()) {
             return $this->buildBackendUri();
-        } else {
-            return $this->buildFrontendUri();
         }
+        return $this->buildFrontendUri();
     }
 
     /**
@@ -634,6 +620,7 @@ class UriBuilder
      * will be ignored in the backend.
      *
      * @return string The URI
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function buildBackendUri()
     {
@@ -654,35 +641,51 @@ class UriBuilder
                         $arguments = array_replace_recursive(GeneralUtility::_POST(), GeneralUtility::_GET());
                         break;
                     default:
-                        $arguments = GeneralUtility::explodeUrl2Array(GeneralUtility::getIndpEnv('QUERY_STRING'), true);
+                        // Explode GET vars recursively
+                        parse_str(GeneralUtility::getIndpEnv('QUERY_STRING'), $arguments);
                 }
             } else {
                 $arguments = GeneralUtility::_GET();
             }
             foreach ($this->argumentsToBeExcludedFromQueryString as $argumentToBeExcluded) {
-                $argumentToBeExcluded = GeneralUtility::explodeUrl2Array($argumentToBeExcluded, true);
-                $arguments = ArrayUtility::arrayDiffAssocRecursive($arguments, $argumentToBeExcluded);
+                $argumentArrayToBeExcluded = [];
+                parse_str($argumentToBeExcluded, $argumentArrayToBeExcluded);
+                $arguments = ArrayUtility::arrayDiffAssocRecursive($arguments, $argumentArrayToBeExcluded);
             }
         } else {
             $id = GeneralUtility::_GP('id');
-            $module = GeneralUtility::_GP('M');
+            // backwards compatibility: check for M parameter
+            // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+            $route = GeneralUtility::_GP('route') ?: GeneralUtility::_GP('M');
             if ($id !== null) {
                 $arguments['id'] = $id;
             }
-            if ($module !== null) {
-                $arguments['M'] = $module;
+            if ($route !== null) {
+                $arguments['route'] = $route;
             }
         }
         ArrayUtility::mergeRecursiveWithOverrule($arguments, $this->arguments);
         $arguments = $this->convertDomainObjectsToIdentityArrays($arguments);
         $this->lastArguments = $arguments;
-        $moduleName = $arguments['M'];
-        unset($arguments['M'], $arguments['moduleToken']);
+        $routeName = $arguments['route'] ?? null;
+        unset($arguments['route'], $arguments['token']);
         $backendUriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
-        if ($this->request instanceof WebRequest && $this->createAbsoluteUri) {
-            $uri = (string)$backendUriBuilder->buildUriFromModule($moduleName, $arguments, \TYPO3\CMS\Backend\Routing\UriBuilder::ABSOLUTE_URL);
-        } else {
-            $uri = (string)$backendUriBuilder->buildUriFromModule($moduleName, $arguments);
+        try {
+            if ($this->request instanceof WebRequest && $this->createAbsoluteUri) {
+                $uri = (string)$backendUriBuilder->buildUriFromRoutePath($routeName, $arguments, \TYPO3\CMS\Backend\Routing\UriBuilder::ABSOLUTE_URL);
+            } else {
+                $uri = (string)$backendUriBuilder->buildUriFromRoutePath($routeName, $arguments, \TYPO3\CMS\Backend\Routing\UriBuilder::ABSOLUTE_PATH);
+            }
+        } catch (ResourceNotFoundException $e) {
+            try {
+                if ($this->request instanceof WebRequest && $this->createAbsoluteUri) {
+                    $uri = (string)$backendUriBuilder->buildUriFromRoute($routeName, $arguments, \TYPO3\CMS\Backend\Routing\UriBuilder::ABSOLUTE_URL);
+                } else {
+                    $uri = (string)$backendUriBuilder->buildUriFromRoute($routeName, $arguments, \TYPO3\CMS\Backend\Routing\UriBuilder::ABSOLUTE_PATH);
+                }
+            } catch (RouteNotFoundException $e) {
+                $uri = '';
+            }
         }
         if ($this->section !== '') {
             $uri .= '#' . $this->section;
@@ -695,6 +698,7 @@ class UriBuilder
      *
      * @return string The URI
      * @see buildTypolinkConfiguration()
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function buildFrontendUri()
     {
@@ -718,7 +722,7 @@ class UriBuilder
     protected function buildTypolinkConfiguration()
     {
         $typolinkConfiguration = [];
-        $typolinkConfiguration['parameter'] = $this->targetPageUid !== null ? $this->targetPageUid : $GLOBALS['TSFE']->id;
+        $typolinkConfiguration['parameter'] = $this->targetPageUid ?? $GLOBALS['TSFE']->id;
         if ($this->targetPageType !== 0) {
             $typolinkConfiguration['parameter'] .= ',' . $this->targetPageType;
         } elseif ($this->format !== '') {
@@ -728,7 +732,7 @@ class UriBuilder
         if (!empty($this->arguments)) {
             $arguments = $this->convertDomainObjectsToIdentityArrays($this->arguments);
             $this->lastArguments = $arguments;
-            $typolinkConfiguration['additionalParams'] = GeneralUtility::implodeArrayForUrl(null, $arguments);
+            $typolinkConfiguration['additionalParams'] = HttpUtility::buildQueryString($arguments, '&');
         }
         if ($this->addQueryString === true) {
             $typolinkConfiguration['addQueryString'] = 1;
@@ -811,6 +815,7 @@ class UriBuilder
      * @param \TYPO3\CMS\Extbase\DomainObject\AbstractDomainObject $object
      * @return array
      * @todo Refactore this into convertDomainObjectsToIdentityArrays()
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function convertTransientObjectToArray(\TYPO3\CMS\Extbase\DomainObject\AbstractDomainObject $object)
     {

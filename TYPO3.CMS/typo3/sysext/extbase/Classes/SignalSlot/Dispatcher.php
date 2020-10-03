@@ -14,12 +14,15 @@ namespace TYPO3\CMS\Extbase\SignalSlot;
  * The TYPO3 project - inspiring people to share!
  */
 
+use Psr\Log\LoggerInterface;
+use TYPO3\CMS\Core\Log\LogManager;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Extbase\Object\ObjectManager;
+
 /**
  * A dispatcher which dispatches signals by calling its registered slot methods
  * and passing them the method arguments which were originally passed to the
  * signal method.
- *
- * @api
  */
 class Dispatcher implements \TYPO3\CMS\Core\SingletonInterface
 {
@@ -43,6 +46,11 @@ class Dispatcher implements \TYPO3\CMS\Core\SingletonInterface
     protected $slots = [];
 
     /**
+     * @var LoggerInterface
+     */
+    protected $logger;
+
+    /**
      * Initializes this object.
      *
      * This methods needs to be used as alternative to inject aspects.
@@ -53,7 +61,9 @@ class Dispatcher implements \TYPO3\CMS\Core\SingletonInterface
     public function initializeObject()
     {
         if (!$this->isInitialized) {
-            $this->objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Extbase\Object\ObjectManager::class);
+            $this->objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+            $logManager = GeneralUtility::makeInstance(LogManager::class);
+            $this->logger = $logManager->getLogger(self::class);
             $this->isInitialized = true;
         }
     }
@@ -68,7 +78,6 @@ class Dispatcher implements \TYPO3\CMS\Core\SingletonInterface
      * @param string $slotMethodName Name of the method to be used as a slot. If $slotClassNameOrObject is a Closure object, this parameter is ignored
      * @param bool $passSignalInformation If set to TRUE, the last argument passed to the slot will be information about the signal (EmitterClassName::signalName)
      * @throws \InvalidArgumentException
-     * @api
      */
     public function connect($signalClassName, $signalName, $slotClassNameOrObject, $slotMethodName = '', $passSignalInformation = true)
     {
@@ -88,9 +97,11 @@ class Dispatcher implements \TYPO3\CMS\Core\SingletonInterface
             'class' => $class,
             'method' => $method,
             'object' => $object,
-            'passSignalInformation' => $passSignalInformation === true
+            'passSignalInformation' => $passSignalInformation === true,
         ];
-        if (!is_array($this->slots[$signalClassName][$signalName]) || !in_array($slot, $this->slots[$signalClassName][$signalName])) {
+        // The in_array() comparision needs to be strict to avoid potential issues
+        // with complex objects being registered as slot.
+        if (!is_array($this->slots[$signalClassName][$signalName] ?? false) || !in_array($slot, $this->slots[$signalClassName][$signalName], true)) {
             $this->slots[$signalClassName][$signalName][] = $slot;
         }
     }
@@ -104,11 +115,18 @@ class Dispatcher implements \TYPO3\CMS\Core\SingletonInterface
      * @return mixed
      * @throws Exception\InvalidSlotException if the slot is not valid
      * @throws Exception\InvalidSlotReturnException if a slot returns invalid arguments (too few or return value is not an array)
-     * @api
      */
     public function dispatch($signalClassName, $signalName, array $signalArguments = [])
     {
         $this->initializeObject();
+        $this->logger->debug(
+            'Triggered signal ' . $signalClassName . ' ' . $signalName,
+            [
+                'signalClassName' => $signalClassName,
+                'signalName' => $signalName,
+                'signalArguments' => $signalArguments,
+            ]
+        );
         if (!isset($this->slots[$signalClassName][$signalName])) {
             return $signalArguments;
         }
@@ -117,7 +135,7 @@ class Dispatcher implements \TYPO3\CMS\Core\SingletonInterface
                 $object = $slotInformation['object'];
             } else {
                 if (!isset($this->objectManager)) {
-                    throw new Exception\InvalidSlotException(sprintf('Cannot dispatch %s::%s to class %s. The object manager is not yet available in the Signal Slot Dispatcher and therefore it cannot dispatch classes.', $signalClassName, $signalName, $slotInformation['class']), 1298113624);
+                    throw new Exception\InvalidSlotException(sprintf('Cannot dispatch %s::%s to class %s. The object manager is not yet available in the Signal Slot Dispatcher and therefore it cannot dispatch classes.', $signalClassName, $signalName, $slotInformation['class'] ?? ''), 1298113624);
                 }
                 if (!$this->objectManager->isRegistered($slotInformation['class'])) {
                     throw new Exception\InvalidSlotException('The given class "' . $slotInformation['class'] . '" is not a registered object.', 1245673367);
@@ -140,12 +158,12 @@ class Dispatcher implements \TYPO3\CMS\Core\SingletonInterface
                 if (!is_array($slotReturn)) {
                     throw new Exception\InvalidSlotReturnException('The slot method ' . get_class($object) . '->' . $slotInformation['method'] . '()\'s return value is of an not allowed type ('
                         . gettype($slotReturn) . ').', 1376683067);
-                } elseif (count($slotReturn) !== count($signalArguments)) {
+                }
+                if (count($slotReturn) !== count($signalArguments)) {
                     throw new Exception\InvalidSlotReturnException('The slot method ' . get_class($object) . '->' . $slotInformation['method'] . '() returned a different number ('
                         . count($slotReturn) . ') of arguments, than it received (' . count($signalArguments) . ').', 1376683066);
-                } else {
-                    $signalArguments = $slotReturn;
                 }
+                $signalArguments = $slotReturn;
             }
         }
 
@@ -158,10 +176,9 @@ class Dispatcher implements \TYPO3\CMS\Core\SingletonInterface
      * @param string $signalClassName Name of the class containing the signal
      * @param string $signalName Name of the signal
      * @return array An array of arrays with slot information
-     * @api
      */
     public function getSlots($signalClassName, $signalName)
     {
-        return isset($this->slots[$signalClassName][$signalName]) ? $this->slots[$signalClassName][$signalName] : [];
+        return $this->slots[$signalClassName][$signalName] ?? [];
     }
 }

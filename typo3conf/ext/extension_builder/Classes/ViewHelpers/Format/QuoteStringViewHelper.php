@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\ViewHelpers\Format;
 
 /*
@@ -14,7 +15,7 @@ namespace EBT\ExtensionBuilder\ViewHelpers\Format;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 
 /**
  * View helper which returns a quoted string
@@ -27,12 +28,23 @@ use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
 class QuoteStringViewHelper extends AbstractViewHelper
 {
     /**
-     * @param string $value
+     * Arguments Initialization
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('value', 'string', 'The string to addslashes', false);
+    }
+
+    /**
      *
      * @return string
      */
-    public function render($value = null)
+    public function render()
     {
+        $value = null;
+        if ($this->hasArgument('value')) {
+            $value = $this->arguments['value'];
+        }
         if ($value == null) {
             $value = $this->renderChildren();
         }

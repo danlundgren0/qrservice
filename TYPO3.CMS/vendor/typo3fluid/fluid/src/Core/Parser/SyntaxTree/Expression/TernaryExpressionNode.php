@@ -6,11 +6,10 @@ namespace TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\Expression;
  * See LICENSE.txt that was shipped with this package.
  */
 
-use TYPO3Fluid\Fluid\Core\Parser;
-use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\Compiler\TemplateCompiler;
 use TYPO3Fluid\Fluid\Core\Parser\BooleanParser;
 use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\BooleanNode;
-use TYPO3Fluid\Fluid\Core\Compiler\TemplateCompiler;
+use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
 
 /**
  * Ternary Condition Node - allows the shorthand version
@@ -27,11 +26,11 @@ class TernaryExpressionNode extends AbstractExpressionNode
 		(
 			{                                                               # Start of shorthand syntax
 				(?:                                                         # Math expression is composed of...
-					[a-zA-Z0-9.\(\)\!\|\&\\\'\'\"\=\<\>\%\s\{\}\:\,]+       # Check variable side
-					[\s]+\?[\s]+
-					[a-zA-Z0-9.\s\'\"]+                                     # Then variable side
-					[\s]*:[\s]*
-					[a-zA-Z0-9.\s\'\"]+                                     # Else variable side
+					[\\!_a-zA-Z0-9.\(\)\!\|\&\\\'\'\"\=\<\>\%\s\{\}\:\,]+    # Check variable side
+					[\s]?\?[\s]?
+					[_a-zA-Z0-9.\s\'\"\\.]*                                  # Then variable side, optional
+					[\s]?:[\s]?
+					[_a-zA-Z0-9.\s\'\"\\.]+                                  # Else variable side
 				)
 			}                                                               # End of shorthand syntax
 		)/x';
@@ -39,7 +38,7 @@ class TernaryExpressionNode extends AbstractExpressionNode
     /**
      * Filter out variable names form expression
      */
-    protected static $variableDetection = '/[^\'a-zA-Z0-9\.\\\\]{0,1}([a-zA-Z0-9\.\\\\]*)[^\']{0,1}/';
+    protected static $variableDetection = '/[^\'_a-zA-Z0-9\.\\\\]{0,1}([_a-zA-Z0-9\.\\\\]*)[^\']{0,1}/';
 
     /**
      * @param RenderingContextInterface $renderingContext
@@ -51,12 +50,18 @@ class TernaryExpressionNode extends AbstractExpressionNode
     {
         $parts = preg_split('/([\?:])/s', $expression);
         $parts = array_map([__CLASS__, 'trimPart'], $parts);
+        $negated = false;
         list ($check, $then, $else) = $parts;
+
+        if ($then === '') {
+            $then = $check[0] === '!' ? $else : $check;
+        }
 
         $context = static::gatherContext($renderingContext, $expression);
 
         $parser = new BooleanParser();
         $checkResult = $parser->evaluate($check, $context);
+
         if ($checkResult) {
             return static::getTemplateVariableOrValueItself($renderingContext->getTemplateParser()->unquoteString($then), $renderingContext);
         } else {

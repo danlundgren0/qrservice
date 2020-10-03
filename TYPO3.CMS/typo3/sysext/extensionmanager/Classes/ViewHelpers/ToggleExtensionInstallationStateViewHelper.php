@@ -19,17 +19,29 @@ use TYPO3\CMS\Core\Imaging\IconFactory;
 use TYPO3\CMS\Core\Package\PackageManager;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Utility\LocalizationUtility;
+use TYPO3\CMS\Fluid\ViewHelpers\Link\ActionViewHelper;
 
 /**
  * Display a deactivate / activate link
  * @internal
  */
-class ToggleExtensionInstallationStateViewHelper extends Link\ActionViewHelper
+class ToggleExtensionInstallationStateViewHelper extends ActionViewHelper
 {
     /**
      * @var string
      */
     protected $tagName = 'a';
+
+    /** @var \TYPO3\CMS\Extbase\Object\ObjectManager */
+    protected $objectManager;
+
+    /**
+     * @param \TYPO3\CMS\Extbase\Object\ObjectManagerInterface $objectManager
+     */
+    public function injectObjectManager(\TYPO3\CMS\Extbase\Object\ObjectManagerInterface $objectManager)
+    {
+        $this->objectManager = $objectManager;
+    }
 
     /**
      * Initialize arguments
@@ -49,14 +61,14 @@ class ToggleExtensionInstallationStateViewHelper extends Link\ActionViewHelper
     {
         $extension = $this->arguments['extension'];
         // Early return if package is protected or is a runtime activated package and can not be unloaded
-        /** @var $packageManager \TYPO3\CMS\Core\Package\PackageManager */
+        /** @var \TYPO3\CMS\Core\Package\PackageManager $packageManager */
         $packageManager = $this->objectManager->get(PackageManager::class);
         $package = $packageManager->getPackage($extension['key']);
         if ($package->isProtected() || in_array($extension['key'], $GLOBALS['TYPO3_CONF_VARS']['EXT']['runtimeActivatedPackages'])) {
             return '';
         }
 
-        $uriBuilder = $this->controllerContext->getUriBuilder();
+        $uriBuilder = $this->renderingContext->getControllerContext()->getUriBuilder();
         $action = 'toggleExtensionInstallationState';
         $uri = $uriBuilder->reset()->uriFor($action, [
             'extensionKey' => $extension['key']

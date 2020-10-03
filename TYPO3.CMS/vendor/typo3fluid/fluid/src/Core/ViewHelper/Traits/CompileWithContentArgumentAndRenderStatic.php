@@ -5,7 +5,6 @@ use TYPO3Fluid\Fluid\Core\Compiler\TemplateCompiler;
 use TYPO3Fluid\Fluid\Core\Compiler\ViewHelperCompiler;
 use TYPO3Fluid\Fluid\Core\Exception;
 use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\ViewHelperNode;
-use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
 
 /**
  * Class CompilableWithContentArgumentAndRenderStatic
@@ -40,7 +39,7 @@ trait CompileWithContentArgumentAndRenderStatic
      * Default render method to render ViewHelper with
      * first defined optional argument as content.
      *
-     * @return string Rendered string
+     * @return mixed Rendered result
      * @api
      */
     public function render()
@@ -76,7 +75,7 @@ trait CompileWithContentArgumentAndRenderStatic
         );
         $contentArgumentName = $this->resolveContentArgumentName();
         $initializationPhpCode .= sprintf(
-            '%s = %s[\'%s\'] ? function() use (%s) { return %s[\'%s\']; } : %s;',
+            '%s = (%s[\'%s\'] !== null) ? function() use (%s) { return %s[\'%s\']; } : %s;',
             $closureName,
             $argumentsName,
             $contentArgumentName,
@@ -128,8 +127,8 @@ trait CompileWithContentArgumentAndRenderStatic
                 }
             }
             throw new Exception(
-                'Attempting to compile %s failed. Chosen compile method requires that ViewHelper has ' .
-                'at least one registered and optional argument'
+                sprintf('Attempting to compile %s failed. Chosen compile method requires that ViewHelper has ' .
+                'at least one registered and optional argument', __CLASS__)
             );
         }
         return $this->contentArgumentName;

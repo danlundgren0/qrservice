@@ -14,10 +14,13 @@ namespace TYPO3\CMS\Install\Configuration\Context;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Log\LogLevel;
+use TYPO3\CMS\Core\Log\Writer\FileWriter;
 use TYPO3\CMS\Install\Configuration;
 
 /**
  * Live preset
+ * @internal only to be used within EXT:install
  */
 class LivePreset extends Configuration\AbstractPreset
 {
@@ -39,11 +42,11 @@ class LivePreset extends Configuration\AbstractPreset
         'FE/debug' => false,
         'SYS/devIPmask' => '',
         'SYS/displayErrors' => 0,
-        'SYS/enableDeprecationLog' => false,
-        'SYS/sqlDebug' => 0,
         'SYS/systemLogLevel' => 2,
-        // E_RECOVERABLE_ERROR | E_USER_DEPRECATED
-        'SYS/exceptionalErrors' => 20480,
+        // Values below are not available in UI
+        'LOG/TYPO3/CMS/deprecations/writerConfiguration/' . LogLevel::NOTICE . '/' . FileWriter::class . '/disabled' => true,
+        // E_RECOVERABLE_ERROR
+        'SYS/exceptionalErrors' => 4096,
     ];
 
     /**

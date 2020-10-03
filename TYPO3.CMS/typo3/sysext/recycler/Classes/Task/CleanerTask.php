@@ -13,6 +13,7 @@ namespace TYPO3\CMS\Recycler\Task;
  *
  * The TYPO3 project - inspiring people to share!
  */
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Scheduler\Task\AbstractTask;
@@ -20,6 +21,7 @@ use TYPO3\CMS\Scheduler\Task\AbstractTask;
 /**
  * A task that should be run regularly that deletes deleted
  * datasets from the DB.
+ * @internal This class is a specific scheduler task implementation and is not part of the Public TYPO3 API.
  */
 class CleanerTask extends AbstractTask
 {
@@ -167,6 +169,7 @@ class CleanerTask extends AbstractTask
      * Checks if the table has fields for uploaded files and removes those files.
      *
      * @param string $table
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Deprecation logged by TcaMigration class. Remove caller, too.
      */
     protected function checkFileResourceFieldsBeforeDeletion($table)
     {
@@ -210,7 +213,7 @@ class CleanerTask extends AbstractTask
 
         while ($row = $result->fetch()) {
             foreach ($fieldList as $fieldName) {
-                $uploadDir = PATH_site . $GLOBALS['TCA'][$table]['columns'][$fieldName]['config']['uploadfolder'] . '/';
+                $uploadDir = Environment::getPublicPath() . '/' . $GLOBALS['TCA'][$table]['columns'][$fieldName]['config']['uploadfolder'] . '/';
                 $fileList = GeneralUtility::trimExplode(',', $row[$fieldName]);
                 foreach ($fileList as $fileName) {
                     @unlink($uploadDir . $fileName);
@@ -224,6 +227,7 @@ class CleanerTask extends AbstractTask
      *
      * @param string $table
      * @return array
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Deprecation logged by TcaMigration class.
      */
     protected function getFileResourceFields($table)
     {
@@ -234,7 +238,6 @@ class CleanerTask extends AbstractTask
                     && $fieldConfiguration['config']['internal_type'] === 'file'
                 ) {
                     $result[] = $fieldName;
-                    break;
                 }
             }
         }
@@ -242,7 +245,7 @@ class CleanerTask extends AbstractTask
     }
 
     /**
-     * @return \TYPO3\CMS\Lang\LanguageService
+     * @return \TYPO3\CMS\Core\Localization\LanguageService
      */
     protected function getLanguageService()
     {

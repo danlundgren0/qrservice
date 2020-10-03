@@ -16,18 +16,31 @@ namespace TYPO3\CMS\Recordlist\Controller;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use TYPO3\CMS\Backend\Routing\UriBuilder;
 use TYPO3\CMS\Backend\Template\DocumentTemplate;
-use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Compatibility\PublicMethodDeprecationTrait;
+use TYPO3\CMS\Core\Http\HtmlResponse;
+use TYPO3\CMS\Core\Http\RedirectResponse;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 use TYPO3\CMS\Recordlist\Browser\ElementBrowserInterface;
 
 /**
  * Script class for the Element Browser window.
+ * @internal This class is a specific Backend controller implementation and is not part of the TYPO3's Core API.
  */
 class ElementBrowserController
 {
+    use PublicMethodDeprecationTrait;
+
+    /**
+     * @var array
+     */
+    private $deprecatedPublicMethods = [
+        'main' => 'Using ElementBrowserController::main() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+    ];
+
     /**
      * The mode determines the main kind of output of the element browser.
      *
@@ -67,7 +80,7 @@ class ElementBrowserController
      */
     protected function init()
     {
-        $this->getLanguageService()->includeLLFile('EXT:lang/Resources/Private/Language/locallang_browse_links.xlf');
+        $this->getLanguageService()->includeLLFile('EXT:recordlist/Resources/Private/Language/locallang_browse_links.xlf');
 
         $this->mode = GeneralUtility::_GP('mode');
     }
@@ -77,18 +90,16 @@ class ElementBrowserController
      * As this controller goes only through the main() method, it is rather simple for now
      *
      * @param ServerRequestInterface $request the current request
-     * @param ResponseInterface $response the prepared response object
      * @return ResponseInterface the response with the content
      */
-    public function mainAction(ServerRequestInterface $request, ResponseInterface $response)
+    public function mainAction(ServerRequestInterface $request): ResponseInterface
     {
         // Fallback for old calls, which use mode "wizard" or "rte" for link selection
         if ($this->mode === 'wizard' || $this->mode === 'rte') {
-            return $response->withStatus(303)->withHeader('Location', BackendUtility::getModuleUrl('wizard_link', $_GET));
+            $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+            return new RedirectResponse((string)$uriBuilder->buildUriFromRoute('wizard_link', $_GET), 303);
         }
-
-        $response->getBody()->write($this->main());
-        return $response;
+        return new HtmlResponse($this->main());
     }
 
     /**
@@ -96,21 +107,19 @@ class ElementBrowserController
      *
      * @return string HTML content
      */
-    public function main()
+    protected function main()
     {
         $content = '';
 
         // Render type by user func
         $browserRendered = false;
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/browse_links.php']['browserRendering'])) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/browse_links.php']['browserRendering'] as $classRef) {
-                $browserRenderObj = GeneralUtility::getUserObj($classRef);
-                if (is_object($browserRenderObj) && method_exists($browserRenderObj, 'isValid') && method_exists($browserRenderObj, 'render')) {
-                    if ($browserRenderObj->isValid($this->mode, $this)) {
-                        $content = $browserRenderObj->render($this->mode, $this);
-                        $browserRendered = true;
-                        break;
-                    }
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['typo3/browse_links.php']['browserRendering'] ?? [] as $className) {
+            $browserRenderObj = GeneralUtility::makeInstance($className);
+            if (is_object($browserRenderObj) && method_exists($browserRenderObj, 'isValid') && method_exists($browserRenderObj, 'render')) {
+                if ($browserRenderObj->isValid($this->mode, $this)) {
+                    $content = $browserRenderObj->render($this->mode, $this);
+                    $browserRendered = true;
+                    break;
                 }
             }
         }

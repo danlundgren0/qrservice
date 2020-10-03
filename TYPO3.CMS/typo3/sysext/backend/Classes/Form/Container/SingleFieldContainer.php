@@ -17,10 +17,10 @@ namespace TYPO3\CMS\Backend\Form\Container;
 use TYPO3\CMS\Backend\Form\InlineStackProcessor;
 use TYPO3\CMS\Backend\Form\Utility\FormEngineUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Type\Bitmask\JsConfirmation;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Container around a "single field".
@@ -65,8 +65,8 @@ class SingleFieldContainer extends AbstractContainer
                 $isOverlay = !empty($parentValue) ? (bool)$parentValue[0] : false;
             } else {
                 throw new \InvalidArgumentException(
-                    'The given value for the original language field ' . $this->data['processedTca']['ctrl']['transOrigPointerField']
-                    . ' of table ' . $table . ' contains an invalid value.',
+                    'The given value "' . $parentValue . '" for the original language field ' . $this->data['processedTca']['ctrl']['transOrigPointerField']
+                    . ' of table ' . $table . ' is invalid.',
                     1470742770
                 );
             }
@@ -76,7 +76,6 @@ class SingleFieldContainer extends AbstractContainer
         // Check if this field is configured and editable according to exclude fields and other configuration
         if (// Return if BE-user has no access rights to this field, @todo: another user access rights check!
             $parameterArray['fieldConf']['exclude'] && !$backendUser->check('non_exclude_fields', $table . ':' . $fieldName)
-            || $parameterArray['fieldConf']['config']['type'] === 'passthrough'
             // Return if field should not be rendered in translated records
             || $isOverlay && empty($parameterArray['fieldConf']['l10n_display']) && $parameterArray['fieldConf']['l10n_mode'] === 'exclude'
             || $this->inlineFieldShouldBeSkipped()

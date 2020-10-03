@@ -15,13 +15,18 @@ namespace TYPO3\CMS\Backend\Backend\ToolbarItems;
  */
 
 use TYPO3\CMS\Backend\Domain\Repository\Module\BackendModuleRepository;
+use TYPO3\CMS\Backend\Routing\UriBuilder;
 use TYPO3\CMS\Backend\Toolbar\ToolbarItemInterface;
-use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Database\Connection;
+use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Fluid\View\StandaloneView;
 
 /**
  * User toolbar item
+ *
+ * @internal This class is a specific Backend implementation and is not considered part of the Public TYPO3 API.
  */
 class UserToolbarItem implements ToolbarItemInterface
 {
@@ -58,13 +63,59 @@ class UserToolbarItem implements ToolbarItemInterface
      */
     public function getDropDown()
     {
+        $backendUser = $this->getBackendUser();
+
         /** @var BackendModuleRepository $backendModuleRepository */
         $backendModuleRepository = GeneralUtility::makeInstance(BackendModuleRepository::class);
+        $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+
+        $mostRecentUsers = [];
+        if (ExtensionManagementUtility::isLoaded('beuser')
+            && $backendUser->isAdmin()
+            && (int)$backendUser->user['ses_backuserid'] === 0
+            && isset($backendUser->uc['recentSwitchedToUsers'])
+            && is_array($backendUser->uc['recentSwitchedToUsers'])
+        ) {
+            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('be_users');
+            $result = $queryBuilder
+                ->select('uid', 'username', 'realName')
+                ->from('be_users')
+                ->where(
+                    $queryBuilder->expr()->in('uid', $queryBuilder->createNamedParameter($backendUser->uc['recentSwitchedToUsers'], Connection::PARAM_INT_ARRAY))
+                )->execute();
+
+            // Flip the array to have a "sorted" list of items
+            $mostRecentUsers = array_flip($backendUser->uc['recentSwitchedToUsers']);
+
+            while ($row = $result->fetch()) {
+                $row['switchUserLink'] = (string)$uriBuilder->buildUriFromRoute(
+                    'system_BeuserTxBeuser',
+                    [
+                        'SwitchUser' => $row['uid']
+                    ]
+                );
+
+                $mostRecentUsers[$row['uid']] = $row;
+            }
+
+            // Remove any item that is not an array (means, the stored uid is not available anymore)
+            $mostRecentUsers = array_filter($mostRecentUsers, function ($record) {
+                return is_array($record);
+            });
+
+            $availableUsers = array_keys($mostRecentUsers);
+            if (!empty(array_diff($backendUser->uc['recentSwitchedToUsers'], $availableUsers))) {
+                $backendUser->uc['recentSwitchedToUsers'] = $availableUsers;
+                $backendUser->writeUC();
+            }
+        }
+
         $view = $this->getFluidTemplateObject('UserToolbarItemDropDown.html');
         $view->assignMultiple([
             'modules' => $backendModuleRepository->findByModuleName('user')->getChildren(),
-            'logoutUrl' => BackendUtility::getModuleUrl('logout'),
+            'logoutUrl' => (string)$uriBuilder->buildUriFromRoute('logout'),
             'switchUserMode' => $this->getBackendUser()->user['ses_backuserid'],
+            'recentUsers' => $mostRecentUsers,
         ]);
         return $view->render();
     }
@@ -122,7 +173,7 @@ class UserToolbarItem implements ToolbarItemInterface
      *
      * @return StandaloneView
      */
-    protected function getFluidTemplateObject(string $filename):StandaloneView
+    protected function getFluidTemplateObject(string $filename): StandaloneView
     {
         $view = GeneralUtility::makeInstance(StandaloneView::class);
         $view->setLayoutRootPaths(['EXT:backend/Resources/Private/Layouts']);

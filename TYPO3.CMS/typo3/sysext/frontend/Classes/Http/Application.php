@@ -1,4 +1,5 @@
 <?php
+declare(strict_types = 1);
 namespace TYPO3\CMS\Frontend\Http;
 
 /*
@@ -14,82 +15,94 @@ namespace TYPO3\CMS\Frontend\Http;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Core\Core\ApplicationInterface;
-use TYPO3\CMS\Core\Core\Bootstrap;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use TYPO3\CMS\Core\Configuration\ConfigurationManager;
+use TYPO3\CMS\Core\Context\Context;
+use TYPO3\CMS\Core\Context\DateTimeAspect;
+use TYPO3\CMS\Core\Context\UserAspect;
+use TYPO3\CMS\Core\Context\VisibilityAspect;
+use TYPO3\CMS\Core\Context\WorkspaceAspect;
+use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Http\AbstractApplication;
+use TYPO3\CMS\Core\Http\RedirectResponse;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Entry point for the TYPO3 Frontend
  */
-class Application implements ApplicationInterface
+class Application extends AbstractApplication
 {
     /**
-     * @var Bootstrap
+     * @var string
      */
-    protected $bootstrap;
+    protected $requestHandler = RequestHandler::class;
 
     /**
-     * Number of subdirectories where the entry script is located, relative to PATH_site
-     * Usually this is equal to PATH_site = 0
-     * @var int
+     * @var string
      */
-    protected $entryPointLevel = 0;
+    protected $middlewareStack = 'frontend';
 
     /**
-     * All available request handlers that can deal with a Frontend Request
-     * @var array
+     * @var ConfigurationManager
      */
-    protected $availableRequestHandlers = [
-        \TYPO3\CMS\Frontend\Http\RequestHandler::class,
-        \TYPO3\CMS\Frontend\Http\EidRequestHandler::class
-    ];
+    protected $configurationManager;
 
     /**
-     * Constructor setting up legacy constant and register available Request Handlers
-     *
-     * @param \Composer\Autoload\ClassLoader $classLoader an instance of the class loader
+     * @param ConfigurationManager $configurationManager
      */
-    public function __construct($classLoader)
+    public function __construct(ConfigurationManager $configurationManager)
     {
-        $this->defineLegacyConstants();
-
-        $this->bootstrap = Bootstrap::getInstance()
-            ->initializeClassLoader($classLoader)
-            ->setRequestType(TYPO3_REQUESTTYPE_FE)
-            ->baseSetup($this->entryPointLevel);
-
-        // Redirect to install tool if base configuration is not found
-        if (!$this->bootstrap->checkIfEssentialConfigurationExists()) {
-            $this->bootstrap->redirectToInstallTool($this->entryPointLevel);
-        }
-
-        foreach ($this->availableRequestHandlers as $requestHandler) {
-            $this->bootstrap->registerRequestHandlerImplementation($requestHandler);
-        }
-
-        $this->bootstrap->configure();
+        $this->configurationManager = $configurationManager;
     }
 
     /**
-     * Starting point
-     *
-     * @param callable $execute
+     * @param ServerRequestInterface $request
+     * @return ResponseInterface
      */
-    public function run(callable $execute = null)
+    protected function handle(ServerRequestInterface $request): ResponseInterface
     {
-        $this->bootstrap->handleRequest(\TYPO3\CMS\Core\Http\ServerRequestFactory::fromGlobals());
-
-        if ($execute !== null) {
-            call_user_func($execute);
+        if (!$this->checkIfEssentialConfigurationExists()) {
+            return $this->installToolRedirect();
         }
-
-        $this->bootstrap->shutdown();
+        $this->initializeContext();
+        return parent::handle($request);
     }
 
     /**
-     * Define constants and variables
+     * Check if LocalConfiguration.php and PackageStates.php exist
+     *
+     * @return bool TRUE when the essential configuration is available, otherwise FALSE
      */
-    protected function defineLegacyConstants()
+    protected function checkIfEssentialConfigurationExists(): bool
     {
-        define('TYPO3_MODE', 'FE');
+        return file_exists($this->configurationManager->getLocalConfigurationFileLocation())
+            && file_exists(Environment::getLegacyConfigPath() . '/PackageStates.php');
+    }
+
+    /**
+     * Create a PSR-7 Response that redirects to the install tool
+     *
+     * @return ResponseInterface
+     */
+    protected function installToolRedirect(): ResponseInterface
+    {
+        $path = TYPO3_mainDir . 'install.php';
+        return new RedirectResponse($path, 302);
+    }
+
+    /**
+     * Initializes the Context used for accessing data and finding out the current state of the application
+     * Will be moved to a DI-like concept once introduced, for now, this is a singleton
+     */
+    protected function initializeContext()
+    {
+        GeneralUtility::makeInstance(Context::class, [
+            'date' => new DateTimeAspect(new \DateTimeImmutable('@' . $GLOBALS['EXEC_TIME'])),
+            'visibility' => new VisibilityAspect(),
+            'workspace' => new WorkspaceAspect(0),
+            'backend.user' => new UserAspect(null),
+            'frontend.user' => new UserAspect(null, [0, -1]),
+        ]);
     }
 }

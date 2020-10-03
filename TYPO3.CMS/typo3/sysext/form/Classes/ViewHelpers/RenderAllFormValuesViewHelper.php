@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\ViewHelpers;
 
 /*
@@ -19,19 +19,18 @@ namespace TYPO3\CMS\Form\ViewHelpers;
 
 use TYPO3\CMS\Core\Resource\File;
 use TYPO3\CMS\Extbase\Domain\Model\FileReference;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3\CMS\Form\Domain\Model\FormElements\FormElementInterface;
 use TYPO3\CMS\Form\Domain\Model\Renderable\CompositeRenderableInterface;
+use TYPO3\CMS\Form\Domain\Model\Renderable\RenderableInterface;
 use TYPO3\CMS\Form\Domain\Model\Renderable\RootRenderableInterface;
-use TYPO3\CMS\Form\Domain\Runtime\FormRuntime;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
  * Renders the values of a form
  *
  * Scope: frontend
- * @api
  */
 class RenderAllFormValuesViewHelper extends AbstractViewHelper
 {
@@ -49,7 +48,6 @@ class RenderAllFormValuesViewHelper extends AbstractViewHelper
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('renderable', RootRenderableInterface::class, 'A RootRenderableInterface instance', true);
         $this->registerArgument('as', 'string', 'The name within the template', false, 'formValue');
     }
@@ -61,12 +59,15 @@ class RenderAllFormValuesViewHelper extends AbstractViewHelper
      * @param \Closure $renderChildrenClosure
      * @param RenderingContextInterface $renderingContext
      * @return string the rendered form values
-     * @api
      */
     public static function renderStatic(array $arguments, \Closure $renderChildrenClosure, RenderingContextInterface $renderingContext)
     {
         $renderable = $arguments['renderable'];
         $as = $arguments['as'];
+
+        if (!$renderable->isEnabled()) {
+            return '';
+        }
 
         if ($renderable instanceof CompositeRenderableInterface) {
             $elements = $renderable->getRenderablesRecursively();
@@ -74,7 +75,7 @@ class RenderAllFormValuesViewHelper extends AbstractViewHelper
             $elements = [$renderable];
         }
 
-        $formRuntime =  $renderingContext
+        $formRuntime = $renderingContext
             ->getViewHelperVariableContainer()
             ->get(RenderRenderableViewHelper::class, 'formRuntime');
 
@@ -84,14 +85,24 @@ class RenderAllFormValuesViewHelper extends AbstractViewHelper
 
             if (
                 !$element instanceof FormElementInterface
-                || $element->getType() === 'Honeypot'
-                || (
-                    isset($renderingOptions['_isCompositeFormElement'])
-                    && $renderingOptions['_isCompositeFormElement'] = true
-                )
+                || (isset($renderingOptions['_isCompositeFormElement']) && (bool)$renderingOptions['_isCompositeFormElement'] === true)
+                || !$element->isEnabled()
+                || self::hasDisabledParent($element)
             ) {
                 continue;
             }
+
+            if (
+                (isset($renderingOptions['_isHiddenFormElement']) && (bool)$renderingOptions['_isHiddenFormElement'] === true)
+                || (isset($renderingOptions['_isReadOnlyFormElement']) && (bool)$renderingOptions['_isReadOnlyFormElement'] === true)
+            ) {
+                trigger_error(
+                    'Using the properties "renderingOptions._isHiddenFormElement" and "renderingOptions._isReadOnlyFormElement" will be removed in TYPO3 v10.0. Use variants instead.',
+                    E_USER_DEPRECATED
+                );
+                continue;
+            }
+
             $value = $formRuntime[$element->getIdentifier()];
 
             $formValue = [
@@ -100,9 +111,9 @@ class RenderAllFormValuesViewHelper extends AbstractViewHelper
                 'processedValue' => self::processElementValue($element, $value, $renderChildrenClosure, $renderingContext),
                 'isMultiValue' => is_array($value) || $value instanceof \Iterator
             ];
-            $renderingContext->getTemplateVariableContainer()->add($as, $formValue);
+            $renderingContext->getVariableProvider()->add($as, $formValue);
             $output .= $renderChildrenClosure();
-            $renderingContext->getTemplateVariableContainer()->remove($as);
+            $renderingContext->getVariableProvider()->remove($as);
         }
         return $output;
     }
@@ -115,6 +126,7 @@ class RenderAllFormValuesViewHelper extends AbstractViewHelper
      * @param \Closure $renderChildrenClosure
      * @param RenderingContextInterface $renderingContext
      * @return mixed
+     * @internal
      */
     public static function processElementValue(
         FormElementInterface $element,
@@ -131,9 +143,8 @@ class RenderAllFormValuesViewHelper extends AbstractViewHelper
             );
             if (is_array($value)) {
                 return self::mapValuesToOptions($value, $properties['options']);
-            } else {
-                return self::mapValueToOption($value, $properties['options']);
             }
+            return self::mapValueToOption($value, $properties['options']);
         }
         if (is_object($value)) {
             return self::processObject($element, $value);
@@ -148,6 +159,7 @@ class RenderAllFormValuesViewHelper extends AbstractViewHelper
      * @param array $value
      * @param array $options
      * @return array
+     * @internal
      */
     public static function mapValuesToOptions(array $value, array $options): array
     {
@@ -165,10 +177,11 @@ class RenderAllFormValuesViewHelper extends AbstractViewHelper
      * @param mixed $value
      * @param array $options
      * @return mixed
+     * @internal
      */
     public static function mapValueToOption($value, array $options)
     {
-        return isset($options[$value]) ? $options[$value] : $value;
+        return $options[$value] ?? $value;
     }
 
     /**
@@ -177,19 +190,30 @@ class RenderAllFormValuesViewHelper extends AbstractViewHelper
      * @param FormElementInterface $element
      * @param object $object
      * @return string
+     * @internal
      */
     public static function processObject(FormElementInterface $element, $object): string
     {
         $properties = $element->getProperties();
         if ($object instanceof \DateTime) {
-            if (isset($properties['dateFormat'])) {
+            if (
+                $element->getType() === 'DatePicker'
+                && isset($properties['dateFormat'])
+            ) {
                 $dateFormat = $properties['dateFormat'];
                 if (isset($properties['displayTimeSelector']) && $properties['displayTimeSelector'] === true) {
                     $dateFormat .= ' H:i';
                 }
+            } elseif ($element->getType() === 'Date') {
+                if (isset($properties['displayFormat'])) {
+                    $dateFormat = $properties['displayFormat'];
+                } else {
+                    $dateFormat = 'Y-m-d';
+                }
             } else {
                 $dateFormat = \DateTime::W3C;
             }
+
             return $object->format($dateFormat);
         }
 
@@ -204,5 +228,21 @@ class RenderAllFormValuesViewHelper extends AbstractViewHelper
             return (string)$object;
         }
         return 'Object [' . get_class($object) . ']';
+    }
+
+    /**
+     * @param RenderableInterface $renderable
+     * @return bool
+     * @internal
+     */
+    public static function hasDisabledParent(RenderableInterface $renderable): bool
+    {
+        while ($renderable = $renderable->getParentRenderable()) {
+            if ($renderable instanceof RenderableInterface && !$renderable->isEnabled()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

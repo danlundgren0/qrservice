@@ -16,18 +16,27 @@ namespace TYPO3\CMS\Workspaces\Service;
 
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
+use TYPO3\CMS\Core\DataHandling\DataHandler;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Automatic publishing of workspaces.
+ *
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. This job is a one-time functionality now built into the "autopublish" functionality.
  */
 class AutoPublishService
 {
+    public function __construct()
+    {
+        trigger_error('AutoPublishService will be removed in TYPO3 v10.0. Use the symfony command "workspaces:autopublish" instead.', E_USER_DEPRECATED);
+    }
+
     /**
      * This method is called by the Scheduler task that triggers
      * the autopublication process
      * It searches for workspaces whose publication date is in the past
      * and publishes them
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
      */
     public function autoPublishWorkspaces()
     {
@@ -50,8 +59,8 @@ class AutoPublishService
                     'pid',
                     $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT)
                 ),
-                $queryBuilder->orWhere(
-                    $queryBuilder->andWhere(
+                $queryBuilder->expr()->orX(
+                    $queryBuilder->expr()->andX(
                         $queryBuilder->expr()->neq(
                             'publish_time',
                             $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT)
@@ -61,7 +70,7 @@ class AutoPublishService
                             $queryBuilder->createNamedParameter($GLOBALS['EXEC_TIME'], \PDO::PARAM_INT)
                         )
                     ),
-                    $queryBuilder->andWhere(
+                    $queryBuilder->expr()->andX(
                         $queryBuilder->expr()->eq(
                             'publish_time',
                             $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT)
@@ -79,7 +88,7 @@ class AutoPublishService
             )
             ->execute();
 
-        $workspaceService = GeneralUtility::makeInstance(\TYPO3\CMS\Workspaces\Service\WorkspaceService::class);
+        $workspaceService = GeneralUtility::makeInstance(WorkspaceService::class);
         while ($rec = $result->fetch()) {
             // First, clear start/end time so it doesn't get select once again:
             $fieldArray = $rec['publish_time'] != 0
@@ -98,7 +107,7 @@ class AutoPublishService
             $cmd = $workspaceService->getCmdArrayForPublishWS($rec['uid'], $rec['swap_modes'] == 1);
             // $rec['swap_modes']==1 means that auto-publishing will swap versions, not just publish and empty the workspace.
             // Execute CMD array:
-            $tce = GeneralUtility::makeInstance(\TYPO3\CMS\Core\DataHandling\DataHandler::class);
+            $tce = GeneralUtility::makeInstance(DataHandler::class);
             $tce->start([], $cmd);
             $tce->process_cmdmap();
         }

@@ -15,31 +15,45 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Be;
  */
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Type\Bitmask\Permission;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
- * View helper which renders a record list as known from the TYPO3 list module
- * Note: This feature is experimental!
+ * ViewHelper which renders a record list as known from the TYPO3 list module.
  *
- * = Examples =
+ * .. note::
+ *    This feature is experimental!
  *
- * <code title="Minimal">
- * <f:be.tableList tableName="fe_users" />
- * </code>
- * <output>
+ * Examples
+ * ========
+ *
+ * Minimal::
+ *
+ *    <f:be.tableList tableName="fe_users" />
+ *
  * List of all "Website user" records stored in the configured storage PID.
- * Records will be editable, if the current BE user has got edit rights for the table "fe_users".
- * Only the title column (username) will be shown.
- * Context menu is active.
- * </output>
+ * Records will be editable, if the current backend user has got edit rights for the table ``fe_users``.
  *
- * <code title="Full">
- * <f:be.tableList tableName="fe_users" fieldList="{0: 'name', 1: 'email'}" storagePid="1" levels="2" filter='foo' recordsPerPage="10" sortField="name" sortDescending="true" readOnly="true" enableClickMenu="false" clickTitleMode="info" />
- * </code>
- * <output>
- * List of "Website user" records with a text property of "foo" stored on PID 1 and two levels down.
+ * Only the title column (username) will be shown.
+ *
+ * Context menu is active.
+ *
+ * Full::
+ *
+ *    <f:be.tableList tableName="fe_users" fieldList="{0: 'name', 1: 'email'}"
+ *        storagePid="1"
+ *        levels="2"
+ *        filter="foo"
+ *        recordsPerPage="10"
+ *        sortField="name"
+ *        sortDescending="true"
+ *        readOnly="true"
+ *        enableClickMenu="false"
+ *        clickTitleMode="info"
+ *        />
+ *
+ * List of "Website user" records with a text property of ``foo`` stored on PID ``1`` and two levels down.
  * Clicking on a username will open the TYPO3 info popup for the respective record
- * </output>
  */
 class TableListViewHelper extends \TYPO3\CMS\Fluid\ViewHelpers\Be\AbstractBackendViewHelper
 {
@@ -105,8 +119,10 @@ class TableListViewHelper extends \TYPO3\CMS\Fluid\ViewHelpers\Be\AbstractBacken
         $enableClickMenu = $this->arguments['enableClickMenu'];
         $clickTitleMode = $this->arguments['clickTitleMode'];
 
-        $pageinfo = BackendUtility::readPageAccess(GeneralUtility::_GP('id'), $GLOBALS['BE_USER']->getPagePermsClause(1));
-        /** @var $dblist \TYPO3\CMS\Recordlist\RecordList\DatabaseRecordList */
+        $this->getPageRenderer()->loadRequireJsModule('TYPO3/CMS/Recordlist/Recordlist');
+
+        $pageinfo = BackendUtility::readPageAccess(GeneralUtility::_GP('id'), $GLOBALS['BE_USER']->getPagePermsClause(Permission::PAGE_SHOW));
+        /** @var \TYPO3\CMS\Recordlist\RecordList\DatabaseRecordList $dblist */
         $dblist = GeneralUtility::makeInstance(\TYPO3\CMS\Recordlist\RecordList\DatabaseRecordList::class);
         $dblist->pageRow = $pageinfo;
         if ($readOnly === false) {
@@ -130,6 +146,10 @@ class TableListViewHelper extends \TYPO3\CMS\Fluid\ViewHelpers\Be\AbstractBacken
         $dblist->sortRev = $sortDescending;
         $dblist->script = $_SERVER['REQUEST_URI'];
         $dblist->generateList();
-        return $dblist->HTMLcode;
+
+        $js = 'var T3_THIS_LOCATION = ' . GeneralUtility::quoteJSvalue(rawurlencode(GeneralUtility::getIndpEnv('REQUEST_URI')));
+        $html = GeneralUtility::wrapJS($js) . $dblist->HTMLcode;
+
+        return $html;
     }
 }

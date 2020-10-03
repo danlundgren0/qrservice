@@ -28,7 +28,7 @@ Taskcenter
       taskcenter
 
 :Copyright:
-      2000-2017
+      2000-2019
 
 :Author:
       TYPO3 CMS Core Development Team

@@ -14,8 +14,12 @@ namespace TYPO3\CMS\Scheduler\Example;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+
 /**
  * Provides testing procedures
+ * @internal This class is an example is not considered part of the Public TYPO3 API.
  */
 class TestTask extends \TYPO3\CMS\Scheduler\Task\AbstractTask
 {
@@ -37,18 +41,16 @@ class TestTask extends \TYPO3\CMS\Scheduler\Task\AbstractTask
         $success = false;
         if (!empty($this->email)) {
             // If an email address is defined, send a message to it
-            // NOTE: the TYPO3_DLOG constant is not used in this case, as this is a test task
-            // and debugging is its main purpose anyway
-            \TYPO3\CMS\Core\Utility\GeneralUtility::devLog('[TYPO3\\CMS\\Scheduler\\Example\\TestTask]: Test email sent to "' . $this->email . '"', 'scheduler', 0);
+            $this->logger->info('[TYPO3\\CMS\\Scheduler\\Example\\TestTask]: Test email sent to "' . $this->email . '"');
             // Get execution information
             $exec = $this->getExecution();
             // Get call method
-            if (TYPO3_REQUESTTYPE & TYPO3_REQUESTTYPE_CLI) {
+            if (Environment::isCli()) {
                 $calledBy = 'CLI module dispatcher';
                 $site = '-';
             } else {
                 $calledBy = 'TYPO3 backend';
-                $site = \TYPO3\CMS\Core\Utility\GeneralUtility::getIndpEnv('TYPO3_SITE_URL');
+                $site = GeneralUtility::getIndpEnv('TYPO3_SITE_URL');
             }
             $start = $exec->getStart();
             $end = $exec->getEnd();
@@ -58,8 +60,8 @@ class TestTask extends \TYPO3\CMS\Scheduler\Task\AbstractTask
             $mailBody = 'SCHEDULER TEST-TASK' . LF . '- - - - - - - - - - - - - - - -' . LF . 'UID: ' . $this->taskUid . LF . 'Sitename: ' . $GLOBALS['TYPO3_CONF_VARS']['SYS']['sitename'] . LF . 'Site: ' . $site . LF . 'Called by: ' . $calledBy . LF . 'tstamp: ' . date('Y-m-d H:i:s') . ' [' . time() . ']' . LF . 'maxLifetime: ' . $this->scheduler->extConf['maxLifetime'] . LF . 'start: ' . date('Y-m-d H:i:s', $start) . ' [' . $start . ']' . LF . 'end: ' . (empty($end) ? '-' : date('Y-m-d H:i:s', $end) . ' [' . $end . ']') . LF . 'interval: ' . $interval . LF . 'multiple: ' . ($multiple ? 'yes' : 'no') . LF . 'cronCmd: ' . ($cronCmd ? $cronCmd : 'not used');
             // Prepare mailer and send the mail
             try {
-                /** @var $mailer \TYPO3\CMS\Core\Mail\MailMessage */
-                $mailer = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Core\Mail\MailMessage::class);
+                /** @var \TYPO3\CMS\Core\Mail\MailMessage $mailer */
+                $mailer = GeneralUtility::makeInstance(\TYPO3\CMS\Core\Mail\MailMessage::class);
                 $mailer->setFrom([$this->email => 'SCHEDULER TEST-TASK']);
                 $mailer->setReplyTo([$this->email => 'SCHEDULER TEST-TASK']);
                 $mailer->setSubject('SCHEDULER TEST-TASK');
@@ -72,7 +74,7 @@ class TestTask extends \TYPO3\CMS\Scheduler\Task\AbstractTask
             }
         } else {
             // No email defined, just log the task
-            \TYPO3\CMS\Core\Utility\GeneralUtility::devLog('[TYPO3\\CMS\\Scheduler\\Example\\TestTask]: No email address given', 'scheduler', 2);
+            $this->logger->warning('[TYPO3\\CMS\\Scheduler\\Example\\TestTask]: No email address given');
         }
         return $success;
     }

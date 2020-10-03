@@ -14,11 +14,15 @@ namespace TYPO3\CMS\Core\Html;
  * The TYPO3 project - inspiring people to share!
  */
 
+use Psr\Log\LoggerAwareInterface;
+use Psr\Log\LoggerAwareTrait;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Compatibility\PublicMethodDeprecationTrait;
+use TYPO3\CMS\Core\Compatibility\PublicPropertyDeprecationTrait;
 use TYPO3\CMS\Core\LinkHandling\Exception\UnknownLinkHandlerException;
 use TYPO3\CMS\Core\LinkHandling\LinkService;
-use TYPO3\CMS\Core\Log\LogManager;
 use TYPO3\CMS\Core\Resource;
+use TYPO3\CMS\Core\Type\File\ImageInfo;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Frontend\Service\TypoLinkCodecService;
 
@@ -30,68 +34,97 @@ use TYPO3\CMS\Frontend\Service\TypoLinkCodecService;
  * line breaks to LFs internally, however when all transformations are done, all LFs are transformed to CRLFs.
  * This means: RteHtmlParser always returns CRLFs to be maximum compatible with all formats.
  */
-class RteHtmlParser extends HtmlParser
+class RteHtmlParser extends HtmlParser implements LoggerAwareInterface
 {
+    use LoggerAwareTrait;
+    use PublicPropertyDeprecationTrait;
+    use PublicMethodDeprecationTrait;
+
+    protected $deprecatedPublicProperties = [
+        'blockElementList' => 'Using $blockElementList of class RteHtmlParser from the outside is discouraged, as this property is only used for internal storage.',
+        'recPid' => 'Using $recPid of class RteHtmlParser from the outside is discouraged, as this property is only used for internal storage.',
+        'elRef' => 'Using $elRef of class RteHtmlParser from the outside is discouraged, as this property is only used for internal storage.',
+        'tsConfig' => 'Using $tsConfig of class RteHtmlParser from the outside is discouraged, as this property is only used for internal storage.',
+        'procOptions' => 'Using $procOptions of class RteHtmlParser from the outside is discouraged, as this property is only used for internal storage.',
+        'TS_transform_db_safecounter' => 'Using $TS_transform_db_safecounter of class RteHtmlParser from the outside is discouraged, as this property is only used for internal storage.',
+        'getKeepTags_cache' => 'Using $getKeepTags_cache of class RteHtmlParser from the outside is discouraged, as this property is only used for internal storage.',
+        'allowedClasses' => 'Using $allowedClasses of class RteHtmlParser from the outside is discouraged, as this property is only used for internal storage.',
+    ];
+
+    protected $deprecatedPublicMethods = [
+        'TS_images_db' => 'Using TS_images_db() of class RteHtmlParser from the outside is discouraged, as this method is only available for internal purposes.',
+        'TS_links_db' => 'Using TS_links_db() of class RteHtmlParser from the outside is discouraged, as this method is only available for internal purposes.',
+        'TS_transform_db' => 'Using TS_transform_db() of class RteHtmlParser from the outside is discouraged, as this method is only available for internal purposes.',
+        'TS_transform_rte' => 'Using TS_transform_rte() of class RteHtmlParser from the outside is discouraged, as this method is only available for internal purposes.',
+        'HTMLcleaner_db' => 'Using HTMLcleaner_db() of class RteHtmlParser from the outside is discouraged, as this method is only available for internal purposes.',
+        'getKeepTags' => 'Using getKeepTags() of class RteHtmlParser from the outside is discouraged, as this method is only available for internal purposes.',
+        'divideIntoLines' => 'Using divideIntoLines() of class RteHtmlParser from the outside is discouraged, as this method is only available for internal purposes.',
+        'setDivTags' => 'Using setDivTags() of class RteHtmlParser from the outside is discouraged, as this method is only available for internal purposes.',
+        'getWHFromAttribs' => 'Using getWHFromAttribs() of class RteHtmlParser from the outside is discouraged, as this method is only available for internal purposes.',
+        'urlInfoForLinkTags' => 'Using urlInfoForLinkTags() of class RteHtmlParser from the outside is discouraged, as this method is not in use anymore and will be removed.',
+        'TS_AtagToAbs' => 'Using TS_AtagToAbs() of class RteHtmlParser from the outside is discouraged, as this method is only available for internal purposes.',
+    ];
+
     /**
      * List of elements that are not wrapped into a "p" tag while doing the transformation.
      * @var string
      */
-    public $blockElementList = 'DIV,TABLE,BLOCKQUOTE,PRE,UL,OL,H1,H2,H3,H4,H5,H6,ADDRESS,DL,DD,HEADER,SECTION,FOOTER,NAV,ARTICLE,ASIDE';
+    protected $blockElementList = 'DIV,TABLE,BLOCKQUOTE,PRE,UL,OL,H1,H2,H3,H4,H5,H6,ADDRESS,DL,DD,HEADER,SECTION,FOOTER,NAV,ARTICLE,ASIDE';
 
     /**
      * List of all tags that are allowed by default
      * @var string
      */
-    protected $defaultAllowedTagsList = 'b,i,u,a,img,br,div,center,pre,font,hr,sub,sup,p,strong,em,li,ul,ol,blockquote,strike,span';
+    protected $defaultAllowedTagsList = 'b,i,u,a,img,br,div,center,pre,font,hr,sub,sup,p,strong,em,li,ul,ol,blockquote,strike,span,abbr,acronym,dfn';
 
     /**
      * Set this to the pid of the record manipulated by the class.
      *
      * @var int
      */
-    public $recPid = 0;
+    protected $recPid = 0;
 
     /**
      * Element reference [table]:[field], eg. "tt_content:bodytext"
      *
      * @var string
      */
-    public $elRef = '';
+    protected $elRef = '';
 
     /**
      * Current Page TSConfig
      *
      * @var array
      */
-    public $tsConfig = [];
+    protected $tsConfig = [];
 
     /**
      * Set to the TSconfig options coming from Page TSconfig
      *
      * @var array
      */
-    public $procOptions = [];
+    protected $procOptions = [];
 
     /**
      * Run-away brake for recursive calls.
      *
      * @var int
      */
-    public $TS_transform_db_safecounter = 100;
+    protected $TS_transform_db_safecounter = 100;
 
     /**
      * Data caching for processing function
      *
      * @var array
      */
-    public $getKeepTags_cache = [];
+    protected $getKeepTags_cache = [];
 
     /**
      * Storage of the allowed CSS class names in the RTE
      *
      * @var array
      */
-    public $allowedClasses = [];
+    protected $allowedClasses = [];
 
     /**
      * A list of HTML attributes for <p> tags. Because <p> tags are wrapped currently in a special handling,
@@ -154,23 +187,23 @@ class RteHtmlParser extends HtmlParser
      * This is the main function called from DataHandler and transfer data classes
      *
      * @param string $value Input value
-     * @param array $specConf deprecated old "defaultExtras" parsed as array
+     * @param null $_ unused
      * @param string $direction Direction of the transformation. Two keywords are allowed; "db" or "rte". If "db" it means the transformation will clean up content coming from the Rich Text Editor and goes into the database. The other direction, "rte", is of course when content is coming from database and must be transformed to fit the RTE.
      * @param array $thisConfig Parsed TypoScript content configuring the RTE, probably coming from Page TSconfig.
      * @return string Output value
      */
-    public function RTE_transform($value, $specConf = [], $direction = 'rte', $thisConfig = [])
+    public function RTE_transform($value, $_ = null, $direction = 'rte', $thisConfig = [])
     {
         $this->tsConfig = $thisConfig;
         $this->procOptions = (array)$thisConfig['proc.'];
         if (isset($this->procOptions['allowedClasses.'])) {
             $this->allowedClasses = (array)$this->procOptions['allowedClasses.'];
         } else {
-            $this->allowedClasses = GeneralUtility::trimExplode(',', $this->procOptions['allowedClasses'], true);
+            $this->allowedClasses = GeneralUtility::trimExplode(',', $this->procOptions['allowedClasses'] ?? '', true);
         }
 
         // Dynamic configuration of blockElementList
-        if ($this->procOptions['blockElementList']) {
+        if (!empty($this->procOptions['blockElementList'])) {
             $this->blockElementList = $this->procOptions['blockElementList'];
         }
 
@@ -178,6 +211,7 @@ class RteHtmlParser extends HtmlParser
         if (isset($this->procOptions['allowAttributes.'])) {
             $this->allowedAttributesForParagraphTags = $this->procOptions['allowAttributes.'];
         } elseif (isset($this->procOptions['keepPDIVattribs'])) {
+            trigger_error('HTML parsing option "keepPDIVattribs" will not be evaluated anymore in TYPO3 v10.0. Use "allowedAttributes" instead.', E_USER_DEPRECATED);
             $this->allowedAttributesForParagraphTags = GeneralUtility::trimExplode(',', strtolower($this->procOptions['keepPDIVattribs']), true);
         }
         // Override tags which are allowed outside of <p> tags
@@ -192,16 +226,8 @@ class RteHtmlParser extends HtmlParser
         // Setting modes / transformations to be called
         if ((string)$this->procOptions['overruleMode'] !== '') {
             $modes = GeneralUtility::trimExplode(',', $this->procOptions['overruleMode']);
-        } elseif (!empty($this->procOptions['mode'])) {
-            $modes = [$this->procOptions['mode']];
         } else {
-            // Get parameters for rte_transformation:
-            // @deprecated since TYPO3 v8, will be removed in TYPO3 v9 - the else{} part can be removed in v9
-            GeneralUtility::deprecationLog(
-                'Argument 2 of RteHtmlParser::RTE_transform() is deprecated. Transformations should be given in $thisConfig[\'proc.\'][\'overruleMode\']'
-            );
-            $specialFieldConfiguration = BackendUtility::getSpecConfParametersFromArray($specConf['rte_transform']['parameters']);
-            $modes = GeneralUtility::trimExplode('-', $specialFieldConfiguration['mode']);
+            $modes = [$this->procOptions['mode']];
         }
         $modes = $this->resolveAppliedTransformationModes($direction, $modes);
 
@@ -214,8 +240,8 @@ class RteHtmlParser extends HtmlParser
         foreach ($modes as $cmd) {
             if ($direction === 'db') {
                 // Checking for user defined transformation:
-                if ($_classRef = $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_parsehtml_proc.php']['transformation'][$cmd]) {
-                    $_procObj = GeneralUtility::getUserObj($_classRef);
+                if (!empty($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_parsehtml_proc.php']['transformation'][$cmd])) {
+                    $_procObj = GeneralUtility::makeInstance($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_parsehtml_proc.php']['transformation'][$cmd]);
                     $_procObj->pObj = $this;
                     $_procObj->transformationKey = $cmd;
                     $value = $_procObj->transform_db($value, $this);
@@ -244,8 +270,8 @@ class RteHtmlParser extends HtmlParser
                 }
             } elseif ($direction === 'rte') {
                 // Checking for user defined transformation:
-                if ($_classRef = $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_parsehtml_proc.php']['transformation'][$cmd]) {
-                    $_procObj = GeneralUtility::getUserObj($_classRef);
+                if (!empty($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_parsehtml_proc.php']['transformation'][$cmd])) {
+                    $_procObj = GeneralUtility::makeInstance($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_parsehtml_proc.php']['transformation'][$cmd]);
                     $_procObj->pObj = $this;
                     $value = $_procObj->transform_rte($value, $this);
                 } else {
@@ -258,7 +284,7 @@ class RteHtmlParser extends HtmlParser
                             $value = $this->TS_images_rte($value);
                             break;
                         case 'ts_links':
-                            $value = $this->TS_links_rte($value);
+                            $value = $this->TS_links_rte($value, true);
                             break;
                         case 'css_transform':
                             $value = $this->TS_transform_rte($value);
@@ -292,9 +318,6 @@ class RteHtmlParser extends HtmlParser
 
         // Replace the shortcut "default" with all custom modes
         $modeList = str_replace('default', 'detectbrokenlinks,css_transform,ts_images,ts_links', $modeList);
-        // Replace the shortcut "ts_css" with all custom modes
-        // @deprecated since TYPO3 v8, will be removed in TYPO3 v9 - NEXT line can be removed in v9
-        $modeList = str_replace('ts_css', 'detectbrokenlinks,css_transform,ts_images,ts_links', $modeList);
 
         // Make list unique
         $modes = array_unique(GeneralUtility::trimExplode(',', $modeList, true));
@@ -319,7 +342,7 @@ class RteHtmlParser extends HtmlParser
      */
     protected function runHtmlParserIfConfigured($content, $configurationDirective)
     {
-        if ($this->procOptions[$configurationDirective]) {
+        if (!empty($this->procOptions[$configurationDirective])) {
             list($keepTags, $keepNonMatchedTags, $hscMode, $additionalConfiguration) = $this->HTMLparserConfig($this->procOptions[$configurationDirective . '.']);
             $content = $this->HTMLcleaner($content, $keepTags, $keepNonMatchedTags, $hscMode, $additionalConfiguration);
         }
@@ -342,16 +365,16 @@ class RteHtmlParser extends HtmlParser
      * @param string $value The content from RTE going to Database
      * @return string Processed content
      */
-    public function TS_images_db($value)
+    protected function TS_images_db($value)
     {
         // Split content by <img> tags and traverse the resulting array for processing:
         $imgSplit = $this->splitTags('img', $value);
         if (count($imgSplit) > 1) {
             $siteUrl = GeneralUtility::getIndpEnv('TYPO3_SITE_URL');
             $sitePath = str_replace(GeneralUtility::getIndpEnv('TYPO3_REQUEST_HOST'), '', $siteUrl);
-            /** @var $resourceFactory Resource\ResourceFactory */
+            /** @var Resource\ResourceFactory $resourceFactory */
             $resourceFactory = Resource\ResourceFactory::getInstance();
-            /** @var $magicImageService Resource\Service\MagicImageService */
+            /** @var Resource\Service\MagicImageService $magicImageService */
             $magicImageService = GeneralUtility::makeInstance(Resource\Service\MagicImageService::class);
             $magicImageService->setMagicImageMaximumDimensions($this->tsConfig);
             foreach ($imgSplit as $k => $v) {
@@ -380,12 +403,12 @@ class RteHtmlParser extends HtmlParser
                     if ($attribArray['data-htmlarea-file-uid']) {
                         // An original image file uid is available
                         try {
-                            /** @var $originalImageFile Resource\File */
+                            /** @var Resource\File $originalImageFile */
                             $originalImageFile = $resourceFactory->getFileObject((int)$attribArray['data-htmlarea-file-uid']);
                         } catch (Resource\Exception\FileDoesNotExistException $fileDoesNotExistException) {
                             // Log the fact the file could not be retrieved.
                             $message = sprintf('Could not find file with uid "%s"', $attribArray['data-htmlarea-file-uid']);
-                            $this->getLogger()->error($message);
+                            $this->logger->error($message);
                         }
                     }
                     if ($originalImageFile instanceof Resource\File) {
@@ -401,7 +424,11 @@ class RteHtmlParser extends HtmlParser
                                 ];
                                 if (!$imageInfo[0] || !$imageInfo[1]) {
                                     $filePath = $originalImageFile->getForLocalProcessing(false);
-                                    $imageInfo = @getimagesize($filePath);
+                                    $imageInfoObject = GeneralUtility::makeInstance(ImageInfo::class, $filePath);
+                                    $imageInfo = [
+                                        $imageInfoObject->getWidth(),
+                                        $imageInfoObject->getHeight()
+                                    ];
                                 }
                                 $attribArray = $this->applyPlainImageModeSettings($imageInfo, $attribArray);
                             }
@@ -456,7 +483,11 @@ class RteHtmlParser extends HtmlParser
                             if ($this->procOptions['plainImageMode']) {
                                 // If "plain image mode" has been configured
                                 // Find the original dimensions of the image
-                                $imageInfo = @getimagesize($filepath);
+                                $imageInfoObject = GeneralUtility::makeInstance(ImageInfo::class, $filepath);
+                                $imageInfo = [
+                                    $imageInfoObject->getWidth(),
+                                    $imageInfoObject->getHeight()
+                                ];
                                 $attribArray = $this->applyPlainImageModeSettings($imageInfo, $attribArray);
                             }
                             // Let's try to find a file uid for this image
@@ -513,7 +544,7 @@ class RteHtmlParser extends HtmlParser
                     list($attribArray) = $this->get_tag_attributes($v, true);
                     $absoluteUrl = trim($attribArray['src']);
                     // Transform the src attribute into an absolute url, if it not already
-                    if (strtolower(substr($absoluteUrl, 0, 4)) !== 'http') {
+                    if (stripos($absoluteUrl, 'http') !== 0) {
                         // If site is in a subpath (eg. /~user_jim/) this path needs to be removed because it will be added with $siteUrl
                         $attribArray['src'] = preg_replace('#^' . preg_quote($sitePath, '#') . '#', '', $attribArray['src']);
                         $attribArray['src'] = $siteUrl . $attribArray['src'];
@@ -541,31 +572,41 @@ class RteHtmlParser extends HtmlParser
      * @return string Content output
      * @see TS_links_rte()
      */
-    public function TS_links_db($value)
+    protected function TS_links_db($value)
     {
         $blockSplit = $this->splitIntoBlock('A', $value);
         foreach ($blockSplit as $k => $v) {
             if ($k % 2) {
                 list($tagAttributes) = $this->get_tag_attributes($this->getFirstTag($v), true);
+
+                // Anchors would not have an href attribute
+                if (!isset($tagAttributes['href'])) {
+                    continue;
+                }
                 $linkService = GeneralUtility::makeInstance(LinkService::class);
                 $linkInformation = $linkService->resolve($tagAttributes['href'] ?? '');
 
                 // Modify parameters, this hook should be deprecated
-                if (isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_parsehtml_proc.php']['modifyParams_LinksDb_PostProc'])
-                    && is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_parsehtml_proc.php']['modifyParams_LinksDb_PostProc'])) {
+                if (isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_parsehtml_proc.php']['modifyParams_LinksDb_PostProc'])) {
+                    trigger_error('The hook "t3lib/class.t3lib_parsehtml_proc.php->modifyParams_LinksDb_PostProc" will be removed in TYPO3 v10.0, use LinkService syntax to modify links to be stored in the database.', E_USER_DEPRECATED);
                     $parameters = [
                         'currentBlock' => $v,
                         'linkInformation' => $linkInformation,
                         'url' => $linkInformation['href'],
                         'attributes' => $tagAttributes
                     ];
-                    foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_parsehtml_proc.php']['modifyParams_LinksDb_PostProc'] as $objRef) {
-                        $processor = GeneralUtility::getUserObj($objRef);
+                    foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_parsehtml_proc.php']['modifyParams_LinksDb_PostProc'] ?? [] as $className) {
+                        $processor = GeneralUtility::makeInstance($className);
                         $blockSplit[$k] = $processor->modifyParamsLinksDb($parameters, $this);
                     }
                 } else {
                     // Otherwise store the link as <a> tag as default by TYPO3, with the new link service syntax
-                    $tagAttributes['href'] = $linkService->asString($linkInformation);
+                    try {
+                        $tagAttributes['href'] = $linkService->asString($linkInformation);
+                    } catch (UnknownLinkHandlerException $e) {
+                        $tagAttributes['href'] = $linkInformation['href'] ?? $tagAttributes['href'];
+                    }
+
                     $blockSplit[$k] = '<a ' . GeneralUtility::implodeAttributes($tagAttributes, true) . '>'
                         . $this->TS_links_db($this->removeFirstAndLastTag($blockSplit[$k])) . '</a>';
                 }
@@ -582,16 +623,23 @@ class RteHtmlParser extends HtmlParser
      * not be converted back to <link> tags anymore.
      *
      * @param string $value Content input
+     * @param bool $internallyCalledFromCore internal option for calls where the Core is still using this function, to supress method deprecations
      * @return string Content output
+     * @deprecated will be removed in TYPO3 v10.0, only ->TS_AtagToAbs() should be called directly, <link> syntax is deprecated
      */
-    public function TS_links_rte($value)
+    public function TS_links_rte($value, $internallyCalledFromCore = null)
     {
+        if ($internallyCalledFromCore === null) {
+            trigger_error('RteHtmlParser->TS_links_rte() will be removed in TYPO3 v10.0, use TS_AtagToAbs() directly and do not use <link> syntax anymore.', E_USER_DEPRECATED);
+        }
+        $hasLinkTags = false;
         $value = $this->TS_AtagToAbs($value);
         // Split content by the TYPO3 pseudo tag "<link>"
         $blockSplit = $this->splitIntoBlock('link', $value, true);
         foreach ($blockSplit as $k => $v) {
             // Block
             if ($k % 2) {
+                $hasLinkTags = true;
                 // Split away the first "<link " part
                 $typoLinkData = explode(' ', substr($this->getFirstTag($v), 0, -1), 2)[1];
                 $tagCode = GeneralUtility::makeInstance(TypoLinkCodecService::class)->decode($typoLinkData);
@@ -607,7 +655,8 @@ class RteHtmlParser extends HtmlParser
                 }
 
                 // Modify parameters by a hook
-                if (isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_parsehtml_proc.php']['modifyParams_LinksRte_PostProc']) && is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_parsehtml_proc.php']['modifyParams_LinksRte_PostProc'])) {
+                if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_parsehtml_proc.php']['modifyParams_LinksRte_PostProc'] ?? false)) {
+                    trigger_error('The hook "t3lib/class.t3lib_parsehtml_proc.php->modifyParams_LinksRte_PostProc" will be removed in TYPO3 v10.0, use the link service to properly use .', E_USER_DEPRECATED);
                     // backwards-compatibility: show an error message if the page is not found
                     $error = '';
                     if ($linkInformation['type'] === LinkService::TYPE_PAGE) {
@@ -624,8 +673,8 @@ class RteHtmlParser extends HtmlParser
                         'external' => $linkInformation['type'] === LinkService::TYPE_URL,
                         'error' => $error
                     ];
-                    foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_parsehtml_proc.php']['modifyParams_LinksRte_PostProc'] as $objRef) {
-                        $processor = GeneralUtility::getUserObj($objRef);
+                    foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_parsehtml_proc.php']['modifyParams_LinksRte_PostProc'] as $className) {
+                        $processor = GeneralUtility::makeInstance($className);
                         $blockSplit[$k] = $processor->modifyParamsLinksRte($parameters, $this);
                     }
                 } else {
@@ -638,10 +687,13 @@ class RteHtmlParser extends HtmlParser
 
                     // Setting the <a> tag
                     $blockSplit[$k] = '<a ' . GeneralUtility::implodeAttributes($anchorAttributes, true) . '>'
-                        . $this->TS_links_rte($this->removeFirstAndLastTag($blockSplit[$k]))
+                        . $this->TS_links_rte($this->removeFirstAndLastTag($blockSplit[$k]), $internallyCalledFromCore)
                         . '</a>';
                 }
             }
+        }
+        if ($hasLinkTags) {
+            trigger_error('Content with <link> syntax was found, update your content to use the t3:// syntax, and migrate your content via the upgrade wizard in the install tool.', E_USER_DEPRECATED);
         }
         return implode('', $blockSplit);
     }
@@ -654,7 +706,7 @@ class RteHtmlParser extends HtmlParser
      * @return string Content output
      * @see TS_transform_rte()
      */
-    public function TS_transform_db($value)
+    protected function TS_transform_db($value)
     {
         // Safety... so forever loops are avoided (they should not occur, but an error would potentially do this...)
         $this->TS_transform_db_safecounter--;
@@ -694,7 +746,7 @@ class RteHtmlParser extends HtmlParser
                     default:
                         // usually <hx> tags and <table> tags where no other block elements are within the tags
                         // Eliminate true linebreaks inside block element tags
-                        $blockSplit[$k] = preg_replace(('/[' . LF . ']+/'), ' ', $blockSplit[$k]);
+                        $blockSplit[$k] = preg_replace('/[' . LF . ']+/', ' ', $blockSplit[$k]);
                 }
             } else {
                 // NON-block:
@@ -725,9 +777,11 @@ class RteHtmlParser extends HtmlParser
      *
      * @param string $value Content input
      * @return string Content output
+     * @deprecated since TYPO3 v9.0, will be removed in TYPO3 v10.0, see comment above, adding attribuet "rteerror" is not necessary anymore.
      */
     public function transformStyledATags($value)
     {
+        trigger_error('RteHtmlParser->transformStyledATags() will be removed in TYPO3 v10.0. TYPO3 can handle style attribute in anchor tags properly since TYPO3 v8 LTS.', E_USER_DEPRECATED);
         $blockSplit = $this->splitIntoBlock('A', $value);
         foreach ($blockSplit as $k => $v) {
             // If an A-tag was found
@@ -754,7 +808,7 @@ class RteHtmlParser extends HtmlParser
      * @return string Content output
      * @see TS_transform_db()
      */
-    public function TS_transform_rte($value)
+    protected function TS_transform_rte($value)
     {
         // Split the content from database by the occurrence of the block elements
         $blockSplit = $this->splitIntoBlock($this->blockElementList, $value);
@@ -782,7 +836,7 @@ class RteHtmlParser extends HtmlParser
                 $blockSplit[$k + 1] = preg_replace('/^[ ]*' . LF . '/', '', $blockSplit[$k + 1]);
             } else {
                 // NON-block:
-                $nextFTN = $this->getFirstTagName($blockSplit[$k + 1]);
+                $nextFTN = $this->getFirstTagName($blockSplit[$k + 1] ?? '');
                 $onlyLineBreaks = (preg_match('/^[ ]*' . LF . '+[ ]*$/', $blockSplit[$k]) == 1);
                 // If the line is followed by a block or is the last line:
                 if (GeneralUtility::inList($this->blockElementList, $nextFTN) || !isset($blockSplit[$k + 1])) {
@@ -820,11 +874,14 @@ class RteHtmlParser extends HtmlParser
      * @return string Clean content
      * @see getKeepTags()
      */
-    public function HTMLcleaner_db($content)
+    protected function HTMLcleaner_db($content)
     {
         $keepTags = $this->getKeepTags('db');
         // Default: remove unknown tags.
-        $keepUnknownTags = (bool)$this->procOptions['dontRemoveUnknownTags_db'];
+        if (isset($this->procOptions['dontRemoveUnknownTags_db'])) {
+            trigger_error('HTMLParser option "dontRemoveUnknownTags_db" will not be evaluted anymore in TYPO3 v10.0. Remove its usages.', E_USER_DEPRECATED);
+        }
+        $keepUnknownTags = (bool)($this->procOptions['dontRemoveUnknownTags_db'] ?? false);
         return $this->HTMLcleaner($content, $keepTags, $keepUnknownTags);
     }
 
@@ -836,20 +893,20 @@ class RteHtmlParser extends HtmlParser
      * @return array Configuration array
      * @see HTMLcleaner_db()
      */
-    public function getKeepTags($direction = 'rte')
+    protected function getKeepTags($direction = 'rte')
     {
-        if (!is_array($this->getKeepTags_cache[$direction])) {
+        if (!isset($this->getKeepTags_cache[$direction]) || !is_array($this->getKeepTags_cache[$direction])) {
             // Setting up allowed tags:
             // Default is to get allowed/denied tags from internal array of processing options:
             // Construct default list of tags to keep:
-            if (is_array($this->procOptions['allowTags.'])) {
+            if (isset($this->procOptions['allowTags.']) && is_array($this->procOptions['allowTags.'])) {
                 $keepTags = implode(',', $this->procOptions['allowTags.']);
             } else {
-                $keepTags = $this->procOptions['allowTags'];
+                $keepTags = $this->procOptions['allowTags'] ?? '';
             }
             $keepTags = array_flip(GeneralUtility::trimExplode(',', $this->defaultAllowedTagsList . ',' . strtolower($keepTags), true));
             // For tags to deny, remove them from $keepTags array:
-            $denyTags = GeneralUtility::trimExplode(',', $this->procOptions['denyTags'], true);
+            $denyTags = GeneralUtility::trimExplode(',', $this->procOptions['denyTags'] ?? '', true);
             foreach ($denyTags as $dKe) {
                 unset($keepTags[$dKe]);
             }
@@ -858,7 +915,7 @@ class RteHtmlParser extends HtmlParser
                 case 'rte':
                     // Transforming keepTags array so it can be understood by the HTMLcleaner function.
                     // This basically converts the format of the array from TypoScript (having dots) to plain multi-dimensional array.
-                    list($keepTags) = $this->HTMLparserConfig($this->procOptions['HTMLparser_rte.'], $keepTags);
+                    list($keepTags) = $this->HTMLparserConfig($this->procOptions['HTMLparser_rte.'] ?? [], $keepTags);
                     break;
                 case 'db':
                     // Setting up span tags if they are allowed:
@@ -877,11 +934,11 @@ class RteHtmlParser extends HtmlParser
                         }
                     }
                     // Setting further options, getting them from the processing options
-                    $TSc = $this->procOptions['HTMLparser_db.'];
-                    if (!$TSc['globalNesting']) {
+                    $TSc = $this->procOptions['HTMLparser_db.'] ?? [];
+                    if (empty($TSc['globalNesting'])) {
                         $TSc['globalNesting'] = 'b,i,u,a,center,font,sub,sup,strong,em,strike,span';
                     }
-                    if (!$TSc['noAttrib']) {
+                    if (empty($TSc['noAttrib'])) {
                         $TSc['noAttrib'] = 'b,i,u,br,center,hr,sub,sup,strong,em,li,ul,ol,blockquote,strike';
                     }
                     // Transforming the array from TypoScript to regular array:
@@ -904,10 +961,10 @@ class RteHtmlParser extends HtmlParser
      * @param string $value Value to process.
      * @param int $count Recursion brake. Decremented on each recursion down to zero. Default is 5 (which equals the allowed nesting levels of p tags).
      * @param bool $returnArray If TRUE, an array with the lines is returned, otherwise a string of the processed input value.
-     * @return string Processed input value.
+     * @return string|array Processed input value.
      * @see setDivTags()
      */
-    public function divideIntoLines($value, $count = 5, $returnArray = false)
+    protected function divideIntoLines($value, $count = 5, $returnArray = false)
     {
         // Setting the third param will eliminate false end-tags. Maybe this is a good thing to do...?
         $paragraphBlocks = $this->splitIntoBlock('p', $value, true);
@@ -960,7 +1017,7 @@ class RteHtmlParser extends HtmlParser
      * @return string Processed value.
      * @see divideIntoLines()
      */
-    public function setDivTags($value)
+    protected function setDivTags($value)
     {
         // First, setting configuration for the HTMLcleaner function. This will process each line between the <div>/<p> section on their way to the RTE
         $keepTags = $this->getKeepTags('rte');
@@ -981,8 +1038,8 @@ class RteHtmlParser extends HtmlParser
             // Wrapping the line in <p> tags if not already wrapped and does not contain an hr tag
             if (!preg_match('/<(hr)(\\s[^>\\/]*)?[[:space:]]*\\/?>/i', $parts[$k])) {
                 $testStr = strtolower(trim($parts[$k]));
-                if (substr($testStr, 0, 4) !== '<div' || substr($testStr, -6) !== '</div>') {
-                    if (substr($testStr, 0, 2) !== '<p' || substr($testStr, -4) !== '</p>') {
+                if (strpos($testStr, '<div') !== 0 || substr($testStr, -6) !== '</div>') {
+                    if (strpos($testStr, '<p') !== 0 || substr($testStr, -4) !== '</p>') {
                         // Only set p-tags if there is not already div or p tags:
                         $parts[$k] = '<p>' . $parts[$k] . '</p>';
                     }
@@ -1018,7 +1075,7 @@ class RteHtmlParser extends HtmlParser
             $tagAttributes = array_intersect_key($tagAttributes, array_flip($this->allowedAttributesForParagraphTags));
 
             // Only allow classes that are whitelisted in $this->allowedClasses
-            if (trim($tagAttributes['class']) !== '' && !empty($this->allowedClasses) && !in_array($tagAttributes['class'], $this->allowedClasses, true)) {
+            if (isset($tagAttributes['class']) && trim($tagAttributes['class']) !== '' && !empty($this->allowedClasses) && !in_array($tagAttributes['class'], $this->allowedClasses, true)) {
                 $classes = GeneralUtility::trimExplode(' ', $tagAttributes['class'], true);
                 $classes = array_intersect($classes, $this->allowedClasses);
                 if (!empty($classes)) {
@@ -1058,7 +1115,7 @@ class RteHtmlParser extends HtmlParser
      * @param array $attribArray Array of attributes from tag in which to search. More specifically the content of the key "style" is used to extract "width:xxx / height:xxx" information
      * @return array Integer w/h in key 0/1. Zero is returned if not found.
      */
-    public function getWHFromAttribs($attribArray)
+    protected function getWHFromAttribs($attribArray)
     {
         $style = trim($attribArray['style']);
         $w = 0;
@@ -1086,14 +1143,15 @@ class RteHtmlParser extends HtmlParser
      * Parse <A>-tag href and return status of email,external,file or page
      * This functionality is not in use anymore
      *
-     * @param string $url URL to analyse.
+     * @param string $url URL to analyze.
      * @return array Information in an array about the URL
+     * @deprecated will be removed in TYPO3 v10.0. Not in use anymore.
      */
-    public function urlInfoForLinkTags($url)
+    protected function urlInfoForLinkTags($url)
     {
         $info = [];
         $url = trim($url);
-        if (substr(strtolower($url), 0, 7) === 'mailto:') {
+        if (strpos(strtolower($url), 'mailto:') === 0) {
             $info['url'] = trim(substr($url, 7));
             $info['type'] = 'email';
         } elseif (strpos($url, '?file:') !== false) {
@@ -1115,7 +1173,7 @@ class RteHtmlParser extends HtmlParser
             $siteUrl_parts = parse_url($url);
             $curUrl_parts = parse_url($curURL);
             // Hosts should match
-            if ($siteUrl_parts['host'] == $curUrl_parts['host'] && (!$info['relScriptPath'] || defined('TYPO3_mainDir') && substr($info['relScriptPath'], 0, strlen(TYPO3_mainDir)) == TYPO3_mainDir)) {
+            if ($siteUrl_parts['host'] == $curUrl_parts['host'] && (!$info['relScriptPath'] || defined('TYPO3_mainDir') && strpos($info['relScriptPath'], TYPO3_mainDir) === 0)) {
                 // If the script path seems to match or is empty (FE-EDIT)
                 // New processing order 100502
                 $uP = parse_url($info['relUrl']);
@@ -1151,11 +1209,13 @@ class RteHtmlParser extends HtmlParser
      * Converting <A>-tags to absolute URLs (+ setting rtekeep attribute)
      *
      * @param string $value Content input
-     * @param bool $dontSetRTEKEEP If TRUE, then the "rtekeep" attribute will not be set. (not in use anymore)
      * @return string Content output
      */
-    public function TS_AtagToAbs($value, $dontSetRTEKEEP = false)
+    protected function TS_AtagToAbs($value)
     {
+        if (func_num_args() > 1) {
+            trigger_error('Second argument of RteHtmlParser->TS_AtagToAbs() is not in use and will be removed in TYPO3 v10.0, however the argument in the callers code can be removed without side-effects.', E_USER_DEPRECATED);
+        }
         $blockSplit = $this->splitIntoBlock('A', $value);
         foreach ($blockSplit as $k => $v) {
             // Block
@@ -1163,7 +1223,7 @@ class RteHtmlParser extends HtmlParser
                 list($attribArray) = $this->get_tag_attributes($this->getFirstTag($v), true);
                 // Checking if there is a scheme, and if not, prepend the current url.
                 // ONLY do this if href has content - the <a> tag COULD be an anchor and if so, it should be preserved...
-                if ($attribArray['href'] !== '') {
+                if (($attribArray['href'] ?? '') !== '') {
                     $uP = parse_url(strtolower($attribArray['href']));
                     if (!$uP['scheme']) {
                         $attribArray['href'] = GeneralUtility::getIndpEnv('TYPO3_SITE_URL') . $attribArray['href'];
@@ -1266,17 +1326,11 @@ class RteHtmlParser extends HtmlParser
                 continue;
             }
             $hrefInformation = $linkService->resolve($attributes['href']);
-            if ($hrefInformation['type'] === LinkService::TYPE_PAGE) {
+            if ($hrefInformation['type'] === LinkService::TYPE_PAGE && $hrefInformation['pageuid'] !== 'current') {
                 $pageRecord = BackendUtility::getRecord('pages', $hrefInformation['pageuid']);
                 if (!is_array($pageRecord)) {
                     // Page does not exist
                     $attributes['data-rte-error'] = 'Page with ID ' . $hrefInformation['pageuid'] . ' not found';
-                    $styling = 'background-color: yellow; border:2px red solid; color: black;';
-                    if (empty($attributes['style'])) {
-                        $attributes['style'] = $styling;
-                    } else {
-                        $attributes['style'] .= ' ' . $styling;
-                    }
                 }
             }
             // Always rewrite the block to allow the nested calling even if a page is found
@@ -1321,17 +1375,5 @@ class RteHtmlParser extends HtmlParser
                 . '</a>';
         }
         return implode('', $blocks);
-    }
-
-    /**
-     * Instantiates a logger
-     *
-     * @return \TYPO3\CMS\Core\Log\Logger
-     */
-    protected function getLogger()
-    {
-        /** @var $logManager LogManager */
-        $logManager = GeneralUtility::makeInstance(LogManager::class);
-        return $logManager->getLogger(get_class($this));
     }
 }

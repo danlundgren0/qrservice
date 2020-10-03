@@ -15,6 +15,7 @@ namespace TYPO3\CMS\Impexp;
  */
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Database\ReferenceIndex;
 use TYPO3\CMS\Core\Exception;
 use TYPO3\CMS\Core\Html\HtmlParser;
@@ -51,6 +52,7 @@ use TYPO3\CMS\Core\Utility\PathUtility;
  *
  * Write export
  * $out = $this->export->compileMemoryToFileContent();
+ * @internal this is not part of TYPO3's Core API.
  */
 
 /**
@@ -59,22 +61,19 @@ use TYPO3\CMS\Core\Utility\PathUtility;
 class Export extends ImportExport
 {
     /**
-     * 1MB max file size
-     *
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. In v10, just remove property, it is not used any longer.
      * @var int
      */
     public $maxFileSize = 1000000;
 
     /**
-     * 1MB max record size
-     *
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. In v10, just remove property, it is not used any longer.
      * @var int
      */
     public $maxRecordSize = 1000000;
 
     /**
-     * 10MB max export size
-     *
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. In v10, just remove property, it is not used any longer.
      * @var int
      */
     public $maxExportSize = 10000000;
@@ -121,9 +120,9 @@ class Export extends ImportExport
     protected $saveFilesOutsideExportFile = false;
 
     /**
-     * @var NULL|string
+     * @var string|null
      */
-    protected $temporaryFilesPathForExport = null;
+    protected $temporaryFilesPathForExport;
 
     /**************************
      * Initialize
@@ -241,7 +240,7 @@ class Export extends ImportExport
      *
      * @param array $idH Page uid hierarchy
      * @return array Modified input array
-     * @access private
+     * @internal
      * @see setPageTree()
      */
     public function unsetExcludedSections($idH)
@@ -312,34 +311,29 @@ class Export extends ImportExport
                     $headerInfo['uid'] = $row['uid'];
                     $headerInfo['pid'] = $row['pid'];
                     $headerInfo['title'] = GeneralUtility::fixed_lgd_cs(BackendUtility::getRecordTitle($table, $row), 40);
-                    $headerInfo['size'] = strlen(serialize($row));
                     if ($relationLevel) {
                         $headerInfo['relationLevel'] = $relationLevel;
                     }
-                    // If record content is not too large in size, set the header content and add the rest:
-                    if ($headerInfo['size'] < $this->maxRecordSize) {
-                        // Set the header summary:
-                        $this->dat['header']['records'][$table][$row['uid']] = $headerInfo;
-                        // Create entry in the PID lookup:
-                        $this->dat['header']['pid_lookup'][$row['pid']][$table][$row['uid']] = 1;
-                        // Initialize reference index object:
-                        $refIndexObj = GeneralUtility::makeInstance(ReferenceIndex::class);
-                        // Yes to workspace overlays for exporting....
-                        $refIndexObj->WSOL = true;
-                        $relations = $refIndexObj->getRelations($table, $row);
-                        $relations = $this->fixFileIDsInRelations($relations);
-                        $relations = $this->removeSoftrefsHavingTheSameDatabaseRelation($relations);
-                        // Data:
-                        $this->dat['records'][$table . ':' . $row['uid']] = [];
-                        $this->dat['records'][$table . ':' . $row['uid']]['data'] = $row;
-                        $this->dat['records'][$table . ':' . $row['uid']]['rels'] = $relations;
-                        // Add information about the relations in the record in the header:
-                        $this->dat['header']['records'][$table][$row['uid']]['rels'] = $this->flatDBrels($this->dat['records'][$table . ':' . $row['uid']]['rels']);
-                        // Add information about the softrefs to header:
-                        $this->dat['header']['records'][$table][$row['uid']]['softrefs'] = $this->flatSoftRefs($this->dat['records'][$table . ':' . $row['uid']]['rels']);
-                    } else {
-                        $this->error('Record ' . $table . ':' . $row['uid'] . ' was larger than maxRecordSize (' . GeneralUtility::formatSize($this->maxRecordSize) . ')');
-                    }
+                    // Set the header summary:
+                    $this->dat['header']['records'][$table][$row['uid']] = $headerInfo;
+                    // Create entry in the PID lookup:
+                    $this->dat['header']['pid_lookup'][$row['pid']][$table][$row['uid']] = 1;
+                    // Initialize reference index object:
+                    $refIndexObj = GeneralUtility::makeInstance(ReferenceIndex::class);
+                    $refIndexObj->enableRuntimeCache();
+                    // Yes to workspace overlays for exporting....
+                    $refIndexObj->WSOL = true;
+                    $relations = $refIndexObj->getRelations($table, $row);
+                    $relations = $this->fixFileIDsInRelations($relations);
+                    $relations = $this->removeSoftrefsHavingTheSameDatabaseRelation($relations);
+                    // Data:
+                    $this->dat['records'][$table . ':' . $row['uid']] = [];
+                    $this->dat['records'][$table . ':' . $row['uid']]['data'] = $row;
+                    $this->dat['records'][$table . ':' . $row['uid']]['rels'] = $relations;
+                    // Add information about the relations in the record in the header:
+                    $this->dat['header']['records'][$table][$row['uid']]['rels'] = $this->flatDBrels($this->dat['records'][$table . ':' . $row['uid']]['rels']);
+                    // Add information about the softrefs to header:
+                    $this->dat['header']['records'][$table][$row['uid']]['softrefs'] = $this->flatSoftRefs($this->dat['records'][$table . ':' . $row['uid']]['rels']);
                 } else {
                     $this->error('Record ' . $table . ':' . $row['uid'] . ' already added.');
                 }
@@ -362,7 +356,7 @@ class Export extends ImportExport
             if (isset($relation['type']) && $relation['type'] === 'file') {
                 foreach ($relation['newValueFiles'] as $key => $fileRelationData) {
                     $absoluteFilePath = $fileRelationData['ID_absFile'];
-                    if (GeneralUtility::isFirstPartOfStr($absoluteFilePath, PATH_site)) {
+                    if (GeneralUtility::isFirstPartOfStr($absoluteFilePath, Environment::getPublicPath())) {
                         $relatedFilePath = PathUtility::stripPathSitePrefix($absoluteFilePath);
                         $relations[$field]['newValueFiles'][$key]['ID'] = md5($relatedFilePath);
                     }
@@ -373,7 +367,7 @@ class Export extends ImportExport
                     foreach ($relation['flexFormRels']['file'] as $key => $subList) {
                         foreach ($subList as $subKey => $fileRelationData) {
                             $absoluteFilePath = $fileRelationData['ID_absFile'];
-                            if (GeneralUtility::isFirstPartOfStr($absoluteFilePath, PATH_site)) {
+                            if (GeneralUtility::isFirstPartOfStr($absoluteFilePath, Environment::getPublicPath())) {
                                 $relatedFilePath = PathUtility::stripPathSitePrefix($absoluteFilePath);
                                 $relations[$field]['flexFormRels']['file'][$key][$subKey]['ID'] = md5($relatedFilePath);
                             }
@@ -426,7 +420,7 @@ class Export extends ImportExport
     }
 
     /**
-     * This analyses the existing added records, finds all database relations to records and adds these records to the export file.
+     * This analyzes the existing added records, finds all database relations to records and adds these records to the export file.
      * This function can be called repeatedly until it returns an empty array.
      * In principle it should not allow to infinite recursivity, but you better set a limit...
      * Call this BEFORE the ext_addFilesFromRelations (so files from added relations are also included of course)
@@ -505,6 +499,13 @@ class Export extends ImportExport
             foreach ($addR as $fI) {
                 // Get and set record:
                 $row = BackendUtility::getRecord($fI['table'], $fI['id']);
+                // Depending on db driver, int fields may or may not be returned as integer or as string. The
+                // loop aligns that detail and forces strings for everything to have exports more db agnostic.
+                foreach ($row as $fieldName => $value) {
+                    // Keep null but force everything else to string
+                    $row[$fieldName] = $value === null ? $value : (string)$value;
+                }
+
                 if (is_array($row)) {
                     $this->export_addRecord($fI['table'], $row, $relationLevel + 1);
                 }
@@ -590,7 +591,7 @@ class Export extends ImportExport
                                 foreach ($elements as $subKey => $el) {
                                     if ($el['subst']['type'] === 'file' && $this->includeSoftref($el['subst']['tokenID'])) {
                                         // Create abs path and ID for file:
-                                        $ID_absFile = GeneralUtility::getFileAbsFileName(PATH_site . $el['subst']['relFileName']);
+                                        $ID_absFile = GeneralUtility::getFileAbsFileName(Environment::getPublicPath() . '/' . $el['subst']['relFileName']);
                                         $ID = md5($el['subst']['relFileName']);
                                         if ($ID_absFile) {
                                             if (!$this->dat['files'][$ID]) {
@@ -616,7 +617,7 @@ class Export extends ImportExport
                         foreach ($elements as $subKey => $el) {
                             if ($el['subst']['type'] === 'file' && $this->includeSoftref($el['subst']['tokenID'])) {
                                 // Create abs path and ID for file:
-                                $ID_absFile = GeneralUtility::getFileAbsFileName(PATH_site . $el['subst']['relFileName']);
+                                $ID_absFile = GeneralUtility::getFileAbsFileName(Environment::getPublicPath() . '/' . $el['subst']['relFileName']);
                                 $ID = md5($el['subst']['relFileName']);
                                 if ($ID_absFile) {
                                     if (!$this->dat['files'][$ID]) {
@@ -660,10 +661,6 @@ class Export extends ImportExport
      */
     public function export_addSysFile(File $file)
     {
-        if ($file->getProperty('size') >= $this->maxFileSize) {
-            $this->error('File ' . $file->getPublicUrl() . ' was larger (' . GeneralUtility::formatSize($file->getProperty('size')) . ') than the maxFileSize (' . GeneralUtility::formatSize($this->maxFileSize) . ')! Skipping.');
-            return;
-        }
         $fileContent = '';
         try {
             if (!$this->saveFilesOutsideExportFile) {
@@ -676,12 +673,6 @@ class Export extends ImportExport
             return;
         }
         $fileUid = $file->getUid();
-        $fileInfo = $file->getStorage()->getFileInfo($file);
-        $fileSize = (int)$fileInfo['size'];
-        if ($fileSize !== (int)$file->getProperty('size')) {
-            $this->error('File size of ' . $file->getCombinedIdentifier() . ' is not up-to-date in index! File added with current size.');
-            $this->dat['records']['sys_file:' . $fileUid]['data']['size'] = $fileSize;
-        }
         $fileSha1 = $file->getStorage()->hashFile($file, 'sha1');
         if ($fileSha1 !== $file->getProperty('sha1')) {
             $this->error('File sha1 hash of ' . $file->getCombinedIdentifier() . ' is not up-to-date in index! File added on current sha1.');
@@ -689,7 +680,6 @@ class Export extends ImportExport
         }
 
         $fileRec = [];
-        $fileRec['filesize'] = $fileSize;
         $fileRec['filename'] = $file->getProperty('name');
         $fileRec['filemtime'] = $file->getProperty('modification_date');
 
@@ -723,13 +713,8 @@ class Export extends ImportExport
             $this->error($fI['ID_absFile'] . ' was not a file! Skipping.');
             return;
         }
-        if (filesize($fI['ID_absFile']) >= $this->maxFileSize) {
-            $this->error($fI['ID_absFile'] . ' was larger (' . GeneralUtility::formatSize(filesize($fI['ID_absFile'])) . ') than the maxFileSize (' . GeneralUtility::formatSize($this->maxFileSize) . ')! Skipping.');
-            return;
-        }
         $fileInfo = stat($fI['ID_absFile']);
         $fileRec = [];
-        $fileRec['filesize'] = $fileInfo['size'];
         $fileRec['filename'] = PathUtility::basename($fI['ID_absFile']);
         $fileRec['filemtime'] = $fileInfo['mtime'];
         //for internal type file_reference
@@ -768,7 +753,6 @@ class Export extends ImportExport
                     $RTEoriginal_ID = md5($RTEoriginal_absPath);
                     $fileInfo = stat($RTEoriginal_absPath);
                     $fileRec = [];
-                    $fileRec['filesize'] = $fileInfo['size'];
                     $fileRec['filename'] = PathUtility::basename($RTEoriginal_absPath);
                     $fileRec['filemtime'] = $fileInfo['mtime'];
                     $fileRec['record_ref'] = '_RTE_COPY_ID:' . $fI['ID'];
@@ -805,7 +789,7 @@ class Export extends ImportExport
                     if ($k % 2) {
                         $EXTres_absPath = GeneralUtility::resolveBackPath(PathUtility::dirname($fI['ID_absFile']) . '/' . $v);
                         $EXTres_absPath = GeneralUtility::getFileAbsFileName($EXTres_absPath);
-                        if ($EXTres_absPath && GeneralUtility::isFirstPartOfStr($EXTres_absPath, PATH_site . $this->fileadminFolderName . '/') && @is_file($EXTres_absPath)) {
+                        if ($EXTres_absPath && GeneralUtility::isFirstPartOfStr($EXTres_absPath, Environment::getPublicPath() . '/' . $this->fileadminFolderName . '/') && @is_file($EXTres_absPath)) {
                             $htmlResourceCaptured = true;
                             $EXTres_ID = md5($EXTres_absPath);
                             $this->dat['header']['files'][$fI['ID']]['EXT_RES_ID'][] = $EXTres_ID;
@@ -814,7 +798,6 @@ class Export extends ImportExport
                             if (!isset($this->dat['header']['files'][$EXTres_ID])) {
                                 $fileInfo = stat($EXTres_absPath);
                                 $fileRec = [];
-                                $fileRec['filesize'] = $fileInfo['size'];
                                 $fileRec['filename'] = PathUtility::basename($EXTres_absPath);
                                 $fileRec['filemtime'] = $fileInfo['mtime'];
                                 $fileRec['record_ref'] = '_EXT_PARENT_:' . $fI['ID'];
@@ -903,7 +886,7 @@ class Export extends ImportExport
                             // Add file_ID key to header - slightly "risky" way of doing this because if the calculation
                             // changes for the same value in $this->records[...] this will not work anymore!
                             if ($el['subst'] && $el['subst']['relFileName']) {
-                                $list[$lKey]['file_ID'] = md5(PATH_site . $el['subst']['relFileName']);
+                                $list[$lKey]['file_ID'] = md5(Environment::getPublicPath() . '/' . $el['subst']['relFileName']);
                             }
                         }
                     }
@@ -919,7 +902,7 @@ class Export extends ImportExport
                                 // Add file_ID key to header - slightly "risky" way of doing this because if the calculation
                                 // changes for the same value in $this->records[...] this will not work anymore!
                                 if ($el['subst'] && $el['subst']['relFileName']) {
-                                    $list[$lKey]['file_ID'] = md5(PATH_site . $el['subst']['relFileName']);
+                                    $list[$lKey]['file_ID'] = md5(Environment::getPublicPath() . '/' . $el['subst']['relFileName']);
                                 }
                             }
                         }

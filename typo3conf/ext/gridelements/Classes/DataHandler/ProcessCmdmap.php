@@ -49,7 +49,7 @@ class ProcessCmdmap extends AbstractDataHandler
         $value,
         &$commandIsProcessed,
         DataHandler $parentObj = null,
-        $pasteUpdate
+        $pasteUpdate = false
     ) {
         $this->init($table, $id, $parentObj);
         $reference = (int)GeneralUtility::_GET('reference');

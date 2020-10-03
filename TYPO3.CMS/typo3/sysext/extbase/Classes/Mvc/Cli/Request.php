@@ -17,8 +17,7 @@ namespace TYPO3\CMS\Extbase\Mvc\Cli;
 /**
  * Represents a CLI request.
  *
- * @license http://www.gnu.org/licenses/lgpl.html GNU Lesser General Public License, version 3 or later
- * @api
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Use symfony/console commands instead.
  */
 class Request implements \TYPO3\CMS\Extbase\Mvc\RequestInterface
 {
@@ -40,7 +39,7 @@ class Request implements \TYPO3\CMS\Extbase\Mvc\RequestInterface
     /**
      * @var string Name of the extension which is supposed to handle this request.
      */
-    protected $controllerExtensionName = null;
+    protected $controllerExtensionName;
 
     /**
      * The arguments for this request
@@ -69,7 +68,7 @@ class Request implements \TYPO3\CMS\Extbase\Mvc\RequestInterface
     /**
      * @var \TYPO3\CMS\Extbase\Mvc\Cli\Command | NULL
      */
-    protected $command = null;
+    protected $command;
 
     /**
      * @var string

@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Mvc\Configuration;
 
 /*
@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Form\Mvc\Configuration;
  */
 
 use TYPO3\CMS\Core\Utility\ArrayUtility;
+use TYPO3\CMS\Core\Utility\Exception\MissingArrayPathException;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Object\ObjectManager;
 use TYPO3\CMS\Form\Mvc\Configuration\Exception\CycleInheritancesException;
@@ -23,6 +24,38 @@ use TYPO3\CMS\Form\Mvc\Configuration\Exception\CycleInheritancesException;
 /**
  * Resolve declared inheritances within an configuration array
  *
+ * Basic concept:
+ * - Take a large YAML config and replace the key '__inheritance' by the referenced YAML partial (of the same config file)
+ * - Maybe also override some keys of the referenced partial
+ * - Avoid endless loop by reference cycles
+ *
+ * e.g.
+ * ---------------------
+ *
+ * Form:
+ *  part1:
+ *    key1: value1
+ *    key2: value2
+ *    key3: value3
+ *  part2:
+ *    __inheritance:
+ *      10: Form.part1
+ *    key2: another_value
+ *
+ * will result in:
+ * ---------------------
+ *
+ * Form:
+ *  part1:
+ *    key1: value1
+ *    key2: value2
+ *    key3: value3
+ *  part2:
+ *    key1: value1
+ *    key2: another_value
+ *    key3: value3
+ *
+ * ---------------------
  * Scope: frontend / backend
  * @internal
  */
@@ -51,12 +84,12 @@ class InheritancesResolverService
     protected $inheritanceStack = [];
 
     /**
-     * Needed to park a configuration path for cyclically inheritances
+     * Needed to buffer a configuration path for cyclically inheritances
      * detection while inheritances for this path is ongoing.
      *
      * @var string
      */
-    protected $inheritancePathToCkeck = '';
+    protected $inheritancePathToCheck = '';
 
     /**
      * Returns an instance of this service. Additionally the configuration
@@ -86,7 +119,7 @@ class InheritancesResolverService
     {
         $this->referenceConfiguration = [];
         $this->inheritanceStack = [];
-        $this->inheritancePathToCkeck = '';
+        $this->inheritancePathToCheck = '';
         return $this;
     }
 
@@ -121,55 +154,53 @@ class InheritancesResolverService
     /**
      * Resolve all inheritances within a configuration.
      *
-     * @toDo: More description
-     * @param array $configuration
-     * @param array $pathStack
-     * @param bool $setInheritancePathToCkeck
+     * Takes a YAML config mapped to associative array $configuration
+     * - replace all findings of key '__inheritance' recursively
+     * - perform a deep search in config by iteration, thus check for endless loop by reference cycle
+     *
+     * Return the completed configuration.
+     *
+     * @param array $configuration - a mapped YAML configuration (full or partial)
+     * @param array $pathStack - an identifier for YAML key as array (Form.part1.key => {Form, part1, key})
+     * @param bool $setInheritancePathToCheck
      * @return array
      */
     protected function resolve(
         array $configuration,
         array $pathStack = [],
-        bool $setInheritancePathToCkeck = true
+        bool $setInheritancePathToCheck = true
     ): array {
         foreach ($configuration as $key => $values) {
+            //add current key to pathStack
             $pathStack[] = $key;
             $path = implode('.', $pathStack);
 
+            //check endless loop for current path
             $this->throwExceptionIfCycleInheritances($path, $path);
-            if ($setInheritancePathToCkeck) {
-                $this->inheritancePathToCkeck = $path;
+
+            //overwrite service property 'inheritancePathToCheck' with current path
+            if ($setInheritancePathToCheck) {
+                $this->inheritancePathToCheck = $path;
             }
 
+            //if value of subnode is an array, perform a deep search iteration step
             if (is_array($configuration[$key])) {
                 if (isset($configuration[$key][self::INHERITANCE_OPERATOR])) {
-                    try {
-                        $inheritances = ArrayUtility::getValueByPath(
-                            $this->referenceConfiguration,
-                            $path . '.' . self::INHERITANCE_OPERATOR,
-                            '.'
-                        );
-                    } catch (\RuntimeException $exception) {
-                        $inheritances = null;
-                    }
+                    $inheritances = $this->getValueByPath($this->referenceConfiguration, $path . '.' . self::INHERITANCE_OPERATOR);
 
+                    //and replace the __inheritance operator by the respective partial
                     if (is_array($inheritances)) {
                         $inheritedConfigurations = $this->resolveInheritancesRecursive($inheritances);
-
-                        $configuration[$key] = array_replace_recursive(
-                            $inheritedConfigurations,
-                            $configuration[$key]
-                        );
+                        $configuration[$key] = array_replace_recursive($inheritedConfigurations, $configuration[$key]);
                     }
 
+                    //remove the inheritance operator from configuration
                     unset($configuration[$key][self::INHERITANCE_OPERATOR]);
                 }
 
                 if (!empty($configuration[$key])) {
-                    $configuration[$key] = $this->resolve(
-                        $configuration[$key],
-                        $pathStack
-                    );
+                    // resolve subnode of YAML config
+                    $configuration[$key] = $this->resolve($configuration[$key], $pathStack);
                 }
             }
             array_pop($pathStack);
@@ -181,7 +212,8 @@ class InheritancesResolverService
     /**
      * Additional helper for the resolve method.
      *
-     * @toDo: More description
+     * Takes all inheritances (an array of YAML paths), and check them for endless loops
+     *
      * @param array $inheritances
      * @return array
      * @throws CycleInheritancesException
@@ -192,23 +224,15 @@ class InheritancesResolverService
         $inheritedConfigurations = [];
         foreach ($inheritances as $inheritancePath) {
             $this->throwExceptionIfCycleInheritances($inheritancePath, $inheritancePath);
-            try {
-                $inheritedConfiguration = ArrayUtility::getValueByPath(
-                    $this->referenceConfiguration,
-                    $inheritancePath,
-                    '.'
-                );
-            } catch (\RuntimeException $exception) {
-                $inheritedConfiguration = null;
-            }
+            $inheritedConfiguration = $this->getValueByPath($this->referenceConfiguration, $inheritancePath);
 
             if (
                 isset($inheritedConfiguration[self::INHERITANCE_OPERATOR])
                 && count($inheritedConfiguration) === 1
             ) {
-                if ($this->inheritancePathToCkeck === $inheritancePath) {
+                if ($this->inheritancePathToCheck === $inheritancePath) {
                     throw new CycleInheritancesException(
-                        $this->inheritancePathToCkeck . ' has cycle inheritances',
+                        $this->inheritancePathToCheck . ' has cycle inheritances',
                         1474900796
                     );
                 }
@@ -249,56 +273,23 @@ class InheritancesResolverService
     /**
      * Throw an exception if a cycle is detected.
      *
-     * @toDo: More description
      * @param string $path
      * @param string $pathToCheck
      * @throws CycleInheritancesException
      */
     protected function throwExceptionIfCycleInheritances(string $path, string $pathToCheck)
     {
-        try {
-            $configuration = ArrayUtility::getValueByPath(
-                $this->referenceConfiguration,
-                $path,
-                '.'
-            );
-        } catch (\RuntimeException $exception) {
-            $configuration = null;
-        }
+        $configuration = $this->getValueByPath($this->referenceConfiguration, $path);
 
         if (isset($configuration[self::INHERITANCE_OPERATOR])) {
-            try {
-                $inheritances = ArrayUtility::getValueByPath(
-                    $this->referenceConfiguration,
-                    $path . '.' . self::INHERITANCE_OPERATOR,
-                    '.'
-                );
-            } catch (\RuntimeException $exception) {
-                $inheritances = null;
-            }
+            $inheritances = $this->getValueByPath($this->referenceConfiguration, $path . '.' . self::INHERITANCE_OPERATOR);
 
             if (is_array($inheritances)) {
                 foreach ($inheritances as $inheritancePath) {
-                    try {
-                        $configuration = ArrayUtility::getValueByPath(
-                            $this->referenceConfiguration,
-                            $inheritancePath,
-                            '.'
-                        );
-                    } catch (\RuntimeException $exception) {
-                        $configuration = null;
-                    }
+                    $configuration = $this->getValueByPath($this->referenceConfiguration, $inheritancePath);
 
                     if (isset($configuration[self::INHERITANCE_OPERATOR])) {
-                        try {
-                            $_inheritances = ArrayUtility::getValueByPath(
-                                $this->referenceConfiguration,
-                                $inheritancePath . '.' . self::INHERITANCE_OPERATOR,
-                                '.'
-                            );
-                        } catch (\RuntimeException $exception) {
-                            $_inheritances = null;
-                        }
+                        $_inheritances = $this->getValueByPath($this->referenceConfiguration, $inheritancePath . '.' . self::INHERITANCE_OPERATOR);
 
                         foreach ($_inheritances as $_inheritancePath) {
                             if (strpos($pathToCheck, $_inheritancePath) === 0) {
@@ -311,7 +302,8 @@ class InheritancesResolverService
                     }
 
                     if (
-                        is_array($this->inheritanceStack[$pathToCheck])
+                        isset($this->inheritanceStack[$pathToCheck])
+                        && is_array($this->inheritanceStack[$pathToCheck])
                         && in_array($inheritancePath, $this->inheritanceStack[$pathToCheck])
                     ) {
                         $this->inheritanceStack[$pathToCheck][] = $inheritancePath;
@@ -348,5 +340,23 @@ class InheritancesResolverService
             }
         }
         return $result;
+    }
+
+    /**
+     * Check the given array representation of a YAML config for the given path and return it's value / sub-array.
+     * If path is not found, return null;
+     *
+     * @param array $config
+     * @param string $path
+     * @param string $delimiter
+     * @return string|array|null
+     */
+    protected function getValueByPath(array $config, string $path, string $delimiter = '.')
+    {
+        try {
+            return ArrayUtility::getValueByPath($config, $path, $delimiter);
+        } catch (MissingArrayPathException $exception) {
+            return null;
+        }
     }
 }

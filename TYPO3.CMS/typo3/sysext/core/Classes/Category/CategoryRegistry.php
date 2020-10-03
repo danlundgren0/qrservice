@@ -14,11 +14,11 @@ namespace TYPO3\CMS\Core\Category;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\SingletonInterface;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Class to register category configurations.
@@ -49,6 +49,7 @@ class CategoryRegistry implements SingletonInterface
      * Returns a class instance
      *
      * @return CategoryRegistry
+     * @internal
      */
     public static function getInstance()
     {
@@ -81,6 +82,7 @@ class CategoryRegistry implements SingletonInterface
      * @return bool
      * @throws \InvalidArgumentException
      * @throws \RuntimeException
+     * @internal
      */
     public function add($extensionKey, $tableName, $fieldName = 'categories', array $options = [], $override = false)
     {
@@ -113,6 +115,7 @@ class CategoryRegistry implements SingletonInterface
      * Gets all extension keys that registered a category configuration.
      *
      * @return array
+     * @internal
      */
     public function getExtensionKeys()
     {
@@ -123,6 +126,7 @@ class CategoryRegistry implements SingletonInterface
      * Gets all categorized tables
      *
      * @return array
+     * @internal
      */
     public function getCategorizedTables()
     {
@@ -135,6 +139,7 @@ class CategoryRegistry implements SingletonInterface
      *
      * @param array $configuration Current field configuration
      * @throws \UnexpectedValueException
+     * @internal
      */
     public function getCategoryFieldsForTable(array &$configuration)
     {
@@ -170,6 +175,7 @@ class CategoryRegistry implements SingletonInterface
      * @param string $tableName Name of the table to be looked up
      * @param string $fieldName Name of the field to be looked up
      * @return bool
+     * @internal
      */
     public function isRegistered($tableName, $fieldName = 'categories')
     {
@@ -180,6 +186,7 @@ class CategoryRegistry implements SingletonInterface
      * Generates tables definitions for all registered tables.
      *
      * @return string
+     * @internal
      */
     public function getDatabaseTableDefinitions()
     {
@@ -195,6 +202,7 @@ class CategoryRegistry implements SingletonInterface
      *
      * @param string $extensionKey Extension key to have the database definitions created for
      * @return string
+     * @internal
      */
     public function getDatabaseTableDefinition($extensionKey)
     {
@@ -303,7 +311,7 @@ class CategoryRegistry implements SingletonInterface
     {
         $fieldList = '';
         if (!isset($this->addedCategoryTabs[$tableName])) {
-            $fieldList .= '--div--;LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_category.tabs.category, ';
+            $fieldList .= '--div--;LLL:EXT:core/Resources/Private/Language/locallang_tca.xlf:sys_category.tabs.category, ';
             $this->addedCategoryTabs[$tableName] = $tableName;
         }
         $fieldList .= $fieldName;
@@ -327,7 +335,7 @@ class CategoryRegistry implements SingletonInterface
         // Makes sure to add more TCA to an existing structure
         if (isset($GLOBALS['TCA'][$tableName]['columns'])) {
             // Take specific label into account
-            $label = 'LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_category.categories';
+            $label = 'LLL:EXT:core/Resources/Private/Language/locallang_tca.xlf:sys_category.categories';
             if (!empty($options['label'])) {
                 $label = $options['label'];
             }
@@ -356,6 +364,9 @@ class CategoryRegistry implements SingletonInterface
             }
             if (isset($options['displayCond'])) {
                 $columns[$fieldName]['displayCond'] = $options['displayCond'];
+            }
+            if (isset($options['onChange'])) {
+                $columns[$fieldName]['onChange'] = $options['onChange'];
             }
 
             // Register opposite references for the foreign side of a relation
@@ -389,7 +400,6 @@ class CategoryRegistry implements SingletonInterface
      * @param string $fieldName The field name (default categories)
      * @param array $fieldConfigurationOverride Changes to the default configuration
      * @return array
-     * @api
      */
     public static function getTcaFieldConfiguration($tableName, $fieldName = 'categories', array $fieldConfigurationOverride = [])
     {
@@ -434,26 +444,13 @@ class CategoryRegistry implements SingletonInterface
      *
      * @param array $sqlString
      * @return array
+     * @internal
      */
     public function addCategoryDatabaseSchemaToTablesDefinition(array $sqlString)
     {
         $this->registerDefaultCategorizedTables();
         $sqlString[] = $this->getDatabaseTableDefinitions();
         return ['sqlString' => $sqlString];
-    }
-
-    /**
-     * A slot method to inject the required category database fields of an
-     * extension to the tables definition string
-     *
-     * @param array $sqlString
-     * @param string $extensionKey
-     * @return array
-     */
-    public function addExtensionCategoryDatabaseSchemaToTablesDefinition(array $sqlString, $extensionKey)
-    {
-        $sqlString[] = $this->getDatabaseTableDefinition($extensionKey);
-        return ['sqlString' => $sqlString, 'extensionKey' => $extensionKey];
     }
 
     /**

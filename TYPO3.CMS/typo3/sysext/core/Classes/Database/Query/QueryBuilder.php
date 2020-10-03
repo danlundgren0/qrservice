@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Database\Query;
 
 /*
@@ -15,6 +15,10 @@ namespace TYPO3\CMS\Core\Database\Query;
  * The TYPO3 project - inspiring people to share!
  */
 
+use Doctrine\DBAL\Platforms\MySqlPlatform;
+use Doctrine\DBAL\Platforms\OraclePlatform;
+use Doctrine\DBAL\Platforms\PostgreSqlPlatform;
+use Doctrine\DBAL\Platforms\SqlitePlatform;
 use Doctrine\DBAL\Platforms\SQLServerPlatform;
 use Doctrine\DBAL\Query\Expression\CompositeExpression;
 use TYPO3\CMS\Core\Database\Connection;
@@ -59,19 +63,27 @@ class QueryBuilder
     protected $restrictionContainer;
 
     /**
+     * @var array
+     */
+    protected $additionalRestrictions;
+
+    /**
      * Initializes a new QueryBuilder.
      *
      * @param Connection $connection The DBAL Connection.
      * @param QueryRestrictionContainerInterface $restrictionContainer
      * @param \Doctrine\DBAL\Query\QueryBuilder $concreteQueryBuilder
+     * @param array $additionalRestrictions
      */
     public function __construct(
         Connection $connection,
         QueryRestrictionContainerInterface $restrictionContainer = null,
-        \Doctrine\DBAL\Query\QueryBuilder $concreteQueryBuilder = null
+        \Doctrine\DBAL\Query\QueryBuilder $concreteQueryBuilder = null,
+        array $additionalRestrictions = null
     ) {
         $this->connection = $connection;
-        $this->restrictionContainer = $restrictionContainer ?: GeneralUtility::makeInstance(DefaultRestrictionContainer::class);
+        $this->additionalRestrictions = $additionalRestrictions ?: $GLOBALS['TYPO3_CONF_VARS']['DB']['additionalQueryRestrictions'] ?? [];
+        $this->setRestrictions($restrictionContainer ?: GeneralUtility::makeInstance(DefaultRestrictionContainer::class));
         $this->concreteQueryBuilder = $concreteQueryBuilder ?: GeneralUtility::makeInstance(\Doctrine\DBAL\Query\QueryBuilder::class, $connection);
     }
 
@@ -88,6 +100,12 @@ class QueryBuilder
      */
     public function setRestrictions(QueryRestrictionContainerInterface $restrictionContainer)
     {
+        foreach ($this->additionalRestrictions as $restrictionClass => $options) {
+            if (empty($options['disabled'])) {
+                $restriction = GeneralUtility::makeInstance($restrictionClass);
+                $restrictionContainer->add($restriction);
+            }
+        }
         $this->restrictionContainer = $restrictionContainer;
     }
 
@@ -96,7 +114,7 @@ class QueryBuilder
      */
     public function resetRestrictions()
     {
-        $this->restrictionContainer = GeneralUtility::makeInstance(DefaultRestrictionContainer::class);
+        $this->setRestrictions(GeneralUtility::makeInstance(DefaultRestrictionContainer::class));
     }
 
     /**
@@ -337,12 +355,12 @@ class QueryBuilder
      * 'groupBy', 'having' and 'orderBy'.
      *
      * @param string $sqlPartName
-     * @param string $sqlPart
+     * @param string|array $sqlPart
      * @param bool $append
      *
      * @return QueryBuilder This QueryBuilder instance.
      */
-    public function add(string $sqlPartName, string $sqlPart, bool $append = false): QueryBuilder
+    public function add(string $sqlPartName, $sqlPart, bool $append = false): QueryBuilder
     {
         $this->concreteQueryBuilder->add($sqlPartName, $sqlPart, $append);
 
@@ -969,10 +987,19 @@ class QueryBuilder
     public function quoteIdentifiersForSelect(array $input): array
     {
         foreach ($input as &$select) {
-            list($fieldName, $alias, $suffix) = GeneralUtility::trimExplode(' AS ', $select, 3);
+            list($fieldName, $alias, $suffix) = array_pad(
+                GeneralUtility::trimExplode(
+                    ' AS ',
+                    str_ireplace(' as ', ' AS ', $select),
+                    true,
+                    3
+                ),
+                3,
+                null
+            );
             if (!empty($suffix)) {
                 throw new \InvalidArgumentException(
-                    'QueryBuilder::quoteIdentifiersForSelect() could not parse the input "' . $input . '"',
+                    'QueryBuilder::quoteIdentifiersForSelect() could not parse the select ' . $select . '.',
                     1461170686
                 );
             }
@@ -1008,6 +1035,46 @@ class QueryBuilder
     public function quoteColumnValuePairs(array $input): array
     {
         return $this->getConnection()->quoteColumnValuePairs($input);
+    }
+
+    /**
+     * Creates a cast of the $fieldName to a text datatype depending on the database management system.
+     *
+     * @param string $fieldName The fieldname will be quoted and casted according to database platform automatically
+     * @return string
+     */
+    public function castFieldToTextType(string $fieldName): string
+    {
+        $databasePlatform = $this->connection->getDatabasePlatform();
+        // https://dev.mysql.com/doc/refman/5.7/en/cast-functions.html#function_convert
+        if ($databasePlatform instanceof MySqlPlatform) {
+            return sprintf('CONVERT(%s, CHAR)', $this->connection->quoteIdentifier($fieldName));
+        }
+        // https://www.postgresql.org/docs/current/sql-createcast.html
+        if ($databasePlatform instanceof PostgreSqlPlatform) {
+            return sprintf('%s::text', $this->connection->quoteIdentifier($fieldName));
+        }
+        // https://www.sqlite.org/lang_expr.html#castexpr
+        if ($databasePlatform instanceof SqlitePlatform) {
+            return sprintf('CAST(%s as TEXT)', $this->connection->quoteIdentifier($fieldName));
+        }
+        // https://docs.microsoft.com/en-us/sql/t-sql/functions/cast-and-convert-transact-sql?view=sql-server-ver15#implicit-conversions
+        if ($databasePlatform instanceof SQLServerPlatform) {
+            return sprintf('CAST(%s as VARCHAR)', $this->connection->quoteIdentifier($fieldName));
+        }
+        // https://docs.oracle.com/javadb/10.8.3.0/ref/rrefsqlj33562.html
+        if ($databasePlatform instanceof OraclePlatform) {
+            return sprintf('CAST(%s as VARCHAR)', $this->connection->quoteIdentifier($fieldName));
+        }
+
+        throw new \RuntimeException(
+            sprintf(
+                '%s is not implemented for the used database platform "%s", yet!',
+                __METHOD__,
+                get_class($this->connection->getDatabasePlatform())
+            ),
+            1584637096
+        );
     }
 
     /**
@@ -1088,8 +1155,16 @@ class QueryBuilder
             $this->concreteQueryBuilder->andWhere($expression);
         }
 
-        // @todo add hook to be able to add additional restrictions
-
         return $originalWhereConditions;
+    }
+
+    /**
+     * Deep clone of the QueryBuilder
+     * @see \Doctrine\DBAL\Query\QueryBuilder::__clone()
+     */
+    public function __clone()
+    {
+        $this->concreteQueryBuilder = clone $this->concreteQueryBuilder;
+        $this->restrictionContainer = clone $this->restrictionContainer;
     }
 }

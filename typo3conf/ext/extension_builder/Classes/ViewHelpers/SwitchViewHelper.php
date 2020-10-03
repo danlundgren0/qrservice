@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\ViewHelpers;
 
 /*
@@ -14,9 +15,8 @@ namespace EBT\ExtensionBuilder\ViewHelpers;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Fluid\Core\Parser\SyntaxTree\ViewHelperNode;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
-use TYPO3\CMS\Fluid\Core\ViewHelper\Facets\ChildNodeAccessInterface;
+use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\ViewHelperNode;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 
 /**
  * Switch view helper which can be used to render content depending on a value or expression.
@@ -42,11 +42,12 @@ use TYPO3\CMS\Fluid\Core\ViewHelper\Facets\ChildNodeAccessInterface;
  * Depending on the scenario this can be easier to extend and possibly contains less duplication.
  *
  * @api
+ * @deprecated Use default `f:switch` instead
  */
-class SwitchViewHelper extends AbstractViewHelper implements ChildNodeAccessInterface
+class SwitchViewHelper extends AbstractViewHelper
 {
     /**
-     * An array of \TYPO3\CMS\Fluid\Core\Parser\SyntaxTree\AbstractNode
+     * An array of AbstractNode items
      * @var array
      */
     protected $childNodes = [];
@@ -60,7 +61,7 @@ class SwitchViewHelper extends AbstractViewHelper implements ChildNodeAccessInte
     protected $backupBreakState = false;
 
     /**
-     * Setter for ChildNodes - as defined in ChildNodeAccessInterface
+     * Setter for ChildNodes
      *
      * @param array $childNodes Child nodes of this syntax tree node
      * @return void
@@ -71,17 +72,25 @@ class SwitchViewHelper extends AbstractViewHelper implements ChildNodeAccessInte
     }
 
     /**
-     * @param mixed $expression
+     * Arguments Initialization
+     */
+    public function initializeArguments()
+    {
+        $this->registerArgument('expression', 'mixed', '', true);
+    }
+
+    /**
      * @return string the rendered string
      * @api
      */
-    public function render($expression)
+    public function render()
     {
         $content = '';
         $this->backupSwitchState();
         $templateVariableContainer = $this->renderingContext->getViewHelperVariableContainer();
 
-        $templateVariableContainer->addOrUpdate('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper', 'switchExpression', $expression);
+        $templateVariableContainer->addOrUpdate('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper', 'switchExpression',
+            $this->arguments['expression']);
         $templateVariableContainer->addOrUpdate('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper', 'break', false);
 
         foreach ($this->childNodes as $childNode) {
@@ -92,7 +101,8 @@ class SwitchViewHelper extends AbstractViewHelper implements ChildNodeAccessInte
                 continue;
             }
             $content = $childNode->evaluate($this->renderingContext);
-            if ($templateVariableContainer->get('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper', 'break') === true) {
+            if ($templateVariableContainer->get('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper',
+                    'break') === true) {
                 break;
             }
         }
@@ -111,11 +121,15 @@ class SwitchViewHelper extends AbstractViewHelper implements ChildNodeAccessInte
      */
     protected function backupSwitchState()
     {
-        if ($this->renderingContext->getViewHelperVariableContainer()->exists('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper', 'switchExpression')) {
-            $this->backupSwitchExpression = $this->renderingContext->getViewHelperVariableContainer()->get('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper', 'switchExpression');
+        if ($this->renderingContext->getViewHelperVariableContainer()->exists('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper',
+            'switchExpression')) {
+            $this->backupSwitchExpression = $this->renderingContext->getViewHelperVariableContainer()->get('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper',
+                'switchExpression');
         }
-        if ($this->renderingContext->getViewHelperVariableContainer()->exists('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper', 'break')) {
-            $this->backupBreakState = $this->renderingContext->getViewHelperVariableContainer()->get('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper', 'break');
+        if ($this->renderingContext->getViewHelperVariableContainer()->exists('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper',
+            'break')) {
+            $this->backupBreakState = $this->renderingContext->getViewHelperVariableContainer()->get('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper',
+                'break');
         }
     }
 
@@ -134,7 +148,8 @@ class SwitchViewHelper extends AbstractViewHelper implements ChildNodeAccessInte
             );
         }
         if ($this->backupBreakState !== false) {
-            $this->renderingContext->getViewHelperVariableContainer()->addOrUpdate('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper', 'break', true);
+            $this->renderingContext->getViewHelperVariableContainer()->addOrUpdate('EBT\ExtensionBuilder\ViewHelpers\SwitchViewHelper',
+                'break', true);
         }
     }
 }

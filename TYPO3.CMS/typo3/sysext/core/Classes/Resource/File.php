@@ -56,8 +56,8 @@ class File extends AbstractFile
      */
     public function __construct(array $fileData, ResourceStorage $storage, array $metaData = [])
     {
-        $this->identifier = $fileData['identifier'];
-        $this->name = $fileData['name'];
+        $this->identifier = $fileData['identifier'] ?? null;
+        $this->name = $fileData['name'] ?? '';
         $this->properties = $fileData;
         $this->storage = $storage;
         if (!empty($metaData)) {
@@ -79,10 +79,9 @@ class File extends AbstractFile
     {
         if (parent::hasProperty($key)) {
             return parent::getProperty($key);
-        } else {
-            $metaData = $this->_getMetaData();
-            return isset($metaData[$key]) ? $metaData[$key] : null;
         }
+        $metaData = $this->_getMetaData();
+        return $metaData[$key] ?? null;
     }
 
     /**
@@ -168,7 +167,7 @@ class File extends AbstractFile
     /**
      * Returns TRUE if this file is indexed
      *
-     * @return bool|NULL
+     * @return bool|null
      */
     public function isIndexed()
     {
@@ -211,7 +210,7 @@ class File extends AbstractFile
             $this->name = $properties['name'];
         }
 
-        if ($this->properties['uid'] != 0 && isset($properties['uid'])) {
+        if (isset($properties['uid']) && $this->properties['uid'] != 0) {
             unset($properties['uid']);
         }
         foreach ($properties as $key => $value) {
@@ -360,15 +359,14 @@ class File extends AbstractFile
      *
      * @param bool  $relativeToCurrentScript   Determines whether the URL returned should be relative to the current script, in case it is relative at all (only for the LocalDriver)
      *
-     * @return string
+     * @return string|null NULL if file is missing or deleted, the generated url otherwise
      */
     public function getPublicUrl($relativeToCurrentScript = false)
     {
         if ($this->isMissing() || $this->deleted) {
-            return false;
-        } else {
-            return $this->getStorage()->getPublicUrl($this, $relativeToCurrentScript);
+            return null;
         }
+        return $this->getStorage()->getPublicUrl($this, $relativeToCurrentScript);
     }
 
     /**

@@ -24,6 +24,7 @@ use TYPO3\CMS\Recordlist\View\FolderUtilityRenderer;
 
 /**
  * Browser for folders
+ * @internal This class is a specific LinkBrowser implementation and is not part of the TYPO3's Core API.
  */
 class FolderBrowser extends AbstractElementBrowser implements ElementBrowserInterface, LinkParameterProviderInterface
 {
@@ -33,7 +34,7 @@ class FolderBrowser extends AbstractElementBrowser implements ElementBrowserInte
      * If the value is NOT set, then it will be restored from the module session data.
      * Example value: "/www/htdocs/typo3/32/3dsplm/fileadmin/css/"
      *
-     * @var string|NULL
+     * @var string|null
      */
     protected $expandFolder;
 
@@ -108,7 +109,6 @@ class FolderBrowser extends AbstractElementBrowser implements ElementBrowserInte
         $markup[] = '   <div class="element-browser-panel element-browser-main">';
         $markup[] = '       <div class="element-browser-main-sidebar">';
         $markup[] = '           <div class="element-browser-body">';
-        $markup[] = '               <h3>' . htmlspecialchars($this->getLanguageService()->getLL('folderTree')) . ':</h3>';
         $markup[] = '               ' . $tree;
         $markup[] = '           </div>';
         $markup[] = '       </div>';
@@ -163,8 +163,8 @@ class FolderBrowser extends AbstractElementBrowser implements ElementBrowserInte
             $icon = '<span style="width: 16px; height: 16px; display: inline-block;"></span>';
             $icon .= '<span title="' . htmlspecialchars($subFolder->getName()) . '">' . $this->iconFactory->getIcon('apps-filetree-folder-default', Icon::SIZE_SMALL) . '</span>';
             // Create links for adding the folder:
-            $aTag = '<a href="#" data-folder-id="' . htmlspecialchars($folderIdentifier) . '" data-close="0">';
-            $aTag_alt = '<a href="#" data-folder-id="' . htmlspecialchars($folderIdentifier) . '" data-close="1">';
+            $aTag = '<a href="#" data-folder-id="' . htmlspecialchars($subFolderIdentifier) . '" data-close="0">';
+            $aTag_alt = '<a href="#" data-folder-id="' . htmlspecialchars($subFolderIdentifier) . '" data-close="1">';
             if (strstr($subFolderIdentifier, ',') || strstr($subFolderIdentifier, '|')) {
                 // In case an invalid character is in the filepath, display error message:
                 $errorMessage = sprintf(htmlspecialchars($lang->getLL('invalidChar')), ', |');
@@ -215,7 +215,7 @@ class FolderBrowser extends AbstractElementBrowser implements ElementBrowserInte
     {
         return [
             'mode' => 'folder',
-            'expandFolder' => isset($values['identifier']) ? $values['identifier'] : $this->expandFolder,
+            'expandFolder' => $values['identifier'] ?? $this->expandFolder,
             'bparams' => $this->bparams
         ];
     }

@@ -14,19 +14,35 @@ namespace TYPO3\CMS\Beuser\Controller;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Compatibility\PublicMethodDeprecationTrait;
 use TYPO3\CMS\Core\Session\Backend\SessionBackendInterface;
 use TYPO3\CMS\Core\Session\SessionManager;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Extbase\Mvc\Controller\ActionController;
+use TYPO3\CMS\Extbase\Mvc\View\ViewInterface;
 use TYPO3\CMS\Extbase\Utility\LocalizationUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Backend module user administration controller
+ * @internal This class is a TYPO3 Backend implementation and is not considered part of the Public TYPO3 API.
  */
-class BackendUserController extends BackendUserActionController
+class BackendUserController extends ActionController
 {
+    use PublicMethodDeprecationTrait;
+
+    /**
+     * @var array
+     */
+    private $deprecatedPublicMethods = [
+        'initializeView' => 'Using BackendUserController::initializeView() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+    ];
+
+    /**
+     * @var int
+     */
+    const RECENT_USERS_LIMIT = 3;
+
     /**
      * @var \TYPO3\CMS\Beuser\Domain\Model\ModuleData
      */
@@ -105,20 +121,16 @@ class BackendUserController extends BackendUserActionController
     }
 
     /**
-     * Initialize actions
-     *
-     * @throws \RuntimeException
+     * Assign default variables to view
+     * @param ViewInterface $view
      */
-    public function initializeAction()
+    protected function initializeView(ViewInterface $view)
     {
-        // @TODO: Extbase backend modules relies on frontend TypoScript for view, persistence
-        // and settings. Thus, we need a TypoScript root template, that then loads the
-        // ext_typoscript_setup.txt file of this module. This is nasty, but can not be
-        // circumvented until there is a better solution in extbase.
-        // For now we throw an exception if no settings are detected.
-        if (empty($this->settings)) {
-            throw new \RuntimeException('No settings detected. This module can not work then. This usually happens if there is no frontend TypoScript template with root flag set. ' . 'Please create a frontend page with a TypoScript root template.', 1344375003);
-        }
+        $view->assignMultiple([
+            'shortcutLabel' => 'backendUsers',
+            'dateFormat' => $GLOBALS['TYPO3_CONF_VARS']['SYS']['ddmmyy'],
+            'timeFormat' => $GLOBALS['TYPO3_CONF_VARS']['SYS']['hhmm'],
+        ]);
     }
 
     /**
@@ -149,18 +161,16 @@ class BackendUserController extends BackendUserActionController
                 $onlineBackendUsers[$onlineUser['ses_userid']] = true;
             }
         }
-        $this->view->assign('onlineBackendUsers', $onlineBackendUsers);
 
-        $this->view->assign('demand', $demand);
-        $this->view->assign('returnUrl', rawurlencode(BackendUtility::getModuleUrl('system_BeuserTxBeuser')));
-        $this->view->assign('dateFormat', $GLOBALS['TYPO3_CONF_VARS']['SYS']['ddmmyy']);
-        $this->view->assign('timeFormat', $GLOBALS['TYPO3_CONF_VARS']['SYS']['hhmm']);
-        $this->view->assign('backendUsers', $this->backendUserRepository->findDemanded($demand));
-        $this->view->assign('backendUserGroups', array_merge([''], $this->backendUserGroupRepository->findAll()->toArray()));
-        $this->view->assign('compareUserUidList', array_map(function ($item) {
-            return true;
-        }, array_flip((array)$compareUserList)));
-        $this->view->assign('compareUserList', !empty($compareUserList) ? $this->backendUserRepository->findByUidList($compareUserList) : '');
+        $this->view->assignMultiple([
+            'onlineBackendUsers' => $onlineBackendUsers,
+            'demand' => $demand,
+            'backendUsers' => $this->backendUserRepository->findDemanded($demand),
+            'backendUserGroups' => array_merge([''], $this->backendUserGroupRepository->findAll()->toArray()),
+            'compareUserUidList' => array_combine($compareUserList, $compareUserList),
+            'currentUserUid' => $this->getBackendUserAuthentication()->user['uid'],
+            'compareUserList' => !empty($compareUserList) ? $this->backendUserRepository->findByUidList($compareUserList) : '',
+        ]);
     }
 
     /**
@@ -176,10 +186,12 @@ class BackendUserController extends BackendUserActionController
                 'sessions' => $this->backendUserSessionRepository->findByBackendUser($onlineUser)
             ];
         }
-        $this->view->assign('dateFormat', $GLOBALS['TYPO3_CONF_VARS']['SYS']['ddmmyy']);
-        $this->view->assign('timeFormat', $GLOBALS['TYPO3_CONF_VARS']['SYS']['hhmm']);
-        $this->view->assign('onlineUsersAndSessions', $onlineUsersAndSessions);
-        $this->view->assign('currentSessionId', $this->getBackendUserAuthentication()->user['ses_id']);
+
+        $this->view->assignMultiple([
+            'shortcutLabel' => 'onlineUsers',
+            'onlineUsersAndSessions' => $onlineUsersAndSessions,
+            'currentSessionId' => $this->getBackendUserAuthentication()->user['ses_id'],
+        ]);
     }
 
     /**
@@ -188,9 +200,14 @@ class BackendUserController extends BackendUserActionController
     public function compareAction()
     {
         $compareUserList = $this->moduleData->getCompareUserList();
-        $this->view->assign('dateFormat', $GLOBALS['TYPO3_CONF_VARS']['SYS']['ddmmyy']);
-        $this->view->assign('timeFormat', $GLOBALS['TYPO3_CONF_VARS']['SYS']['hhmm']);
-        $this->view->assign('compareUserList', !empty($compareUserList) ? $this->backendUserRepository->findByUidList($compareUserList) : '');
+        if (empty($compareUserList)) {
+            $this->redirect('index');
+        }
+
+        $this->view->assignMultiple([
+            'shortcutLabel' => 'compareUsers',
+            'compareUserList' => $this->backendUserRepository->findByUidList($compareUserList),
+        ]);
     }
 
     /**
@@ -246,6 +263,7 @@ class BackendUserController extends BackendUserActionController
         if (is_array($targetUser) && $this->getBackendUserAuthentication()->isAdmin()) {
             // Set backend user listing module as starting module for switchback
             $this->getBackendUserAuthentication()->uc['startModuleOnFirstLogin'] = 'system_BeuserTxBeuser';
+            $this->getBackendUserAuthentication()->uc['recentSwitchedToUsers'] = $this->generateListOfMostRecentSwitchedUsers($targetUser['uid']);
             $this->getBackendUserAuthentication()->writeUC();
 
             $sessionBackend = $this->getSessionBackend();
@@ -257,25 +275,56 @@ class BackendUserController extends BackendUserActionController
                 ]
             );
 
+            $this->emitSwitchUserSignal($targetUser);
+
             $redirectUrl = 'index.php' . ($GLOBALS['TYPO3_CONF_VARS']['BE']['interfaces'] ? '' : '?commandLI=1');
             \TYPO3\CMS\Core\Utility\HttpUtility::redirect($redirectUrl);
         }
     }
 
     /**
-     * @return BackendUserAuthentication
+     * Generates a list of users to whom where switched in the past. This is limited by RECENT_USERS_LIMIT.
+     *
+     * @param int $targetUserUid
+     * @return int[]
      */
-    protected function getBackendUserAuthentication()
+    protected function generateListOfMostRecentSwitchedUsers(int $targetUserUid): array
     {
-        return $GLOBALS['BE_USER'];
+        $latestUserUids = [];
+        $backendUser = $this->getBackendUserAuthentication();
+
+        if (isset($backendUser->uc['recentSwitchedToUsers']) && is_array($backendUser->uc['recentSwitchedToUsers'])) {
+            $latestUserUids = $backendUser->uc['recentSwitchedToUsers'];
+        }
+
+        // Remove potentially existing user in that list
+        $index = array_search($targetUserUid, $latestUserUids, true);
+        if ($index !== false) {
+            unset($latestUserUids[$index]);
+        }
+
+        array_unshift($latestUserUids, $targetUserUid);
+        $latestUserUids = array_slice($latestUserUids, 0, static::RECENT_USERS_LIMIT);
+
+        return $latestUserUids;
     }
 
     /**
-     * @return LanguageService
+     * Emit a signal when using the "switch to user" functionality
+     *
+     * @param array $targetUser
      */
-    protected function getLanguageService()
+    protected function emitSwitchUserSignal(array $targetUser)
     {
-        return $GLOBALS['LANG'];
+        $this->signalSlotDispatcher->dispatch(__CLASS__, 'switchUser', [$targetUser]);
+    }
+
+    /**
+     * @return BackendUserAuthentication
+     */
+    protected function getBackendUserAuthentication(): BackendUserAuthentication
+    {
+        return $GLOBALS['BE_USER'];
     }
 
     /**

@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Controller;
 
 /*
@@ -24,6 +24,7 @@ use TYPO3\CMS\Form\Mvc\Configuration\ConfigurationManagerInterface;
  * The abstract form backend controller
  *
  * Scope: backend
+ * @internal
  */
 abstract class AbstractBackendController extends ActionController
 {

@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Lowlevel\Command;
 
 /*
@@ -52,7 +52,7 @@ class CleanFlexFormsCommand extends Command
                 'depth',
                 'd',
                 InputOption::VALUE_REQUIRED,
-                'Setting traversal depth. 0 (zero) will only analyse start page (see --pid), 1 will traverse one level of subpages etc.'
+                'Setting traversal depth. 0 (zero) will only analyze start page (see --pid), 1 will traverse one level of subpages etc.'
             )
             ->addOption(
                 'dry-run',
@@ -71,7 +71,7 @@ class CleanFlexFormsCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output)
     {
         // Make sure the _cli_ user is loaded
-        Bootstrap::getInstance()->initializeBackendAuthentication();
+        Bootstrap::initializeBackendAuthentication();
 
         $io = new SymfonyStyle($input, $output);
         $io->title($this->getDescription());
@@ -232,7 +232,7 @@ class CleanFlexFormsCommand extends Command
                 if ($fullRecord[$columnName]) {
                     // Clean XML and check against the record fetched from the database
                     $newXML = $flexObj->cleanFlexFormXML($tableName, $columnName, $fullRecord);
-                    if (md5($fullRecord[$columnName]) !== md5($newXML)) {
+                    if (!hash_equals(md5($fullRecord[$columnName]), md5($newXML))) {
                         $dirtyFlexFormFields[$tableName . ':' . $uid . ':' . $columnName] = $fullRecord;
                     }
                 }

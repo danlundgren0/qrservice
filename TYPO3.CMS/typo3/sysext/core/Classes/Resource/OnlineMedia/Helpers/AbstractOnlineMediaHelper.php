@@ -14,6 +14,7 @@ namespace TYPO3\CMS\Core\Resource\OnlineMedia\Helpers;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Resource\DuplicationBehavior;
 use TYPO3\CMS\Core\Resource\File;
 use TYPO3\CMS\Core\Resource\Folder;
@@ -59,6 +60,10 @@ abstract class AbstractOnlineMediaHelper implements OnlineMediaHelperInterface
     public function getOnlineMediaId(File $file)
     {
         if (!isset($this->onlineMediaIdCache[$file->getUid()])) {
+            // Limiting media identifier to 2048 bytes
+            if ($file->getSize() > 2048) {
+                return '';
+            }
             // By definition these files only contain the ID of the remote media source
             $this->onlineMediaIdCache[$file->getUid()] = trim($file->getContents());
         }
@@ -71,7 +76,7 @@ abstract class AbstractOnlineMediaHelper implements OnlineMediaHelperInterface
      * @param string $onlineMediaId
      * @param Folder $targetFolder
      * @param string $fileExtension
-     * @return File|NULL
+     * @return File|null
      */
     protected function findExistingFileByOnlineMediaId($onlineMediaId, Folder $targetFolder, $fileExtension)
     {
@@ -107,7 +112,6 @@ abstract class AbstractOnlineMediaHelper implements OnlineMediaHelperInterface
         $temporaryFile = GeneralUtility::tempnam('online_media');
         GeneralUtility::writeFileToTypo3tempDir($temporaryFile, $onlineMediaId);
         $file = $targetFolder->addFile($temporaryFile, $fileName, DuplicationBehavior::RENAME);
-        GeneralUtility::unlink_tempfile($temporaryFile);
         return $file;
     }
 
@@ -118,7 +122,7 @@ abstract class AbstractOnlineMediaHelper implements OnlineMediaHelperInterface
      */
     protected function getTempFolderPath()
     {
-        $path = PATH_site . 'typo3temp/var/transient/';
+        $path = Environment::getVarPath() . '/transient/';
         if (!is_dir($path)) {
             GeneralUtility::mkdir_deep($path);
         }

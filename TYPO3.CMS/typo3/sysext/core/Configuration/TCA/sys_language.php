@@ -4,7 +4,7 @@ return [
         'label' => 'title',
         'tstamp' => 'tstamp',
         'sortby' => 'sorting',
-        'title' => 'LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_language',
+        'title' => 'LLL:EXT:core/Resources/Private/Language/locallang_tca.xlf:sys_language',
         'adminOnly' => true,
         'rootLevel' => 1,
         'enablecolumns' => [
@@ -22,7 +22,7 @@ return [
     ],
     'columns' => [
         'title' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_general.xlf:LGL.language',
+            'label' => 'LLL:EXT:core/Resources/Private/Language/locallang_general.xlf:LGL.language',
             'config' => [
                 'type' => 'input',
                 'size' => 35,
@@ -31,16 +31,24 @@ return [
             ]
         ],
         'hidden' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_general.xlf:LGL.disable',
+            'label' => 'LLL:EXT:core/Resources/Private/Language/locallang_general.xlf:LGL.enabled',
             'exclude' => true,
             'config' => [
                 'type' => 'check',
-                'default' => 0
+                'renderType' => 'checkboxToggle',
+                'default' => 0,
+                'items' => [
+                    [
+                        0 => '',
+                        1 => '',
+                        'invertStateDisplay' => true
+                    ]
+                ],
             ]
         ],
         'language_isocode' => [
             'exclude' => true,
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_language.language_isocode',
+            'label' => 'LLL:EXT:core/Resources/Private/Language/locallang_tca.xlf:sys_language.language_isocode',
             'config' => [
                 'type' => 'select',
                 'renderType' => 'selectSingle',
@@ -52,7 +60,7 @@ return [
             ]
         ],
         'flag' => [
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_language.flag',
+            'label' => 'LLL:EXT:core/Resources/Private/Language/locallang_tca.xlf:sys_language.flag',
             'config' => [
                 'type' => 'select',
                 'renderType' => 'selectSingle',
@@ -68,6 +76,7 @@ return [
                     ['am', 'am', 'flags-am'],
                     ['an', 'an', 'flags-an'],
                     ['ao', 'ao', 'flags-ao'],
+                    ['aq', 'aq', 'flags-aq'],
                     ['ar', 'ar', 'flags-ar'],
                     ['as', 'as', 'flags-as'],
                     ['at', 'at', 'flags-at'],
@@ -84,9 +93,11 @@ return [
                     ['bh', 'bh', 'flags-bh'],
                     ['bi', 'bi', 'flags-bi'],
                     ['bj', 'bj', 'flags-bj'],
+                    ['bl', 'bl', 'flags-bl'],
                     ['bm', 'bm', 'flags-bm'],
                     ['bn', 'bn', 'flags-bn'],
                     ['bo', 'bo', 'flags-bo'],
+                    ['bq', 'bq', 'flags-bq'],
                     ['br', 'br', 'flags-br'],
                     ['bs', 'bs', 'flags-bs'],
                     ['bt', 'bt', 'flags-bt'],
@@ -111,6 +122,7 @@ return [
                     ['cs', 'cs', 'flags-cs'],
                     ['cu', 'cu', 'flags-cu'],
                     ['cv', 'cv', 'flags-cv'],
+                    ['cw', 'cw', 'flags-cw'],
                     ['cx', 'cx', 'flags-cx'],
                     ['cy', 'cy', 'flags-cy'],
                     ['cz', 'cz', 'flags-cz'],
@@ -130,7 +142,6 @@ return [
                     ['es', 'es', 'flags-es'],
                     ['et', 'et', 'flags-et'],
                     ['eu', 'eu', 'flags-eu'],
-                    ['fam', 'fam', 'flags-fam'],
                     ['fi', 'fi', 'flags-fi'],
                     ['fj', 'fj', 'flags-fj'],
                     ['fk', 'fk', 'flags-fk'],
@@ -142,6 +153,7 @@ return [
                     ['gd', 'gd', 'flags-gd'],
                     ['ge', 'ge', 'flags-ge'],
                     ['gf', 'gf', 'flags-gf'],
+                    ['gg', 'gg', 'flags-gg'],
                     ['gh', 'gh', 'flags-gh'],
                     ['gi', 'gi', 'flags-gi'],
                     ['gl', 'gl', 'flags-gl'],
@@ -164,6 +176,7 @@ return [
                     ['id', 'id', 'flags-id'],
                     ['ie', 'ie', 'flags-ie'],
                     ['il', 'il', 'flags-il'],
+                    ['im', 'im', 'flags-im'],
                     ['in', 'in', 'flags-in'],
                     ['io', 'io', 'flags-io'],
                     ['iq', 'iq', 'flags-iq'],
@@ -199,8 +212,10 @@ return [
                     ['mc', 'mc', 'flags-mc'],
                     ['md', 'md', 'flags-md'],
                     ['me', 'me', 'flags-me'],
+                    ['mf', 'mf', 'flags-mf'],
                     ['mg', 'mg', 'flags-mg'],
                     ['mh', 'mh', 'flags-mh'],
+                    ['mi', 'mi', 'flags-mi'],
                     ['mk', 'mk', 'flags-mk'],
                     ['ml', 'ml', 'flags-ml'],
                     ['mm', 'mm', 'flags-mm'],
@@ -223,6 +238,7 @@ return [
                     ['nf', 'nf', 'flags-nf'],
                     ['ng', 'ng', 'flags-ng'],
                     ['ni', 'ni', 'flags-ni'],
+                    ['gb-nir', 'gb-nir', 'flags-gb-nir'],
                     ['nl', 'nl', 'flags-nl'],
                     ['no', 'no', 'flags-no'],
                     ['np', 'np', 'flags-np'],
@@ -254,7 +270,7 @@ return [
                     ['sa', 'sa', 'flags-sa'],
                     ['sb', 'sb', 'flags-sb'],
                     ['sc', 'sc', 'flags-sc'],
-                    ['scotland', 'scotland', 'flags-scotland'],
+                    ['gb-sct', 'gb-sct', 'flags-gb-sct'],
                     ['sd', 'sd', 'flags-sd'],
                     ['se', 'se', 'flags-se'],
                     ['sg', 'sg', 'flags-sg'],
@@ -267,8 +283,10 @@ return [
                     ['sn', 'sn', 'flags-sn'],
                     ['so', 'so', 'flags-so'],
                     ['sr', 'sr', 'flags-sr'],
+                    ['ss', 'ss', 'flags-ss'],
                     ['st', 'st', 'flags-st'],
                     ['sv', 'sv', 'flags-sv'],
+                    ['sx', 'sx', 'flags-sx'],
                     ['sy', 'sy', 'flags-sy'],
                     ['sz', 'sz', 'flags-sz'],
                     ['tc', 'tc', 'flags-tc'],
@@ -300,14 +318,14 @@ return [
                     ['vi', 'vi', 'flags-vi'],
                     ['vn', 'vn', 'flags-vn'],
                     ['vu', 'vu', 'flags-vu'],
-                    ['wales', 'wales', 'flags-wales'],
+                    ['gb-wls', 'gb-wls', 'flags-gb-wls'],
                     ['wf', 'wf', 'flags-wf'],
                     ['ws', 'ws', 'flags-ws'],
                     ['ye', 'ye', 'flags-ye'],
                     ['yt', 'yt', 'flags-yt'],
                     ['za', 'za', 'flags-za'],
                     ['zm', 'zm', 'flags-zm'],
-                    ['zw', 'zw', 'flags-zw']
+                    ['zw', 'zw', 'flags-zw'],
                 ],
                 'size' => 1,
                 'minitems' => 0,

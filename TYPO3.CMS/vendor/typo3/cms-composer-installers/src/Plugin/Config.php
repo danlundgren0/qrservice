@@ -26,19 +26,14 @@ class Config
     /**
      * @var array
      */
-    public static $defaultConfig = array(
-        'web-dir' => '.',
-        'prepare-web-dir' => true,
-        'cms-package-dir' => 'typo3_src',
-        'extensions-in-vendor-dir' => false,
-        // The following values are for internal use only and does not represent public API
+    public static $defaultConfig = [
+        'web-dir' => 'public',
+        'root-dir' => '{$web-dir}',
+        'app-dir' => '{$base-dir}',
+        // The following values are for internal use only and do not represent public API
         // Names and behaviour of these values might change without notice
         'composer-mode' => true,
-        'backend-dir' => '{$web-dir}/typo3',
-        'config-dir' => '{$web-dir}/typo3conf',
-        'temporary-dir' => '{$web-dir}/typo3temp',
-        'cache-dir' => '{$temporary-dir}/Cache',
-    );
+    ];
 
     /**
      * @var array
@@ -86,13 +81,12 @@ class Config
     {
         switch ($key) {
             case 'web-dir':
-            case 'backend-dir':
-            case 'config-dir':
-            case 'temporary-dir':
-            case 'cache-dir':
-            case 'cms-package-dir':
+            case 'root-dir':
+            case 'app-dir':
                 $val = rtrim($this->process($this->config[$key], $flags), '/\\');
                 return ($flags & self::RELATIVE_PATHS === 1) ? $val : $this->realpath($val);
+            case 'base-dir':
+                return ($flags & self::RELATIVE_PATHS === 1) ? '' : $this->realpath($this->baseDir);
             default:
                 if (!isset($this->config[$key])) {
                     return null;
@@ -107,7 +101,7 @@ class Config
      */
     public function all($flags = 0)
     {
-        $all = array();
+        $all = [];
         foreach (array_keys($this->config) as $key) {
             $all['config'][$key] = $this->get($key, $flags);
         }
@@ -120,9 +114,9 @@ class Config
      */
     public function raw()
     {
-        return array(
+        return [
             'config' => $this->config,
-        );
+        ];
     }
 
     /**
@@ -151,11 +145,13 @@ class Config
             return $value;
         }
 
-        return preg_replace_callback('#\{\$(.+)\}#',
+        return preg_replace_callback(
+            '#\{\$(.+)\}#',
             function ($match) use ($config, $flags) {
                 return $config->get($match[1], $flags);
             },
-            $value);
+            $value
+        );
     }
 
     /**
@@ -168,7 +164,10 @@ class Config
      */
     protected function realpath($path)
     {
-        if (substr($path, 0, 1) === '/' || substr($path, 1, 1) === ':') {
+        if ($path === '') {
+            return $this->baseDir;
+        }
+        if ($path[0] === '/' || (!empty($path[1]) && $path[1] === ':')) {
             return $path;
         }
 
@@ -192,18 +191,16 @@ class Config
         static $config;
         if ($config === null) {
             $baseDir = static::extractBaseDir($composer->getConfig());
+            if ($composer->getPackage()->getName() === 'typo3/cms') {
+                // Configuration for the web dir is different, in case
+                // typo3/cms is the root package
+                self::$defaultConfig['web-dir'] = '.';
+            }
             $config = new static($baseDir);
             $rootPackageExtraConfig = $composer->getPackage()->getExtra();
             if (is_array($rootPackageExtraConfig)) {
                 $config->merge($rootPackageExtraConfig);
             }
-            $config->merge(
-                array(
-                    'typo3/cms' => array(
-                        'vendor-dir' => $composer->getConfig()->get('vendor-dir')
-                    )
-                )
-            );
         }
         return $config;
     }

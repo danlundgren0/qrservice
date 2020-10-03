@@ -70,7 +70,7 @@ class PageTreeView extends AbstractTreeView
      */
     public function init($clause = '', $orderByFields = '')
     {
-        parent::init(' AND deleted=0 ' . $clause, 'sorting');
+        parent::init(' AND deleted=0 AND sys_language_uid=0 ' . $clause, 'sorting');
     }
 
     /**
@@ -94,7 +94,7 @@ class PageTreeView extends AbstractTreeView
      * @param int $nextCount The number of sub-elements to the current element.
      * @param bool $isExpand The element was expanded to render subelements if this flag is set.
      * @return string Image tag with the plus/minus icon.
-     * @access private
+     * @internal
      * @see AbstractTreeView::PMicon()
      */
     public function PMicon($row, $a, $c, $nextCount, $isExpand)
@@ -106,7 +106,7 @@ class PageTreeView extends AbstractTreeView
      * Get stored tree structure AND updating it if needed according to incoming PM GET var.
      * - Here we just set it to nothing since we want to just render the tree, nothing more.
      *
-     * @access private
+     * @internal
      */
     public function initializePositionSaving()
     {
@@ -125,20 +125,20 @@ class PageTreeView extends AbstractTreeView
     {
         $lang = $this->getLanguageService();
         if ($this->ext_showNavTitle && isset($row['nav_title']) && trim($row['nav_title']) !== '') {
-            $title = '<span title="' . htmlspecialchars($lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:title')) . ' '
-                     . htmlspecialchars(trim($row['title'])) . '">'
-                     . htmlspecialchars(GeneralUtility::fixed_lgd_cs($row['nav_title'], $titleLen))
-                     . '</span>';
+            $title = '<span title="' . htmlspecialchars($lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_tca.xlf:title')) . ' '
+                        . htmlspecialchars(trim($row['title'])) . '">'
+                        . htmlspecialchars(GeneralUtility::fixed_lgd_cs($row['nav_title'], $titleLen))
+                        . '</span>';
         } else {
             $title = htmlspecialchars(GeneralUtility::fixed_lgd_cs($row['title'], $titleLen));
             if (isset($row['nav_title']) && trim($row['nav_title']) !== '') {
                 $title = '<span title="'
-                         . htmlspecialchars($lang->sL('LLL:EXT:frontend/Resources/Private/Language/locallang_tca.xlf:pages.nav_title'))
-                         . ' ' . htmlspecialchars(trim($row['nav_title'])) . '">' . $title
-                         . '</span>';
+                            . htmlspecialchars($lang->sL('LLL:EXT:frontend/Resources/Private/Language/locallang_tca.xlf:pages.nav_title'))
+                            . ' ' . htmlspecialchars(trim($row['nav_title'])) . '">' . $title
+                            . '</span>';
             }
             $title = trim($row['title']) === ''
-                ? '<em>[' . htmlspecialchars($lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.no_title')) . ']</em>'
+                ? '<em>[' . htmlspecialchars($lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.no_title')) . ']</em>'
                 : $title;
         }
         return $title;

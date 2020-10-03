@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Configuration;
 
 /*
@@ -16,8 +16,8 @@ namespace TYPO3\CMS\Core\Configuration;
  */
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
-use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Configuration\Loader\YamlFileLoader;
+use TYPO3\CMS\Core\TypoScript\TypoScriptService;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
@@ -52,59 +52,24 @@ class Richtext
         // The main problem here is that all parameters that the processing needs is handed over to as TSconfig
         // "dotted array" syntax. We convert at least the processing information available under "processing"
         // together with pageTS, this way it can be overridden and understood in RteHtmlParser.
-        // However, all other parts of the core will depend on the non-dotted syntax (coming from Yaml directly)
+        // However, all other parts of the core will depend on the non-dotted syntax (coming from YAML directly)
 
-        if (!isset($tcaFieldConf['richtextConfiguration'])) {
-            $tcaFieldConf['richtextConfiguration'] = 'default';
-        }
-        $usePreset = $tcaFieldConf['richtextConfiguration'];
-        $configuration = $this->loadConfigurationFromPreset($tcaFieldConf['richtextConfiguration']);
+        $pageTs = $this->getPageTsConfiguration($table, $field, $pid, $recordType);
 
-        // Overload with PageTSconfig configuration
-        // First use RTE.*
-        // Then overload with RTE.default
-        // Then overload with RTE.config.tt_content.bodytext
-        // Then overload with RTE.config.tt_content.bodytext.types.textmedia
-        $fullPageTsConfig = $this->getRtePageTsConfigOfPid($pid);
-        $fullPageTsConfig = !empty($fullPageTsConfig['properties']) ? $fullPageTsConfig['properties'] : [];
-        $defaultPageTsConfigOverrides = isset($fullPageTsConfig['default.']) ? $fullPageTsConfig['default.'] : null;
-        $fieldSpecificPageTsConfigOverrides = isset($fullPageTsConfig['config.'][$table . '.'][$field . '.']) ? $fullPageTsConfig['config.'][$table . '.'][$field . '.'] : null;
-        unset($fullPageTsConfig['default.'], $fullPageTsConfig['config.']);
-        // RTE.* (used for RTE.classesAnchor or similar in RTEHtmlArea)
-        if (!empty($fullPageTsConfig)) {
-            ArrayUtility::mergeRecursiveWithOverrule($configuration, $fullPageTsConfig);
-        }
-        // RTE.default.*
-        if (is_array($defaultPageTsConfigOverrides)) {
-            ArrayUtility::mergeRecursiveWithOverrule($configuration, $defaultPageTsConfigOverrides);
-        }
-        // RTE.config.tt_content.bodytext and based on type as well
-        if (is_array($fieldSpecificPageTsConfigOverrides)) {
-            $fieldSpecificPageTsConfigOverridesWithoutType = $fieldSpecificPageTsConfigOverrides;
-            unset($fieldSpecificPageTsConfigOverridesWithoutType['types.']);
-            ArrayUtility::mergeRecursiveWithOverrule($configuration, $fieldSpecificPageTsConfigOverridesWithoutType);
-            if ($recordType
-                && isset($fieldSpecificPageTsConfigOverrides['types.'][$recordType . '.'])
-                && is_array($fieldSpecificPageTsConfigOverrides['types.'][$recordType . '.'])) {
-                ArrayUtility::mergeRecursiveWithOverrule(
-                    $configuration,
-                    $fieldSpecificPageTsConfigOverrides['types.'][$recordType . '.']
-                );
-            }
-        }
+        // determine which preset to use
+        $usePreset = $pageTs['preset'] ?? $tcaFieldConf['richtextConfiguration'] ?? 'default';
 
-        // Reload the base configuration, if overridden via PageTS "RTE.default.preset = Minimal" for instance
-        // However, if a preset is chosen via TSconfig, then it is not possible to override anything else again
-        // via TSconfig (endless loop).
-        if (isset($configuration['preset']) && $usePreset !== $configuration['preset']) {
-            $configuration = $this->loadConfigurationFromPreset($configuration['preset']);
-        }
+        // load configuration from preset
+        $configuration = $this->loadConfigurationFromPreset($usePreset);
+
+        // overlay preset configuration with pageTs
+        ArrayUtility::mergeRecursiveWithOverrule(
+            $configuration,
+            $this->addFlattenedPageTsConfig($pageTs)
+        );
 
         // Handle "mode" / "transformation" config when overridden
-        if (isset($configuration['proc.']['overruleMode']) && $configuration['proc.']['overruleMode'] === 'ts_css') {
-            // Change legacy 'ts_css' to 'default'
-            $configuration['proc.']['overruleMode'] = 'default';
-        } elseif (!isset($configuration['proc.']['mode']) && !isset($configuration['proc.']['overruleMode'])) {
+        if (!isset($configuration['proc.']['mode']) && !isset($configuration['proc.']['overruleMode'])) {
             $configuration['proc.']['overruleMode'] = 'default';
         }
 
@@ -140,14 +105,12 @@ class Richtext
      */
     protected function getRtePageTsConfigOfPid(int $pid): array
     {
-        // Override with pageTs if needed
-        $backendUser = $this->getBackendUser();
-        return $backendUser->getTSConfig('RTE', BackendUtility::getPagesTSconfig($pid));
+        return BackendUtility::getPagesTSconfig($pid)['RTE.'] ?? [];
     }
 
     /**
      * Returns an array with Typoscript the old way (with dot)
-     * Since the functionality in Yaml is without the dots, but the new configuration is used without the dots
+     * Since the functionality in YAML is without the dots, but the new configuration is used without the dots
      * this functionality adds also an explicit = 1 to the arrays
      *
      * @param array $plainArray An array
@@ -163,17 +126,80 @@ class Richtext
                 }
                 $typoScriptArray[$key . '.'] = $this->convertPlainArrayToTypoScriptArray($value);
             } else {
-                $typoScriptArray[$key] = is_null($value) ? '' : $value;
+                $typoScriptArray[$key] = $value === null ? '' : $value;
             }
         }
         return $typoScriptArray;
     }
 
     /**
-     * @return BackendUserAuthentication
+     * Add all PageTS.RTE options keys to configuration without dots
+     *
+     * We need to keep the dotted keys for backwards compatibility like ext:rtehtmlarea
+     *
+     * @param array $typoScriptArray TypoScriptArray
+     * @return array array with config without dots added
      */
-    protected function getBackendUser() : BackendUserAuthentication
+    protected function addFlattenedPageTsConfig(array $typoScriptArray): array
     {
-        return $GLOBALS['BE_USER'];
+        foreach ($typoScriptArray as $key => $data) {
+            if (substr($key, -1) !== '.') {
+                continue;
+            }
+            /** @var TypoScriptService $typoScriptService */
+            $typoScriptService = GeneralUtility::makeInstance(TypoScriptService::class);
+            $typoScriptArray[substr($key, 0, -1)] = $typoScriptService->convertTypoScriptArrayToPlainArray($typoScriptArray[$key]);
+        }
+
+        return $typoScriptArray;
+    }
+
+    /**
+     * Load PageTS configuration for the RTE
+     *
+     * Return RTE section of page TS, taking into account overloading via table, field and record type
+     *
+     * @param string $table The table the field is in
+     * @param string $field Field name
+     * @param int $pid Real page id
+     * @param string $recordType Record type value
+     * @return array
+     */
+    protected function getPageTsConfiguration(string $table, string $field, int $pid, string $recordType): array
+    {
+        // Load PageTSconfig configuration
+        $fullPageTsConfig = $this->getRtePageTsConfigOfPid($pid);
+        $defaultPageTsConfigOverrides = $fullPageTsConfig['default.'] ?? null;
+        $fieldSpecificPageTsConfigOverrides = $fullPageTsConfig['config.'][$table . '.'][$field . '.'] ?? null;
+        unset($fullPageTsConfig['default.'], $fullPageTsConfig['config.']);
+
+        // First use RTE.*
+        $rtePageTsConfiguration = $fullPageTsConfig;
+
+        // Then overload with RTE.default.*
+        if (is_array($defaultPageTsConfigOverrides)) {
+            ArrayUtility::mergeRecursiveWithOverrule($rtePageTsConfiguration, $defaultPageTsConfigOverrides);
+        }
+
+        // Then overload with RTE.config.tt_content.bodytext
+        if (is_array($fieldSpecificPageTsConfigOverrides)) {
+            $fieldSpecificPageTsConfigOverridesWithoutType = $fieldSpecificPageTsConfigOverrides;
+            unset($fieldSpecificPageTsConfigOverridesWithoutType['types.']);
+            ArrayUtility::mergeRecursiveWithOverrule($rtePageTsConfiguration, $fieldSpecificPageTsConfigOverridesWithoutType);
+
+            // Then overload with RTE.config.tt_content.bodytext.types.textmedia
+            if (
+                $recordType
+                && isset($fieldSpecificPageTsConfigOverrides['types.'][$recordType . '.'])
+                && is_array($fieldSpecificPageTsConfigOverrides['types.'][$recordType . '.'])
+            ) {
+                ArrayUtility::mergeRecursiveWithOverrule(
+                    $rtePageTsConfiguration,
+                    $fieldSpecificPageTsConfigOverrides['types.'][$recordType . '.']
+                );
+            }
+        }
+
+        return $rtePageTsConfiguration;
     }
 }

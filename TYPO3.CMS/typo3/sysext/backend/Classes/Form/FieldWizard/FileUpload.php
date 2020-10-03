@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Form\FieldWizard;
 
 /*
@@ -47,6 +47,7 @@ class FileUpload extends AbstractNode
             || !$isDirectFileUploadEnabled
             || empty($config['uploadfolder'])
         ) {
+            // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Deprecation logged by TcaMigration class.
             // No upload if disabled for user or upload folder missing
             return $result;
         }
@@ -55,7 +56,7 @@ class FileUpload extends AbstractNode
             // If maxItems = 1 then automatically replace the current item file selector
             $resultArray['additionalJavaScriptPost'][] =
                 'TBE_EDITOR.clearBeforeSettingFormValueFromBrowseWin[' . GeneralUtility::quoteJSvalue($itemName) . '] = {'
-                   . 'itemFormElID_file: ' . GeneralUtility::quoteJSvalue($uploadFieldId)
+                    . 'itemFormElID_file: ' . GeneralUtility::quoteJSvalue($uploadFieldId)
                 . '}';
         }
 

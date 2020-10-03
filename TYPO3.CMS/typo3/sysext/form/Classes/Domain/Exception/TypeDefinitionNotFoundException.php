@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Exception;
 
 /*
@@ -22,8 +22,6 @@ use TYPO3\CMS\Form\Domain\Exception;
 /**
  * This exception is thrown if a Type Definition for a form element was not found,
  * or if the implementationClassName was not set.
- *
- * @api
  */
 class TypeDefinitionNotFoundException extends Exception
 {

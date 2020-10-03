@@ -14,11 +14,9 @@ namespace TYPO3\CMS\Backend\Form;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Page\PageRenderer;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
-use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -87,7 +85,7 @@ class FormResultCompiler
     /**
      * @var PageRenderer
      */
-    protected $pageRenderer = null;
+    protected $pageRenderer;
 
     /**
      * Merge existing data with the given result array
@@ -159,18 +157,6 @@ class FormResultCompiler
     }
 
     /**
-     * JavaScript code added BEFORE the form is drawn:
-     *
-     * @return string
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function JStop()
-    {
-        GeneralUtility::logDeprecatedFunction();
-        return $this->addCssFiles();
-    }
-
-    /**
      * Adds CSS files BEFORE the form is drawn
      *
      * @return string
@@ -208,6 +194,8 @@ class FormResultCompiler
     protected function JSbottom()
     {
         $pageRenderer = $this->getPageRenderer();
+        /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
 
         // @todo: this is messy here - "additional hidden fields" should be handled elsewhere
         $html = implode(LF, $this->hiddenFieldAccum);
@@ -215,7 +203,7 @@ class FormResultCompiler
         // load the main module for FormEngine with all important JS functions
         $this->requireJsModules['TYPO3/CMS/Backend/FormEngine'] = 'function(FormEngine) {
 			FormEngine.initialize(
-				' . GeneralUtility::quoteJSvalue(BackendUtility::getModuleUrl('wizard_element_browser')) . ',
+				' . GeneralUtility::quoteJSvalue((string)$uriBuilder->buildUriFromRoute('wizard_element_browser')) . ',
 				' . ($GLOBALS['TYPO3_CONF_VARS']['SYS']['USdateFormat'] ? '1' : '0') . '
 			);
 		}';
@@ -229,28 +217,27 @@ class FormResultCompiler
                 $pageRenderer->loadRequireJsModule($moduleName, $callback);
             }
         }
-        $pageRenderer->loadJquery();
-        $beUserAuth = $this->getBackendUserAuthentication();
+        $backendUser = $this->getBackendUserAuthentication();
 
         // define the window size of the element browser etc.
         $popupWindowWidth  = 800;
         $popupWindowHeight = 600;
-        $popupWindowSize = trim($beUserAuth->getTSConfigVal('options.popupWindowSize'));
+        $popupWindowSize = trim($backendUser->getTSConfig()['options.']['popupWindowSize'] ?? '');
         if (!empty($popupWindowSize)) {
             list($popupWindowWidth, $popupWindowHeight) = GeneralUtility::intExplode('x', $popupWindowSize);
         }
 
         // define the window size of the popups within the RTE
-        $rtePopupWindowSize = trim($beUserAuth->getTSConfigVal('options.rte.popupWindowSize'));
+        $rtePopupWindowSize = trim($backendUser->getTSConfig()['options.']['rte.']['popupWindowSize'] ?? '');
         if (!empty($rtePopupWindowSize)) {
             list($rtePopupWindowWidth, $rtePopupWindowHeight) = GeneralUtility::trimExplode('x', $rtePopupWindowSize);
         }
-        $rtePopupWindowWidth  = !empty($rtePopupWindowWidth) ? (int)$rtePopupWindowWidth : ($popupWindowWidth);
-        $rtePopupWindowHeight = !empty($rtePopupWindowHeight) ? (int)$rtePopupWindowHeight : ($popupWindowHeight);
+        $rtePopupWindowWidth  = !empty($rtePopupWindowWidth) ? (int)$rtePopupWindowWidth : $popupWindowWidth;
+        $rtePopupWindowHeight = !empty($rtePopupWindowHeight) ? (int)$rtePopupWindowHeight : $popupWindowHeight;
 
         // Make textareas resizable and flexible ("autogrow" in height)
         $textareaSettings = [
-            'autosize'  => (bool)$beUserAuth->uc['resizeTextareas_Flexible'],
+            'autosize'  => (bool)$backendUser->uc['resizeTextareas_Flexible'],
             'RTEPopupWindow' => [
                 'width' => $rtePopupWindowWidth,
                 'height' => $rtePopupWindowHeight
@@ -273,29 +260,26 @@ class FormResultCompiler
 
         $pageRenderer->loadRequireJsModule('TYPO3/CMS/Filelist/FileListLocalisation');
 
-        $pageRenderer->addInlineLanguageLabelFile('EXT:lang/Resources/Private/Language/locallang_core.xlf', 'file_upload');
+        $pageRenderer->addInlineLanguageLabelFile('EXT:core/Resources/Private/Language/locallang_core.xlf', 'file_upload');
         if (!empty($this->additionalInlineLanguageLabelFiles)) {
             foreach ($this->additionalInlineLanguageLabelFiles as $additionalInlineLanguageLabelFile) {
                 $pageRenderer->addInlineLanguageLabelFile($additionalInlineLanguageLabelFile);
             }
         }
-        // Load codemirror for T3Editor
-        if (ExtensionManagementUtility::isLoaded('t3editor')) {
-            $pageRenderer->addJsFile('EXT:t3editor/Resources/Public/JavaScript/Contrib/codemirror/js/codemirror.js');
-        }
-        // We want to load jQuery-ui inside our js. Enable this using requirejs.
+        // @TODO: Refactor jsfunc.inline.js to an AMD module / TypsScript. If this is done, remove loadJquery() call.
+        $pageRenderer->loadJquery(null, null, PageRenderer::JQUERY_NAMESPACE_NONE, true);
         $pageRenderer->addJsFile('EXT:backend/Resources/Public/JavaScript/jsfunc.inline.js');
 
         // todo: change these things in JS
         $pageRenderer->addInlineLanguageLabelArray([
-            'FormEngine.noRecordTitle'          => 'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.no_title',
-            'FormEngine.fieldsChanged'          => 'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.fieldsChanged',
-            'FormEngine.fieldsMissing'          => 'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.fieldsMissing',
-            'FormEngine.maxItemsAllowed'        => 'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.maxItemsAllowed',
-            'FormEngine.refreshRequiredTitle'   => 'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:mess.refreshRequired.title',
-            'FormEngine.refreshRequiredContent' => 'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:mess.refreshRequired.content',
-            'FormEngine.remainingCharacters'    => 'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.remainingCharacters',
-        ], true);
+            'FormEngine.noRecordTitle'          => $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.no_title'),
+            'FormEngine.fieldsChanged'          => $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.fieldsChanged'),
+            'FormEngine.fieldsMissing'          => $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.fieldsMissing'),
+            'FormEngine.maxItemsAllowed'        => $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.maxItemsAllowed'),
+            'FormEngine.refreshRequiredTitle'   => $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:mess.refreshRequired.title'),
+            'FormEngine.refreshRequiredContent' => $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:mess.refreshRequired.content'),
+            'FormEngine.remainingCharacters'    => $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.remainingCharacters'),
+        ]);
 
         $out = LF . 'TBE_EDITOR.doSaveFieldName = "' . ($this->doSaveFieldName ? addslashes($this->doSaveFieldName) : '') . '";';
 
@@ -311,7 +295,7 @@ class FormResultCompiler
         }
         $out .= LF . implode(LF, $this->additionalJavaScriptPost);
 
-        return $html . LF . TAB . GeneralUtility::wrapJS($out);
+        return $html . LF . "\t" . GeneralUtility::wrapJS($out);
     }
 
     /**
@@ -320,6 +304,16 @@ class FormResultCompiler
     protected function getBackendUserAuthentication()
     {
         return $GLOBALS['BE_USER'];
+    }
+
+    /**
+     * Returns an instance of LanguageService
+     *
+     * @return \TYPO3\CMS\Core\Localization\LanguageService
+     */
+    protected function getLanguageService()
+    {
+        return $GLOBALS['LANG'];
     }
 
     /**

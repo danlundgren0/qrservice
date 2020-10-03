@@ -14,12 +14,13 @@ namespace TYPO3\CMS\Install\Configuration\Image;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Install\Configuration;
+use TYPO3\CMS\Core\Core\Environment;
 
 /**
  * Preset for GraphicsMagick
+ * @internal only to be used within EXT:install
  */
-class GraphicsMagickPreset extends AbstractImagePreset implements Configuration\PresetInterface
+class GraphicsMagickPreset extends AbstractImagePreset
 {
     /**
      * @var string Name of preset
@@ -40,7 +41,7 @@ class GraphicsMagickPreset extends AbstractImagePreset implements Configuration\
         'GFX/processor_path' => '',
         'GFX/processor_path_lzw' => '',
         'GFX/processor' => 'GraphicsMagick',
-        'GFX/processor_effects' => -1,
+        'GFX/processor_effects' => false,
         'GFX/processor_allowTemporaryMasksAsPng' => false,
         'GFX/processor_colorspace' => 'RGB',
     ];
@@ -66,7 +67,7 @@ class GraphicsMagickPreset extends AbstractImagePreset implements Configuration\
     {
         $result = false;
         foreach ($searchPaths as $path) {
-            if (TYPO3_OS === 'WIN') {
+            if (Environment::isWindows()) {
                 $executable = 'gm.exe';
             } else {
                 $executable = 'gm';

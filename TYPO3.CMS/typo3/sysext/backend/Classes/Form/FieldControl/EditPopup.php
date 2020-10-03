@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Form\FieldControl;
 
 /*
@@ -16,9 +16,8 @@ namespace TYPO3\CMS\Backend\Form\FieldControl;
  */
 
 use TYPO3\CMS\Backend\Form\AbstractNode;
-use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Renders the icon with link parameters to edit a selected element,
@@ -36,30 +35,57 @@ class EditPopup extends AbstractNode
         $languageService = $this->getLanguageService();
         $options = $this->data['renderData']['fieldControlOptions'];
 
-        $title = $options['title'] ?? 'LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.edit';
+        $title = $options['title'] ?? 'LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.edit';
 
         $parameterArray = $this->data['parameterArray'];
         $itemName = $parameterArray['itemFormElName'];
         $windowOpenParameters = $options['windowOpenParameters'] ?? 'height=800,width=600,status=0,menubar=0,scrollbars=1';
 
-        $urlParameters  = [
+        $flexFormDataStructureIdentifier = $this->data['flexFormDataStructureIdentifier'] ?? '';
+        $flexFormDataStructurePath = '';
+        if (!empty($flexFormDataStructureIdentifier)) {
+            if (empty($this->data['flexFormContainerName'])) {
+                // simple flex form element
+                $flexFormDataStructurePath = 'sheets/'
+                    . $this->data['flexFormSheetName']
+                    . '/ROOT/el/'
+                    . $this->data['flexFormFieldName']
+                    . '/TCEforms/config';
+            } else {
+                // flex form section container element
+                $flexFormDataStructurePath = 'sheets/'
+                    . $this->data['flexFormSheetName']
+                    . '/ROOT/el/'
+                    . $this->data['flexFormFieldName']
+                    . '/el/'
+                    . $this->data['flexFormContainerName']
+                    . '/el/'
+                    . $this->data['flexFormContainerFieldName']
+                    . '/TCEforms/config';
+            }
+        }
+
+        $urlParameters = [
             'P' => [
                 'table' => $this->data['tableName'],
                 'field' => $this->data['fieldName'],
                 'formName' => 'editform',
+                'flexFormDataStructureIdentifier' => $flexFormDataStructureIdentifier,
+                'flexFormDataStructurePath' => $flexFormDataStructurePath,
                 'hmac' => GeneralUtility::hmac('editform' . $itemName, 'wizard_js'),
                 'fieldChangeFunc' => $parameterArray['fieldChangeFunc'],
-                'fieldChangeFuncHash' => GeneralUtility::hmac(serialize($parameterArray['fieldChangeFunc'])),
+                'fieldChangeFuncHash' => GeneralUtility::hmac(serialize($parameterArray['fieldChangeFunc']), 'backend-link-browser'),
             ],
         ];
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
+        $url = (string)$uriBuilder->buildUriFromRoute('wizard_edit', $urlParameters);
 
-        $url = BackendUtility::getModuleUrl('wizard_edit', $urlParameters);
         $onClick = [];
         $onClick[] = 'this.blur();';
         $onClick[] = 'if (!TBE_EDITOR.curSelected(' . GeneralUtility::quoteJSvalue($itemName) . ')) {';
         $onClick[] =    'top.TYPO3.Modal.confirm(';
-        $onClick[] =        '"' . $languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:warning.header') . '",';
-        $onClick[] =        '"' . $languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:mess.noSelItemForEdit') . '",';
+        $onClick[] =        '"' . $languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:warning.header') . '",';
+        $onClick[] =        '"' . $languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:mess.noSelItemForEdit') . '",';
         $onClick[] =        'top.TYPO3.Severity.notice, [{text: TYPO3.lang[\'button.ok\'] || \'OK\', btnClass: \'btn-notice\', name: \'ok\'}]';
         $onClick[] =    ')';
         $onClick[] =    '.on("button.clicked", function(e) {';
@@ -70,7 +96,7 @@ class EditPopup extends AbstractNode
         $onClick[] = 'vHWin=window.open(';
         $onClick[] =    GeneralUtility::quoteJSvalue($url);
         $onClick[] =    '+\'&P[currentValue]=\'+TBE_EDITOR.rawurlencode(';
-        $onClick[] =        'document.editform[' . GeneralUtility::quoteJSvalue($itemName) . '].value,300';
+        $onClick[] =        'document.editform[' . GeneralUtility::quoteJSvalue($itemName) . '].value';
         $onClick[] =    ')';
         $onClick[] =    '+\'&P[currentSelectedValues]=\'+TBE_EDITOR.curSelected(';
         $onClick[] =        GeneralUtility::quoteJSvalue($itemName);

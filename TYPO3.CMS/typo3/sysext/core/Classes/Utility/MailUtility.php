@@ -35,11 +35,11 @@ class MailUtility
         $name = self::getSystemFromName();
         if (!$address) {
             return null;
-        } elseif ($name) {
-            return [$address => $name];
-        } else {
-            return [$address];
         }
+        if ($name) {
+            return [$address => $name];
+        }
+        return [$address];
     }
 
     /**
@@ -53,9 +53,8 @@ class MailUtility
     {
         if ($GLOBALS['TYPO3_CONF_VARS']['MAIL']['defaultMailFromName']) {
             return $GLOBALS['TYPO3_CONF_VARS']['MAIL']['defaultMailFromName'];
-        } else {
-            return null;
         }
+        return null;
     }
 
     /**
@@ -113,6 +112,30 @@ class MailUtility
             }
         }
         return $address;
+    }
+
+    /**
+     * Gets a default "reply-to" for mail messages (email and name).
+     *
+     * Ready to be passed to $mail->setReplyTo()
+     *
+     * @return array List of email-addresses. Specifying a realname can be done in the form of "replyToName <replyTo@example.com>".
+     */
+    public static function getSystemReplyTo(): array
+    {
+        $mailConfiguration = $GLOBALS['TYPO3_CONF_VARS']['MAIL'];
+        $replyToAddress = $mailConfiguration['defaultMailReplyToAddress'];
+        if (empty($replyToAddress) || !GeneralUtility::validEmail($replyToAddress)) {
+            return [];
+        }
+
+        if (!empty($mailConfiguration['defaultMailReplyToName'])) {
+            $replyTo = [$replyToAddress => $mailConfiguration['defaultMailReplyToName']];
+        } else {
+            $replyTo = [$replyToAddress];
+        }
+
+        return $replyTo;
     }
 
     /**
@@ -176,7 +199,7 @@ class MailUtility
      */
     public static function parseAddresses($rawAddresses)
     {
-        /** @var $addressParser \TYPO3\CMS\Core\Mail\Rfc822AddressesParser */
+        /** @var \TYPO3\CMS\Core\Mail\Rfc822AddressesParser $addressParser */
         $addressParser = GeneralUtility::makeInstance(
             \TYPO3\CMS\Core\Mail\Rfc822AddressesParser::class,
             $rawAddresses

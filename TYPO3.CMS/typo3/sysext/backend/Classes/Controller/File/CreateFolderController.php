@@ -1,4 +1,5 @@
 <?php
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Controller\File;
 
 /*
@@ -16,9 +17,14 @@ namespace TYPO3\CMS\Backend\Controller\File;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use TYPO3\CMS\Backend\Module\AbstractModule;
+use TYPO3\CMS\Backend\Routing\UriBuilder;
+use TYPO3\CMS\Backend\Template\ModuleTemplate;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Compatibility\PublicMethodDeprecationTrait;
+use TYPO3\CMS\Core\Compatibility\PublicPropertyDeprecationTrait;
+use TYPO3\CMS\Core\Http\HtmlResponse;
 use TYPO3\CMS\Core\Imaging\Icon;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsException;
 use TYPO3\CMS\Core\Resource\OnlineMedia\Helpers\OnlineMediaHelperRegistry;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
@@ -30,32 +36,56 @@ use TYPO3\CMS\Fluid\View\StandaloneView;
  * Script class for the create-new script
  *
  * Displays forms for creating folders (1 to 10), a media asset or a new file.
+ * @internal This class is a specific Backend controller implementation and is not considered part of the Public TYPO3 API.
  */
-class CreateFolderController extends AbstractModule
+class CreateFolderController
 {
+    use PublicMethodDeprecationTrait;
+    use PublicPropertyDeprecationTrait;
+
+    /**
+     * @var array
+     */
+    private $deprecatedPublicMethods = [
+        'main' => 'Using CreateFolderController::main() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+    ];
+
+    /**
+     * @var array
+     */
+    private $deprecatedPublicProperties = [
+        'number' => 'Using $number of class CreateFolderController from outside is discouraged, as this variable is only used for internal storage.',
+        'folderNumber' => 'Using $folderNumber of class CreateFolderController from outside is discouraged, as this variable is only used for internal storage.',
+        'target' => 'Using $target of class CreateFolderController from outside is discouraged, as this variable is only used for internal storage.',
+        'content' => 'Using $content of class CreateFolderController from outside is discouraged, as this variable is only used for internal storage.',
+        'returnUrl' => 'Using $content of class CreateFolderController from outside is discouraged, as this variable is only used for internal storage.',
+        'title' => 'Using $content of class CreateFolderController from outside is discouraged, as this variable is only used for internal storage.',
+    ];
+
     /**
      * @var int
      */
-    public $folderNumber = 10;
+    protected $folderNumber = 10;
 
     /**
      * Name of the filemount
      *
      * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, unused
      */
-    public $title;
+    protected $title;
 
     /**
      * @var int
      */
-    public $number;
+    protected $number;
 
     /**
      * Set with the target path inputted in &target
      *
      * @var string
      */
-    public $target;
+    protected $target;
 
     /**
      * The folder object which is  the target directory
@@ -69,7 +99,7 @@ class CreateFolderController extends AbstractModule
      *
      * @var string
      */
-    public $returnUrl;
+    protected $returnUrl;
 
     /**
      * @var array
@@ -80,29 +110,53 @@ class CreateFolderController extends AbstractModule
      * Accumulating content
      *
      * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, unused
      */
-    public $content;
+    protected $content;
+
+    /**
+     * ModuleTemplate object
+     *
+     * @var ModuleTemplate
+     */
+    protected $moduleTemplate;
 
     /**
      * Constructor
      */
     public function __construct()
     {
-        parent::__construct();
-        $GLOBALS['SOBE'] = $this;
-        $this->init();
+        $this->moduleTemplate = GeneralUtility::makeInstance(ModuleTemplate::class);
+        // @deprecated since TYPO3 v9, will be moved out of __construct() in TYPO3 v10.0
+        $this->init($GLOBALS['TYPO3_REQUEST']);
     }
 
     /**
+     * Processes the request, currently everything is handled and put together via "main()"
+     *
+     * @param ServerRequestInterface $request the current request
+     * @return ResponseInterface the response with the content
+     */
+    public function mainAction(ServerRequestInterface $request): ResponseInterface
+    {
+        $this->main();
+        return new HtmlResponse($this->moduleTemplate->renderContent());
+    }
+
+    /**
+     * @param ServerRequestInterface|null $request
+     *
      * @throws InsufficientFolderAccessPermissionsException
      * @throws \RuntimeException
      */
-    protected function init()
+    protected function init(ServerRequestInterface $request): void
     {
-        // Initialize GPvars:
-        $this->number = GeneralUtility::_GP('number');
-        $this->target = ($combinedIdentifier = GeneralUtility::_GP('target'));
-        $this->returnUrl = GeneralUtility::sanitizeLocalUrl(GeneralUtility::_GP('returnUrl'));
+        $parsedBody = $request->getParsedBody();
+        $queryParams = $request->getQueryParams();
+
+        $this->number = $parsedBody['number'] ?? $queryParams['number'] ?? 0;
+        $this->target = ($combinedIdentifier = $parsedBody['target'] ?? $queryParams['target'] ?? '');
+        $this->returnUrl = GeneralUtility::sanitizeLocalUrl($parsedBody['returnUrl'] ?? $queryParams['returnUrl'] ?? '');
         // create the folder object
         if ($combinedIdentifier) {
             $this->folderObject = ResourceFactory::getInstance()
@@ -110,8 +164,8 @@ class CreateFolderController extends AbstractModule
         }
         // Cleaning and checking target directory
         if (!$this->folderObject) {
-            $title = $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_mod_file_list.xlf:paramError');
-            $message = $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_mod_file_list.xlf:targetNoDir');
+            $title = $this->getLanguageService()->sL('LLL:EXT:filelist/Resources/Private/Language/locallang_mod_file_list.xlf:paramError');
+            $message = $this->getLanguageService()->sL('LLL:EXT:filelist/Resources/Private/Language/locallang_mod_file_list.xlf:targetNoDir');
             throw new \RuntimeException($title . ': ' . $message, 1294586845);
         }
         if ($this->folderObject->getStorage()->getUid() === 0) {
@@ -124,6 +178,8 @@ class CreateFolderController extends AbstractModule
         $pathInfo = [
             'combined_identifier' => $this->folderObject->getCombinedIdentifier(),
         ];
+        $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+
         $this->moduleTemplate->getDocHeaderComponent()->setMetaInformation($pathInfo);
         $this->moduleTemplate->getPageRenderer()->loadRequireJsModule('TYPO3/CMS/Backend/ContextMenu');
         $this->moduleTemplate->addJavaScriptCode(
@@ -131,17 +187,17 @@ class CreateFolderController extends AbstractModule
             'var path = "' . $this->target . '";
             var confirmTitle = '
             . GeneralUtility::quoteJSvalue(
-                $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_common.xlf:pleaseConfirm')
+                $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_common.xlf:pleaseConfirm')
             )
             . ';
             var confirmText = '
             . GeneralUtility::quoteJSvalue(
-                $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:mess.redraw')
+                $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:mess.redraw')
             )
             . ';
             function reload(a) {
                 var params = "&target="+encodeURIComponent(path)+"&number="+a+"&returnUrl=' . rawurlencode($this->returnUrl) . '";
-                var url = \'' . BackendUtility::getModuleUrl('file_newfolder') . '\';
+                var url = \'' . (string)$uriBuilder->buildUriFromRoute('file_newfolder') . '\';
                 if (!changed) {
                     window.location.href = url + params;
                 } else {
@@ -165,13 +221,14 @@ class CreateFolderController extends AbstractModule
     /**
      * Main function, rendering the main module content
      */
-    public function main()
+    protected function main()
     {
         $lang = $this->getLanguageService();
         $assigns = [];
         $assigns['target'] = $this->target;
         if ($this->folderObject->checkActionPermission('add')) {
-            $assigns['moduleUrlTceFile'] = BackendUtility::getModuleUrl('tce_file');
+            $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+            $assigns['moduleUrlTceFile'] = (string)$uriBuilder->buildUriFromRoute('tce_file');
             $assigns['cshFileNewFolder'] = BackendUtility::cshItem('xMOD_csh_corebe', 'file_newfolder');
             // Making the selector box for the number of concurrent folder-creations
             $this->number = MathUtility::forceIntegerInRange($this->number, 1, 10);
@@ -193,7 +250,8 @@ class CreateFolderController extends AbstractModule
         }
 
         if ($this->folderObject->getStorage()->checkUserActionPermission('add', 'File')) {
-            $assigns['moduleUrlOnlineMedia'] = BackendUtility::getModuleUrl('online_media');
+            $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+            $assigns['moduleUrlOnlineMedia'] = (string)$uriBuilder->buildUriFromRoute('online_media');
             $assigns['cshFileNewMedia'] = BackendUtility::cshItem('xMOD_csh_corebe', 'file_newMedia');
             // Create a list of allowed file extensions with the readable format "youtube, vimeo" etc.
             $fileExtList = [];
@@ -205,7 +263,7 @@ class CreateFolderController extends AbstractModule
             }
             $assigns['fileExtList'] = $fileExtList;
 
-            $assigns['moduleUrlTceFile'] = BackendUtility::getModuleUrl('tce_file');
+            $assigns['moduleUrlTceFile'] = (string)$uriBuilder->buildUriFromRoute('tce_file');
             $assigns['cshFileNewFile'] = BackendUtility::cshItem('xMOD_csh_corebe', 'file_newfile');
             // Create a list of allowed file extensions with a text format "*.txt, *.css" etc.
             $fileExtList = [];
@@ -228,9 +286,9 @@ class CreateFolderController extends AbstractModule
         // Back
         if ($this->returnUrl) {
             $backButton = $buttonBar->makeLinkButton()
-               ->setHref($this->returnUrl)
-               ->setTitle($lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.goBack'))
-               ->setIcon($this->moduleTemplate->getIconFactory()->getIcon('actions-view-go-back', Icon::SIZE_SMALL));
+                ->setHref($this->returnUrl)
+                ->setTitle($lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.goBack'))
+                ->setIcon($this->moduleTemplate->getIconFactory()->getIcon('actions-view-go-back', Icon::SIZE_SMALL));
             $buttonBar->addButton($backButton);
         }
 
@@ -242,30 +300,15 @@ class CreateFolderController extends AbstractModule
             'EXT:backend/Resources/Private/Templates/File/CreateFolder.html'
         ));
         $view->assignMultiple($assigns);
-        $this->content = $view->render();
-        $this->moduleTemplate->setContent($this->content);
-    }
-
-    /**
-     * Processes the request, currently everything is handled and put together via "main()"
-     *
-     * @param ServerRequestInterface $request the current request
-     * @param ResponseInterface $response
-     * @return ResponseInterface the response with the content
-     */
-    public function mainAction(ServerRequestInterface $request, ResponseInterface $response)
-    {
-        $this->main();
-        $response->getBody()->write($this->moduleTemplate->renderContent());
-        return $response;
+        $this->moduleTemplate->setContent($view->render());
     }
 
     /**
      * Returns LanguageService
      *
-     * @return \TYPO3\CMS\Lang\LanguageService
+     * @return LanguageService
      */
-    protected function getLanguageService()
+    protected function getLanguageService(): LanguageService
     {
         return $GLOBALS['LANG'];
     }

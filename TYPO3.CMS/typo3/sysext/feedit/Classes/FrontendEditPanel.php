@@ -13,20 +13,21 @@ namespace TYPO3\CMS\Feedit;
  *
  * The TYPO3 project - inspiring people to share!
  */
+use TYPO3\CMS\Adminpanel\Service\EditToolbarService;
 use TYPO3\CMS\Backend\FrontendBackendUserAuthentication;
-use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Type\Bitmask\JsConfirmation;
-use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
 use TYPO3\CMS\Core\Utility\PathUtility;
 use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
-use TYPO3\CMS\Frontend\View\AdminPanelView;
 
 /**
  * View class for the edit panels in frontend editing.
+ *
+ * @internal this is a concrete TYPO3 implementation and solely used for EXT:feedit and not part of TYPO3's Core API.
  */
 class FrontendEditPanel
 {
@@ -87,7 +88,7 @@ class FrontendEditPanel
      */
     public function editPanel($content, array $conf, $currentRecord = '', array $dataArr = [], $table = '', array $allow = [], $newUID = 0, array $hiddenFields = [])
     {
-        $hiddenFieldString = $command = '';
+        $hiddenFieldString = '';
 
         // Special content is about to be shown, so the cache must be disabled.
         $this->frontendController->set_no_cache('Frontend edit panel is shown', true);
@@ -99,18 +100,19 @@ class FrontendEditPanel
         $hideField = $GLOBALS['TCA'][$table]['ctrl']['enablecolumns']['disabled'];
 
         $panel = '';
-        if (isset($allow['toolbar']) && $this->backendUser->adminPanel instanceof AdminPanelView) {
-            $panel .= $this->backendUser->adminPanel->ext_makeToolBar();
+        if (isset($allow['toolbar'])) {
+            $editToolbarService = GeneralUtility::makeInstance(EditToolbarService::class);
+            $panel .= $editToolbarService->createToolbar();
         }
         if (isset($allow['edit'])) {
-            $icon = '<span title="' . $this->backendUser->extGetLL('p_editRecord') . '">' . $this->iconFactory->getIcon('actions-document-open', Icon::SIZE_SMALL)->render('inline') . '</span>';
+            $icon = '<span title="' . $this->getLabel('p_editRecord') . '">' . $this->iconFactory->getIcon('actions-document-open', Icon::SIZE_SMALL)->render('inline') . '</span>';
             $panel .= $this->editPanelLinkWrap($icon, $formName, 'edit', $dataArr['_LOCALIZED_UID'] ? $table . ':' . $dataArr['_LOCALIZED_UID'] : $currentRecord);
         }
         // Hiding in workspaces because implementation is incomplete
         if (isset($allow['move']) && $sortField && $this->backendUser->workspace === 0) {
-            $icon = '<span title="' . $this->backendUser->extGetLL('p_moveUp') . '">' . $this->iconFactory->getIcon('actions-move-up', Icon::SIZE_SMALL)->render('inline') . '</span>';
+            $icon = '<span title="' . $this->getLabel('p_moveUp') . '">' . $this->iconFactory->getIcon('actions-move-up', Icon::SIZE_SMALL)->render('inline') . '</span>';
             $panel .= $this->editPanelLinkWrap($icon, $formName, 'up');
-            $icon = '<span title="' . $this->backendUser->extGetLL('p_moveDown') . '">' . $this->iconFactory->getIcon('actions-move-down', Icon::SIZE_SMALL)->render('inline') . '</span>';
+            $icon = '<span title="' . $this->getLabel('p_moveDown') . '">' . $this->iconFactory->getIcon('actions-move-down', Icon::SIZE_SMALL)->render('inline') . '</span>';
             $panel .= $this->editPanelLinkWrap($icon, $formName, 'down');
         }
         // Hiding in workspaces because implementation is incomplete
@@ -121,17 +123,17 @@ class FrontendEditPanel
                 $panel .= $this->editPanelLinkWrap($icon, $formName, 'unhide');
             } else {
                 $icon = $this->iconFactory->getIcon('actions-edit-hide', Icon::SIZE_SMALL)->render('inline');
-                $panel .= $this->editPanelLinkWrap($icon, $formName, 'hide', '', $this->backendUser->extGetLL('p_hideConfirm'));
+                $panel .= $this->editPanelLinkWrap($icon, $formName, 'hide', '', $this->getLabel('p_hideConfirm'));
             }
         }
         if (isset($allow['new'])) {
             if ($table === 'pages') {
-                $icon = '<span title="' . $this->backendUser->extGetLL('p_newSubpage') . '">'
+                $icon = '<span title="' . $this->getLabel('p_newSubpage') . '">'
                     . $this->iconFactory->getIcon('actions-page-new', Icon::SIZE_SMALL)->render('inline')
                     . '</span>';
                 $panel .= $this->editPanelLinkWrap($icon, $formName, 'new', $currentRecord, '');
             } else {
-                $icon = '<span title="' . $this->backendUser->extGetLL('p_newRecordAfter') . '">'
+                $icon = '<span title="' . $this->getLabel('p_newRecordAfter') . '">'
                     . $this->iconFactory->getIcon('actions-document-new', Icon::SIZE_SMALL)->render('inline')
                     . '</span>';
                 $panel .= $this->editPanelLinkWrap($icon, $formName, 'new', $currentRecord, '', $newUID);
@@ -140,10 +142,10 @@ class FrontendEditPanel
         // Hiding in workspaces because implementation is incomplete
         // Hiding for localizations because it is unknown what should be the function in that case
         if (isset($allow['delete']) && $this->backendUser->workspace === 0 && !$dataArr['_LOCALIZED_UID']) {
-            $icon = '<span title="' . $this->backendUser->extGetLL('p_delete') . '">'
+            $icon = '<span title="' . $this->getLabel('p_delete') . '">'
                 . $this->iconFactory->getIcon('actions-edit-delete', Icon::SIZE_SMALL)->render('inline')
                 . '</span>';
-            $panel .= $this->editPanelLinkWrap($icon, $formName, 'delete', '', $this->backendUser->extGetLL('p_deleteConfirm'));
+            $panel .= $this->editPanelLinkWrap($icon, $formName, 'delete', '', $this->getLabel('p_deleteConfirm'));
         }
         // Final
         $labelTxt = $this->cObj->stdWrap($conf['label'], $conf['label.']);
@@ -155,7 +157,7 @@ class FrontendEditPanel
 								' . $formTag . $hiddenFieldString . '
 									<input type="hidden" name="TSFE_EDIT[cmd]" value="" />
 									<input type="hidden" name="TSFE_EDIT[record]" value="' . $currentRecord . '" />
-									<div class="typo3-editPanel" style="display: none;">'
+									<div class="typo3-editPanel">'
                                         . '<div class="typo3-editPanel-btn-group">'
                                         . $panel
                                         . '</div>' .
@@ -185,9 +187,7 @@ class FrontendEditPanel
         }
 
         $hidden = $this->isDisabled($table, $dataArr) ? ' typo3-feedit-element-hidden' : '';
-        $outerWrapConfig = isset($conf['stdWrap.'])
-            ? $conf['stdWrap.']
-            : ['wrap' => '<div class="typo3-feedit-element' . $hidden . '">|</div>'];
+        $outerWrapConfig = $conf['stdWrap.'] ?? ['wrap' => '<div class="typo3-feedit-element' . $hidden . '">|</div>'];
         $finalOut = $this->cObj->stdWrap($finalOut, $outerWrapConfig);
 
         return $finalOut;
@@ -216,14 +216,15 @@ class FrontendEditPanel
         $iconImg = '<span title="' . htmlspecialchars($iconTitle, ENT_COMPAT, 'UTF-8', false) . '" style="' . ($conf['styleAttribute'] ? htmlspecialchars($conf['styleAttribute']) : '') . '">'
             . $this->iconFactory->getIcon('actions-document-open', Icon::SIZE_SMALL)->render('inline')
             . '</span>';
-        $nV = GeneralUtility::_GP('ADMCMD_view') ? 1 : 0;
+        $noView = GeneralUtility::_GP('ADMCMD_view') ? 1 : 0;
 
-        $url = BackendUtility::getModuleUrl(
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
+        $url = (string)$uriBuilder->buildUriFromRoute(
             'record_edit',
             [
                 'edit[' . $table . '][' . $editUid . ']' => 'edit',
                 'columnsOnly' => $fieldList,
-                'noView' => $nV,
+                'noView' => $noView,
                 'feEdit' => 1
             ]
         ) . $addUrlParamStr;
@@ -258,19 +259,21 @@ class FrontendEditPanel
      */
     protected function editPanelLinkWrap($string, $formName, $cmd, $currentRecord = '', $confirm = '', $nPid = '')
     {
-        $nV = GeneralUtility::_GP('ADMCMD_view') ? 1 : 0;
+        $noView = GeneralUtility::_GP('ADMCMD_view') ? 1 : 0;
+        /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
         if ($cmd === 'edit') {
             $rParts = explode(':', $currentRecord);
-            $out = $this->editPanelLinkWrap_doWrap($string, BackendUtility::getModuleUrl('record_edit', ['edit[' . $rParts[0] . '][' . $rParts[1] . ']' => 'edit', 'noView' => $nV, 'feEdit' => 1]), $currentRecord);
+            $out = $this->editPanelLinkWrap_doWrap($string, (string)$uriBuilder->buildUriFromRoute('record_edit', ['edit[' . $rParts[0] . '][' . $rParts[1] . ']' => 'edit', 'noView' => $noView, 'feEdit' => 1]), $currentRecord);
         } elseif ($cmd === 'new') {
             $rParts = explode(':', $currentRecord);
             if ($rParts[0] === 'pages') {
-                $out = $this->editPanelLinkWrap_doWrap($string, BackendUtility::getModuleUrl('db_new', ['id' => $rParts[1], 'pagesOnly' => 1]), $currentRecord);
+                $out = $this->editPanelLinkWrap_doWrap($string, (string)$uriBuilder->buildUriFromRoute('db_new', ['id' => $rParts[1], 'pagesOnly' => 1]), $currentRecord);
             } else {
                 if (!(int)$nPid) {
                     $nPid = MathUtility::canBeInterpretedAsInteger($rParts[1]) ? -$rParts[1] : $this->frontendController->id;
                 }
-                $out = $this->editPanelLinkWrap_doWrap($string, BackendUtility::getModuleUrl('record_edit', ['edit[' . $rParts[0] . '][' . $nPid . ']' => 'new', 'noView' => $nV]), $currentRecord);
+                $out = $this->editPanelLinkWrap_doWrap($string, (string)$uriBuilder->buildUriFromRoute('record_edit', ['edit[' . $rParts[0] . '][' . $nPid . ']' => 'new', 'noView' => $noView]), $currentRecord);
             }
         } else {
             if ($confirm && $this->backendUser->jsConfirmation(JsConfirmation::FE_EDIT)) {
@@ -280,7 +283,7 @@ class FrontendEditPanel
             } else {
                 $cf1 = ($cf2 = '');
             }
-            $out = '<a href="#" class="typo3-editPanel-btn typo3-editPanel-btn-default" onclick="' . htmlspecialchars(($cf1 . 'document.' . $formName . '[\'TSFE_EDIT[cmd]\'].value=\'' . $cmd . '\'; document.' . $formName . '.submit();' . $cf2 . ' return false;')) . '">' . $string . '</a>';
+            $out = '<a href="#" class="typo3-editPanel-btn typo3-editPanel-btn-default" onclick="' . htmlspecialchars($cf1 . 'document.' . $formName . '[\'TSFE_EDIT[cmd]\'].value=\'' . $cmd . '\'; document.' . $formName . '.submit();' . $cf2 . ' return false;') . '">' . $string . '</a>';
         }
         return $out;
     }
@@ -296,10 +299,10 @@ class FrontendEditPanel
      */
     protected function editPanelLinkWrap_doWrap($string, $url, $additionalClasses = '')
     {
-        $width = MathUtility::forceIntegerInRange($this->backendUser->getTSConfigVal('options.feedit.popupWidth'), 690, 5000, 690);
-        $height = MathUtility::forceIntegerInRange($this->backendUser->getTSConfigVal('options.feedit.popupHeight'), 500, 5000, 500);
-        $onclick = 'vHWin=window.open(' . GeneralUtility::quoteJSvalue($url . '&returnUrl=' . rawurlencode(PathUtility::getAbsoluteWebPath(ExtensionManagementUtility::siteRelPath('backend') . 'Resources/Private/Templates/Close.html'))) . ',\'FEquickEditWindow\',\'width=' . $width . ',height=' . $height . ',status=0,menubar=0,scrollbars=1,resizable=1\');vHWin.focus();return false;';
-        return '<a href="#" class="typo3-editPanel-btn typo3-editPanel-btn-default frontEndEditIconLinks ' . htmlspecialchars($additionalClasses) . '" onclick="' . htmlspecialchars($onclick) . '" style="display: none;">' . $string . '</a>';
+        $width = MathUtility::forceIntegerInRange($this->backendUser->getTSConfig()['options.']['feedit.']['popupWidth'] ?? 690, 690, 5000, 690);
+        $height = MathUtility::forceIntegerInRange($this->backendUser->getTSConfig()['options.']['feedit.']['popupHeight'] ?? 500, 500, 5000, 500);
+        $onclick = 'vHWin=window.open(' . GeneralUtility::quoteJSvalue($url . '&returnUrl=' . rawurlencode(PathUtility::getAbsoluteWebPath(GeneralUtility::getFileAbsFileName('EXT:backend/Resources/Public/Html/Close.html')))) . ',\'FEquickEditWindow\',\'width=' . $width . ',height=' . $height . ',status=0,menubar=0,scrollbars=1,resizable=1\');vHWin.focus();return false;';
+        return '<a href="#" class="typo3-editPanel-btn typo3-editPanel-btn-default frontEndEditIconLinks ' . htmlspecialchars($additionalClasses) . '" onclick="' . htmlspecialchars($onclick) . '">' . $string . '</a>';
     }
 
     /**
@@ -328,5 +331,34 @@ class FrontendEditPanel
         }
 
         return $status;
+    }
+
+    /**
+     * Returns the label for key. If a translation for the language set in $this->uc['lang']
+     * is found that is returned, otherwise the default value.
+     * If the global variable $LOCAL_LANG is NOT an array (yet) then this function loads
+     * the global $LOCAL_LANG array with the content of "EXT:core/Resources/Private/Language/locallang_tsfe.xlf"
+     * such that the values therein can be used for labels in the Admin Panel
+     *
+     * @param string $key Key for a label in the $GLOBALS['LOCAL_LANG'] array of "EXT:core/Resources/Private/Language/locallang_tsfe.xlf
+     * @return string The value for the $key
+     */
+    protected function getLabel(string $key): string
+    {
+        if (!is_array($GLOBALS['LOCAL_LANG'])) {
+            $this->getLanguageService()->includeLLFile('EXT:core/Resources/Private/Language/locallang_tsfe.xlf');
+            if (!is_array($GLOBALS['LOCAL_LANG'])) {
+                $GLOBALS['LOCAL_LANG'] = [];
+            }
+        }
+        return htmlspecialchars($this->getLanguageService()->getLL($key));
+    }
+
+    /**
+     * @return LanguageService
+     */
+    protected function getLanguageService(): LanguageService
+    {
+        return $GLOBALS['LANG'];
     }
 }

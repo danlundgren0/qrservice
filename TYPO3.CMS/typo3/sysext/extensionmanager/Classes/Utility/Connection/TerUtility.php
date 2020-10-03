@@ -14,13 +14,16 @@ namespace TYPO3\CMS\Extensionmanager\Utility\Connection;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Core\Core\Bootstrap;
+use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
+use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extensionmanager\Exception\ExtensionManagerException;
 
 /**
  * TER2 connection handling class for the TYPO3 Extension Manager.
  *
  * It contains methods for downloading and uploading extensions and related code
+ * @internal This class is a specific TER implementation and is not part of the Public TYPO3 API.
  */
 class TerUtility
 {
@@ -28,19 +31,6 @@ class TerUtility
      * @var string
      */
     public $wsdlUrl;
-
-    /**
-     * @var \TYPO3\CMS\Extensionmanager\Utility\ConfigurationUtility
-     */
-    protected $configurationUtility;
-
-    /**
-     * @param \TYPO3\CMS\Extensionmanager\Utility\ConfigurationUtility $configurationUtility
-     */
-    public function injectConfigurationUtility(\TYPO3\CMS\Extensionmanager\Utility\ConfigurationUtility $configurationUtility)
-    {
-        $this->configurationUtility = $configurationUtility;
-    }
 
     /**
      * Fetches an extension from the given mirror
@@ -55,8 +45,8 @@ class TerUtility
     public function fetchExtension($extensionKey, $version, $expectedMd5, $mirrorUrl)
     {
         if (
-            !empty($this->configurationUtility->getCurrentConfiguration('extensionmanager')['offlineMode']['value'])
-            || Bootstrap::usesComposerClassLoading()
+            (bool)GeneralUtility::makeInstance(ExtensionConfiguration::class)->get('extensionmanager', 'offlineMode')
+            || Environment::isComposerMode()
         ) {
             throw new ExtensionManagerException('Extension Manager is in offline mode. No TER connection available.', 1437078620);
         }
@@ -102,7 +92,7 @@ class TerUtility
                     throw new ExtensionManagerException('Decoding Error: No decompressor available for compressed content. gzuncompress() function is not available!', 1342859463);
                 }
             }
-            $listArr = unserialize($dat);
+            $listArr = unserialize($dat, ['allowed_classes' => false]);
             if (!is_array($listArr)) {
                 throw new ExtensionManagerException('Error: Unserialized information was not an array - strange!', 1342859489);
             }
@@ -130,8 +120,8 @@ class TerUtility
                 throw new ExtensionManagerException('Decoding Error: No decompressor available for compressed content. gzcompress()/gzuncompress() ' . 'functions are not available!', 1344761814);
             }
         }
-        if (md5($parts[2]) === $parts[0]) {
-            $output = unserialize($parts[2]);
+        if (hash_equals($parts[0], md5($parts[2]))) {
+            $output = unserialize($parts[2], ['allowed_classes' => false]);
             if (!is_array($output)) {
                 throw new ExtensionManagerException('Error: Content could not be unserialized to an array. Strange (since MD5 hashes match!)', 1344761938);
             }

@@ -32,7 +32,7 @@ class Request extends Message implements RequestInterface
 {
     /**
      * The request-target, if it has been provided or calculated.
-     * @var NULL|string
+     * @var string|null
      */
     protected $requestTarget;
 
@@ -65,7 +65,11 @@ class Request extends Message implements RequestInterface
         'MOVE',
         'PROPFIND',
         'PROPPATCH',
-        'UNLOCK'
+        'REPORT',
+        'UNLOCK',
+        // Custom methods
+        'PURGE',
+        'BAN'
     ];
 
     /**
@@ -77,8 +81,8 @@ class Request extends Message implements RequestInterface
     /**
      * Constructor, the only place to set all parameters of this Request
      *
-     * @param NULL|string $uri URI for the request, if any.
-     * @param NULL|string $method HTTP method for the request, if any.
+     * @param string|null $uri URI for the request, if any.
+     * @param string|null $method HTTP method for the request, if any.
      * @param string|resource|StreamInterface $body Message body, if any.
      * @param array $headers Headers for the message, if any.
      * @throws \InvalidArgumentException for any invalid value.
@@ -233,7 +237,7 @@ class Request extends Message implements RequestInterface
      *     request-target forms allowed in request messages)
      *
      * @param mixed $requestTarget
-     * @return Request
+     * @return static
      */
     public function withRequestTarget($requestTarget)
     {
@@ -267,7 +271,7 @@ class Request extends Message implements RequestInterface
      * changed request method.
      *
      * @param string $method Case-sensitive method.
-     * @return Request
+     * @return static
      * @throws \InvalidArgumentException for invalid HTTP methods.
      */
     public function withMethod($method)
@@ -320,7 +324,7 @@ class Request extends Message implements RequestInterface
      *
      * @param \Psr\Http\Message\UriInterface $uri New request URI to use.
      * @param bool $preserveHost Preserve the original state of the Host header.
-     * @return Request
+     * @return static
      */
     public function withUri(UriInterface $uri, $preserveHost = false)
     {
@@ -349,7 +353,7 @@ class Request extends Message implements RequestInterface
     /**
      * Validate the HTTP method, helper function.
      *
-     * @param NULL|string $method
+     * @param string|null $method
      * @throws \InvalidArgumentException on invalid HTTP method.
      */
     protected function validateMethod($method)

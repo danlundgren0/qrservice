@@ -15,18 +15,18 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Form;
  */
 
 /**
- * View Helper which creates a text field (<input type="text">).
+ * ViewHelper which creates a text field :html:`<input type="text">`.
  *
- * = Examples =
+ * Examples
+ * ========
  *
- * <code title="Example">
- * <f:form.textfield name="myTextBox" value="default value" />
- * </code>
- * <output>
- * <input type="text" name="myTextBox" value="default value" />
- * </output>
+ * Example::
  *
- * @api
+ *    <f:form.textfield name="myTextBox" value="default value" />
+ *
+ * Output::
+ *
+ *    <input type="text" name="myTextBox" value="default value" />
  */
 class TextfieldViewHelper extends AbstractFormFieldViewHelper
 {
@@ -39,7 +39,6 @@ class TextfieldViewHelper extends AbstractFormFieldViewHelper
      * Initialize the arguments.
      *
      * @throws \TYPO3Fluid\Fluid\Core\ViewHelper\Exception
-     * @api
      */
     public function initializeArguments()
     {
@@ -51,7 +50,7 @@ class TextfieldViewHelper extends AbstractFormFieldViewHelper
         $this->registerTagAttribute('size', 'int', 'The size of the input field');
         $this->registerTagAttribute('placeholder', 'string', 'The placeholder of the textfield');
         $this->registerTagAttribute('pattern', 'string', 'HTML5 validation pattern');
-        $this->registerArgument('errorClass', 'string', 'CSS class to set if there are errors for this view helper', false, 'f3-form-error');
+        $this->registerArgument('errorClass', 'string', 'CSS class to set if there are errors for this ViewHelper', false, 'f3-form-error');
         $this->registerUniversalTagAttributes();
         $this->registerArgument('required', 'bool', 'If the field is required or not', false, false);
         $this->registerArgument('type', 'string', 'The field type, e.g. "text", "email", "url" etc.', false, 'text');
@@ -61,12 +60,11 @@ class TextfieldViewHelper extends AbstractFormFieldViewHelper
      * Renders the textfield.
      *
      * @return string
-     * @api
      */
     public function render()
     {
-        $required = $this->arguments['required'];
-        $type = $this->arguments['type'];
+        $required = $this->arguments['required'] ?? false;
+        $type = $this->arguments['type'] ?? null;
 
         $name = $this->getName();
         $this->registerFieldNameForFormTokenGeneration($name);

@@ -17,7 +17,7 @@ namespace TYPO3\CMS\Backend\Form\FormDataProvider;
 use TYPO3\CMS\Backend\Form\FormDataProviderInterface;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
-use TYPO3\CMS\Core\Tree\TableConfiguration\ExtJsArrayTreeRenderer;
+use TYPO3\CMS\Core\Tree\TableConfiguration\ArrayTreeRenderer;
 use TYPO3\CMS\Core\Tree\TableConfiguration\TableConfigurationTree;
 use TYPO3\CMS\Core\Tree\TableConfiguration\TreeDataProviderFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -82,11 +82,12 @@ class TcaSelectTreeItems extends AbstractItemProvider implements FormDataProvide
                 }
             }
 
-            if ($result['selectTreeCompileItems']) {
-                // Prepare the list of currently selected nodes using RelationHandler
-                $result['databaseRow'][$fieldName] = $this->processDatabaseFieldValue($result['databaseRow'], $fieldName);
-                $result['databaseRow'][$fieldName] = $this->processSelectFieldValue($result, $fieldName, []);
+            // Prepare the list of currently selected nodes using RelationHandler
+            // This is needed to ensure a correct value initialization before the actual tree is loaded
+            $result['databaseRow'][$fieldName] = $this->processDatabaseFieldValue($result['databaseRow'], $fieldName);
+            $result['databaseRow'][$fieldName] = $this->processSelectFieldValue($result, $fieldName, []);
 
+            if ($result['selectTreeCompileItems']) {
                 $finalItems = [];
 
                 // Prepare the list of "static" items if there are any.
@@ -174,7 +175,7 @@ class TcaSelectTreeItems extends AbstractItemProvider implements FormDataProvide
                 // tree representing the nested tree, just to collapse all that to a flat array again. Yay ...
                 $treeDataProvider->setItemWhiteList($uidListOfAllDynamicItems);
                 $treeDataProvider->initializeTreeData();
-                $treeRenderer = GeneralUtility::makeInstance(ExtJsArrayTreeRenderer::class);
+                $treeRenderer = GeneralUtility::makeInstance(ArrayTreeRenderer::class);
                 $tree = GeneralUtility::makeInstance(TableConfigurationTree::class);
                 $tree->setDataProvider($treeDataProvider);
                 $tree->setNodeRenderer($treeRenderer);

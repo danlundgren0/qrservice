@@ -17,6 +17,7 @@ Menu ViewHelpers have been moved to the `compatibility7` extension, and are
 replaced in the core menu content elements.
 
 List of removed ViewHelpers:
+
 - menu.categories
 - menu.directory
 - menu.keywords
@@ -83,4 +84,4 @@ After:
       ...
    </f:for>
 
-.. index:: Fluid, Frontend
+.. index:: Fluid, Frontend, ext:fluid_styled_content

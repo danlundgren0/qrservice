@@ -14,6 +14,7 @@ namespace TYPO3\CMS\Core\Compatibility;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Package\PackageInterface;
 
 /**
@@ -65,10 +66,10 @@ class LoadedExtensionArrayElement implements \IteratorAggregate, \ArrayAccess, \
      */
     protected function initializeBasicExtensionInformation()
     {
-        $pathSite = PATH_site;
+        $pathSite = Environment::getPublicPath() . '/';
         $pathSiteLength = strlen($pathSite);
         $absolutePackagePath = $this->package->getPackagePath();
-        if (substr($absolutePackagePath, 0, $pathSiteLength) === $pathSite) {
+        if (strpos($absolutePackagePath, $pathSite) === 0) {
             $relativePackagePathToPathSite = substr($absolutePackagePath, $pathSiteLength);
             $relativePackagePathToPathSiteSegments = explode('/', $relativePackagePathToPathSite);
             $packageType = null;

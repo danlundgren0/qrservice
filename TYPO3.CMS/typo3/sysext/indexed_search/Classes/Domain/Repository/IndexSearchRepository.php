@@ -15,6 +15,8 @@ namespace TYPO3\CMS\IndexedSearch\Domain\Repository;
  */
 
 use Doctrine\DBAL\Driver\Statement;
+use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
+use TYPO3\CMS\Core\Context\Context;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\QueryHelper;
@@ -27,6 +29,7 @@ use TYPO3\CMS\IndexedSearch\Utility;
 
 /**
  * Index search abstraction to search through the index
+ * @internal This class is a specific repository implementation and is not considered part of the Public TYPO3 API.
  */
 class IndexSearchRepository
 {
@@ -57,7 +60,7 @@ class IndexSearchRepository
      *
      * @var string
      */
-    protected $sections = null;
+    protected $sections;
 
     /**
      * Search type
@@ -65,7 +68,7 @@ class IndexSearchRepository
      *
      * @var string
      */
-    protected $searchType = null;
+    protected $searchType;
 
     /**
      * Language uid
@@ -73,7 +76,7 @@ class IndexSearchRepository
      *
      * @var int
      */
-    protected $languageUid = null;
+    protected $languageUid;
 
     /**
      * Media type
@@ -81,7 +84,7 @@ class IndexSearchRepository
      *
      * @var int
      */
-    protected $mediaType = null;
+    protected $mediaType;
 
     /**
      * Sort order
@@ -89,7 +92,7 @@ class IndexSearchRepository
      *
      * @var string
      */
-    protected $sortOrder = null;
+    protected $sortOrder;
 
     /**
      * Descending sort order flag
@@ -97,7 +100,7 @@ class IndexSearchRepository
      *
      * @var bool
      */
-    protected $descendingSortOrderFlag = null;
+    protected $descendingSortOrderFlag;
 
     /**
      * Result page pointer
@@ -176,7 +179,7 @@ class IndexSearchRepository
         $this->indexerObj = GeneralUtility::makeInstance(Indexer::class);
         $this->externalParsers = $externalParsers;
         $this->searchRootPageIdList = $searchRootPageIdList;
-        $this->frontendUserGroupList = $this->getTypoScriptFrontendController()->gr_list;
+        $this->frontendUserGroupList = implode(',', GeneralUtility::makeInstance(Context::class)->getPropertyFromAspect('frontend.user', 'groupIds', [0, -1]));
         // Should we use joinPagesForQuery instead of long lists of uids?
         if ($settings['searchSkipExtendToSubpagesChecking']) {
             $this->joinPagesForQuery = 1;
@@ -190,7 +193,7 @@ class IndexSearchRepository
         $this->sections = $searchData['sections'];
         $this->searchType = $searchData['searchType'];
         $this->languageUid = $searchData['languageUid'];
-        $this->mediaType = isset($searchData['mediaType']) ? $searchData['mediaType'] : false;
+        $this->mediaType = $searchData['mediaType'] ?? false;
         $this->sortOrder = $searchData['sortOrder'];
         $this->descendingSortOrderFlag = $searchData['desc'];
         $this->resultpagePointer = $searchData['pointer'];
@@ -208,20 +211,12 @@ class IndexSearchRepository
      */
     public function doSearch($searchWords, $freeIndexUid = -1)
     {
-        // unserializing the configuration so we can use it here:
-        $extConf = [];
-        if (isset($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['indexed_search'])) {
-            $extConf = unserialize(
-                $GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['indexed_search'],
-                ['allowed_classes' => false]
-            );
-        }
-
-            // Getting SQL result pointer:
+        $useMysqlFulltext = (bool)GeneralUtility::makeInstance(ExtensionConfiguration::class)->get('indexed_search', 'useMysqlFulltext');
+        // Getting SQL result pointer:
         $this->getTimeTracker()->push('Searching result');
         if ($hookObj = &$this->hookRequest('getResultRows_SQLpointer')) {
             $result = $hookObj->getResultRows_SQLpointer($searchWords, $freeIndexUid);
-        } elseif (isset($extConf['useMysqlFulltext']) && $extConf['useMysqlFulltext'] === '1') {
+        } elseif ($useMysqlFulltext) {
             $result = $this->getResultRows_SQLpointerMysqlFulltext($searchWords, $freeIndexUid);
         } else {
             $result = $this->getResultRows_SQLpointer($searchWords, $freeIndexUid);
@@ -256,7 +251,7 @@ class IndexSearchRepository
                 // or not (depends on possible right problems)
                 $row['show_resume'] = $this->checkResume($row);
                 $phashGr = !in_array($row['phash_grouping'], $grouping_phashes);
-                $chashGr = !in_array(($row['contentHash'] . '.' . $row['data_page_id']), $grouping_chashes);
+                $chashGr = !in_array($row['contentHash'] . '.' . $row['data_page_id'], $grouping_chashes);
                 if ($phashGr && $chashGr) {
                     // Only if the resume may be shown are we going to filter out duplicates...
                     if ($row['show_resume'] || $this->displayForbiddenRecords) {
@@ -273,7 +268,7 @@ class IndexSearchRepository
                             $resultRows[] = $row;
                             // This may lead to a problem: If the result check is not stopped here, the search will take longer.
                             // However the result counter will not filter out grouped cHashes/pHashes that were not processed yet.
-                            // You can change this behavior using the "search.exactCount" property (see above).
+                            // You can change this behavior using the "settings.exactCount" property (see above).
                             if (!$this->useExactCount && $c + 1 > ($pointer + 1) * $this->numberOfResults) {
                                 break;
                             }
@@ -298,10 +293,9 @@ class IndexSearchRepository
                 'firstRow' => $firstRow,
                 'count' => $count
             ];
-        } else {
-            // No results found
-            return false;
         }
+        // No results found
+        return false;
     }
 
     /**
@@ -323,9 +317,8 @@ class IndexSearchRepository
             $res = $this->execFinalQuery($list, $freeIndexUid);
             $this->getTimeTracker()->pull();
             return $res;
-        } else {
-            return false;
         }
+        return false;
     }
 
     /**
@@ -368,7 +361,7 @@ class IndexSearchRepository
      * mysql fulltext specific helper method
      *
      * @param array $searchWordArray Search word array
-     * @return string Search string
+     * @return array Search string
      */
     protected function getSearchString($searchWordArray)
     {
@@ -548,6 +541,7 @@ class IndexSearchRepository
             'IP.phash_grouping',
             'IP.data_filename',
             'IP.data_page_id',
+            // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Remove along with database field data_page_reg1
             'IP.data_page_reg1',
             'IP.data_page_type',
             'IP.data_page_mp',
@@ -619,10 +613,10 @@ class IndexSearchRepository
                 case '10':
                     // Sounds like
                     /**
-                    * Indexer object
-                    *
-                    * @var Indexer
-                    */
+                     * Indexer object
+                     *
+                     * @var Indexer
+                     */
                     $indexerObj = GeneralUtility::makeInstance(Indexer::class);
                     // Perform metaphone search
                     $storeMetaphoneInfoAsWords = !$this->isTableUsed('index_words');
@@ -757,7 +751,7 @@ class IndexSearchRepository
             ->from('index_fulltext', 'IFT')
             ->where(
                 QueryHelper::stripLogicalOperatorPrefix($likePart),
-                $queryBuilder->expr()->eq('ISEC.phash', $queryBuilder->quoteIdentifier(('IFT.phash'))),
+                $queryBuilder->expr()->eq('ISEC.phash', $queryBuilder->quoteIdentifier('IFT.phash')),
                 QueryHelper::stripLogicalOperatorPrefix($this->sectionTableWhere())
             )
             ->groupBy('ISEC.phash')
@@ -798,20 +792,20 @@ class IndexSearchRepository
                 $expressionBuilder->in('ISEC.rl0', GeneralUtility::intExplode(',', $this->searchRootPageIdList, true))
             );
         }
-        if (substr($this->sections, 0, 4) === 'rl1_') {
+        if (strpos($this->sections, 'rl1_') === 0) {
             $whereClause->add(
                 $expressionBuilder->in('ISEC.rl1', GeneralUtility::intExplode(',', substr($this->sections, 4)))
             );
             $match = true;
-        } elseif (substr($this->sections, 0, 4) === 'rl2_') {
+        } elseif (strpos($this->sections, 'rl2_') === 0) {
             $whereClause->add(
                 $expressionBuilder->in('ISEC.rl2', GeneralUtility::intExplode(',', substr($this->sections, 4)))
             );
             $match = true;
-        } elseif (is_array($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['addRootLineFields'])) {
+        } else {
             // Traversing user configured fields to see if any of those are used to limit search to a section:
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['addRootLineFields'] as $fieldName => $rootLineLevel) {
-                if (substr($this->sections, 0, strlen($fieldName) + 1) == $fieldName . '_') {
+            foreach ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['addRootLineFields'] ?? [] as $fieldName => $rootLineLevel) {
+                if (strpos($this->sections, $fieldName . '_') === 0) {
                     $whereClause->add(
                         $expressionBuilder->in(
                             'ISEC.' . $fieldName,
@@ -1010,6 +1004,7 @@ class IndexSearchRepository
                 'IP.phash_grouping',
                 'IP.data_filename',
                 'IP.data_page_id',
+                // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Remove along with database field data_page_reg1
                 'IP.data_page_reg1',
                 'IP.data_page_type',
                 'IP.data_page_mp',
@@ -1029,7 +1024,8 @@ class IndexSearchRepository
                 'IP.externalUrl',
                 'IP.recordUid',
                 'IP.freeIndexUid',
-                'IP.freeIndexSetId'
+                'IP.freeIndexSetId',
+                'IP.static_page_arguments'
             );
 
         // Setting up methods of filtering results
@@ -1079,7 +1075,7 @@ class IndexSearchRepository
         // If any of the ranking sortings are selected, we must make a
         // join with the word/rel-table again, because we need to
         // calculate ranking based on all search-words found.
-        if (substr($this->sortOrder, 0, 5) === 'rank_') {
+        if (strpos($this->sortOrder, 'rank_') === 0) {
             $queryBuilder
                 ->from('index_words', 'IW')
                 ->from('index_rel', 'IR')
@@ -1186,28 +1182,26 @@ class IndexSearchRepository
                     'gr_list' => $this->frontendUserGroupList
                 ]
             );
-        } else {
-            // Ordinary TYPO3 pages:
-            if ((string)$row['gr_list'] !== (string)$this->frontendUserGroupList) {
-                // Selecting for the grlist records belonging to the phash-row where the current users gr_list exists.
-                // If it is found it is proof that this user has direct access to the phash-rows content although
-                // he did not himself initiate the indexing...
-                if (!$this->isTableUsed('index_grlist')) {
-                    return false;
-                }
+        }
+        // Ordinary TYPO3 pages:
+        if ((string)$row['gr_list'] !== (string)$this->frontendUserGroupList) {
+            // Selecting for the grlist records belonging to the phash-row where the current users gr_list exists.
+            // If it is found it is proof that this user has direct access to the phash-rows content although
+            // he did not himself initiate the indexing...
+            if (!$this->isTableUsed('index_grlist')) {
+                return false;
+            }
 
-                return (bool)$connection->count(
-                    'phash',
-                    'index_grlist',
-                    [
+            return (bool)$connection->count(
+                'phash',
+                'index_grlist',
+                [
                         'phash' => (int)$row['phash'],
                         'gr_list' => $this->frontendUserGroupList
                     ]
-                );
-            } else {
-                return true;
-            }
+            );
         }
+        return true;
     }
 
     /**
@@ -1215,8 +1209,7 @@ class IndexSearchRepository
      * highest/lowest result order (piVars['desc'])
      *
      * @param bool $inverse If TRUE, inverse the order which is defined by piVars['desc']
-     * @return string " DESC" or
-     * @formallyknownas tx_indexedsearch_pi->isDescending
+     * @return string " DESC" or formerly known as tx_indexedsearch_pi->isDescending
      */
     protected function getDescendingSortOrderFlag($inverse = false)
     {
@@ -1271,13 +1264,13 @@ class IndexSearchRepository
      * Returns an object reference to the hook object if any
      *
      * @param string $functionName Name of the function you want to call / hook key
-     * @return object|NULL Hook object, if any. Otherwise NULL.
+     * @return object|null Hook object, if any. Otherwise NULL.
      */
     public function hookRequest($functionName)
     {
         // Hook: menuConfig_preProcessModMenu
         if ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['pi1_hooks'][$functionName]) {
-            $hookObj = GeneralUtility::getUserObj($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['pi1_hooks'][$functionName]);
+            $hookObj = GeneralUtility::makeInstance($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['pi1_hooks'][$functionName]);
             if (method_exists($hookObj, $functionName)) {
                 $hookObj->pObj = $this;
                 return $hookObj;

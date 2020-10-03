@@ -15,34 +15,47 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Form;
  */
 
 /**
- * View Helper which creates a simple checkbox (<input type="checkbox">).
+ * ViewHelper which creates a simple checkbox :html:`<input type="checkbox">`.
  *
- * = Examples =
+ * Examples
+ * ========
  *
- * <code title="Example">
- * <f:form.checkbox name="myCheckBox" value="someValue" />
- * </code>
- * <output>
- * <input type="checkbox" name="myCheckBox" value="someValue" />
- * </output>
+ * Simple one
+ * ----------
  *
- * <code title="Preselect">
- * <f:form.checkbox name="myCheckBox" value="someValue" checked="{object.value} == 5" />
- * </code>
- * <output>
- * <input type="checkbox" name="myCheckBox" value="someValue" checked="checked" />
- * (depending on $object)
- * </output>
+ * ::
  *
- * <code title="Bind to object property">
- * <f:form.checkbox property="interests" value="TYPO3" />
- * </code>
- * <output>
- * <input type="checkbox" name="user[interests][]" value="TYPO3" checked="checked" />
- * (depending on property "interests")
- * </output>
+ *    <f:form.checkbox name="myCheckBox" value="someValue" />
  *
- * @api
+ * Output::
+ *
+ *    <input type="checkbox" name="myCheckBox" value="someValue" />
+ *
+ * Preselect
+ * ---------
+ *
+ * ::
+ *
+ *    <f:form.checkbox name="myCheckBox" value="someValue" checked="{object.value} == 5" />
+ *
+ * Output::
+ *
+ *    <input type="checkbox" name="myCheckBox" value="someValue" checked="checked" />
+ *
+ * Depending on bound ``object`` to surrounding :ref:`f:form <typo3-fluid-form>`.
+ *
+ * Bind to object property
+ * -----------------------
+ *
+ * ::
+ *
+ *    <f:form.checkbox property="interests" value="TYPO3" />
+ *
+ * Output::
+ *
+ *    <input type="checkbox" name="user[interests][]" value="TYPO3" checked="checked" />
+ *
+ * Depending on property ``interests``.
  */
 class CheckboxViewHelper extends AbstractFormFieldViewHelper
 {
@@ -53,17 +66,21 @@ class CheckboxViewHelper extends AbstractFormFieldViewHelper
 
     /**
      * Initialize the arguments.
-     *
-     * @api
      */
     public function initializeArguments()
     {
         parent::initializeArguments();
         $this->registerTagAttribute(
-            'disabled', 'string', 'Specifies that the input element should be disabled when the page loads'
+            'disabled',
+            'string',
+            'Specifies that the input element should be disabled when the page loads'
         );
         $this->registerArgument(
-            'errorClass', 'string', 'CSS class to set if there are errors for this view helper', false, 'f3-form-error'
+            'errorClass',
+            'string',
+            'CSS class to set if there are errors for this ViewHelper',
+            false,
+            'f3-form-error'
         );
         $this->overrideArgument('value', 'string', 'Value of input tag. Required for checkboxes', true);
         $this->registerUniversalTagAttributes();
@@ -74,9 +91,8 @@ class CheckboxViewHelper extends AbstractFormFieldViewHelper
     /**
      * Renders the checkbox.
      *
-     * @throws \TYPO3\CMS\Fluid\Core\ViewHelper\Exception
+     * @throws \TYPO3Fluid\Fluid\Core\ViewHelper\Exception
      * @return string
-     * @api
      */
     public function render()
     {
@@ -107,7 +123,7 @@ class CheckboxViewHelper extends AbstractFormFieldViewHelper
         } elseif ($multiple === true) {
             $nameAttribute .= '[]';
         } elseif ($propertyValue !== null) {
-            $checked = (boolean) $propertyValue === (boolean) $valueAttribute;
+            $checked = (boolean)$propertyValue === (boolean)$valueAttribute;
         }
 
         $this->registerFieldNameForFormTokenGeneration($nameAttribute);

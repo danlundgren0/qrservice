@@ -1,10 +1,16 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <xliff version="1.0">
-	<file source-language="en" datatype="plaintext" original="messages" date="2017-07-05T05:02:00Z" product-name="dl_qrcodesgenerator">
+	<file source-language="en" datatype="plaintext" original="messages" date="2020-09-26T19:20:29Z" product-name="dl_qrcodesgenerator">
 		<header/>
 		<body>
 			<trans-unit id="tx_dlqrcodesgenerator_domain_model_qrcodesgenerator">
 				<source>Q Rcodes Generator</source>
+			</trans-unit>
+			<trans-unit id="tx_dl_qrcodesgenerator_qrcodesgenerator.name">
+				<source>QRcodesGenerator</source>
+			</trans-unit>
+			<trans-unit id="tx_dl_qrcodesgenerator_qrcodesgenerator.description">
+				<source></source>
 			</trans-unit>
 		</body>
 	</file>

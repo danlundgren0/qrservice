@@ -136,9 +136,9 @@ class GridelementsBackendLayoutWizardElement extends BackendLayoutWizardElement
                 if (!empty($item[1])) {
                     $contentType['key'] = $item[1];
                     if (substr($contentType['key'], 0, 2) !== '--') {
-                        $contentType['label'] = $lang->sL($item[0], true);
+                        $contentType['label'] = $lang->sL($item[0]);
                         if (strpos($item[2], 'EXT:') === 0) {
-                            $contentType['icon'] = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName($item[2]);
+                            $contentType['icon'] = GeneralUtility::getFileAbsFileName($item[2]);
                         } elseif (strpos($item[2], '/typo3') === 0) {
                             $contentType['icon'] = '../../../' . $item[2];
                         } else {
@@ -160,9 +160,9 @@ class GridelementsBackendLayoutWizardElement extends BackendLayoutWizardElement
                 if (!empty($item[1])) {
                     $listType['key'] = $item[1];
                     if (substr($listType['key'], 0, 2) !== '--') {
-                        $listType['label'] = $lang->sL($item[0], true);
+                        $listType['label'] = $lang->sL($item[0]);
                         if (strpos($item[2], 'EXT:') === 0) {
-                            $listType['icon'] = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName($item[2]);
+                            $listType['icon'] = GeneralUtility::getFileAbsFileName($item[2]);
                         } elseif (strpos($item[2], '/typo3') === 0) {
                             $listType['icon'] = '../../../' . $item[2];
                         } else {
@@ -188,10 +188,10 @@ class GridelementsBackendLayoutWizardElement extends BackendLayoutWizardElement
                 if (!empty($key)) {
                     $gridType['key'] = $key;
                     if (substr($gridType['key'], 0, 2) !== '--') {
-                        $gridType['label'] = $lang->sL($item['title'], true);
+                        $gridType['label'] = $lang->sL($item['title']);
                         if (!empty($item['icon']) && is_array($item['icon']) && !empty($item['icon'][0])) {
                             if (strpos($item['icon'][0], 'EXT:') === 0) {
-                                $gridType['icon'] = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName($item['icon']);
+                                $gridType['icon'] = GeneralUtility::getFileAbsFileName($item['icon']);
                             } elseif (strpos($item['icon'][0], '/typo3') === 0) {
                                 $gridType['icon'] = '../../../' . $item['icon'];
                             } else {
@@ -219,7 +219,7 @@ class GridelementsBackendLayoutWizardElement extends BackendLayoutWizardElement
         $html = implode(LF, $html);
         $resultArray['html'] = $html;
         $resultArray['additionalInlineLanguageLabelFiles'][] = 'EXT:gridelements/Resources/Private/Language/locallang_wizard.xlf';
-        $resultArray['additionalInlineLanguageLabelFiles'][] = 'EXT:lang/Resources/Private/Language/locallang_wizards.xlf';
+        $resultArray['additionalInlineLanguageLabelFiles'][] = 'EXT:core/Resources/Private/Language/locallang_wizards.xlf';
         $resultArray['additionalInlineLanguageLabelFiles'][] = 'EXT:backend/Resources/Private/Language/locallang.xlf';
         $resultArray['requireJsModules'][] = 'TYPO3/CMS/Gridelements/GridEditor';
 

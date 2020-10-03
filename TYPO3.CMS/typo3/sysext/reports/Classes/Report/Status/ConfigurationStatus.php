@@ -15,14 +15,12 @@ namespace TYPO3\CMS\Reports\Report\Status;
  */
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\QueryBuilder;
-use TYPO3\CMS\Core\Messaging\FlashMessage;
-use TYPO3\CMS\Core\Messaging\FlashMessageService;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Registry;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Core\Utility\PathUtility;
-use TYPO3\CMS\Lang\LanguageService;
 use TYPO3\CMS\Reports\Status as ReportStatus;
 use TYPO3\CMS\Reports\StatusProviderInterface;
 
@@ -32,35 +30,19 @@ use TYPO3\CMS\Reports\StatusProviderInterface;
 class ConfigurationStatus implements StatusProviderInterface
 {
     /**
-     * 10MB
-     *
-     * @var int
-     */
-    protected $deprecationLogFileSizeWarningThreshold = 10485760;
-
-    /**
-     * 100MB
-     *
-     * @var int
-     */
-    protected $deprecationLogFileSizeErrorThreshold = 104857600;
-
-    /**
      * Determines the Install Tool's status, mainly concerning its protection.
      *
      * @return array List of statuses
      */
     public function getStatus()
     {
-        $this->executeAdminCommand();
         $statuses = [
             'emptyReferenceIndex' => $this->getReferenceIndexStatus(),
-            'deprecationLog' => $this->getDeprecationLogStatus()
         ];
         if ($this->isMemcachedUsed()) {
             $statuses['memcachedConnection'] = $this->getMemcachedConnectionStatus();
         }
-        if (TYPO3_OS !== 'WIN') {
+        if (!Environment::isWindows()) {
             $statuses['createdFilesWorldWritable'] = $this->getCreatedFilesWorldWritableStatus();
             $statuses['createdDirectoriesWorldWritable'] = $this->getCreatedDirectoriesWorldWritableStatus();
         }
@@ -90,11 +72,13 @@ class ConfigurationStatus implements StatusProviderInterface
 
         $registry = GeneralUtility::makeInstance(Registry::class);
         $lastRefIndexUpdate = $registry->get('core', 'sys_refindex_lastUpdate');
+        /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
         if (!$count && $lastRefIndexUpdate) {
             $value = $this->getLanguageService()->getLL('status_empty');
             $severity = ReportStatus::WARNING;
-            $url =  BackendUtility::getModuleUrl('system_dbint') . '&id=0&SET[function]=refindex';
-            $message = sprintf($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:warning.backend_reference_index'), '<a href="' . htmlspecialchars($url) . '">', '</a>', BackendUtility::datetime($lastRefIndexUpdate));
+            $url = (string)$uriBuilder->buildUriFromRoute('system_dbint') . '&id=0&SET[function]=refindex';
+            $message = sprintf($this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:warning.backend_reference_index'), '<a href="' . htmlspecialchars($url) . '">', '</a>', BackendUtility::datetime($lastRefIndexUpdate));
         }
         return GeneralUtility::makeInstance(ReportStatus::class, $this->getLanguageService()->getLL('status_referenceIndex'), $value, $message, $severity);
     }
@@ -121,15 +105,14 @@ class ConfigurationStatus implements StatusProviderInterface
      */
     protected function getConfiguredMemcachedServers()
     {
+        $configurations = $GLOBALS['TYPO3_CONF_VARS']['SYS']['caching']['cacheConfigurations'] ?? [];
         $memcachedServers = [];
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SYS']['caching']['cacheConfigurations'])) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SYS']['caching']['cacheConfigurations'] as $table => $conf) {
-                if (is_array($conf)) {
-                    foreach ($conf as $key => $value) {
-                        if (!is_array($value) && $value === \TYPO3\CMS\Core\Cache\Backend\MemcachedBackend::class) {
-                            $memcachedServers = $GLOBALS['TYPO3_CONF_VARS']['SYS']['caching']['cacheConfigurations'][$table]['options']['servers'];
-                            break;
-                        }
+        foreach ($configurations as $table => $conf) {
+            if (is_array($conf)) {
+                foreach ($conf as $key => $value) {
+                    if ($value === \TYPO3\CMS\Core\Cache\Backend\MemcachedBackend::class) {
+                        $memcachedServers = $configurations[$table]['options']['servers'];
+                        break;
                     }
                 }
             }
@@ -153,11 +136,11 @@ class ConfigurationStatus implements StatusProviderInterface
         if (function_exists('memcache_connect') && is_array($memcachedServers)) {
             foreach ($memcachedServers as $testServer) {
                 $configuredServer = $testServer;
-                if (substr($testServer, 0, 7) === 'unix://') {
+                if (strpos($testServer, 'unix://') === 0) {
                     $host = $testServer;
                     $port = 0;
                 } else {
-                    if (substr($testServer, 0, 6) === 'tcp://') {
+                    if (strpos($testServer, 'tcp://') === 0) {
                         $testServer = substr($testServer, 6);
                     }
                     if (strstr($testServer, ':') !== false) {
@@ -169,7 +152,7 @@ class ConfigurationStatus implements StatusProviderInterface
                 }
                 $memcachedConnection = @memcache_connect($host, $port);
                 if ($memcachedConnection != null) {
-                    memcache_close($memcachedConnection);
+                    memcache_close();
                 } else {
                     $failedConnections[] = $configuredServer;
                 }
@@ -178,43 +161,9 @@ class ConfigurationStatus implements StatusProviderInterface
         if (!empty($failedConnections)) {
             $value = $this->getLanguageService()->getLL('status_connectionFailed');
             $severity = ReportStatus::WARNING;
-            $message = $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:warning.memcache_not_usable') . '<br /><br />' . '<ul><li>' . implode('</li><li>', $failedConnections) . '</li></ul>';
+            $message = $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:warning.memcache_not_usable') . '<br /><br />' . '<ul><li>' . implode('</li><li>', $failedConnections) . '</li></ul>';
         }
         return GeneralUtility::makeInstance(ReportStatus::class, $this->getLanguageService()->getLL('status_memcachedConfiguration'), $value, $message, $severity);
-    }
-
-    /**
-     * Provides status information on the deprecation log, whether it's enabled
-     * and if so whether certain limits in file size are reached.
-     *
-     * @return \TYPO3\CMS\Reports\Status The deprecation log status.
-     */
-    protected function getDeprecationLogStatus()
-    {
-        $title = $this->getLanguageService()->getLL('status_configuration_DeprecationLog');
-        $value = $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_common.xlf:disabled');
-        $message = '';
-        $severity = ReportStatus::OK;
-        if ($GLOBALS['TYPO3_CONF_VARS']['SYS']['enableDeprecationLog']) {
-            $value = $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_common.xlf:enabled');
-            $message = '<p>' . $this->getLanguageService()->getLL('status_configuration_DeprecationLogEnabled') . '</p>';
-            $severity = ReportStatus::NOTICE;
-            $logFile = GeneralUtility::getDeprecationLogFileName();
-            $logFileSize = 0;
-            if (@file_exists($logFile)) {
-                $logFileSize = filesize($logFile);
-                $message .= '<p>' . sprintf($this->getLanguageService()->getLL('status_configuration_DeprecationLogFile'), '<code>' . $this->getDeprecationLogFileLink()) . '</code></p>';
-                $removeDeprecationLogFileUrl = GeneralUtility::getIndpEnv('TYPO3_REQUEST_URL') . '&amp;adminCmd=removeDeprecationLogFile';
-                $message .= '<p>' . sprintf($this->getLanguageService()->getLL('status_configuration_DeprecationLogSize'), GeneralUtility::formatSize($logFileSize)) . ' <a href="' . $removeDeprecationLogFileUrl . '">' . $this->getLanguageService()->getLL('status_configuration_DeprecationLogDeleteLink') . '</a></p>';
-            }
-            if ($logFileSize > $this->deprecationLogFileSizeWarningThreshold) {
-                $severity = ReportStatus::WARNING;
-            }
-            if ($logFileSize > $this->deprecationLogFileSizeErrorThreshold) {
-                $severity = ReportStatus::ERROR;
-            }
-        }
-        return GeneralUtility::makeInstance(ReportStatus::class, $title, $value, $message, $severity);
     }
 
     /**
@@ -251,19 +200,6 @@ class ConfigurationStatus implements StatusProviderInterface
             $message = $this->getLanguageService()->getLL('status_CreatedDirectoryPermissions.writable');
         }
         return GeneralUtility::makeInstance(ReportStatus::class, $this->getLanguageService()->getLL('status_CreatedDirectoryPermissions'), $value, $message, $severity);
-    }
-
-    /**
-     * Creates a link to the deprecation log file with the absolute path as the
-     * link text.
-     *
-     * @return string Link to the deprecation log file
-     */
-    protected function getDeprecationLogFileLink()
-    {
-        $logFile = GeneralUtility::getDeprecationLogFileName();
-        $linkToLogFile = PathUtility::getAbsoluteWebPath($logFile);
-        return '<a href="' . $linkToLogFile . '">' . $logFile . '</a>';
     }
 
     /**
@@ -308,6 +244,7 @@ class ConfigurationStatus implements StatusProviderInterface
         if (strpos($defaultDatabaseCharset, 'utf8') !== 0) {
             // If the default character set is e.g. latin1, BUT all tables in the system are UTF-8,
             // we assume that TYPO3 has the correct charset for adding tables, and everything is fine
+            $queryBuilder = $connection->createQueryBuilder();
             $nonUtf8TableCollationsFound = $queryBuilder->select('table_collation')
                 ->from('information_schema.tables')
                 ->where(
@@ -329,6 +266,61 @@ class ConfigurationStatus implements StatusProviderInterface
                 $severity = ReportStatus::INFO;
                 $statusValue = $this->getLanguageService()->getLL('status_info');
             }
+        } elseif (isset($GLOBALS['TYPO3_CONF_VARS']['DB']['Connections'][ConnectionPool::DEFAULT_CONNECTION_NAME]['tableoptions'])) {
+            $message = $this->getLanguageService()->getLL('status_MysqlDatabaseCharacterSet_Ok');
+
+            $tableOptions = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections'][ConnectionPool::DEFAULT_CONNECTION_NAME]['tableoptions'];
+            if (isset($tableOptions['collate'])) {
+                $collationConstraint = $queryBuilder->expr()->neq('table_collation', $queryBuilder->quote($tableOptions['collate']));
+                $charset = $tableOptions['collate'];
+            } elseif (isset($tableOptions['charset'])) {
+                $collationConstraint = $queryBuilder->expr()->notLike('table_collation', $queryBuilder->quote($tableOptions['charset'] . '%'));
+                $charset = $tableOptions['charset'];
+            }
+
+            if (isset($collationConstraint)) {
+                $queryBuilder = $connection->createQueryBuilder();
+                $wrongCollationTablesFound = $queryBuilder->select('table_collation')
+                    ->from('information_schema.tables')
+                    ->where(
+                        $queryBuilder->expr()->andX(
+                            $queryBuilder->expr()->eq('table_schema', $queryBuilder->quote($connection->getDatabase())),
+                            $collationConstraint
+                        )
+                    )
+                    ->setMaxResults(1)
+                    ->execute();
+
+                if ($wrongCollationTablesFound->rowCount() > 0) {
+                    $message = sprintf($this->getLanguageService()->getLL('status_MysqlDatabaseCharacterSet_MixedCollations'), $charset);
+                    $severity = ReportStatus::ERROR;
+                    $statusValue = $this->getLanguageService()->getLL('status_checkFailed');
+                } else {
+                    if (isset($tableOptions['collate'])) {
+                        $collationConstraint = $queryBuilder->expr()->neq('collation_name', $queryBuilder->quote($tableOptions['collate']));
+                    } elseif (isset($tableOptions['charset'])) {
+                        $collationConstraint = $queryBuilder->expr()->notLike('collation_name', $queryBuilder->quote($tableOptions['charset'] . '%'));
+                    }
+
+                    $queryBuilder = $connection->createQueryBuilder();
+                    $wrongCollationColumnsFound = $queryBuilder->select('collation_name')
+                        ->from('information_schema.columns')
+                        ->where(
+                            $queryBuilder->expr()->andX(
+                                $queryBuilder->expr()->eq('table_schema', $queryBuilder->quote($connection->getDatabase())),
+                                $collationConstraint
+                            )
+                        )
+                        ->setMaxResults(1)
+                        ->execute();
+
+                    if ($wrongCollationColumnsFound->rowCount() > 0) {
+                        $message = sprintf($this->getLanguageService()->getLL('status_MysqlDatabaseCharacterSet_MixedCollations'), $charset);
+                        $severity = ReportStatus::ERROR;
+                        $statusValue = $this->getLanguageService()->getLL('status_checkFailed');
+                    }
+                }
+            }
         } else {
             $message = $this->getLanguageService()->getLL('status_MysqlDatabaseCharacterSet_Ok');
         }
@@ -340,44 +332,6 @@ class ConfigurationStatus implements StatusProviderInterface
             $message,
             $severity
         );
-    }
-
-    /**
-     * Executes admin commands.
-     *
-     * Currently implemented commands are:
-     * - Remove deprecation log file
-     */
-    protected function executeAdminCommand()
-    {
-        $command = GeneralUtility::_GET('adminCmd');
-        switch ($command) {
-            case 'removeDeprecationLogFile':
-                self::removeDeprecationLogFile();
-                break;
-            default:
-                // intentionally left blank
-        }
-    }
-
-    /**
-     * Remove deprecation log file.
-     */
-    protected static function removeDeprecationLogFile()
-    {
-        if (@unlink(GeneralUtility::getDeprecationLogFileName())) {
-            $message = $GLOBALS['LANG']->getLL('status_configuration_DeprecationLogDeletedSuccessful');
-            $severity = FlashMessage::OK;
-        } else {
-            $message = $GLOBALS['LANG']->getLL('status_configuration_DeprecationLogDeletionFailed');
-            $severity = FlashMessage::ERROR;
-        }
-        $flashMessage = GeneralUtility::makeInstance(FlashMessage::class, $message, '', $severity, true);
-        /** @var FlashMessageService $flashMessageService  */
-        $flashMessageService = GeneralUtility::makeInstance(FlashMessageService::class);
-        /** @var \TYPO3\CMS\Core\Messaging\FlashMessageQueue $defaultFlashMessageQueue */
-        $defaultFlashMessageQueue = $flashMessageService->getMessageQueueByIdentifier();
-        $defaultFlashMessageQueue->enqueue($flashMessage);
     }
 
     /**

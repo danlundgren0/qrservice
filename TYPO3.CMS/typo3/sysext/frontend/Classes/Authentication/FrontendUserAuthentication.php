@@ -15,6 +15,8 @@ namespace TYPO3\CMS\Frontend\Authentication;
  */
 
 use TYPO3\CMS\Core\Authentication\AbstractUserAuthentication;
+use TYPO3\CMS\Core\Configuration\Features;
+use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Session\Backend\Exception\SessionNotFoundException;
 use TYPO3\CMS\Core\TypoScript\Parser\TypoScriptParser;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -33,7 +35,7 @@ class FrontendUserAuthentication extends AbstractUserAuthentication
     public $formfield_permanent = 'permalogin';
 
     /**
-     * Lifetime of session data in seconds.
+     * Lifetime of anonymous session data in seconds.
      * @var int
      */
     protected $sessionDataLifetime = 86400;
@@ -137,6 +139,7 @@ class FrontendUserAuthentication extends AbstractUserAuthentication
         $this->lockIP = $GLOBALS['TYPO3_CONF_VARS']['FE']['lockIP'];
         $this->checkPid = $GLOBALS['TYPO3_CONF_VARS']['FE']['checkFeUserPid'];
         $this->lifetime = (int)$GLOBALS['TYPO3_CONF_VARS']['FE']['lifetime'];
+        $this->sessionTimeout = (int)$GLOBALS['TYPO3_CONF_VARS']['FE']['sessionTimeout'];
     }
 
     /**
@@ -160,7 +163,7 @@ class FrontendUserAuthentication extends AbstractUserAuthentication
      */
     public function start()
     {
-        if ((int)$this->sessionTimeout > 0 && $this->sessionTimeout < $this->lifetime) {
+        if ($this->sessionTimeout > 0 && $this->sessionTimeout < $this->lifetime) {
             // If server session timeout is non-zero but less than client session timeout: Copy this value instead.
             $this->sessionTimeout = $this->lifetime;
         }
@@ -278,12 +281,13 @@ class FrontendUserAuthentication extends AbstractUserAuthentication
         $this->TSdataArray[] = $GLOBALS['TYPO3_CONF_VARS']['FE']['defaultUserTSconfig'];
         // Get the info data for auth services
         $authInfo = $this->getAuthInfoArray();
-        if ($this->writeDevLog) {
-            if (is_array($this->user)) {
-                GeneralUtility::devLog('Get usergroups for user: ' . GeneralUtility::arrayToLogString($this->user, [$this->userid_column, $this->username_column]), __CLASS__);
-            } else {
-                GeneralUtility::devLog('Get usergroups for "anonymous" user', __CLASS__);
-            }
+        if (is_array($this->user)) {
+            $this->logger->debug('Get usergroups for user', [
+                $this->userid_column => $this->user[$this->userid_column],
+                $this->username_column => $this->user[$this->username_column]
+            ]);
+        } else {
+            $this->logger->debug('Get usergroups for "anonymous" user');
         }
         $groupDataArr = [];
         // Use 'auth' service to find the groups for the user
@@ -299,14 +303,14 @@ class FrontendUserAuthentication extends AbstractUserAuthentication
             }
             unset($serviceObj);
         }
-        if ($this->writeDevLog && $serviceChain) {
-            GeneralUtility::devLog($subType . ' auth services called: ' . $serviceChain, __CLASS__);
+        if ($serviceChain) {
+            $this->logger->debug($subType . ' auth services called: ' . $serviceChain);
         }
-        if ($this->writeDevLog && empty($groupDataArr)) {
-            GeneralUtility::devLog('No usergroups found by services', __CLASS__);
+        if (empty($groupDataArr)) {
+            $this->logger->debug('No usergroups found by services');
         }
-        if ($this->writeDevLog && !empty($groupDataArr)) {
-            GeneralUtility::devLog(count($groupDataArr) . ' usergroup records found by services', __CLASS__);
+        if (!empty($groupDataArr)) {
+            $this->logger->debug(count($groupDataArr) . ' usergroup records found by services');
         }
         // Use 'auth' service to check the usergroups if they are really valid
         foreach ($groupDataArr as $groupData) {
@@ -319,9 +323,10 @@ class FrontendUserAuthentication extends AbstractUserAuthentication
                 $serviceObj->initAuth($subType, [], $authInfo, $this);
                 if (!$serviceObj->authGroup($this->user, $groupData)) {
                     $validGroup = false;
-                    if ($this->writeDevLog) {
-                        GeneralUtility::devLog($subType . ' auth service did not auth group: ' . GeneralUtility::arrayToLogString($groupData, 'uid,title'), __CLASS__, 2);
-                    }
+                    $this->logger->debug($subType . ' auth service did not auth group', [
+                        'uid ' => $groupData['uid'],
+                        'title' => $groupData['title']
+                    ]);
                     break;
                 }
                 unset($serviceObj);
@@ -441,11 +446,11 @@ class FrontendUserAuthentication extends AbstractUserAuthentication
      * Thereby the current user (if any) is effectively logged out!
      * Additionally the cookie is removed, but only if there is no session data.
      * If session data exists, only the user information is removed and the session
-     * gets converted into an anonymous session.
+     * gets converted into an anonymous session if the feature toggle
+     * "security.frontend.keepSessionDataOnLogout" is set to true (default: false).
      */
     protected function performLogoff()
     {
-        $oldSession = [];
         $sessionData = [];
         try {
             // Session might not be loaded at this point, so fetch it
@@ -455,12 +460,15 @@ class FrontendUserAuthentication extends AbstractUserAuthentication
             // Leave uncaught, will unset cookie later in this method
         }
 
-        if (!empty($sessionData)) {
+        $keepSessionDataOnLogout = GeneralUtility::makeInstance(Features::class)
+            ->isFeatureEnabled('security.frontend.keepSessionDataOnLogout');
+
+        if ($keepSessionDataOnLogout && !empty($sessionData)) {
             // Regenerate session as anonymous
             $this->regenerateSessionId($oldSession, true);
-        } else {
             $this->user = null;
-            $this->getSessionBackend()->remove($this->id);
+        } else {
+            parent::performLogoff();
             if ($this->isCookieSet()) {
                 $this->removeCookie($this->name);
             }
@@ -519,13 +527,12 @@ class FrontendUserAuthentication extends AbstractUserAuthentication
     /**
      * Saves session data, either persistent or bound to current session cookie. Please see getKey() for more details.
      * When a value is set the flags $this->userData_change or $this->sesData_change will be set so that the final call to ->storeSessionData() will know if a change has occurred and needs to be saved to the database.
-     * Notice: The key "recs" is already used by the function record_registration() which stores table/uid=value pairs in that key. This is used for the shopping basket among other things.
      * Notice: Simply calling this function will not save the data to the database! The actual saving is done in storeSessionData() which is called as some of the last things in \TYPO3\CMS\Frontend\Http\RequestHandler. So if you exit before this point, nothing gets saved of course! And the solution is to call $GLOBALS['TSFE']->storeSessionData(); before you exit.
      *
      * @param string $type Session data type; Either "user" (persistent, bound to fe_users profile) or "ses" (temporary, bound to current session cookie)
      * @param string $key Key from the data array to store incoming data in; The session data (in either case) is an array ($this->uc / $this->sessionData) and this value determines in which key the $data value will be stored.
      * @param mixed $data The data value to store in $key
-     * @see setKey(), storeSessionData(), record_registration()
+     * @see setKey(), storeSessionData()
      */
     public function setKey($type, $key, $data)
     {
@@ -579,43 +586,6 @@ class FrontendUserAuthentication extends AbstractUserAuthentication
     }
 
     /**
-     * Registration of records/"shopping basket" in session data
-     * This will take the input array, $recs, and merge into the current "recs" array found in the session data.
-     * If a change in the recs storage happens (which it probably does) the function setKey() is called in order to store the array again.
-     *
-     * @param array $recs The data array to merge into/override the current recs values. The $recs array is constructed as [table]][uid] = scalar-value (eg. string/integer).
-     * @param int $maxSizeOfSessionData The maximum size of stored session data. If zero, no limit is applied and even confirmation of cookie session is discarded.
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9. Automatically feeding a "basket" by magic GET/POST keyword "recs" has been deprecated.
-     */
-    public function record_registration($recs, $maxSizeOfSessionData = 0)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        // Storing value ONLY if there is a confirmed cookie set,
-        // otherwise a shellscript could easily be spamming the fe_sessions table
-        // with bogus content and thus bloat the database
-        if (!$maxSizeOfSessionData || $this->isCookieSet()) {
-            if ($recs['clear_all']) {
-                $this->setKey('ses', 'recs', []);
-            }
-            $change = 0;
-            $recs_array = $this->getKey('ses', 'recs');
-            foreach ($recs as $table => $data) {
-                if (is_array($data)) {
-                    foreach ($data as $rec_id => $value) {
-                        if ($value != $recs_array[$table][$rec_id]) {
-                            $recs_array[$table][$rec_id] = $value;
-                            $change = 1;
-                        }
-                    }
-                }
-            }
-            if ($change && (!$maxSizeOfSessionData || strlen(serialize($recs_array)) < $maxSizeOfSessionData)) {
-                $this->setKey('ses', 'recs', $recs_array);
-            }
-        }
-    }
-
-    /**
      * Garbage collector, removing old expired sessions.
      *
      * @internal
@@ -635,5 +605,25 @@ class FrontendUserAuthentication extends AbstractUserAuthentication
     {
         $this->user = null;
         $this->loginHidden = true;
+    }
+
+    /**
+     * Update the field "is_online" every 60 seconds of a logged-in user
+     *
+     * @internal
+     */
+    public function updateOnlineTimestamp()
+    {
+        if (!is_array($this->user) || !$this->user['uid']
+            || $this->user['is_online'] >= $GLOBALS['EXEC_TIME'] - 60) {
+            return;
+        }
+        $dbConnection = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('fe_users');
+        $dbConnection->update(
+            'fe_users',
+            ['is_online' => $GLOBALS['EXEC_TIME']],
+            ['uid' => (int)$this->user['uid']]
+        );
+        $this->user['is_online'] = $GLOBALS['EXEC_TIME'];
     }
 }

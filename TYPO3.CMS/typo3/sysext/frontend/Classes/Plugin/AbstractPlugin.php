@@ -15,23 +15,26 @@ namespace TYPO3\CMS\Frontend\Plugin;
  */
 
 use Doctrine\DBAL\Driver\Statement;
+use Psr\Http\Message\ServerRequestInterface;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
-use TYPO3\CMS\Core\Database\DatabaseConnection;
 use TYPO3\CMS\Core\Database\Query\QueryHelper;
 use TYPO3\CMS\Core\Database\Query\Restriction\FrontendRestrictionContainer;
 use TYPO3\CMS\Core\Localization\Locales;
 use TYPO3\CMS\Core\Localization\LocalizationFactory;
 use TYPO3\CMS\Core\Service\MarkerBasedTemplateService;
+use TYPO3\CMS\Core\Site\Entity\SiteLanguage;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\HttpUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
+use TYPO3\CMS\Core\Utility\PathUtility;
 use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
 use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
 
 /**
  * Base class for frontend plugins
- * Most modern frontend plugins are extension classes of this one.
+ * Most legacy frontend plugins are extension classes of this one.
  * This class contains functions which assists these plugins in creating lists, searching, displaying menus, page-browsing (next/previous/1/2/3) and handling links.
  * Functions are all prefixed "pi_" which is reserved for this class. Those functions can of course be overridden in the extension classes (that is the point...)
  */
@@ -228,14 +231,6 @@ class AbstractPlugin
     protected $frontendController;
 
     /**
-     * Property for accessing DatabaseConnection centrally
-     *
-     * @var DatabaseConnection
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9, use the Doctrine DBAL layer via the ConnectionPool class
-     */
-    protected $databaseConnection;
-
-    /**
      * @var MarkerBasedTemplateService
      */
     protected $templateService;
@@ -245,12 +240,11 @@ class AbstractPlugin
      * Initializes $this->piVars if $this->prefixId is set to any value
      * Will also set $this->LLkey based on the config.language setting.
      *
-     * @param DatabaseConnection $databaseConnection, deprecated in TYPO3 v8, will be removed in TYPO3 v9
+     * @param null $_ unused,
      * @param TypoScriptFrontendController $frontendController
      */
-    public function __construct(DatabaseConnection $databaseConnection = null, TypoScriptFrontendController $frontendController = null)
+    public function __construct($_ = null, TypoScriptFrontendController $frontendController = null)
     {
-        $this->databaseConnection = $databaseConnection ?: $GLOBALS['TYPO3_DB'];
         $this->frontendController = $frontendController ?: $GLOBALS['TSFE'];
         $this->templateService = GeneralUtility::makeInstance(MarkerBasedTemplateService::class);
         // Setting piVars:
@@ -269,21 +263,25 @@ class AbstractPlugin
                 $this->frontendController->reqCHash();
             }
         }
-        if (!empty($this->frontendController->config['config']['language'])) {
+        $siteLanguage = $this->getCurrentSiteLanguage();
+        if ($siteLanguage) {
+            $this->LLkey = $siteLanguage->getTypo3Language();
+        } elseif (!empty($this->frontendController->config['config']['language'])) {
             $this->LLkey = $this->frontendController->config['config']['language'];
-            if (empty($this->frontendController->config['config']['language_alt'])) {
-                /** @var $locales Locales */
-                $locales = GeneralUtility::makeInstance(Locales::class);
-                if (in_array($this->LLkey, $locales->getLocales())) {
-                    $this->altLLkey = '';
-                    foreach ($locales->getLocaleDependencies($this->LLkey) as $language) {
-                        $this->altLLkey .= $language . ',';
-                    }
-                    $this->altLLkey = rtrim($this->altLLkey, ',');
+        }
+
+        if (empty($this->frontendController->config['config']['language_alt'])) {
+            /** @var Locales $locales */
+            $locales = GeneralUtility::makeInstance(Locales::class);
+            if (in_array($this->LLkey, $locales->getLocales())) {
+                $this->altLLkey = '';
+                foreach ($locales->getLocaleDependencies($this->LLkey) as $language) {
+                    $this->altLLkey .= $language . ',';
                 }
-            } else {
-                $this->altLLkey = $this->frontendController->config['config']['language_alt'];
+                $this->altLLkey = rtrim($this->altLLkey, ',');
             }
+        } else {
+            $this->altLLkey = $this->frontendController->config['config']['language_alt'];
         }
     }
 
@@ -310,7 +308,7 @@ class AbstractPlugin
                 // now for stdWrap
                 foreach ($confNextLevel as $subKey => $subConfNextLevel) {
                     if (is_array($subConfNextLevel) && $subKey === 'stdWrap.') {
-                        $conf[$key] = $this->cObj->stdWrap($conf[$key], $conf[$key . '.']['stdWrap.']);
+                        $conf[$key] = $this->cObj->stdWrap($conf[$key] ?? '', $conf[$key . '.']['stdWrap.'] ?? []);
                         unset($conf[$key . '.']['stdWrap.']);
                         if (empty($conf[$key . '.'])) {
                             unset($conf[$key . '.']);
@@ -393,7 +391,7 @@ class AbstractPlugin
         $conf['useCacheHash'] = $this->pi_USER_INT_obj ? 0 : $cache;
         $conf['no_cache'] = $this->pi_USER_INT_obj ? 0 : !$cache;
         $conf['parameter'] = $altPageId ? $altPageId : ($this->pi_tmpPageId ? $this->pi_tmpPageId : $this->frontendController->id);
-        $conf['additionalParams'] = $this->conf['parent.']['addParams'] . GeneralUtility::implodeArrayForUrl('', $urlParameters, '', true) . $this->pi_moreParams;
+        $conf['additionalParams'] = $this->conf['parent.']['addParams'] . HttpUtility::buildQueryString($urlParameters, '&', true) . $this->pi_moreParams;
         return $this->cObj->typoLink($str, $conf);
     }
 
@@ -485,7 +483,8 @@ class AbstractPlugin
     public function pi_openAtagHrefInJSwindow($str, $winName = '', $winParams = 'width=670,height=500,status=0,menubar=0,scrollbars=1,resizable=1')
     {
         if (preg_match('/(.*)(<a[^>]*>)(.*)/i', $str, $match)) {
-            $aTagContent = GeneralUtility::get_tag_attributes($match[2]);
+            // decode HTML entities, `href` is used in escaped JavaScript context
+            $aTagContent = GeneralUtility::get_tag_attributes($match[2], true);
             $onClick = 'vHWin=window.open('
                 . GeneralUtility::quoteJSvalue($this->frontendController->baseUrlWrap($aTagContent['href'])) . ','
                 . GeneralUtility::quoteJSvalue($winName ?: md5($aTagContent['href'])) . ','
@@ -527,16 +526,12 @@ class AbstractPlugin
      */
     public function pi_list_browseresults($showResultCount = 1, $tableParams = '', $wrapArr = [], $pointerName = 'pointer', $hscText = true, $forceOutput = false)
     {
-        if (isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['pi_list_browseresults'])
-            && is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['pi_list_browseresults'])
-        ) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['pi_list_browseresults'] as $classRef) {
-                $hookObj = GeneralUtility::makeInstance($classRef);
-                if (method_exists($hookObj, 'pi_list_browseresults')) {
-                    $pageBrowser = $hookObj->pi_list_browseresults($showResultCount, $tableParams, $wrapArr, $pointerName, $hscText, $forceOutput, $this);
-                    if (is_string($pageBrowser) && trim($pageBrowser) !== '') {
-                        return $pageBrowser;
-                    }
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['pi_list_browseresults'] ?? [] as $classRef) {
+            $hookObj = GeneralUtility::makeInstance($classRef);
+            if (method_exists($hookObj, 'pi_list_browseresults')) {
+                $pageBrowser = $hookObj->pi_list_browseresults($showResultCount, $tableParams, $wrapArr, $pointerName, $hscText, $forceOutput, $this);
+                if (is_string($pageBrowser) && trim($pageBrowser) !== '') {
+                    return $pageBrowser;
                 }
             }
         }
@@ -878,7 +873,7 @@ class AbstractPlugin
             $row = $this->internal['currentRow'];
             $tablename = $this->internal['currentTable'];
         }
-        if ($this->frontendController->beUserLogin) {
+        if ($this->frontendController->isBackendUserLoggedIn()) {
             // Create local cObj if not set:
             if (!is_object($this->pi_EPtemp_cObj)) {
                 $this->pi_EPtemp_cObj = GeneralUtility::makeInstance(ContentObjectRenderer::class);
@@ -893,12 +888,10 @@ class AbstractPlugin
         if ($panel) {
             if ($label) {
                 return '<!-- BEGIN: EDIT PANEL --><table border="0" cellpadding="0" cellspacing="0" width="100%"><tr><td valign="top">' . $label . '</td><td valign="top" align="right">' . $panel . '</td></tr></table><!-- END: EDIT PANEL -->';
-            } else {
-                return '<!-- BEGIN: EDIT PANEL -->' . $panel . '<!-- END: EDIT PANEL -->';
             }
-        } else {
-            return $label;
+            return '<!-- BEGIN: EDIT PANEL -->' . $panel . '<!-- END: EDIT PANEL -->';
         }
+        return $label;
     }
 
     /**
@@ -916,7 +909,7 @@ class AbstractPlugin
      */
     public function pi_getEditIcon($content, $fields, $title = '', $row = [], $tablename = '', $oConf = [])
     {
-        if ($this->frontendController->beUserLogin) {
+        if ($this->frontendController->isBackendUserLoggedIn()) {
             if (!$row || !$tablename) {
                 $row = $this->internal['currentRow'];
                 $tablename = $this->internal['currentTable'];
@@ -941,10 +934,9 @@ class AbstractPlugin
      *
      * @param string $key The key from the LOCAL_LANG array for which to return the value.
      * @param string $alternativeLabel Alternative string to return IF no value is found set for the key, neither for the local language nor the default.
-     * @param bool $hsc If TRUE, the output label is passed through htmlspecialchars()
      * @return string The value from LOCAL_LANG.
      */
-    public function pi_getLL($key, $alternativeLabel = '', $hsc = false)
+    public function pi_getLL($key, $alternativeLabel = '')
     {
         $word = null;
         if (!empty($this->LOCAL_LANG[$this->LLkey][$key][0]['target'])
@@ -975,14 +967,7 @@ class AbstractPlugin
                 $word = isset($this->LLtestPrefixAlt) ? $this->LLtestPrefixAlt . $alternativeLabel : $alternativeLabel;
             }
         }
-        $output = isset($this->LLtestPrefix) ? $this->LLtestPrefix . $word : $word;
-        if ($hsc) {
-            GeneralUtility::deprecationLog(
-                'Calling pi_getLL() with argument \'hsc\' has been deprecated.'
-            );
-            $output = htmlspecialchars($output);
-        }
-        return $output;
+        return isset($this->LLtestPrefix) ? $this->LLtestPrefix . $word : $word;
     }
 
     /**
@@ -1002,13 +987,12 @@ class AbstractPlugin
         }
 
         if ($languageFilePath === '' && $this->scriptRelPath) {
-            $languageFilePath = 'EXT:' . $this->extKey . '/' . dirname($this->scriptRelPath) . '/locallang.xlf';
+            $languageFilePath = 'EXT:' . $this->extKey . '/' . PathUtility::dirname($this->scriptRelPath) . '/locallang.xlf';
         }
         if ($languageFilePath !== '') {
-            /** @var $languageFactory LocalizationFactory */
+            /** @var LocalizationFactory $languageFactory */
             $languageFactory = GeneralUtility::makeInstance(LocalizationFactory::class);
-            // Read the strings in the required charset (since TYPO3 4.2)
-            $this->LOCAL_LANG = $languageFactory->getParsedData($languageFilePath, $this->LLkey, 'utf-8');
+            $this->LOCAL_LANG = $languageFactory->getParsedData($languageFilePath, $this->LLkey);
             $alternativeLanguageKeys = GeneralUtility::trimExplode(',', $this->altLLkey, true);
             foreach ($alternativeLanguageKeys as $languageKey) {
                 $tempLL = $languageFactory->getParsedData($languageFilePath, $languageKey);
@@ -1123,11 +1107,12 @@ class AbstractPlugin
         }
         // Search word:
         if ($this->piVars['sword'] && $this->internal['searchFieldList']) {
-            $queryBuilder->andWhere(
-                QueryHelper::stripLogicalOperatorPrefix(
-                    $this->cObj->searchWhere($this->piVars['sword'], $this->internal['searchFieldList'], $table)
-                )
+            $searchWhere = QueryHelper::stripLogicalOperatorPrefix(
+                $this->cObj->searchWhere($this->piVars['sword'], $this->internal['searchFieldList'], $table)
             );
+            if (!empty($searchWhere)) {
+                $queryBuilder->andWhere($searchWhere);
+            }
         }
 
         if ($count) {
@@ -1288,7 +1273,7 @@ class AbstractPlugin
      *
      * @param string $fList List of fields (keys from piVars) to evaluate on
      * @param int $lowerThan Limit for the values.
-     * @return bool|NULL Returns TRUE (1) if conditions are met.
+     * @return bool|null Returns TRUE (1) if conditions are met.
      */
     public function pi_isOnlyFields($fList, $lowerThan = -1)
     {
@@ -1313,7 +1298,7 @@ class AbstractPlugin
      * This is an advanced form of evaluation of whether a URL should be cached or not.
      *
      * @param array $inArray An array with piVars values to evaluate
-     * @return bool|NULL Returns TRUE (1) if conditions are met.
+     * @return bool|null Returns TRUE (1) if conditions are met.
      * @see pi_linkTP_keepPIvars()
      */
     public function pi_autoCache($inArray)
@@ -1340,9 +1325,8 @@ class AbstractPlugin
     }
 
     /**
-     * Will process the input string with the parseFunc function from ContentObjectRenderer based on configuration set in "lib.parseFunc_RTE" in the current TypoScript template.
-     * This is useful for rendering of content in RTE fields where the transformation mode is set to "ts_css" or so.
-     * Notice that this requires the use of "css_styled_content" to work right.
+     * Will process the input string with the parseFunc function from ContentObjectRenderer based on configuration
+     * set in "lib.parseFunc_RTE" in the current TypoScript template.
      *
      * @param string $str The input text string to process
      * @return string The processed string
@@ -1386,7 +1370,7 @@ class AbstractPlugin
      * @param string $sheet Sheet pointer, eg. "sDEF
      * @param string $lang Language pointer, eg. "lDEF
      * @param string $value Value pointer, eg. "vDEF
-     * @return string|NULL The content.
+     * @return string|null The content.
      */
     public function pi_getFFvalue($T3FlexForm_array, $fieldName, $sheet = 'sDEF', $lang = 'lDEF', $value = 'vDEF')
     {
@@ -1404,7 +1388,7 @@ class AbstractPlugin
      * @param array $fieldNameArr Array where each value points to a key in the FlexForms content - the input array will have the value returned pointed to by these keys. All integer keys will not take their integer counterparts, but rather traverse the current position in the array an return element number X (whether this is right behavior is not settled yet...)
      * @param string $value Value for outermost key, typ. "vDEF" depending on language.
      * @return mixed The value, typ. string.
-     * @access private
+     * @internal
      * @see pi_getFFvalue()
      */
     public function pi_getFFvalueFromSheetArray($sheetArray, $fieldNameArr, $value)
@@ -1427,5 +1411,20 @@ class AbstractPlugin
             }
         }
         return $tempArr[$value];
+    }
+
+    /**
+     * Returns the currently configured "site language" if a site is configured (= resolved) in the current request.
+     *
+     * @internal
+     */
+    protected function getCurrentSiteLanguage(): ?SiteLanguage
+    {
+        $request = $GLOBALS['TYPO3_REQUEST'] ?? null;
+        return $request
+               && $request instanceof ServerRequestInterface
+               && $request->getAttribute('language') instanceof SiteLanguage
+            ? $request->getAttribute('language')
+            : null;
     }
 }

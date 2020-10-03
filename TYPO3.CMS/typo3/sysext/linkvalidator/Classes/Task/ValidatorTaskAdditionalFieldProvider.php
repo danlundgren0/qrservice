@@ -15,17 +15,19 @@ namespace TYPO3\CMS\Linkvalidator\Task;
  */
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Messaging\FlashMessage;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
-use TYPO3\CMS\Scheduler\AdditionalFieldProviderInterface;
+use TYPO3\CMS\Scheduler\AbstractAdditionalFieldProvider;
 use TYPO3\CMS\Scheduler\Controller\SchedulerModuleController;
 use TYPO3\CMS\Scheduler\Task\AbstractTask;
+use TYPO3\CMS\Scheduler\Task\Enumeration\Action;
 
 /**
  * This class provides Scheduler Additional Field plugin implementation
+ * @internal This class is a specific Scheduler task implementation and is not part of the TYPO3's Core API.
  */
-class ValidatorTaskAdditionalFieldProvider implements AdditionalFieldProviderInterface
+class ValidatorTaskAdditionalFieldProvider extends AbstractAdditionalFieldProvider
 {
     /**
      * Default language file of the extension linkvalidator
@@ -38,7 +40,7 @@ class ValidatorTaskAdditionalFieldProvider implements AdditionalFieldProviderInt
      * Render additional information fields within the scheduler backend.
      *
      * @param array $taskInfo Array information of task to return
-     * @param ValidatorTask $task Task object
+     * @param ValidatorTask|null $task The task object being edited. Null when adding a task!
      * @param SchedulerModuleController $schedulerModule Reference to the BE module of the Scheduler
      * @return array Additional fields
      * @see AdditionalFieldProviderInterface->getAdditionalFields($taskInfo, $task, $schedulerModule)
@@ -46,55 +48,59 @@ class ValidatorTaskAdditionalFieldProvider implements AdditionalFieldProviderInt
     public function getAdditionalFields(array &$taskInfo, $task, SchedulerModuleController $schedulerModule)
     {
         $additionalFields = [];
+        $currentSchedulerModuleAction = $schedulerModule->getCurrentAction();
+
         if (empty($taskInfo['configuration'])) {
-            if ($schedulerModule->CMD === 'add') {
+            if ($currentSchedulerModuleAction->equals(Action::ADD)) {
                 $taskInfo['configuration'] = $taskInfo['linkvalidator']['configuration'];
-            } elseif ($schedulerModule->CMD === 'edit') {
+            } elseif ($currentSchedulerModuleAction->equals(Action::EDIT)) {
                 $taskInfo['configuration'] = $task->getConfiguration();
             } else {
                 $taskInfo['configuration'] = $task->getConfiguration();
             }
         }
+
         if (empty($taskInfo['depth'])) {
-            if ($schedulerModule->CMD === 'add') {
+            if ($currentSchedulerModuleAction->equals(Action::ADD)) {
                 $taskInfo['depth'] = $taskInfo['linkvalidator']['depth'];
-            } elseif ($schedulerModule->CMD === 'edit') {
+            } elseif ($currentSchedulerModuleAction->equals(Action::EDIT)) {
                 $taskInfo['depth'] = $task->getDepth();
             } else {
                 $taskInfo['depth'] = $task->getDepth();
             }
         }
+
         if (empty($taskInfo['page'])) {
-            if ($schedulerModule->CMD === 'add') {
+            if ($currentSchedulerModuleAction->equals(Action::ADD)) {
                 $taskInfo['page'] = $taskInfo['linkvalidator']['page'];
-            } elseif ($schedulerModule->CMD === 'edit') {
+            } elseif ($currentSchedulerModuleAction->equals(Action::EDIT)) {
                 $taskInfo['page'] = $task->getPage();
             } else {
                 $taskInfo['page'] = $task->getPage();
             }
         }
         if (empty($taskInfo['email'])) {
-            if ($schedulerModule->CMD === 'add') {
+            if ($currentSchedulerModuleAction->equals(Action::ADD)) {
                 $taskInfo['email'] = $taskInfo['linkvalidator']['email'];
-            } elseif ($schedulerModule->CMD === 'edit') {
+            } elseif ($currentSchedulerModuleAction->equals(Action::EDIT)) {
                 $taskInfo['email'] = $task->getEmail();
             } else {
                 $taskInfo['email'] = $task->getEmail();
             }
         }
         if (empty($taskInfo['emailOnBrokenLinkOnly'])) {
-            if ($schedulerModule->CMD === 'add') {
+            if ($currentSchedulerModuleAction->equals(Action::ADD)) {
                 $taskInfo['emailOnBrokenLinkOnly'] = $taskInfo['linkvalidator']['emailOnBrokenLinkOnly'] ? $taskInfo['linkvalidator']['emailOnBrokenLinkOnly'] : 1;
-            } elseif ($schedulerModule->CMD === 'edit') {
+            } elseif ($currentSchedulerModuleAction->equals(Action::EDIT)) {
                 $taskInfo['emailOnBrokenLinkOnly'] = $task->getEmailOnBrokenLinkOnly();
             } else {
                 $taskInfo['emailOnBrokenLinkOnly'] = $task->getEmailOnBrokenLinkOnly();
             }
         }
         if (empty($taskInfo['emailTemplateFile'])) {
-            if ($schedulerModule->CMD === 'add') {
+            if ($currentSchedulerModuleAction->equals(Action::ADD)) {
                 $taskInfo['emailTemplateFile'] = $taskInfo['linkvalidator']['emailTemplateFile'] ? $taskInfo['linkvalidator']['emailTemplateFile'] : 'EXT:linkvalidator/Resources/Private/Templates/mailtemplate.html';
-            } elseif ($schedulerModule->CMD === 'edit') {
+            } elseif ($currentSchedulerModuleAction->equals(Action::EDIT)) {
                 $taskInfo['emailTemplateFile'] = $task->getEmailTemplateFile();
             } else {
                 $taskInfo['emailTemplateFile'] = $task->getEmailTemplateFile();
@@ -122,12 +128,12 @@ class ValidatorTaskAdditionalFieldProvider implements AdditionalFieldProviderInt
         // input for depth
         $fieldId = 'task_depth';
         $fieldValueArray = [
-            '0' => $lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_0'),
-            '1' => $lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_1'),
-            '2' => $lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_2'),
-            '3' => $lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_3'),
-            '4' => $lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_4'),
-            '999' => $lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.depth_infi')
+            '0' => $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_0'),
+            '1' => $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_1'),
+            '2' => $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_2'),
+            '3' => $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_3'),
+            '4' => $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_4'),
+            '999' => $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.depth_infi')
         ];
         $fieldCode = '<select class="form-control" name="tx_scheduler[linkvalidator][depth]" id="' . $fieldId . '">';
         foreach ($fieldValueArray as $depth => $label) {
@@ -233,7 +239,7 @@ class ValidatorTaskAdditionalFieldProvider implements AdditionalFieldProviderInt
             foreach ($emailList as $emailAdd) {
                 if (!GeneralUtility::validEmail($emailAdd)) {
                     $isValid = false;
-                    $schedulerModule->addMessage(
+                    $this->addMessage(
                         $lang->sL($this->languageFile . ':tasks.validate.invalidEmail'),
                         FlashMessage::ERROR
                     );
@@ -244,14 +250,14 @@ class ValidatorTaskAdditionalFieldProvider implements AdditionalFieldProviderInt
         $row = BackendUtility::getRecord('pages', (int)$submittedData['linkvalidator']['page'], '*', '', false);
         if (empty($row)) {
             $isValid = false;
-            $schedulerModule->addMessage(
+            $this->addMessage(
                 $lang->sL($this->languageFile . ':tasks.validate.invalidPage'),
                 FlashMessage::ERROR
             );
         }
         if ($submittedData['linkvalidator']['depth'] < 0) {
             $isValid = false;
-            $schedulerModule->addMessage(
+            $this->addMessage(
                 $lang->sL($this->languageFile . ':tasks.validate.invalidDepth'),
                 FlashMessage::ERROR
             );
@@ -268,7 +274,7 @@ class ValidatorTaskAdditionalFieldProvider implements AdditionalFieldProviderInt
      */
     public function saveAdditionalFields(array $submittedData, AbstractTask $task)
     {
-        /** @var $task ValidatorTask */
+        /** @var ValidatorTask $task */
         $task->setDepth($submittedData['linkvalidator']['depth']);
         $task->setPage($submittedData['linkvalidator']['page']);
         $task->setEmail($submittedData['linkvalidator']['email']);
@@ -292,9 +298,8 @@ class ValidatorTaskAdditionalFieldProvider implements AdditionalFieldProviderInt
         $page = BackendUtility::getRecord('pages', $pageId, 'title', '', false);
         if ($page === null) {
             return '';
-        } else {
-            return $page['title'];
         }
+        return $page['title'];
     }
 
     /**

@@ -9,7 +9,7 @@ See :issue:`79263`
 Description
 ===========
 
-The PHP class `TYPO3\CMS\Scheduler\Controller\SchedulerCliController` has been removed from the system extension "scheduler"
+The PHP class :php:`TYPO3\CMS\Scheduler\Controller\SchedulerCliController` has been removed from the system extension "scheduler"
 due to the migration to a native Symfony Command.
 
 
@@ -33,4 +33,4 @@ Migration
 
 Remove any direct calls to the PHP class and use the provided APIs via CLI instead.
 
-.. index:: CLI
+.. index:: CLI, ext:scheduler

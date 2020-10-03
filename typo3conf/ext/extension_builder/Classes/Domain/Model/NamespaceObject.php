@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Domain\Model;
 
 /*
@@ -17,7 +18,6 @@ namespace EBT\ExtensionBuilder\Domain\Model;
 
 class NamespaceObject extends Container
 {
-
     /**
      * @param string $name
      */

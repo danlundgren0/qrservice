@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Session\Backend;
 
 /*
@@ -15,10 +15,11 @@ namespace TYPO3\CMS\Core\Session\Backend;
  * The TYPO3 project - inspiring people to share!
  */
 
+use Psr\Log\LoggerAwareInterface;
+use Psr\Log\LoggerAwareTrait;
 use TYPO3\CMS\Core\Session\Backend\Exception\SessionNotCreatedException;
 use TYPO3\CMS\Core\Session\Backend\Exception\SessionNotFoundException;
 use TYPO3\CMS\Core\Session\Backend\Exception\SessionNotUpdatedException;
-use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Class RedisSessionBackend
@@ -26,8 +27,9 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  * This session backend takes these optional configuration options: 'hostname' (default '127.0.0.1'),
  * 'database' (default 0), 'port' (default 3679) and 'password' (no default value).
  */
-class RedisSessionBackend implements SessionBackendInterface
+class RedisSessionBackend implements SessionBackendInterface, LoggerAwareInterface
 {
+    use LoggerAwareTrait;
 
     /**
      * @var array
@@ -127,10 +129,10 @@ class RedisSessionBackend implements SessionBackendInterface
         $rawData = $this->redis->get($key);
 
         if ($rawData !== false) {
-            return json_decode(
-                $rawData,
-                true
-            );
+            $decodedValue = json_decode($rawData, true);
+            if (is_array($decodedValue)) {
+                return $decodedValue;
+            }
         }
         throw new SessionNotFoundException('Session could not be fetched from redis', 1481885583);
     }
@@ -146,7 +148,7 @@ class RedisSessionBackend implements SessionBackendInterface
     {
         $this->initializeConnection();
 
-        return $this->redis->delete($this->getSessionKeyName($sessionId)) >= 1;
+        return $this->redis->del($this->getSessionKeyName($sessionId)) >= 1;
     }
 
     /**
@@ -168,9 +170,10 @@ class RedisSessionBackend implements SessionBackendInterface
         $key = $this->getSessionKeyName($sessionId);
 
         // nx will not allow overwriting existing keys
-        $wasSet = $this->redis->set(
+        $jsonString = json_encode($sessionData);
+        $wasSet = is_string($jsonString) && $this->redis->set(
             $key,
-            json_encode($sessionData),
+            $jsonString,
             ['nx']
         );
 
@@ -202,7 +205,8 @@ class RedisSessionBackend implements SessionBackendInterface
         $sessionData['ses_tstamp'] = $GLOBALS['EXEC_TIME'] ?? time();
 
         $key = $this->getSessionKeyName($sessionId);
-        $wasSet = $this->redis->set($key, json_encode($sessionData));
+        $jsonString = json_encode($sessionData);
+        $wasSet = is_string($jsonString) && $this->redis->set($key, $jsonString);
 
         if (!$wasSet) {
             throw new SessionNotUpdatedException('Session could not be updated in Redis', 1481896383);
@@ -222,11 +226,11 @@ class RedisSessionBackend implements SessionBackendInterface
         foreach ($this->getAll() as $sessionRecord) {
             if ($sessionRecord['ses_anonymous']) {
                 if ($maximumAnonymousLifetime > 0 && ($sessionRecord['ses_tstamp'] + $maximumAnonymousLifetime) < $GLOBALS['EXEC_TIME']) {
-                    $this->redis->delete($this->getSessionKeyName($sessionRecord['ses_id']));
+                    $this->redis->del($this->getSessionKeyName($sessionRecord['ses_id']));
                 }
             } else {
                 if (($sessionRecord['ses_tstamp'] + $maximumLifetime) < $GLOBALS['EXEC_TIME']) {
-                    $this->redis->delete($this->getSessionKeyName($sessionRecord['ses_id']));
+                    $this->redis->del($this->getSessionKeyName($sessionRecord['ses_id']));
                 }
             }
         }
@@ -246,14 +250,12 @@ class RedisSessionBackend implements SessionBackendInterface
         try {
             $this->connected = $this->redis->pconnect(
                 $this->configuration['hostname'] ?? '127.0.0.1',
-                $this->configuration['port'] ?? 6379
+                $this->configuration['port'] ?? 6379,
+                0.0,
+                $this->identifier
             );
         } catch (\RedisException $e) {
-            GeneralUtility::sysLog(
-                'Could not connect to redis server.',
-                'core',
-                GeneralUtility::SYSLOG_SEVERITY_ERROR
-            );
+            $this->logger->alert('Could not connect to redis server.', ['exception' => $e]);
         }
 
         if (!$this->connected) {
@@ -305,7 +307,7 @@ class RedisSessionBackend implements SessionBackendInterface
             }
         }
 
-        $encodedSessions = $this->redis->getMultiple($keys);
+        $encodedSessions = $this->redis->mGet($keys);
         if (!is_array($encodedSessions)) {
             return [];
         }

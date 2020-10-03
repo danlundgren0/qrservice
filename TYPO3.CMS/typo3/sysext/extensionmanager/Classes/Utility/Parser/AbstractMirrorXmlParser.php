@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Extensionmanager\Utility\Parser;
 
 /**
  * Abstract parser for TYPO3's mirror.xml file.
+ * @internal This class is a specific ExtensionManager implementation and is not part of the Public TYPO3 API.
  */
 abstract class AbstractMirrorXmlParser extends AbstractXmlParser
 {
@@ -24,49 +25,49 @@ abstract class AbstractMirrorXmlParser extends AbstractXmlParser
      *
      * @var string
      */
-    protected $country = null;
+    protected $country;
 
     /**
      * Keeps hostname of currently processed mirror.
      *
      * @var string
      */
-    protected $host = null;
+    protected $host;
 
     /**
      * Keeps path to mirrored TER of currently processed mirror.
      *
      * @var string
      */
-    protected $path = null;
+    protected $path;
 
     /**
      * Keeps sponsor link of currently processed mirror.
      *
      * @var string
      */
-    protected $sponsorlink = null;
+    protected $sponsorlink;
 
     /**
      * Keeps sponsor logo location of currently processed mirror.
      *
      * @var string
      */
-    protected $sponsorlogo = null;
+    protected $sponsorlogo;
 
     /**
      * Keeps sponsor name of currently processed mirror.
      *
      * @var string
      */
-    protected $sponsorname = null;
+    protected $sponsorname;
 
     /**
      * Keeps title of currently processed mirror.
      *
      * @var string
      */
-    protected $title = null;
+    protected $title;
 
     /**
      * Returns an associative array of all mirror properties.
@@ -74,7 +75,6 @@ abstract class AbstractMirrorXmlParser extends AbstractXmlParser
      * Valid array keys of returned array are:
      * country, host, path, sponsorlink, sponsorlogo, sponsorname, title
      *
-     * @access public
      * @return array assoziative array of a mirror's properties
      * @see $country, $host, $path, $sponsorlink, $sponsorlogo, $sponsorname, $title
      */
@@ -94,7 +94,6 @@ abstract class AbstractMirrorXmlParser extends AbstractXmlParser
     /**
      * Returns country of currently processed mirror.
      *
-     * @access public
      * @return string name of country a mirror is located in
      * @see $country, getAll()
      */
@@ -106,7 +105,6 @@ abstract class AbstractMirrorXmlParser extends AbstractXmlParser
     /**
      * Returns host of currently processed mirror.
      *
-     * @access public
      * @return string host name
      * @see $host, getAll()
      */
@@ -118,7 +116,6 @@ abstract class AbstractMirrorXmlParser extends AbstractXmlParser
     /**
      * Returns path to mirrored TER of currently processed mirror.
      *
-     * @access public
      * @return string path name
      * @see $path, getAll()
      */
@@ -130,7 +127,6 @@ abstract class AbstractMirrorXmlParser extends AbstractXmlParser
     /**
      * Returns sponsor link of currently processed mirror.
      *
-     * @access public
      * @return string URL of a sponsor's website
      * @see $sponsorlink, getAll()
      */
@@ -142,7 +138,6 @@ abstract class AbstractMirrorXmlParser extends AbstractXmlParser
     /**
      * Returns sponsor logo location of currently processed mirror.
      *
-     * @access public
      * @return string a sponsor's logo location
      * @see $sponsorlogo, getAll()
      */
@@ -154,7 +149,6 @@ abstract class AbstractMirrorXmlParser extends AbstractXmlParser
     /**
      * Returns sponsor name of currently processed mirror.
      *
-     * @access public
      * @return string name of sponsor
      * @see $sponsorname, getAll()
      */
@@ -166,9 +160,8 @@ abstract class AbstractMirrorXmlParser extends AbstractXmlParser
     /**
      * Returns title of currently processed mirror.
      *
-     * @access public
      * @return string title of mirror
-     * @see $title, get All()
+     * @see $title, getAll()
      */
     public function getTitle()
     {
@@ -178,7 +171,6 @@ abstract class AbstractMirrorXmlParser extends AbstractXmlParser
     /**
      * Method resets version class properties.
      *
-     * @access protected
      * @see $country, $host, $path, $sponsorlink, $sponsorlogo, $sponsorname, $title
      */
     protected function resetProperties()

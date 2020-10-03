@@ -1,11 +1,11 @@
 <?php
 return [
     'ctrl' => [
-        'title' => 'LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_log',
+        'title' => 'LLL:EXT:core/Resources/Private/Language/locallang_tca.xlf:sys_log',
         'label' => 'details',
         'tstamp' => 'tstamp',
         'adminOnly' => true,
-        'rootLevel' => true,
+        'rootLevel' => 1,
         'hideTable' => true,
         'default_sortby' => 'uid DESC',
     ],

@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\ViewHelpers;
 
 /*
@@ -15,18 +15,18 @@ namespace TYPO3\CMS\Form\ViewHelpers;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3\CMS\Form\Domain\Model\Renderable\RootRenderableInterface;
 use TYPO3\CMS\Form\Domain\Runtime\FormRuntime;
 use TYPO3\CMS\Form\Service\TranslationService;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Exception;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
- * Translate form element properites.
+ * Translate form element properties.
  *
  * Scope: frontend / backend
- * @api
  */
 class TranslateElementPropertyViewHelper extends AbstractViewHelper
 {
@@ -39,10 +39,9 @@ class TranslateElementPropertyViewHelper extends AbstractViewHelper
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('element', RootRenderableInterface::class, 'Form Element to translate', true);
-        $this->registerArgument('property', 'string', 'Property to translate', false);
-        $this->registerArgument('renderingOptionProperty', 'string', 'Property to translate', false);
+        $this->registerArgument('property', 'mixed', 'Property to translate', false);
+        $this->registerArgument('renderingOptionProperty', 'mixed', 'Property to translate', false);
     }
 
     /**
@@ -52,10 +51,11 @@ class TranslateElementPropertyViewHelper extends AbstractViewHelper
      * @param \Closure $renderChildrenClosure
      * @param RenderingContextInterface $renderingContext
      * @return string|array
-     * @api
      */
     public static function renderStatic(array $arguments, \Closure $renderChildrenClosure, RenderingContextInterface $renderingContext)
     {
+        static::assertArgumentTypes($arguments);
+
         $element = $arguments['element'];
 
         $property = null;
@@ -65,11 +65,42 @@ class TranslateElementPropertyViewHelper extends AbstractViewHelper
             $property = $arguments['renderingOptionProperty'];
         }
 
+        if (empty($property)) {
+            $propertyParts = [];
+        } elseif (is_array($property)) {
+            $propertyParts = $property;
+        } else {
+            $propertyParts = [$property];
+        }
+
         /** @var FormRuntime $formRuntime */
-        $formRuntime =  $renderingContext
+        $formRuntime = $renderingContext
             ->getViewHelperVariableContainer()
             ->get(RenderRenderableViewHelper::class, 'formRuntime');
 
-        return TranslationService::getInstance()->translateFormElementValue($element, $property, $formRuntime);
+        return TranslationService::getInstance()->translateFormElementValue($element, $propertyParts, $formRuntime);
+    }
+
+    /**
+     * @param array $arguments
+     */
+    protected static function assertArgumentTypes(array $arguments)
+    {
+        foreach (['property', 'renderingOptionProperty'] as $argumentName) {
+            if (
+                !isset($arguments[$argumentName])
+                || is_string($arguments[$argumentName])
+                || is_array($arguments[$argumentName])
+            ) {
+                continue;
+            }
+            throw new Exception(
+                sprintf(
+                    'Arguments "%s" either must be string or array',
+                    $argumentName
+                ),
+                1504871830
+            );
+        }
     }
 }

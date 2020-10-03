@@ -406,6 +406,7 @@
 			this.showSpinnerPanel.show();
 			this.dataToSubmit.name = value.name;
 			this.dataToSubmit.working = JSON.stringify(value.working);
+			this.dataToSubmit.storagePath = document.querySelector('#storagePath').value;
 			this.service.saveWiring(this.dataToSubmit, {
 				success: this.saveModuleSuccess,
 				failure: this.saveModuleFailure,
@@ -658,17 +659,19 @@
 		 * @method updateLoadPanelList
 		 */
 		updateLoadPanelList: function() {
-			var list = WireIt.cn("ul");
-			if (lang.isArray(this.pipes)) {
+		  var list;
+			if (lang.isArray(this.pipes) && this.pipes.length > 0) {
+        list = WireIt.cn("ul");
 				for (var i = 0; i < this.pipes.length; i++) {
 					var module = this.pipes[i];
 
 					this.pipesByName[module.name] = module;
 
-					var li = WireIt.cn('li', null, {cursor: 'pointer'}, module.name);
+					var li = WireIt.cn('li', null, {cursor: 'pointer'}, module.name + ' (stored in <code>' + module.storagePath + '</code>)');
+					li.dataset.name = module.name;
 					Event.addListener(li, 'click', function(e, args) {
 						try {
-							this.loadPipe(Event.getTarget(e).innerHTML);
+							this.loadPipe(Event.getTarget(e).dataset.name);
 						}
 						catch(ex) {
 							console.log(ex);
@@ -676,6 +679,9 @@
 					}, this, true);
 					list.appendChild(li);
 				}
+			} else {
+				list = document.createElement('div');
+				list.innerText = 'No extensions found...';
 			}
 			var panelBody = Dom.get('loadPanelBody');
 			panelBody.innerHTML = "";
@@ -824,11 +830,11 @@
 				terminalUid;
 			if (terminal.el.getAttribute('title') == 'SOURCES') {
 				// id of the module
-				terminalUid = TYPO3.jQuery(terminal.el).parents('.WireIt-Container').first().find('input[name="uid"]').val();
+				terminalUid = $(terminal.el).parents('.WireIt-Container').first().find('input[name="uid"]').val();
 			}
 			else {
 				// id of the wrapper of the first field in the fieldset
-				terminalUid = TYPO3.jQuery(terminal.el).parents('.relationGroup').find('input[name="uid"]').val();
+				terminalUid = $(terminal.el).parents('.relationGroup').find('input[name="uid"]').val();
 			}
 			return terminalUid;
 		}

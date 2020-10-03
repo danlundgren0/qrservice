@@ -1,31 +1,23 @@
 <?php
 namespace TYPO3\CMS\Extbase\Property\TypeConverter;
 
-/*                                                                        *
- * This script belongs to the Extbase framework                           *
- *                                                                        *
- * It is free software; you can redistribute it and/or modify it under    *
- * the terms of the GNU Lesser General Public License as published by the *
- * Free Software Foundation, either version 3 of the License, or (at your *
- * option) any later version.                                             *
- *                                                                        *
- * This script is distributed in the hope that it will be useful, but     *
- * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHAN-    *
- * TABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser       *
- * General Public License for more details.                               *
- *                                                                        *
- * You should have received a copy of the GNU Lesser General Public       *
- * License along with the script.                                         *
- * If not, see http://www.gnu.org/licenses/lgpl.html                      *
- *                                                                        *
- * The TYPO3 project - inspiring people to share!                         *
- *                                                                        */
+/*
+ * This file is part of the TYPO3 CMS project.
+ *
+ * It is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License, either version 2
+ * of the License, or any later version.
+ *
+ * For the full copyright and license information, please read the
+ * LICENSE.txt file that was distributed with this source code.
+ *
+ * The TYPO3 project - inspiring people to share!
+ */
+
 /**
  * This converter transforms arrays to simple objects (POPO) by setting properties.
- *
- * @api
  */
-class ObjectConverter extends AbstractTypeConverter implements \TYPO3\CMS\Core\SingletonInterface
+class ObjectConverter extends AbstractTypeConverter
 {
     /**
      * @var int
@@ -84,6 +76,7 @@ class ObjectConverter extends AbstractTypeConverter implements \TYPO3\CMS\Core\S
      * @param mixed $source
      * @param string $targetType
      * @return bool
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function canConvertFrom($source, $targetType)
     {
@@ -95,6 +88,7 @@ class ObjectConverter extends AbstractTypeConverter implements \TYPO3\CMS\Core\S
      *
      * @param mixed $source
      * @return array
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function getSourceChildPropertiesToBeConverted($source)
     {
@@ -112,6 +106,7 @@ class ObjectConverter extends AbstractTypeConverter implements \TYPO3\CMS\Core\S
      * @param \TYPO3\CMS\Extbase\Property\PropertyMappingConfigurationInterface $configuration
      * @return string
      * @throws \TYPO3\CMS\Extbase\Property\Exception\InvalidTargetException
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function getTypeOfChildProperty($targetType, $propertyName, \TYPO3\CMS\Extbase\Property\PropertyMappingConfigurationInterface $configuration)
     {
@@ -121,22 +116,41 @@ class ObjectConverter extends AbstractTypeConverter implements \TYPO3\CMS\Core\S
         }
 
         $specificTargetType = $this->objectContainer->getImplementationClassName($targetType);
-        if ($this->reflectionService->hasMethod($specificTargetType, \TYPO3\CMS\Extbase\Reflection\ObjectAccess::buildSetterMethodName($propertyName))) {
-            $methodParameters = $this->reflectionService->getMethodParameters($specificTargetType, \TYPO3\CMS\Extbase\Reflection\ObjectAccess::buildSetterMethodName($propertyName));
+        $classSchema = $this->reflectionService->getClassSchema($specificTargetType);
+
+        if ($classSchema->hasMethod(\TYPO3\CMS\Extbase\Reflection\ObjectAccess::buildSetterMethodName($propertyName))) {
+            $methodParameters = $classSchema->getMethod(\TYPO3\CMS\Extbase\Reflection\ObjectAccess::buildSetterMethodName($propertyName))['params'] ?? [];
             $methodParameter = current($methodParameters);
             if (!isset($methodParameter['type'])) {
                 throw new \TYPO3\CMS\Extbase\Property\Exception\InvalidTargetException('Setter for property "' . $propertyName . '" had no type hint or documentation in target object of type "' . $specificTargetType . '".', 1303379158);
-            } else {
-                return $methodParameter['type'];
             }
-        } else {
-            $methodParameters = $this->reflectionService->getMethodParameters($specificTargetType, '__construct');
-            if (isset($methodParameters[$propertyName]) && isset($methodParameters[$propertyName]['type'])) {
-                return $methodParameters[$propertyName]['type'];
-            } else {
-                throw new \TYPO3\CMS\Extbase\Property\Exception\InvalidTargetException('Property "' . $propertyName . '" had no setter or constructor argument in target object of type "' . $specificTargetType . '".', 1303379126);
-            }
+            return $methodParameter['type'];
         }
+        $method = $classSchema->getMethod('__construct');
+        if (empty($method)) {
+            $exceptionMessage = sprintf('Type of child property "%s" of class "%s" could not be '
+                . 'derived from constructor arguments as said class does not have a constructor '
+                . 'defined.', $propertyName, $specificTargetType);
+            throw new \TYPO3\CMS\Extbase\Property\Exception\InvalidTargetException($exceptionMessage, 1582385098);
+        }
+
+        $methodParameters = $classSchema->getMethod('__construct')['params'] ?? [];
+        if (!isset($methodParameters[$propertyName])) {
+            $exceptionMessage = sprintf('Type of child property "%1$s" of class "%2$s" could not be '
+                . 'derived from constructor arguments as the constructor of said class does not '
+                . 'have a parameter with property name "%1$s".', $propertyName, $specificTargetType);
+            throw new \TYPO3\CMS\Extbase\Property\Exception\InvalidTargetException($exceptionMessage, 1303379126);
+        }
+
+        $parameterType = $methodParameters[$propertyName]['type'];
+        if ($parameterType === null) {
+            $exceptionMessage = sprintf('Type of child property "%1$s" of class "%2$s" could not be '
+                . 'derived from constructor argument "%1$s". This usually happens if the argument '
+                . 'misses a type hint.', $propertyName, $specificTargetType);
+            throw new \TYPO3\CMS\Extbase\Property\Exception\InvalidTargetException($exceptionMessage, 1582385619);
+        }
+
+        return $parameterType;
     }
 
     /**
@@ -150,6 +164,7 @@ class ObjectConverter extends AbstractTypeConverter implements \TYPO3\CMS\Core\S
      * @throws \TYPO3\CMS\Extbase\Property\Exception\InvalidTargetException
      * @throws \TYPO3\CMS\Extbase\Property\Exception\InvalidDataTypeException
      * @throws \TYPO3\CMS\Extbase\Property\Exception\InvalidPropertyMappingConfigurationException
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function convertFrom($source, $targetType, array $convertedChildProperties = [], \TYPO3\CMS\Extbase\Property\PropertyMappingConfigurationInterface $configuration = null)
     {
@@ -180,6 +195,7 @@ class ObjectConverter extends AbstractTypeConverter implements \TYPO3\CMS\Core\S
      * @throws \TYPO3\CMS\Extbase\Property\Exception\InvalidDataTypeException
      * @throws \TYPO3\CMS\Extbase\Property\Exception\InvalidPropertyMappingConfigurationException
      * @throws \InvalidArgumentException
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function getTargetTypeForSource($source, $originalTargetType, \TYPO3\CMS\Extbase\Property\PropertyMappingConfigurationInterface $configuration = null)
     {
@@ -216,8 +232,10 @@ class ObjectConverter extends AbstractTypeConverter implements \TYPO3\CMS\Core\S
     protected function buildObject(array &$possibleConstructorArgumentValues, $objectType)
     {
         $specificObjectType = $this->objectContainer->getImplementationClassName($objectType);
-        if ($this->reflectionService->hasMethod($specificObjectType, '__construct')) {
-            $constructorSignature = $this->reflectionService->getMethodParameters($specificObjectType, '__construct');
+        $classSchema = $this->reflectionService->getClassSchema($specificObjectType);
+
+        if ($classSchema->hasConstructor()) {
+            $constructorSignature = $classSchema->getMethod('__construct')['params'] ?? [];
             $constructorArguments = [];
             foreach ($constructorSignature as $constructorArgumentName => $constructorArgumentInformation) {
                 if (array_key_exists($constructorArgumentName, $possibleConstructorArgumentValues)) {
@@ -230,8 +248,7 @@ class ObjectConverter extends AbstractTypeConverter implements \TYPO3\CMS\Core\S
                 }
             }
             return call_user_func_array([$this->objectManager, 'get'], array_merge([$objectType], $constructorArguments));
-        } else {
-            return $this->objectManager->get($objectType);
         }
+        return $this->objectManager->get($objectType);
     }
 }

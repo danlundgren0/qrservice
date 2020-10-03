@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Database\Query\Expression;
 
 /*
@@ -305,14 +305,12 @@ class ExpressionBuilder
                         $this->literal(',')
                     )
                 );
-                break;
             case 'oci8':
             case 'pdo_oracle':
                 throw new \RuntimeException(
                     'FIND_IN_SET support for database platform "Oracle" not yet implemented.',
                     1459696680
                 );
-                break;
             case 'sqlsrv':
             case 'pdo_sqlsrv':
             case 'mssql':
@@ -347,19 +345,32 @@ class ExpressionBuilder
                         1476029421
                     );
                 }
-
-                return $this->comparison(
-                    implode('||', [
-                        $this->literal(','),
-                        $this->connection->quoteIdentifier($fieldName),
-                        $this->literal(','),
-                    ]),
-                    'LIKE',
-                    $this->literal(
-                        '%,' . $this->unquoteLiteral($value) . ',%'
-                    )
+                $comparison = sprintf(
+                    'instr(%s, %s)',
+                    implode(
+                        '||',
+                        [
+                            $this->literal(','),
+                            $this->connection->quoteIdentifier($fieldName),
+                            $this->literal(','),
+                        ]
+                    ),
+                    $isColumn ?
+                        implode(
+                            '||',
+                            [
+                                $this->literal(','),
+                                // do not explicitly quote value as it is expected to be
+                                // quoted by the caller
+                                'cast(' . $value . ' as text)',
+                                $this->literal(','),
+                            ]
+                        )
+                        : $this->literal(
+                            ',' . $this->unquoteLiteral($value) . ','
+                        )
                 );
-                break;
+                return $comparison;
             default:
                 return sprintf(
                     'FIND_IN_SET(%s, %s)',

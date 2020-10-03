@@ -18,24 +18,21 @@ use TYPO3\CMS\Extbase\Persistence\ObjectStorage;
 
 /**
  * The persistence session - acts as a Unit of Work for Extbase persistence framework.
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 class Session implements \TYPO3\CMS\Core\SingletonInterface
 {
+    /**
+     * @var \TYPO3\CMS\Extbase\Object\Container\Container
+     */
+    protected $objectContainer;
+
     /**
      * Reconstituted objects
      *
      * @var ObjectStorage
      */
     protected $reconstitutedEntities;
-
-    /**
-     * Reconstituted entity data (effectively their clean state)
-     * Currently unused in Extbase
-     * @todo make use of it in Extbase
-     *
-     * @var array
-     */
-    protected $reconstitutedEntitiesData = [];
 
     /**
      * @var ObjectStorage
@@ -48,23 +45,11 @@ class Session implements \TYPO3\CMS\Core\SingletonInterface
     protected $identifierMap = [];
 
     /**
-     * @var \TYPO3\CMS\Extbase\Reflection\ReflectionService
-     */
-    protected $reflectionService;
-
-    /**
-     * @param \TYPO3\CMS\Extbase\Reflection\ReflectionService $reflectionService
-     */
-    public function injectReflectionService(\TYPO3\CMS\Extbase\Reflection\ReflectionService $reflectionService)
-    {
-        $this->reflectionService = $reflectionService;
-    }
-
-    /**
      * Constructs a new Session
      */
-    public function __construct()
+    public function __construct(\TYPO3\CMS\Extbase\Object\Container\Container $container)
     {
+        $this->objectContainer = $container;
         $this->reconstitutedEntities = new ObjectStorage();
         $this->objectMap = new ObjectStorage();
     }
@@ -76,12 +61,10 @@ class Session implements \TYPO3\CMS\Core\SingletonInterface
      * "Documentation/PersistenceFramework object data format.txt"
      *
      * @param object $entity
-     * @param array $entityData
      */
-    public function registerReconstitutedEntity($entity, array $entityData = [])
+    public function registerReconstitutedEntity($entity)
     {
         $this->reconstitutedEntities->attach($entity);
-        $this->reconstitutedEntitiesData[$entityData['identifier']] = $entityData;
     }
 
     /**
@@ -105,7 +88,6 @@ class Session implements \TYPO3\CMS\Core\SingletonInterface
     {
         if ($this->reconstitutedEntities->contains($entity)) {
             $this->reconstitutedEntities->detach($entity);
-            unset($this->reconstitutedEntitiesData[$this->getIdentifierByObject($entity)]);
         }
     }
 
@@ -137,7 +119,6 @@ class Session implements \TYPO3\CMS\Core\SingletonInterface
      *
      * @param object $object
      * @return bool
-     * @api
      */
     public function hasObject($object)
     {
@@ -153,7 +134,7 @@ class Session implements \TYPO3\CMS\Core\SingletonInterface
      */
     public function hasIdentifier($identifier, $className)
     {
-        return isset($this->identifierMap[strtolower($className)][$identifier]);
+        return isset($this->identifierMap[$this->getClassIdentifier($className)][$identifier]);
     }
 
     /**
@@ -162,11 +143,10 @@ class Session implements \TYPO3\CMS\Core\SingletonInterface
      * @param string $identifier
      * @param string $className
      * @return object
-     * @api
      */
     public function getObjectByIdentifier($identifier, $className)
     {
-        return $this->identifierMap[strtolower($className)][$identifier];
+        return $this->identifierMap[$this->getClassIdentifier($className)][$identifier];
     }
 
     /**
@@ -176,7 +156,6 @@ class Session implements \TYPO3\CMS\Core\SingletonInterface
      *
      * @param object $object
      * @return string
-     * @api
      */
     public function getIdentifierByObject($object)
     {
@@ -191,12 +170,11 @@ class Session implements \TYPO3\CMS\Core\SingletonInterface
      *
      * @param object $object
      * @param string $identifier
-     * @api
      */
     public function registerObject($object, $identifier)
     {
         $this->objectMap[$object] = $identifier;
-        $this->identifierMap[strtolower(get_class($object))][$identifier] = $object;
+        $this->identifierMap[$this->getClassIdentifier(get_class($object))][$identifier] = $object;
     }
 
     /**
@@ -206,7 +184,7 @@ class Session implements \TYPO3\CMS\Core\SingletonInterface
      */
     public function unregisterObject($object)
     {
-        unset($this->identifierMap[strtolower(get_class($object))][$this->objectMap[$object]]);
+        unset($this->identifierMap[$this->getClassIdentifier(get_class($object))][$this->objectMap[$object]]);
         $this->objectMap->detach($object);
     }
 
@@ -219,6 +197,17 @@ class Session implements \TYPO3\CMS\Core\SingletonInterface
         $this->identifierMap = [];
         $this->objectMap = new ObjectStorage();
         $this->reconstitutedEntities = new ObjectStorage();
-        $this->reconstitutedEntitiesData = [];
+    }
+
+    /**
+     * Objects are stored in the cache with their implementation class name
+     * to allow reusing instances of different classes that point to the same implementation
+     *
+     * @param string $className
+     * @return string a unique class identifier respecting configured implementation class names
+     */
+    protected function getClassIdentifier($className): string
+    {
+        return strtolower($this->objectContainer->getImplementationClassName($className));
     }
 }

@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Install\Updates\RowUpdater;
 
 /*
@@ -25,6 +25,7 @@ use TYPO3\CMS\Frontend\Service\TypoLinkCodecService;
 
 /**
  * Move '<link ...' syntax to '<a href' in rte fields
+ * @internal This class is only meant to be used within EXT:install and is not part of the TYPO3 Core API.
  */
 class RteLinkSyntaxUpdater implements RowUpdaterInterface
 {
@@ -64,7 +65,7 @@ class RteLinkSyntaxUpdater implements RowUpdaterInterface
     /**
      * @var LoggerInterface
      */
-    protected $logger = null;
+    protected $logger;
 
     /**
      * Get title

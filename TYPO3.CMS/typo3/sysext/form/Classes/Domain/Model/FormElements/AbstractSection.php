@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Model\FormElements;
 
 /*
@@ -24,7 +24,6 @@ use TYPO3\CMS\Form\Domain\Exception\TypeDefinitionNotFoundException;
 use TYPO3\CMS\Form\Domain\Exception\TypeDefinitionNotValidException;
 use TYPO3\CMS\Form\Domain\Model\Exception\FormDefinitionConsistencyException;
 use TYPO3\CMS\Form\Domain\Model\Renderable\AbstractCompositeRenderable;
-use TYPO3\CMS\Form\Domain\Runtime\FormRuntime;
 
 /**
  * A base class for "section-like" form parts like "Page" or "Section" (which
@@ -46,7 +45,6 @@ abstract class AbstractSection extends AbstractCompositeRenderable
      * @param string $identifier The Section identifier
      * @param string $type The Section type
      * @throws IdentifierNotValidException if the identifier was no non-empty string
-     * @api
      */
     public function __construct(string $identifier, string $type)
     {
@@ -62,7 +60,6 @@ abstract class AbstractSection extends AbstractCompositeRenderable
      * Get the child Form Elements
      *
      * @return FormElementInterface[] The Page's elements
-     * @api
      */
     public function getElements(): array
     {
@@ -73,7 +70,6 @@ abstract class AbstractSection extends AbstractCompositeRenderable
      * Get the child Form Elements
      *
      * @return FormElementInterface[] The Page's elements
-     * @api
      */
     public function getElementsRecursively(): array
     {
@@ -85,7 +81,6 @@ abstract class AbstractSection extends AbstractCompositeRenderable
      *
      * @param FormElementInterface $formElement The form element to add
      * @throws FormDefinitionConsistencyException if FormElement is already added to a section
-     * @api
      */
     public function addElement(FormElementInterface $formElement)
     {
@@ -106,7 +101,6 @@ abstract class AbstractSection extends AbstractCompositeRenderable
      * @return FormElementInterface the newly created form element
      * @throws TypeDefinitionNotFoundException
      * @throws TypeDefinitionNotValidException
-     * @api
      */
     public function createElement(string $identifier, string $typeName): FormElementInterface
     {
@@ -154,7 +148,6 @@ abstract class AbstractSection extends AbstractCompositeRenderable
      *
      * @param FormElementInterface $elementToMove
      * @param FormElementInterface $referenceElement
-     * @api
      */
     public function moveElementBefore(FormElementInterface $elementToMove, FormElementInterface $referenceElement)
     {
@@ -168,7 +161,6 @@ abstract class AbstractSection extends AbstractCompositeRenderable
      *
      * @param FormElementInterface $elementToMove
      * @param FormElementInterface $referenceElement
-     * @api
      */
     public function moveElementAfter(FormElementInterface $elementToMove, FormElementInterface $referenceElement)
     {
@@ -179,26 +171,9 @@ abstract class AbstractSection extends AbstractCompositeRenderable
      * Remove $elementToRemove from this Section/Page
      *
      * @param FormElementInterface $elementToRemove
-     * @api
      */
     public function removeElement(FormElementInterface $elementToRemove)
     {
         $this->removeRenderable($elementToRemove);
-    }
-
-    /**
-     * This callback is invoked by the FormRuntime whenever values are mapped and validated
-     * (after a form page was submitted)
-     * @see FormRuntime::mapAndValidate()
-     *
-     * @param FormRuntime $formRuntime
-     * @param mixed $elementValue submitted value of the element *before post processing*
-     * @param array $requestArguments submitted raw request values
-     * @api
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function onSubmit(FormRuntime $formRuntime, &$elementValue, array $requestArguments = [])
-    {
-        GeneralUtility::logDeprecatedFunction();
     }
 }

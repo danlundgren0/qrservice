@@ -16,9 +16,15 @@ namespace TYPO3\CMS\Extbase\Reflection;
 
 /**
  * A little parser which creates tag objects from doc comments
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 class DocCommentParser
 {
+    /**
+     * @var array
+     */
+    protected static $ignoredTags = ['package', 'subpackage', 'license', 'copyright', 'author', 'version', 'const'];
+
     /**
      * @var string The description as found in the doc comment
      */
@@ -28,6 +34,19 @@ class DocCommentParser
      * @var array An array of tag names and their values (multiple values are possible)
      */
     protected $tags = [];
+
+    /**
+     * @var bool
+     */
+    private $useIgnoredTags;
+
+    /**
+     * @param bool $useIgnoredTags
+     */
+    public function __construct($useIgnoredTags = false)
+    {
+        $this->useIgnoredTags = $useIgnoredTags;
+    }
 
     /**
      * Parses the given doc comment and saves the result (description and
@@ -109,6 +128,11 @@ class DocCommentParser
     {
         $tagAndValue = preg_split('/\\s/', $line, 2);
         $tag = substr($tagAndValue[0], 1);
+
+        if ($this->useIgnoredTags && in_array($tag, static::$ignoredTags, true)) {
+            return;
+        }
+
         if (count($tagAndValue) > 1) {
             $this->tags[$tag][] = trim($tagAndValue[1]);
         } else {

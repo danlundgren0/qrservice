@@ -14,19 +14,21 @@ namespace TYPO3\CMS\Backend\Template;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Backend\Backend\Shortcut\ShortcutRepository;
 use TYPO3\CMS\Backend\Template\Components\DocHeaderComponent;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Messaging\AbstractMessage;
 use TYPO3\CMS\Core\Messaging\FlashMessageService;
 use TYPO3\CMS\Core\Page\PageRenderer;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\HttpUtility;
 use TYPO3\CMS\Fluid\View\Exception\InvalidTemplateResourceException;
 use TYPO3\CMS\Fluid\View\StandaloneView;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * A class taking care of the "outer" HTML of a module, especially
@@ -189,10 +191,12 @@ class ModuleTemplate
      * Sets the body tag
      *
      * @param string $bodyTag
+     * @return self
      */
-    public function setBodyTag($bodyTag)
+    public function setBodyTag($bodyTag): self
     {
         $this->bodyTag = $bodyTag;
+        return $this;
     }
 
     /**
@@ -209,20 +213,24 @@ class ModuleTemplate
      * Set content
      *
      * @param string $content Content of the module
+     * @return self
      */
-    public function setContent($content)
+    public function setContent($content): self
     {
         $this->view->assign('content', $content);
+        return $this;
     }
 
     /**
      * Set title tag
      *
      * @param string $title
+     * @return self
      */
-    public function setTitle($title)
+    public function setTitle($title): self
     {
         $this->title = $title;
+        return $this;
     }
 
     /**
@@ -258,11 +266,12 @@ class ModuleTemplate
      */
     protected function loadJavaScripts()
     {
-        $this->pageRenderer->loadJquery();
         $this->pageRenderer->loadRequireJsModule('bootstrap');
-        $this->pageRenderer->loadRequireJsModule('TYPO3/CMS/Backend/ContextHelp');
-        $this->pageRenderer->loadRequireJsModule('TYPO3/CMS/Backend/DocumentHeader');
-        $this->pageRenderer->loadRequireJsModule('TYPO3/CMS/Backend/SplitButtons');
+        if (TYPO3_MODE === 'BE' && $this->getBackendUserAuthentication() && !empty($this->getBackendUserAuthentication()->user)) {
+            $this->pageRenderer->loadRequireJsModule('TYPO3/CMS/Backend/ContextHelp');
+            $this->pageRenderer->loadRequireJsModule('TYPO3/CMS/Backend/DocumentHeader');
+            $this->pageRenderer->loadRequireJsModule('TYPO3/CMS/Backend/SplitButtons');
+        }
     }
 
     /**
@@ -270,10 +279,10 @@ class ModuleTemplate
      */
     protected function loadStylesheets()
     {
-        if ($GLOBALS['TBE_STYLES']['stylesheet']) {
+        if (!empty($GLOBALS['TBE_STYLES']['stylesheet'])) {
             $this->pageRenderer->addCssFile($GLOBALS['TBE_STYLES']['stylesheet']);
         }
-        if ($GLOBALS['TBE_STYLES']['stylesheet2']) {
+        if (!empty($GLOBALS['TBE_STYLES']['stylesheet2'])) {
             $this->pageRenderer->addCssFile($GLOBALS['TBE_STYLES']['stylesheet2']);
         }
     }
@@ -287,7 +296,7 @@ class ModuleTemplate
         $this->pageRenderer->setXmlPrologAndDocType('<!DOCTYPE html>');
         $this->pageRenderer->setCharSet('utf-8');
         $this->pageRenderer->setLanguage($GLOBALS['LANG']->lang);
-        $this->pageRenderer->addMetaTag('<meta name="viewport" content="width=device-width, initial-scale=1">');
+        $this->pageRenderer->setMetaTag('name', 'viewport', 'width=device-width, initial-scale=1');
     }
 
     /**
@@ -305,10 +314,12 @@ class ModuleTemplate
      *
      * @param string $name Javascript code block name
      * @param string $code Inline Javascript
+     * @return self
      */
-    public function addJavaScriptCode($name = '', $code = '')
+    public function addJavaScriptCode($name = '', $code = ''): self
     {
         $this->javascriptCodeArray[$name] = $code;
+        return $this;
     }
 
     /**
@@ -366,39 +377,46 @@ class ModuleTemplate
      * Set form tag
      *
      * @param string $formTag Form tag to add
+     * @return self
      */
-    public function setForm($formTag = '')
+    public function setForm($formTag = ''): self
     {
         $this->view->assign('formTag', $formTag);
+        return $this;
     }
 
     /**
      * Sets the ModuleId
      *
      * @param string $moduleId ID of the module
+     * @return self
      */
-    public function setModuleId($moduleId)
+    public function setModuleId($moduleId): self
     {
         $this->moduleId = $moduleId;
         $this->registerModuleMenu($moduleId);
+        return $this;
     }
 
     /**
      * Sets the ModuleName
      *
      * @param string $moduleName Name of the module
+     * @return self
      */
-    public function setModuleName($moduleName)
+    public function setModuleName($moduleName): self
     {
         $this->moduleName = $moduleName;
+        return $this;
     }
 
     /**
      * Generates the Menu for things like Web->Info
      *
      * @param $moduleMenuIdentifier
+     * @return self
      */
-    public function registerModuleMenu($moduleMenuIdentifier)
+    public function registerModuleMenu($moduleMenuIdentifier): self
     {
         if (isset($GLOBALS['TBE_MODULES_EXT'][$moduleMenuIdentifier])) {
             $menuEntries =
@@ -412,6 +430,7 @@ class ModuleTemplate
             }
             $this->docHeaderComponent->getMenuRegistry()->addMenu($menu);
         }
+        return $this;
     }
 
     /**
@@ -469,11 +488,15 @@ class ModuleTemplate
      * "sysext/core/Resources/Public/JavaScript/QueryGenerator.js" to load it
      *
      * @internal
+     * @return self
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0, use PageRenderer directly.
+     * @see \TYPO3\CMS\Core\Page\PageRenderer::addJsFile
      */
-    public function loadJavascriptLib($lib)
+    public function loadJavascriptLib($lib): self
     {
-        // @todo: maybe we can remove this one as well
+        trigger_error('ModuleTemplate->loadJavascriptLib() should not be used any longer, as this method will be removed in TYPO3 v10.0.', E_USER_DEPRECATED);
         $this->pageRenderer->addJsFile($lib);
+        return $this;
     }
 
     /**
@@ -501,7 +524,7 @@ class ModuleTemplate
      */
     public function makeShortcutIcon($gvList, $setList, $modName, $motherModName = '', $displayName = '', $classes = 'btn btn-default btn-sm')
     {
-        $gvList = 'route,' . $gvList;
+        $gvList = 'route,id,' . $gvList;
         $storeUrl = $this->makeShortcutUrl($gvList, $setList);
         $pathInfo = parse_url(GeneralUtility::getIndpEnv('REQUEST_URI'));
         // Fallback for alt_mod. We still pass in the old xMOD... stuff,
@@ -510,8 +533,9 @@ class ModuleTemplate
         // since this is used for icons.
         $moduleName = $modName === 'xMOD_alt_doc.php' ? 'record_edit' : $modName;
         // Add the module identifier automatically if typo3/index.php is used:
-        if (GeneralUtility::_GET('M') !== null) {
-            $storeUrl = '&M=' . $moduleName . $storeUrl;
+        // @todo: routing
+        if (GeneralUtility::_GET('route') !== null) {
+            $storeUrl = '&route=' . $moduleName . $storeUrl;
         }
         if ((int)$motherModName === 1) {
             $motherModule = 'top.currentModuleLoaded';
@@ -521,11 +545,12 @@ class ModuleTemplate
             $motherModule = '\'\'';
         }
         $confirmationText = GeneralUtility::quoteJSvalue(
-            $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.makeBookmark')
+            $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.makeBookmark')
         );
 
         $shortcutUrl = $pathInfo['path'] . '?' . $storeUrl;
-        $shortcutExist = BackendUtility::shortcutExists($shortcutUrl);
+        $shortcutRepository = GeneralUtility::makeInstance(ShortcutRepository::class);
+        $shortcutExist = $shortcutRepository->shortcutExists($shortcutUrl);
 
         if ($shortcutExist) {
             return '<a class="active ' . htmlspecialchars($classes) . '" title="">' .
@@ -537,7 +562,7 @@ class ModuleTemplate
             ', ' . $url . ', ' . $confirmationText . ', ' . $motherModule . ', this, ' . GeneralUtility::quoteJSvalue($displayName) . ');return false;';
 
         return '<a href="#" class="' . htmlspecialchars($classes) . '" onclick="' . htmlspecialchars($onClick) . '" title="' .
-        htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.makeBookmark')) . '">' .
+        htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.makeBookmark')) . '">' .
         $this->iconFactory->getIcon('actions-system-shortcut-new', Icon::SIZE_SMALL)->render() . '</a>';
     }
 
@@ -550,7 +575,7 @@ class ModuleTemplate
      * - SET[] variables a stored in $GLOBALS["SOBE"]->MOD_SETTINGS for backend
      * modules
      *
-     * @return string
+     * @return string GET-parameters for the shortcut-url only(!). String starts with '&'
      * @internal
      */
     public function makeShortcutUrl($gvList, $setList)
@@ -560,35 +585,7 @@ class ModuleTemplate
             GeneralUtility::compileSelectedGetVarsFromArray($gvList, $getParams),
             ['SET' => GeneralUtility::compileSelectedGetVarsFromArray($setList, (array)$GLOBALS['SOBE']->MOD_SETTINGS)]
         );
-        return GeneralUtility::implodeArrayForUrl('', $storeArray);
-    }
-
-    /**
-     * Creates the version selector for the page id inputted.
-     * Requires the core version management extension, "version" to be loaded.
-     *
-     * @param int $id Page id to create selector for.
-     * @param bool $noAction If set, there will be no button for swapping page.
-     *
-     * @return string
-     * @internal
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function getVersionSelector($id, $noAction = false)
-    {
-        if (ExtensionManagementUtility::isLoaded('version')
-            && ExtensionManagementUtility::isLoaded('compatibility7')
-            && !ExtensionManagementUtility::isLoaded('workspaces')
-        ) {
-            /**
-             * For Code Completion
-             *
-             * @var $versionGuiObj \TYPO3\CMS\Compatibility7\View\VersionView
-             */
-            $versionGuiObj = GeneralUtility::makeInstance(\TYPO3\CMS\Compatibility7\View\VersionView::class);
-            return $versionGuiObj->getVersionSelector($id, $noAction);
-        }
-        return '';
+        return HttpUtility::buildQueryString($storeArray, '&');
     }
 
     /**
@@ -624,9 +621,11 @@ class ModuleTemplate
      *
      * @return string HTML image tag (if applicable)
      * @internal
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0
      */
     public function icons($type)
     {
+        trigger_error('ModuleTemplate->icons() should not be used any longer, as this will be removed in TYPO3 v10.0.', E_USER_DEPRECATED);
         $icon = '';
         switch ($type) {
             case self::STATUS_ICON_ERROR:
@@ -699,8 +698,9 @@ class ModuleTemplate
      * @param int $severity Optional severity, must be one of \TYPO3\CMS\Core\Messaging\FlashMessage constants
      * @param bool $storeInSession Optional, defines whether the message should be stored in the session (default)
      * @throws \InvalidArgumentException if the message body is no string
+     * @return self
      */
-    public function addFlashMessage($messageBody, $messageTitle = '', $severity = AbstractMessage::OK, $storeInSession = true)
+    public function addFlashMessage($messageBody, $messageTitle = '', $severity = AbstractMessage::OK, $storeInSession = true): self
     {
         if (!is_string($messageBody)) {
             throw new \InvalidArgumentException('The message body must be of type string, "' . gettype($messageBody) . '" given.', 1446483133);
@@ -714,14 +714,17 @@ class ModuleTemplate
             $storeInSession
         );
         $this->getFlashMessageQueue()->enqueue($flashMessage);
+        return $this;
     }
 
     /**
      * @param \TYPO3\CMS\Core\Messaging\FlashMessageQueue $flashMessageQueue
+     * @return self
      */
-    public function setFlashMessageQueue($flashMessageQueue)
+    public function setFlashMessageQueue($flashMessageQueue): self
     {
         $this->flashMessageQueue = $flashMessageQueue;
+        return $this;
     }
 
     /**
@@ -740,16 +743,18 @@ class ModuleTemplate
     /**
      * @return bool
      */
-    public function isUiBlock() : bool
+    public function isUiBlock(): bool
     {
         return $this->uiBlock;
     }
 
     /**
      * @param bool $uiBlock
+     * @return self
      */
-    public function setUiBlock(bool $uiBlock)
+    public function setUiBlock(bool $uiBlock): self
     {
         $this->uiBlock = $uiBlock;
+        return $this;
     }
 }

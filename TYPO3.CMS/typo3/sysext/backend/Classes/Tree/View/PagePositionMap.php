@@ -14,8 +14,10 @@ namespace TYPO3\CMS\Backend\Tree\View;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Backend\Routing\UriBuilder;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Compatibility\PublicPropertyDeprecationTrait;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Restriction\BackendWorkspaceRestriction;
 use TYPO3\CMS\Core\Database\Query\Restriction\EndTimeRestriction;
@@ -23,15 +25,28 @@ use TYPO3\CMS\Core\Database\Query\Restriction\HiddenRestriction;
 use TYPO3\CMS\Core\Database\Query\Restriction\StartTimeRestriction;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Position map class - generating a page tree / content element list which links for inserting (copy/move) of records.
  * Used for pages / tt_content element wizards of various kinds.
+ * @internal This class is a TYPO3 Backend implementation and is not considered part of the Public TYPO3 API.
  */
 class PagePositionMap
 {
+    use PublicPropertyDeprecationTrait;
+
+    /**
+     * Properties which have been moved to protected status from public
+     *
+     * @var array
+     */
+    protected $deprecatedPublicProperties = [
+        'getModConfigCache' => 'Using $getModConfigCache of class PagePositionMap is discouraged. This property will be removed in TYPO3 v10.0.',
+        'modConfigStr' => 'Using $$modConfigStr of class PagePositionMap is discouraged. This property will be removed in TYPO3 v10.0.',
+    ];
+
     // EXTERNAL, static:
     /**
      * @var string
@@ -76,9 +91,9 @@ class PagePositionMap
 
     // Caching arrays:
     /**
-     * @var array
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
-    public $getModConfigCache = [];
+    protected $getModConfigCache = [];
 
     /**
      * @var array
@@ -97,9 +112,9 @@ class PagePositionMap
     public $l_insertNewRecordHere = 'insertNewRecordHere';
 
     /**
-     * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
-    public $modConfigStr = 'mod.web_list.newPageWiz';
+    protected $modConfigStr = 'mod.web_list.newPageWiz';
 
     /**
      * Page tree implementation class name
@@ -114,15 +129,22 @@ class PagePositionMap
     protected $iconFactory;
 
     /**
+     * @var string
+     */
+    protected $clientContext;
+
+    /**
      * Constructor allowing to set pageTreeImplementation
      *
      * @param string $pageTreeClassName
+     * @param string $clientContext JavaScript context of view client (either 'window' or 'list_frame')
      */
-    public function __construct($pageTreeClassName = null)
+    public function __construct(string $pageTreeClassName = null, string $clientContext = 'window')
     {
         if ($pageTreeClassName !== null) {
             $this->pageTreeClassName = $pageTreeClassName;
         }
+        $this->clientContext = $clientContext;
         $this->iconFactory = GeneralUtility::makeInstance(IconFactory::class);
     }
 
@@ -172,7 +194,8 @@ class PagePositionMap
                     // 1) It must be allowed to create a new page and 2) If there are subpages there is no need to render a subpage icon here - it'll be done over the subpages...
                     if (!$this->dontPrintPageInsertIcons && $this->checkNewPageInPid($id) && !($prev_dat['invertedDepth'] > $pageTree->tree[$cc]['invertedDepth'])) {
                         end($lines);
-                        $lines[] = '<li><span class="text-nowrap"><a href="#" onclick="' . htmlspecialchars($this->onClickEvent($id, $id)) . '"><i class="t3-icon fa fa-long-arrow-left" title="' . $this->insertlabel() . '"></i></a></span></li>';
+                        $margin = 'style="margin-left: ' . (($dat['invertedDepth'] - 1) * 16 + 9) . 'px;"';
+                        $lines[] = '<ul class="list-tree" ' . $margin . '><li><span class="text-nowrap"><a href="#" onclick="' . htmlspecialchars($this->onClickEvent($id, $id)) . '"><i class="t3-icon fa fa-long-arrow-left" title="' . $this->insertlabel() . '"></i></a></span></li></ul>';
                     }
                 }
                 // If going down
@@ -230,7 +253,7 @@ class PagePositionMap
         $code = '<ul class="list-tree">';
 
         foreach ($lines as $line) {
-            if ((substr($line, 0, 3) === '<ul') || (substr($line, 0, 4) === '</ul')) {
+            if ((strpos($line, '<ul') === 0) || (strpos($line, '</ul') === 0)) {
                 $code .= $line;
             } else {
                 $code .= '<li>' . $line . '</li>';
@@ -269,16 +292,19 @@ class PagePositionMap
      */
     public function onClickEvent($pid, $newPagePID)
     {
-        $TSconfig = BackendUtility::getModTSconfig($newPagePID, 'mod.newPageWizard');
-        $TSconfig = $TSconfig['properties'];
+        $TSconfig = BackendUtility::getPagesTSconfig($newPagePID)['mod.']['newPageWizard.'] ?? [];
         if (isset($TSconfig['override']) && !empty($TSconfig['override'])) {
-            $url = BackendUtility::getModuleUrl($TSconfig['override'], [
-                'positionPid' => $pid,
-                'newPageId'   => $newPagePID,
-                'cmd'         => 'crPage',
-                'returnUrl'   => GeneralUtility::getIndpEnv('REQUEST_URI')]
+            $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+            $url = $uriBuilder->buildUriFromRoute(
+                $TSconfig['override'],
+                [
+                    'positionPid' => $pid,
+                    'newPageId'   => $newPagePID,
+                    'cmd'         => 'crPage',
+                    'returnUrl'   => GeneralUtility::getIndpEnv('REQUEST_URI')
+                ]
             );
-            return 'window.location.href=' . GeneralUtility::quoteJSvalue($url) . ';';
+            return $this->clientContext . '.location.href=' . GeneralUtility::quoteJSvalue((string)$url) . ';';
         }
         $params = '&edit[pages][' . $pid . ']=new&returnNewPageId=1';
         return BackendUtility::editOnClick($params, '', $this->R_URI);
@@ -328,12 +354,14 @@ class PagePositionMap
      * @param int $pid Page id for which to get the module configuration.
      * @return array The properties of the module configuration for the page id.
      * @see onClickEvent()
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
      */
     public function getModConfig($pid)
     {
+        trigger_error('PagePositionMap->getModConfig() will be removed in TYPO3 v10.0.', E_USER_DEPRECATED);
         if (!isset($this->getModConfigCache[$pid])) {
             // Acquiring TSconfig for this PID:
-            $this->getModConfigCache[$pid] = BackendUtility::getModTSconfig($pid, $this->modConfigStr);
+            $this->getModConfigCache[$pid]['properties'] = BackendUtility::getPagesTSconfig($pid)['mod.']['web_list.']['newPageWiz.'] ?? [];
         }
         return $this->getModConfigCache[$pid]['properties'];
     }
@@ -455,11 +483,11 @@ class PagePositionMap
                     // Render header
                     $table .= '<p>';
                     if (isset($columnConfig['colPos']) && $head) {
-                        $table .= '<strong>' . $this->wrapColumnHeader($head, '', '') . '</strong>';
+                        $table .= '<strong>' . $this->wrapColumnHeader($head, '') . '</strong>';
                     } elseif ($columnConfig['colPos']) {
-                        $table .= '<em>' . $this->wrapColumnHeader($this->getLanguageService()->getLL('noAccess'), '', '') . '</em>';
+                        $table .= '<em>' . $this->wrapColumnHeader($this->getLanguageService()->getLL('noAccess'), '') . '</em>';
                     } else {
-                        $table .= '<em>' . $this->wrapColumnHeader(($this->getLanguageService()->sL($columnConfig['name']) ?: '') . ' (' . $this->getLanguageService()->getLL('notAssigned') . ')', '', '') . '</em>';
+                        $table .= '<em>' . $this->wrapColumnHeader(($this->getLanguageService()->sL($columnConfig['name']) ?: '') . ' (' . $this->getLanguageService()->getLL('notAssigned') . ')', '') . '</em>';
                     }
                     $table .= '</p>';
                     // Render lines
@@ -541,7 +569,7 @@ class PagePositionMap
             $uid = '';
         }
         $cc = hexdec(substr(md5($uid . '-' . $vv . '-' . $kk), 0, 4));
-        return '<a href="#" onclick="' . htmlspecialchars($this->onClickInsertRecord($row, $vv, $moveUid, $pid, $this->cur_sys_language)) . '">' . '<i class="t3-icon fa fa-long-arrow-left" name="mImgEnd' . $cc . '" title="' . htmlspecialchars($this->getLanguageService()->getLL($this->l_insertNewRecordHere)) . '"></i></a>';
+        return '<a href="#" onclick="' . htmlspecialchars($this->onClickInsertRecord($row, $vv, $moveUid, $pid, $this->cur_sys_language)) . '" data-dismiss="modal">' . '<i class="t3-icon fa fa-long-arrow-left" name="mImgEnd' . $cc . '" title="' . htmlspecialchars($this->getLanguageService()->getLL($this->l_insertNewRecordHere)) . '"></i></a>';
     }
 
     /**
@@ -557,15 +585,21 @@ class PagePositionMap
      */
     public function onClickInsertRecord($row, $vv, $moveUid, $pid, $sys_lang = 0)
     {
-        $table = 'tt_content';
+        $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
         if (is_array($row)) {
-            $location = BackendUtility::getModuleUrl('tce_db') . '&cmd[' . $table . '][' . $moveUid . '][' . $this->moveOrCopy . ']=-' . $row['uid'] . '&prErr=1&uPT=1';
+            $location = $uriBuilder->buildUriFromRoute('tce_db', [
+                'cmd[tt_content][' . $moveUid . '][' . $this->moveOrCopy . ']' => '-' . $row['uid'],
+                'redirect' => $this->R_URI,
+            ]);
         } else {
-            $location = BackendUtility::getModuleUrl('tce_db') . '&cmd[' . $table . '][' . $moveUid . '][' . $this->moveOrCopy . ']=' . $pid . '&data[' . $table . '][' . $moveUid . '][colPos]=' . $vv . '&prErr=1';
+            $location = $uriBuilder->buildUriFromRoute('tce_db', [
+                'cmd[tt_content][' . $moveUid . '][' . $this->moveOrCopy . ']' => $pid,
+                'data[tt_content][' . $moveUid . '][colPos]' => $vv,
+                'redirect' => $this->R_URI,
+            ]);
         }
-        $location .= '&redirect=' . rawurlencode($this->R_URI);
         // returns to prev. page
-        return 'window.location.href=' . GeneralUtility::quoteJSvalue($location) . ';return false;';
+        return $this->clientContext . '.location.href=' . GeneralUtility::quoteJSvalue((string)$location) . ';return false;';
     }
 
     /**

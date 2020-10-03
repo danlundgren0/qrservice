@@ -14,9 +14,9 @@ namespace TYPO3\CMS\Reports\Report\Status;
  * The TYPO3 project - inspiring people to share!
  */
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Registry;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 use TYPO3\CMS\Reports\Status as ReportStatus;
 
 /**
@@ -41,7 +41,7 @@ class WarningMessagePostProcessor
         /** @var Registry $registry */
         $registry = GeneralUtility::makeInstance(Registry::class);
         $highestSeverity = $registry->get('tx_reports', 'status.highestSeverity', null);
-        if (!is_null($highestSeverity)) {
+        if ($highestSeverity !== null) {
             if ($highestSeverity > ReportStatus::OK) {
                 // Display a message that there's something wrong and that
                 // the admin should take a look at the detailed status report

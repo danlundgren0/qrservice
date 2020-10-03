@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Domain\Model;
 
 /*
@@ -49,6 +50,7 @@ abstract class AbstractObject
      * @var string
      */
     protected $name = '';
+
     /**
      * @var string
      */
@@ -123,7 +125,7 @@ abstract class AbstractObject
      * Checks if the doc comment of this method is tagged with
      * the specified tag
      *
-     * @param  string $tagName : Tag name to check for
+     * @param string $tagName : Tag name to check for
      * @return bool true if such a tag has been defined, otherwise false
      */
     public function isTaggedWith($tagName)
@@ -460,7 +462,7 @@ abstract class AbstractObject
             if ($line === '*/') {
                 break;
             }
-            if (strlen($line) > 0 && strpos($line, '* @') !== false) {
+            if ($line !== '' && strpos($line, '* @') !== false) {
                 $this->parseTag(substr($line, strpos($line, '@')));
             } else {
                 if (count($this->tags) === 0) {
@@ -618,11 +620,7 @@ abstract class AbstractObject
      */
     public function isNamespaced()
     {
-        if (empty($this->namespaceName)) {
-            return false;
-        } else {
-            return true;
-        }
+        return !empty($this->namespaceName);
     }
 
     /**

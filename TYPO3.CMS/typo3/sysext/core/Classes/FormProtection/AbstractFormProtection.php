@@ -15,6 +15,7 @@ namespace TYPO3\CMS\Core\FormProtection;
  */
 
 use TYPO3\CMS\Core\Crypto\Random;
+use TYPO3\CMS\Core\Security\BlockSerializationTrait;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -26,6 +27,8 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  */
 abstract class AbstractFormProtection
 {
+    use BlockSerializationTrait;
+
     /**
      * @var \Closure
      */
@@ -43,9 +46,7 @@ abstract class AbstractFormProtection
      */
     protected function getSessionToken()
     {
-        if ($this->sessionToken === null) {
-            $this->sessionToken = $this->retrieveSessionToken();
-        }
+        $this->sessionToken = $this->sessionToken ?? $this->retrieveSessionToken();
         return $this->sessionToken;
     }
 
@@ -103,7 +104,7 @@ abstract class AbstractFormProtection
     public function validateToken($tokenId, $formName, $action = '', $formInstanceName = '')
     {
         $validTokenId = GeneralUtility::hmac(((string)$formName . (string)$action) . (string)$formInstanceName . $this->getSessionToken());
-        if ((string)$tokenId === $validTokenId) {
+        if (hash_equals($validTokenId, (string)$tokenId)) {
             $isValid = true;
         } else {
             $isValid = false;
@@ -146,7 +147,7 @@ abstract class AbstractFormProtection
      * Saves the session token so that it can be used by a later incarnation
      * of this class.
      *
-     * @access private
+     * @internal
      */
     abstract public function persistSessionToken();
 }

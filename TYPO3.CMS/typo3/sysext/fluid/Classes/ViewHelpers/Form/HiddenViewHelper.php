@@ -15,21 +15,21 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Form;
  */
 
 /**
- * Renders an <input type="hidden" ...> tag.
+ * Renders an :html:`<input type="hidden" ...>` tag.
  *
- * = Examples =
+ * Examples
+ * ========
  *
- * <code title="Example">
- * <f:form.hidden name="myHiddenValue" value="42" />
- * </code>
- * <output>
- * <input type="hidden" name="myHiddenValue" value="42" />
- * </output>
+ * Example::
+ *
+ *    <f:form.hidden name="myHiddenValue" value="42" />
+ *
+ * Output::
+ *
+ *    <input type="hidden" name="myHiddenValue" value="42" />
  *
  * You can also use the "property" attribute if you have bound an object to the form.
- * See <f:form> for more documentation.
- *
- * @api
+ * See :ref:`<f:form> <typo3-fluid-form>` for more documentation.
  */
 class HiddenViewHelper extends \TYPO3\CMS\Fluid\ViewHelpers\Form\AbstractFormFieldViewHelper
 {
@@ -40,8 +40,6 @@ class HiddenViewHelper extends \TYPO3\CMS\Fluid\ViewHelpers\Form\AbstractFormFie
 
     /**
      * Initialize the arguments.
-     *
-     * @api
      */
     public function initializeArguments()
     {
@@ -53,7 +51,6 @@ class HiddenViewHelper extends \TYPO3\CMS\Fluid\ViewHelpers\Form\AbstractFormFie
      * Renders the hidden field.
      *
      * @return string
-     * @api
      */
     public function render()
     {
@@ -64,6 +61,8 @@ class HiddenViewHelper extends \TYPO3\CMS\Fluid\ViewHelpers\Form\AbstractFormFie
         $this->tag->addAttribute('type', 'hidden');
         $this->tag->addAttribute('name', $name);
         $this->tag->addAttribute('value', $this->getValueAttribute());
+
+        $this->addAdditionalIdentityPropertiesIfNeeded();
 
         return $this->tag->render();
     }

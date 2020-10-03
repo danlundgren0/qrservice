@@ -1,4 +1,5 @@
 <?php
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Controller\File;
 
 /*
@@ -16,45 +17,60 @@ namespace TYPO3\CMS\Backend\Controller\File;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use TYPO3\CMS\Backend\Module\AbstractModule;
-use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Backend\Template\ModuleTemplate;
+use TYPO3\CMS\Core\Compatibility\PublicPropertyDeprecationTrait;
+use TYPO3\CMS\Core\Http\HtmlResponse;
 use TYPO3\CMS\Core\Imaging\Icon;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsException;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Script Class for display up to 10 upload fields
+ * @internal This class is a specific Backend controller implementation and is not considered part of the Public TYPO3 API.
  */
-class FileUploadController extends AbstractModule
+class FileUploadController
 {
+    use PublicPropertyDeprecationTrait;
+
+    /**
+     * @var array
+     */
+    protected $deprecatedPublicProperties = [
+        'title' => 'Using $title of class FileUploadController from outside is discouraged as this variable is only used for internal storage.',
+        'target' => 'Using $target of class FileUploadController from outside is discouraged as this variable is only used for internal storage.',
+        'returnUrl' => 'Using $returnUrl of class FileUploadController from outside is discouraged as this variable is only used for internal storage.',
+        'content' => 'Using $content of class FileUploadController from outside is discouraged as this variable is only used for internal storage.',
+    ];
+
     /**
      * Name of the filemount
      *
      * @var string
      */
-    public $title;
+    protected $title;
 
     /**
      * Set with the target path inputted in &target
      *
      * @var string
      */
-    public $target;
+    protected $target;
 
     /**
      * Return URL of list module.
      *
      * @var string
      */
-    public $returnUrl;
+    protected $returnUrl;
 
     /**
      * Accumulating content
      *
      * @var string
      */
-    public $content;
+    protected $content;
 
     /**
      * The folder object which is the target directory for the upload
@@ -64,28 +80,77 @@ class FileUploadController extends AbstractModule
     protected $folderObject;
 
     /**
+     * ModuleTemplate object
+     *
+     * @var ModuleTemplate
+     */
+    protected $moduleTemplate;
+
+    /**
      * Constructor
      */
     public function __construct()
     {
-        parent::__construct();
-        $GLOBALS['SOBE'] = $this;
-        $this->getLanguageService()->includeLLFile('EXT:lang/Resources/Private/Language/locallang_misc.xlf');
-        $this->init();
+        $this->moduleTemplate = GeneralUtility::makeInstance(ModuleTemplate::class);
+        $this->getLanguageService()->includeLLFile('EXT:core/Resources/Private/Language/locallang_misc.xlf');
+
+        // @deprecated since TYPO3 v9, will be moved out of __construct() in TYPO3 v10.0
+        $this->init($GLOBALS['TYPO3_REQUEST']);
+    }
+
+    /**
+     * Processes the request, currently everything is handled and put together via "renderContent()"
+     *
+     * @param ServerRequestInterface $request the current request
+     * @return ResponseInterface the response with the content
+     */
+    public function mainAction(ServerRequestInterface $request): ResponseInterface
+    {
+        $this->renderContent();
+        return new HtmlResponse($this->moduleTemplate->renderContent());
+    }
+
+    /**
+     * Main function, rendering the upload file form fields
+     *
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
+     */
+    public function main()
+    {
+        trigger_error('FileUploadController->main() will be replaced by protected method renderContent() in TYPO3 v10.0. Do not call from other extension.', E_USER_DEPRECATED);
+        $this->renderContent();
+    }
+
+    /**
+     * This function renders the upload form
+     *
+     * @return string The HTML form as a string, ready for outputting
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
+     */
+    public function renderUploadForm()
+    {
+        trigger_error('FileUploadController->renderUploadForm() will be replaced by protected method renderUploadFormInternal() in TYPO3 v10.0. Do not call from other extension.', E_USER_DEPRECATED);
+        return $this->renderUploadFormInternal();
     }
 
     /**
      * Initialize
      *
+     * @param ServerRequestInterface $request
      * @throws InsufficientFolderAccessPermissionsException
      */
-    protected function init()
+    protected function init(ServerRequestInterface $request): void
     {
+        $parsedBody = $request->getParsedBody();
+        $queryParams = $request->getQueryParams();
+
+        /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
         // Initialize GPvars:
-        $this->target = GeneralUtility::_GP('target');
-        $this->returnUrl = GeneralUtility::sanitizeLocalUrl(GeneralUtility::_GP('returnUrl'));
+        $this->target = $parsedBody['target'] ?? $queryParams['target'] ?? null;
+        $this->returnUrl = GeneralUtility::sanitizeLocalUrl($parsedBody['returnUrl'] ?? $queryParams['returnUrl'] ?? '');
         if (!$this->returnUrl) {
-            $this->returnUrl = BackendUtility::getModuleUrl('file_list', [
+            $this->returnUrl = (string)$uriBuilder->buildUriFromRoute('file_list', [
                 'id' => rawurlencode($this->target)
             ]);
         }
@@ -103,8 +168,8 @@ class FileUploadController extends AbstractModule
 
         // Cleaning and checking target directory
         if (!$this->folderObject) {
-            $title = $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_mod_file_list.xlf:paramError');
-            $message = $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_mod_file_list.xlf:targetNoDir');
+            $title = $this->getLanguageService()->sL('LLL:EXT:filelist/Resources/Private/Language/locallang_mod_file_list.xlf:paramError');
+            $message = $this->getLanguageService()->sL('LLL:EXT:filelist/Resources/Private/Language/locallang_mod_file_list.xlf:targetNoDir');
             throw new \RuntimeException($title . ': ' . $message, 1294586843);
         }
 
@@ -119,21 +184,23 @@ class FileUploadController extends AbstractModule
     }
 
     /**
-     * Main function, rendering the upload file form fields
+     * Render module content
      */
-    public function main()
+    protected function renderContent(): void
     {
         $lang = $this->getLanguageService();
+        /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
 
         // set page title
-        $this->moduleTemplate->setTitle($lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:file_upload.php.pagetitle'));
+        $this->moduleTemplate->setTitle($lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:file_upload.php.pagetitle'));
 
         $pageContent = '<form action="'
-            . htmlspecialchars(BackendUtility::getModuleUrl('tce_file'))
+            . htmlspecialchars((string)$uriBuilder->buildUriFromRoute('tce_file'))
             . '" method="post" id="FileUploadController" name="editform" enctype="multipart/form-data">';
         // Make page header:
-        $pageContent .= '<h1>' . $lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:file_upload.php.pagetitle') . '</h1>';
-        $pageContent .= $this->renderUploadForm();
+        $pageContent .= '<h1>' . $lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:file_upload.php.pagetitle') . '</h1>';
+        $pageContent .= $this->renderUploadFormInternal();
 
         // Header Buttons
         $buttonBar = $this->moduleTemplate->getDocHeaderComponent()->getButtonBar();
@@ -148,7 +215,7 @@ class FileUploadController extends AbstractModule
         if ($this->returnUrl) {
             $backButton = $buttonBar->makeLinkButton()
                 ->setHref($this->returnUrl)
-                ->setTitle($lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.goBack'))
+                ->setTitle($lang->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.goBack'))
                 ->setIcon($this->moduleTemplate->getIconFactory()->getIcon('actions-view-go-back', Icon::SIZE_SMALL));
             $buttonBar->addButton($backButton);
         }
@@ -163,60 +230,34 @@ class FileUploadController extends AbstractModule
      *
      * @return string The HTML form as a string, ready for outputting
      */
-    public function renderUploadForm()
+    protected function renderUploadFormInternal(): string
     {
-        // Make checkbox for "overwrite"
         $content = '
-			<div id="c-override">
-				<p><label for="overwriteExistingFiles"><input type="checkbox" class="checkbox" name="overwriteExistingFiles" id="overwriteExistingFiles" value="replace" /> ' . htmlspecialchars($this->getLanguageService()->getLL('overwriteExistingFiles')) . '</label></p>
-				<p>&nbsp;</p>
-				<p>' . htmlspecialchars($this->getLanguageService()->getLL('uploadMultipleFilesInfo')) . '</p>
-			</div>
-			';
-        // Produce the number of upload-fields needed:
-        $content .= '
-			<div id="c-upload">
-		';
-        // Adding 'size="50" ' for the sake of Mozilla!
-        $content .= '
-				<input type="file" multiple="multiple" name="upload_1[]" />
-				<input type="hidden" name="file[upload][1][target]" value="' . htmlspecialchars($this->folderObject->getCombinedIdentifier()) . '" />
-				<input type="hidden" name="file[upload][1][data]" value="1" /><br />
-			';
-        $content .= '
-			</div>
-		';
-        // Submit button:
-        $content .= '
-			<div id="c-submit">
-				<input type="hidden" name="redirect" value="' . $this->returnUrl . '" /><br />
-				<input class="btn btn-default" type="submit" value="' . htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:file_upload.php.submit')) . '" />
-			</div>
-		';
+            <div class="form-group">
+                <input type="file" multiple="multiple" class="form-control" name="upload_1[]" />
+                <input type="hidden" name="data[upload][1][target]" value="' . htmlspecialchars($this->folderObject->getCombinedIdentifier()) . '" />
+                <input type="hidden" name="data[upload][1][data]" value="1" />
+            </div>
+            <div class="checkbox">
+                <label for="overwriteExistingFiles">
+                <input type="checkbox" name="overwriteExistingFiles" id="overwriteExistingFiles" value="replace" /> ' . htmlspecialchars($this->getLanguageService()->getLL('overwriteExistingFiles')) . '</label>
+            </div>
+            <div>
+                <input type="hidden" name="data[upload][1][redirect]" value="' . $this->returnUrl . '" />
+                <input class="btn btn-primary" type="submit" value="' . htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:file_upload.php.submit')) . '" />
+            </div>
+            <div class="callout callout-warning">
+              ' . htmlspecialchars($this->getLanguageService()->getLL('uploadMultipleFilesInfo')) . '
+            </div>
+        ';
+
         return $content;
     }
 
     /**
-     * Processes the request, currently everything is handled and put together via "main()"
-     *
-     * @param ServerRequestInterface $request the current request
-     * @param ResponseInterface $response
-     * @return ResponseInterface the response with the content
+     * @return LanguageService
      */
-    public function mainAction(ServerRequestInterface $request, ResponseInterface $response)
-    {
-        $this->main();
-        $response->getBody()->write($this->moduleTemplate->renderContent());
-
-        return $response;
-    }
-
-    /**
-     * Returns LanguageService
-     *
-     * @return \TYPO3\CMS\Lang\LanguageService
-     */
-    protected function getLanguageService()
+    protected function getLanguageService(): LanguageService
     {
         return $GLOBALS['LANG'];
     }

@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Exception;
 
 /*
@@ -21,8 +21,6 @@ use TYPO3\CMS\Form\Domain\Exception;
 
 /**
  * This exception is thrown if a rendering error occurs
- *
- * @api
  */
 class RenderingException extends Exception
 {

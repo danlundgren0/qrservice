@@ -1,4 +1,4 @@
-<p><f:translate key="dependencyCheck.headline" arguments="{extensionKey: extension.extensionKey}" />:</p>
+<p><f:translate key="dependencyCheck.headline" arguments="{0: extension.extensionKey}" />:</p>
 <ul>
 	<f:for each="{unresolvedDependencies}" key="key" as="messages">
 		<f:if condition="{key} == {extension.extensionKey}">
@@ -10,7 +10,7 @@
 	<f:for each="{unresolvedDependencies}" key="key" as="messages">
 		<f:if condition="{key} != {extension.extensionKey}">
 			<li>
-				<strong>{f:translate(key: 'dependencyCheck.requiredExtension', arguments: {key: key}) -> f:format.htmlspecialchars()}</strong>
+				<strong>{f:translate(key: 'dependencyCheck.requiredExtension', arguments: '{key: key}') -> f:format.htmlspecialchars()}</strong>
 				<ul>
 					<f:for each="{messages}" as="message">
 						<li>{message.message -> f:format.htmlspecialchars()}</li>

@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Extensionmanager\Utility\Importer;
 
 /**
  * Importer object for mirror list.
+ * @internal This class is a specific ExtensionManager implementation and is not part of the Public TYPO3 API.
  */
 class MirrorListUtility implements \SplObserver
 {
@@ -47,7 +48,7 @@ class MirrorListUtility implements \SplObserver
             $this->parser->attach($this);
         } else {
             throw new \TYPO3\CMS\Extensionmanager\Exception\ExtensionManagerException(
-                get_class($this) . ': No XML parser available.',
+                static::class . ': No XML parser available.',
                 1476108687
             );
         }
@@ -64,7 +65,7 @@ class MirrorListUtility implements \SplObserver
     {
         $zlibStream = 'compress.zlib://';
         $this->parser->parseXml($zlibStream . $localMirrorListFile);
-        /** @var $objRepositoryMirrors \TYPO3\CMS\Extensionmanager\Domain\Model\Mirrors */
+        /** @var \TYPO3\CMS\Extensionmanager\Domain\Model\Mirrors $objRepositoryMirrors */
         $objRepositoryMirrors = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Extensionmanager\Domain\Model\Mirrors::class);
         $objRepositoryMirrors->setMirrors($this->arrTmpMirrors);
         $this->arrTmpMirrors = [];

@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Domain\Model\DomainObject\Relation;
 
 /*
@@ -70,6 +71,7 @@ class ZeroToManyRelation extends AnyToManyRelation
     /**
      *
      * @return bool true (if property is of type relation any to many)
+     * @deprecated Use `instanceof ZeroToManyRelation` instead
      */
     public function isZeroToManyRelation()
     {

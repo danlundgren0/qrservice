@@ -14,8 +14,11 @@ namespace TYPO3\CMS\Extensionmanager\Domain\Model;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Core\Environment;
+
 /**
  * Main extension model
+ * @internal This class is a specific domain model implementation and is not part of the Public TYPO3 API.
  */
 class Extension extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
 {
@@ -147,7 +150,7 @@ class Extension extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     /**
      * @var \SplObjectStorage<\TYPO3\CMS\Extensionmanager\Domain\Model\Dependency>
      */
-    protected $dependencies = null;
+    protected $dependencies;
 
     /**
      * @internal
@@ -337,7 +340,7 @@ class Extension extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     public function getDefaultState($state = null)
     {
         $defaultState = '';
-        if (is_null($state)) {
+        if ($state === null) {
             $defaultState = self::$defaultStates;
         } else {
             if (is_string($state)) {
@@ -451,9 +454,9 @@ class Extension extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     public static function returnInstallPaths()
     {
         $installPaths = [
-            'System' => PATH_typo3 . 'sysext/',
-            'Global' => PATH_typo3 . 'ext/',
-            'Local' => PATH_typo3conf . 'ext/'
+            'System' => Environment::getFrameworkBasePath() . '/',
+            'Global' => Environment::getBackendPath() . '/ext/',
+            'Local' => Environment::getExtensionsPath() . '/'
         ];
         return $installPaths;
     }
@@ -467,9 +470,6 @@ class Extension extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     public static function returnAllowedInstallPaths()
     {
         $installPaths = self::returnInstallPaths();
-        if (empty($GLOBALS['TYPO3_CONF_VARS']['EXT']['allowSystemInstall'])) {
-            unset($installPaths['System']);
-        }
         if (empty($GLOBALS['TYPO3_CONF_VARS']['EXT']['allowGlobalInstall'])) {
             unset($installPaths['Global']);
         }
@@ -521,7 +521,7 @@ class Extension extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     public function getDependencies()
     {
         if (!is_object($this->dependencies)) {
-            /** @var $extensionModelUtility \TYPO3\CMS\Extensionmanager\Utility\ExtensionModelUtility */
+            /** @var \TYPO3\CMS\Extensionmanager\Utility\ExtensionModelUtility $extensionModelUtility */
             $extensionModelUtility = $this->objectManager->get(\TYPO3\CMS\Extensionmanager\Utility\ExtensionModelUtility::class);
             $this->setDependencies($extensionModelUtility->convertDependenciesToObjects($this->getSerializedDependencies()));
         }

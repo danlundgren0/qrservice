@@ -14,15 +14,25 @@ namespace TYPO3\CMS\Install\Service;
  * The TYPO3 project - inspiring people to share!
  */
 
+use Symfony\Component\HttpFoundation\Cookie;
+use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Http\CookieHeaderTrait;
+use TYPO3\CMS\Core\Messaging\FlashMessage;
+use TYPO3\CMS\Core\Security\BlockSerializationTrait;
+use TYPO3\CMS\Core\SingletonInterface;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Secure session handling for the install tool.
+ * @internal This class is only meant to be used within EXT:install and is not part of the TYPO3 Core API.
  */
-class SessionService implements \TYPO3\CMS\Core\SingletonInterface
+class SessionService implements SingletonInterface
 {
+    use BlockSerializationTrait;
+    use CookieHeaderTrait;
+
     /**
-     * The path to our typo3temp/var/ (where we can write our sessions). Set in the
+     * The path to our var/ folder (where we can write our sessions). Set in the
      * constructor.
      *
      * @var string
@@ -30,12 +40,12 @@ class SessionService implements \TYPO3\CMS\Core\SingletonInterface
     private $basePath;
 
     /**
-     * Path where to store our session files in typo3temp. %s will be
+     * Path where to store our session files in var/session/. %s will be
      * non-guessable.
      *
      * @var string
      */
-    private $sessionPath = 'InstallToolSessions/%s';
+    private $sessionPath = 'session/%s';
 
     /**
      * the cookie to store the session ID of the install tool
@@ -65,29 +75,37 @@ class SessionService implements \TYPO3\CMS\Core\SingletonInterface
      */
     public function __construct()
     {
-        $this->basePath = PATH_site . 'typo3temp/var/';
+        $this->basePath = Environment::getVarPath() . '/';
         // Start our PHP session early so that hasSession() works
         $sessionSavePath = $this->getSessionSavePath();
         // Register our "save" session handler
         session_set_save_handler([$this, 'open'], [$this, 'close'], [$this, 'read'], [$this, 'write'], [$this, 'destroy'], [$this, 'gc']);
         session_save_path($sessionSavePath);
         session_name($this->cookieName);
-        ini_set('session.cookie_path', GeneralUtility::getIndpEnv('TYPO3_SITE_PATH'));
+        ini_set('session.cookie_httponly', true);
+        if ($this->hasSameSiteCookieSupport()) {
+            ini_set('session.cookie_samesite', Cookie::SAMESITE_STRICT);
+        }
+        ini_set('session.cookie_path', (string)GeneralUtility::getIndpEnv('TYPO3_SITE_PATH'));
         // Always call the garbage collector to clean up stale session files
-        ini_set('session.gc_probability', 100);
-        ini_set('session.gc_divisor', 100);
-        ini_set('session.gc_maxlifetime', $this->expireTimeInMinutes * 2 * 60);
-        if (\TYPO3\CMS\Core\Utility\PhpOptionsUtility::isSessionAutoStartEnabled()) {
+        ini_set('session.gc_probability', (string)100);
+        ini_set('session.gc_divisor', (string)100);
+        ini_set('session.gc_maxlifetime', (string)$this->expireTimeInMinutes * 2 * 60);
+        if ($this->isSessionAutoStartEnabled()) {
             $sessionCreationError = 'Error: session.auto-start is enabled.<br />';
             $sessionCreationError .= 'The PHP option session.auto-start is enabled. Disable this option in php.ini or .htaccess:<br />';
             $sessionCreationError .= '<pre>php_value session.auto_start Off</pre>';
             throw new \TYPO3\CMS\Install\Exception($sessionCreationError, 1294587485);
-        } elseif (defined('SID')) {
+        }
+        if (defined('SID')) {
             $sessionCreationError = 'Session already started by session_start().<br />';
             $sessionCreationError .= 'Make sure no installed extension is starting a session in its ext_localconf.php or ext_tables.php.';
             throw new \TYPO3\CMS\Install\Exception($sessionCreationError, 1294587486);
         }
         session_start();
+        if (!$this->hasSameSiteCookieSupport()) {
+            $this->resendCookieHeader([$this->cookieName]);
+        }
     }
 
     /**
@@ -126,7 +144,7 @@ class SessionService implements \TYPO3\CMS\Core\SingletonInterface
                 GeneralUtility::mkdir_deep($sessionSavePath);
             } catch (\RuntimeException $exception) {
                 throw new \TYPO3\CMS\Install\Exception(
-                    'Could not create session folder in typo3temp/. Make sure it is writeable!',
+                    'Could not create session folder in ' . Environment::getVarPath() . '. Make sure it is writeable!',
                     1294587484
                 );
             }
@@ -144,9 +162,9 @@ class SessionService implements \TYPO3\CMS\Core\SingletonInterface
 </IfModule>
 			';
             GeneralUtility::writeFile($sessionSavePath . '/.htaccess', $htaccessContent);
-            $indexContent = '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">';
-            $indexContent .= '<HTML><HEAD<TITLE></TITLE><META http-equiv=Refresh Content="0; Url=../../">';
-            $indexContent .= '</HEAD></HTML>';
+            $indexContent = '<!DOCTYPE html>';
+            $indexContent .= '<html><head><title></title><meta http-equiv=Refresh Content="0; Url=../../"/>';
+            $indexContent .= '</head></html>';
             GeneralUtility::writeFile($sessionSavePath . '/index.html', $indexContent);
         }
     }
@@ -188,6 +206,9 @@ class SessionService implements \TYPO3\CMS\Core\SingletonInterface
     private function renewSession()
     {
         session_regenerate_id();
+        if (!$this->hasSameSiteCookieSupport()) {
+            $this->resendCookieHeader([$this->cookieName]);
+        }
         return session_id();
     }
 
@@ -250,6 +271,21 @@ class SessionService implements \TYPO3\CMS\Core\SingletonInterface
     }
 
     /**
+     * Marks this session as an "authorized by backend user" one.
+     * This is called by BackendModuleController from backend context.
+     */
+    public function setAuthorizedBackendSession()
+    {
+        $_SESSION['authorized'] = true;
+        $_SESSION['lastSessionId'] = time();
+        $_SESSION['tstamp'] = time();
+        $_SESSION['expires'] = time() + $this->expireTimeInMinutes * 60;
+        $_SESSION['isBackendSession'] = true;
+        // Renew the session id to avoid session fixation
+        $this->renewSession();
+    }
+
+    /**
      * Check if we have an already authorized session
      *
      * @return bool TRUE if this session has been authorized before (by a correct password)
@@ -257,6 +293,23 @@ class SessionService implements \TYPO3\CMS\Core\SingletonInterface
     public function isAuthorized()
     {
         if (!$_SESSION['authorized']) {
+            return false;
+        }
+        if ($_SESSION['expires'] < time()) {
+            // This session has already expired
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Check if we have an authorized session from a system maintainer
+     *
+     * @return bool TRUE if this session has been authorized before and initialized by a backend system maintainer
+     */
+    public function isAuthorizedBackendUserSession()
+    {
+        if (!$_SESSION['authorized'] || !$_SESSION['isBackendSession']) {
             return false;
         }
         if ($_SESSION['expires'] < time()) {
@@ -305,9 +358,9 @@ class SessionService implements \TYPO3\CMS\Core\SingletonInterface
     /**
      * Add a message to "Flash" message storage.
      *
-     * @param \TYPO3\CMS\Install\Status\StatusInterface $message A message to add
+     * @param FlashMessage $message A message to add
      */
-    public function addMessage(\TYPO3\CMS\Install\Status\StatusInterface $message)
+    public function addMessage(FlashMessage $message)
     {
         if (!is_array($_SESSION['messages'])) {
             $_SESSION['messages'] = [];
@@ -318,7 +371,7 @@ class SessionService implements \TYPO3\CMS\Core\SingletonInterface
     /**
      * Return stored session messages and flush.
      *
-     * @return array<\TYPO3\CMS\Install\Status\StatusInterface> Messages
+     * @return FlashMessage[] Messages
      */
     public function getMessagesAndFlush()
     {
@@ -431,7 +484,8 @@ class SessionService implements \TYPO3\CMS\Core\SingletonInterface
         }
         if (!$result) {
             throw new Exception(
-                'Session file not writable. Please check permission on typo3temp/var/InstallToolSessions and its subdirectories.',
+                'Session file not writable. Please check permission on ' .
+                Environment::getVarPath() . '/session and its subdirectories.',
                 1424355157
             );
         }
@@ -485,5 +539,26 @@ class SessionService implements \TYPO3\CMS\Core\SingletonInterface
     public function __destruct()
     {
         session_write_close();
+    }
+
+    /**
+     * Check if php session.auto_start is enabled
+     *
+     * @return bool TRUE if session.auto_start is enabled, FALSE if disabled
+     */
+    protected function isSessionAutoStartEnabled()
+    {
+        return $this->getIniValueBoolean('session.auto_start');
+    }
+
+    /**
+     * Cast an on/off php ini value to boolean
+     *
+     * @param string $configOption
+     * @return bool TRUE if the given option is enabled, FALSE if disabled
+     */
+    protected function getIniValueBoolean($configOption)
+    {
+        return filter_var(ini_get($configOption), FILTER_VALIDATE_BOOLEAN, [FILTER_REQUIRE_SCALAR, FILTER_NULL_ON_FAILURE]);
     }
 }

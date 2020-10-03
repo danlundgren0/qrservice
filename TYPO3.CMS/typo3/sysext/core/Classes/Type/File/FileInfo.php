@@ -13,7 +13,9 @@ namespace TYPO3\CMS\Core\Type\File;
  *
  * The TYPO3 project - inspiring people to share!
  */
+
 use TYPO3\CMS\Core\Type\TypeInterface;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * A SPL FileInfo class providing general information related to a file.
@@ -22,6 +24,9 @@ class FileInfo extends \SplFileInfo implements TypeInterface
 {
     /**
      * Return the mime type of a file.
+     *
+     * TYPO3 specific settings in $GLOBALS['TYPO3_CONF_VARS']['SYS']['FileInfo']['fileExtensionToMimeType'] take
+     * precedence over native resolving.
      *
      * @return string|bool Returns the mime type or FALSE if the mime type could not be discovered
      */
@@ -43,22 +48,54 @@ class FileInfo extends \SplFileInfo implements TypeInterface
             }
         }
 
-        if (isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][\TYPO3\CMS\Core\Type\File\FileInfo::class]['mimeTypeGuessers'])
-            && is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][\TYPO3\CMS\Core\Type\File\FileInfo::class]['mimeTypeGuesser'])
-        ) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][\TYPO3\CMS\Core\Type\File\FileInfo::class]['mimeTypeGuesser'] as $mimeTypeGuesser) {
-                $hookParameters = [
-                    'mimeType' => &$mimeType
-                ];
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][\TYPO3\CMS\Core\Type\File\FileInfo::class]['mimeTypeGuessers'] ?? [] as $mimeTypeGuesser) {
+            $hookParameters = [
+                'mimeType' => &$mimeType
+            ];
 
-                \TYPO3\CMS\Core\Utility\GeneralUtility::callUserFunction(
-                    $mimeTypeGuesser,
-                    $hookParameters,
-                    $this
-                );
-            }
+            GeneralUtility::callUserFunction(
+                $mimeTypeGuesser,
+                $hookParameters,
+                $this
+            );
         }
 
         return $mimeType;
+    }
+
+    /**
+     * Returns the file extensions appropiate for a the MIME type detected in the file. For types that commonly have
+     * multiple file extensions, such as JPEG images, then the return value is multiple extensions, for instance that
+     * could be ['jpeg', 'jpg', 'jpe', 'jfif']. For unknown types not available in the magic.mime database
+     * (/etc/magic.mime, /etc/mime.types, ...), then return value is an empty array.
+     *
+     * TYPO3 specific settings in $GLOBALS['TYPO3_CONF_VARS']['SYS']['FileInfo']['fileExtensionToMimeType'] take
+     * precedence over native resolving.
+     *
+     * @return string[]
+     */
+    public function getMimeExtensions(): array
+    {
+        $mimeExtensions = [];
+        if ($this->isFile()) {
+            $fileExtensionToMimeTypeMapping = $GLOBALS['TYPO3_CONF_VARS']['SYS']['FileInfo']['fileExtensionToMimeType'];
+            $mimeType = $this->getMimeType();
+            if (in_array($mimeType, $fileExtensionToMimeTypeMapping, true)) {
+                $mimeExtensions = array_keys($fileExtensionToMimeTypeMapping, $mimeType, true);
+            } elseif (function_exists('finfo_file')) {
+                $fileInfo = new \finfo();
+                $mimeExtensions = array_filter(
+                    GeneralUtility::trimExplode(
+                        '/',
+                        (string)$fileInfo->file($this->getPathname(), FILEINFO_EXTENSION)
+                    ),
+                    function ($item) {
+                        // filter invalid items ('???' is used if not found in magic.mime database)
+                        return $item !== '' && $item !== '???';
+                    }
+                );
+            }
+        }
+        return $mimeExtensions;
     }
 }

@@ -13,14 +13,51 @@ namespace TYPO3\CMS\Core\Service;
  *
  * The TYPO3 project - inspiring people to share!
  */
+
+use Psr\Log\LoggerAwareInterface;
+use Psr\Log\LoggerAwareTrait;
+use TYPO3\CMS\Core\Security\BlockSerializationTrait;
 use TYPO3\CMS\Core\TimeTracker\TimeTracker;
+use TYPO3\CMS\Core\Utility\CommandUtility;
+use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Parent class for "Services" classes
  */
-abstract class AbstractService
+abstract class AbstractService implements LoggerAwareInterface
 {
+    use BlockSerializationTrait;
+    use LoggerAwareTrait;
+
+    // General error - something went wrong
+    const ERROR_GENERAL = -1;
+
+    // During execution it showed that the service is not available and
+    // should be ignored. The service itself should call $this->setNonAvailable()
+    const ERROR_SERVICE_NOT_AVAILABLE = -2;
+
+    // Passed subtype is not possible with this service
+    const ERROR_WRONG_SUBTYPE = -3;
+
+    // Passed subtype is not possible with this service
+    const ERROR_NO_INPUT = -4;
+
+    // File not found which the service should process
+    const ERROR_FILE_NOT_FOUND = -20;
+
+    // File not readable
+    const ERROR_FILE_NOT_READABLE = -21;
+
+    // File not writable
+    // @todo: check writeable vs. writable
+    const ERROR_FILE_NOT_WRITEABLE = -22;
+
+    // Passed subtype is not possible with this service
+    const ERROR_PROGRAM_NOT_FOUND = -40;
+
+    // Passed subtype is not possible with this service
+    const ERROR_PROGRAM_FAILED = -41;
     /**
      * @var array service description array
      */
@@ -30,11 +67,6 @@ abstract class AbstractService
      * @var array error stack
      */
     public $error = [];
-
-    /**
-     * @var bool Defines if debug messages should be written with \TYPO3\CMS\Core\Utility\GeneralUtility::devLog
-     */
-    public $writeDevLog = false;
 
     /**
      * @var string The output content. That's what the services produced as result.
@@ -125,9 +157,11 @@ abstract class AbstractService
     public function getServiceOption($optionName, $defaultValue = '', $includeDefaultConfig = true)
     {
         $config = null;
-        $svOptions = $GLOBALS['TYPO3_CONF_VARS']['SVCONF'][$this->info['serviceType']];
-        if (isset($svOptions[$this->info['serviceKey']][$optionName])) {
-            $config = $svOptions[$this->info['serviceKey']][$optionName];
+        $serviceType = $this->info['serviceType'] ?? '';
+        $serviceKey = $this->info['serviceKey'] ?? '';
+        $svOptions = $GLOBALS['TYPO3_CONF_VARS']['SVCONF'][$serviceType] ?? [];
+        if (isset($svOptions[$serviceKey][$optionName])) {
+            $config = $svOptions[$serviceKey][$optionName];
         } elseif ($includeDefaultConfig && isset($svOptions['default'][$optionName])) {
             $config = $svOptions['default'][$optionName];
         }
@@ -143,26 +177,26 @@ abstract class AbstractService
      *
      ***************************************/
     /**
-     * Logs debug messages to \TYPO3\CMS\Core\Utility\GeneralUtility::devLog()
+     * Logs debug messages to the Logging API
      *
      * @param string $msg Debug message
      * @param int $severity Severity: 0 is info, 1 is notice, 2 is warning, 3 is fatal error, -1 is "OK" message
-     * @param array|bool $dataVar dditional data you want to pass to the logger.
+     * @param array|bool $dataVar additional data you want to pass to the logger.
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
      */
     public function devLog($msg, $severity = 0, $dataVar = false)
     {
-        if ($this->writeDevLog) {
-            GeneralUtility::devLog($msg, $this->info['serviceKey'], $severity, $dataVar);
-        }
+        trigger_error('AbstractService->devLog() will be removed with TYPO3 v10.0.', E_USER_DEPRECATED);
+        $this->logger->debug($this->info['serviceKey'] . ': ' . $msg, (array)$dataVar);
     }
 
     /**
      * Puts an error on the error stack. Calling without parameter adds a general error.
      *
-     * @param int $errNum Error number (see T3_ERR_SV_* constants)
+     * @param int $errNum Error number (see class constants)
      * @param string $errMsg Error message
      */
-    public function errorPush($errNum = T3_ERR_SV_GENERAL, $errMsg = 'Unspecified error occurred')
+    public function errorPush($errNum = self::ERROR_GENERAL, $errMsg = 'Unspecified error occurred')
     {
         $this->error[] = ['nr' => $errNum, 'msg' => $errMsg];
         /** @var \TYPO3\CMS\Core\TimeTracker\TimeTracker $timeTracker */
@@ -259,9 +293,9 @@ abstract class AbstractService
         $ret = true;
         $progList = GeneralUtility::trimExplode(',', $progList, true);
         foreach ($progList as $prog) {
-            if (!\TYPO3\CMS\Core\Utility\CommandUtility::checkCommand($prog)) {
+            if (!CommandUtility::checkCommand($prog)) {
                 // Program not found
-                $this->errorPush(T3_ERR_SV_PROG_NOT_FOUND, 'External program not found: ' . $prog);
+                $this->errorPush(self::ERROR_PROGRAM_NOT_FOUND, 'External program not found: ' . $prog);
                 $ret = false;
             }
         }
@@ -273,7 +307,7 @@ abstract class AbstractService
      */
     public function deactivateService()
     {
-        \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::deactivateService($this->info['serviceType'], $this->info['serviceKey']);
+        ExtensionManagementUtility::deactivateService($this->info['serviceType'], $this->info['serviceKey']);
     }
 
     /***************************************
@@ -294,10 +328,10 @@ abstract class AbstractService
             if (@is_readable($absFile)) {
                 $checkResult = $absFile;
             } else {
-                $this->errorPush(T3_ERR_SV_FILE_READ, 'File is not readable: ' . $absFile);
+                $this->errorPush(self::ERROR_FILE_NOT_READABLE, 'File is not readable: ' . $absFile);
             }
         } else {
-            $this->errorPush(T3_ERR_SV_FILE_NOT_FOUND, 'File not found: ' . $absFile);
+            $this->errorPush(self::ERROR_FILE_NOT_FOUND, 'File not found: ' . $absFile);
         }
         return $checkResult;
     }
@@ -315,7 +349,7 @@ abstract class AbstractService
         if ($this->checkInputFile($absFile)) {
             $out = file_get_contents($absFile);
             if ($out === false) {
-                $this->errorPush(T3_ERR_SV_FILE_READ, 'Can not read from file: ' . $absFile);
+                $this->errorPush(self::ERROR_FILE_NOT_READABLE, 'Can not read from file: ' . $absFile);
             }
         }
         return $out;
@@ -338,7 +372,7 @@ abstract class AbstractService
                 @fwrite($fd, $content);
                 @fclose($fd);
             } else {
-                $this->errorPush(T3_ERR_SV_FILE_WRITE, 'Can not write to file: ' . $absFile);
+                $this->errorPush(self::ERROR_FILE_NOT_WRITEABLE, 'Can not write to file: ' . $absFile);
                 $absFile = false;
             }
         }
@@ -359,7 +393,7 @@ abstract class AbstractService
             $this->registerTempFile($absFile);
         } else {
             $ret = false;
-            $this->errorPush(T3_ERR_SV_FILE_WRITE, 'Can not create temp file.');
+            $this->errorPush(self::ERROR_FILE_NOT_WRITEABLE, 'Can not create temp file.');
         }
         return $ret;
     }
@@ -367,7 +401,7 @@ abstract class AbstractService
     /**
      * Register file which should be deleted afterwards.
      *
-     * @param string File name with absolute path.
+     * @param string $absFile File name with absolute path.
      */
     public function registerTempFile($absFile)
     {
@@ -512,8 +546,7 @@ abstract class AbstractService
         $this->reset();
         // Check for external programs which are defined by $info['exec']
         if (trim($this->info['exec'])) {
-            if (!$this->checkExec($this->info['exec'])) {
-            }
+            $this->checkExec($this->info['exec']);
         }
         return $this->getLastError() === true;
     }

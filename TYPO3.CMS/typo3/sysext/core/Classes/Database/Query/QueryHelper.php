@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Database\Query;
 
 /*
@@ -46,7 +46,9 @@ class QueryHelper
 
         return array_map(
             function ($expression) {
-                list($fieldName, $order) = GeneralUtility::trimExplode(' ', $expression, true);
+                $fieldNameOrderArray = GeneralUtility::trimExplode(' ', $expression, true);
+                $fieldName = $fieldNameOrderArray[0] ?? null;
+                $order = $fieldNameOrderArray[1] ?? null;
 
                 return [$fieldName, $order];
             },
@@ -72,15 +74,15 @@ class QueryHelper
 
         return array_map(
             function ($expression) {
-                list($tableName, $as, $alias) = GeneralUtility::trimExplode(' ', $expression, true);
+                [$tableName, $as, $alias] = array_pad(GeneralUtility::trimExplode(' ', $expression, true), 3, null);
 
                 if (!empty($as) && strtolower($as) === 'as' && !empty($alias)) {
                     return [$tableName, $alias];
-                } elseif (!empty($as) && empty($alias)) {
-                    return [$tableName, $as];
-                } else {
-                    return [$tableName, null];
                 }
+                if (!empty($as) && empty($alias)) {
+                    return [$tableName, $as];
+                }
+                return [$tableName, null];
             },
             $tableExpressions
         );
@@ -139,7 +141,8 @@ class QueryHelper
         // Catch the edge case that the table name is unquoted and the
         // table alias is actually quoted. This will not work in the case
         // that the quoted table alias contains whitespace.
-        if ($tableAlias[0] === '`' || $tableAlias[0] === '"') {
+        $firstCharacterOfTableAlias = $tableAlias[0] ?? null;
+        if ($firstCharacterOfTableAlias === '`' || $firstCharacterOfTableAlias === '"') {
             $tableAlias = substr($tableAlias, 1, -1);
         }
 
@@ -179,7 +182,27 @@ class QueryHelper
             'datetime' => [
                 'empty' => '0000-00-00 00:00:00',
                 'format' => 'Y-m-d H:i:s'
+            ],
+            'time' => [
+                'empty' => '00:00:00',
+                'format' => 'H:i:s'
             ]
+        ];
+    }
+
+    /**
+     * Returns the date and time types compatible with the given database.
+     *
+     * This simple method should probably be deprecated and removed later.
+     *
+     * @return array
+     */
+    public static function getDateTimeTypes()
+    {
+        return [
+            'date',
+            'datetime',
+            'time'
         ];
     }
 

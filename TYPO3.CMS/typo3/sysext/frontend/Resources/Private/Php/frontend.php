@@ -13,12 +13,13 @@
  */
 
 // Exit early if php requirement is not satisfied.
-if (version_compare(PHP_VERSION, '7.0.0', '<')) {
-    die('This version of TYPO3 CMS requires PHP 7.0 or above');
+if (PHP_VERSION_ID < 70200) {
+    die('This version of TYPO3 CMS requires PHP 7.2 or above');
 }
 
-// Set up the application for the Frontend
+// Set up the application for the frontend
 call_user_func(function () {
     $classLoader = require __DIR__ . '/../../../../../../vendor/autoload.php';
-    (new \TYPO3\CMS\Frontend\Http\Application($classLoader))->run();
+    \TYPO3\CMS\Core\Core\SystemEnvironmentBuilder::run(0, \TYPO3\CMS\Core\Core\SystemEnvironmentBuilder::REQUESTTYPE_FE);
+    \TYPO3\CMS\Core\Core\Bootstrap::init($classLoader)->get(\TYPO3\CMS\Frontend\Http\Application::class)->run();
 });

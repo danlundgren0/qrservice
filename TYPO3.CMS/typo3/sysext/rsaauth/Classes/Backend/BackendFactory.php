@@ -46,7 +46,7 @@ class BackendFactory
      *
      * @var AbstractBackend
      */
-    protected static $selectedBackend = null;
+    protected static $selectedBackend;
 
     /**
      * Obtains a backend. This function will return a non-abstract class, which
@@ -60,10 +60,10 @@ class BackendFactory
         if (!self::$initialized) {
             // Backend does not exist yet. Create it.
             foreach (self::$availableBackends as $backend) {
-                $backendObject = \TYPO3\CMS\Core\Utility\GeneralUtility::getUserObj($backend);
+                $backendObject = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance($backend);
                 // Check that it is derived from the proper base class
                 if ($backendObject instanceof AbstractBackend) {
-                    /** @var $backendObject AbstractBackend */
+                    /** @var AbstractBackend $backendObject */
                     if ($backendObject->isAvailable()) {
                         // The backend is available, save it and stop the loop
                         self::$selectedBackend = $backendObject;

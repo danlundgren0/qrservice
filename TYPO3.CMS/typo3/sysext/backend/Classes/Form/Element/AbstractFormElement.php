@@ -16,13 +16,13 @@ namespace TYPO3\CMS\Backend\Form\Element;
 
 use TYPO3\CMS\Backend\Form\AbstractNode;
 use TYPO3\CMS\Backend\Form\NodeFactory;
-use TYPO3\CMS\Backend\Form\Utility\FormEngineUtility;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Base class for form elements of FormEngine. Contains several helper methods used by single elements.
@@ -211,7 +211,7 @@ abstract class AbstractFormElement extends AbstractNode
                 if (isset($formatOptions['appendAge']) && $formatOptions['appendAge']) {
                     $age = BackendUtility::calcAge(
                         $GLOBALS['EXEC_TIME'] - $itemValue,
-                        $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.minutesHoursDaysYears')
+                        $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.minutesHoursDaysYears')
                     );
                     $value .= ' (' . $age . ')';
                 }
@@ -219,32 +219,32 @@ abstract class AbstractFormElement extends AbstractNode
                 break;
             case 'datetime':
                 // compatibility with "eval" (type "input")
-                if ($itemValue !== '' && !is_null($itemValue)) {
-                    $itemValue = date('H:i d-m-Y', (int)$itemValue);
+                if ($itemValue !== '' && $itemValue !== null) {
+                    $itemValue = BackendUtility::datetime((int)$itemValue);
                 }
                 break;
             case 'time':
                 // compatibility with "eval" (type "input")
-                if ($itemValue !== '' && !is_null($itemValue)) {
-                    $itemValue = gmdate('H:i', (int)$itemValue);
+                if ($itemValue !== '' && $itemValue !== null) {
+                    $itemValue = BackendUtility::time((int)$itemValue, false);
                 }
                 break;
             case 'timesec':
                 // compatibility with "eval" (type "input")
-                if ($itemValue !== '' && !is_null($itemValue)) {
-                    $itemValue = gmdate('H:i:s', (int)$itemValue);
+                if ($itemValue !== '' && $itemValue !== null) {
+                    $itemValue = BackendUtility::time((int)$itemValue);
                 }
                 break;
             case 'year':
                 // compatibility with "eval" (type "input")
-                if ($itemValue !== '' && !is_null($itemValue)) {
+                if ($itemValue !== '' && $itemValue !== null) {
                     $itemValue = date('Y', (int)$itemValue);
                 }
                 break;
             case 'int':
                 $baseArr = ['dec' => 'd', 'hex' => 'x', 'HEX' => 'X', 'oct' => 'o', 'bin' => 'b'];
                 $base = isset($formatOptions['base']) ? trim($formatOptions['base']) : '';
-                $format = isset($baseArr[$base]) ? $baseArr[$base] : 'd';
+                $format = $baseArr[$base] ?? 'd';
                 $itemValue = sprintf('%' . $format, $itemValue);
                 break;
             case 'float':
@@ -307,301 +307,84 @@ abstract class AbstractFormElement extends AbstractNode
         return ceil($size * $compensationForFormFields);
     }
 
+    /***********************************************
+     * CheckboxElement related methods
+     ***********************************************/
+
     /**
-     * @return bool TRUE if wizards are disabled on a global level
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9 - remove together with renderWizards(), log is thrown in renderWizards()
+     * Creates checkbox parameters
+     *
+     * @param string $itemName Form element name
+     * @param int $formElementValue The value of the checkbox (representing checkboxes with the bits)
+     * @param int $checkbox Checkbox # (0-9?)
+     * @param int $checkboxesCount Total number of checkboxes in the array.
+     * @param string $additionalJavaScript Additional JavaScript for the onclick handler.
+     * @return string The onclick attribute + possibly the checked-option set.
+     * @internal
      */
-    protected function isWizardsDisabled()
+    protected function checkBoxParams($itemName, $formElementValue, $checkbox, $checkboxesCount, $additionalJavaScript = ''): string
     {
-        return !empty($this->data['disabledWizards']);
+        $elementName = 'document.editform[' . GeneralUtility::quoteJSvalue($itemName) . ']';
+        $checkboxPow = 2 ** $checkbox;
+        $onClick = $elementName . '.value=this.checked?(' . $elementName . '.value|' . $checkboxPow . '):('
+            . $elementName . '.value&' . ((2 ** $checkboxesCount) - 1 - $checkboxPow) . ');' . $additionalJavaScript;
+        return ' onclick="' . htmlspecialchars($onClick) . '"' . ($formElementValue & $checkboxPow ? ' checked="checked"' : '');
     }
 
     /**
-     * Rendering wizards for form fields.
+     * Calculates the bootstrap grid classes based on the amount of columns
+     * defined in the checkbox item TCA
      *
-     * Deprecated, old "wizard" API. This method will be removed in v9, but is kept for
-     * backwards compatibility. Extensions that give the item HTML in $itemKinds, trigger
-     * the legacy mode of this method which wraps calculated wizards around the given item HTML.
-     *
-     * This method is deprecated and will vanish in v9. Migrate old wizards to the "fieldWizard",
-     * "fieldInformation" and "fieldControl" API instead.
-     *
-     * @param null|array $itemKinds Array with the real item in the first value. Array in legacy mode, else null
-     * @param array $wizConf The "wizards" key from the config array for the field (from TCA)
-     * @param string $table Table name
-     * @param array $row The record array
-     * @param string $fieldName The field name
-     * @param array $PA Additional configuration array.
-     * @param string $itemName The field name
-     * @param array $specConf Special configuration if available.
-     * @param bool $RTE Whether the RTE could have been loaded.
-     * @return string|array String in legacy mode, an array with the buttons and the controls in non-legacy mode
-     * @throws \InvalidArgumentException
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
+     * @param $cols
+     * @return array
+     * @internal
      */
-    protected function renderWizards(
-        $itemKinds = null,
-        $wizConf = null,
-        $table = null,
-        $row = null,
-        $fieldName = null,
-        $PA = null,
-        $itemName = null,
-        $specConf = null,
-        $RTE = null
-    ) {
-        if ($itemKinds !== null) {
-            // Deprecation log if the old $itemsKinds array comes in containing the item HTML - all core elements
-            // deliver null here. If not null, the legacy mode of the method is enabled that wraps the calculated
-            // wizards around given item HTML.
-            GeneralUtility::logDeprecatedFunction();
-        }
-        $item = '';
-        if (is_array($itemKinds)) {
-            $item = $itemKinds[0];
-        }
-
-        if ($wizConf === null) {
-            $wizConf = $this->data['parameterArray']['fieldConf']['config']['wizards'] ?? null;
-        }
-        if ($table === null) {
-            $table = $this->data['tableName'];
-        }
-        if ($row === null) {
-            $row = $this->data['databaseRow'];
-        }
-        if ($fieldName === null) {
-            $fieldName = $this->data['fieldName'];
-        }
-        if ($PA === null) {
-            $PA = $this->data['parameterArray'];
-        }
-        if ($itemName === null) {
-            $itemName = $PA['itemFormElName'];
-        }
-        if ($RTE === null) {
-            $RTE = false;
-            if ((bool)$this->data['parameterArray']['fieldConf']['config']['enableRichtext'] === true) {
-                $RTE = true;
-            }
-        }
-
-        // Return not changed main item directly if wizards are disabled
-        if (!is_array($wizConf) || $this->isWizardsDisabled()) {
-            if ($itemKinds === null) {
-                return [
-                    'fieldControl' => [],
-                    'fieldWizard' => [],
-                ];
-            } else {
-                return $item;
-            }
-        }
-
-        $languageService = $this->getLanguageService();
-
-        $fieldChangeFunc = $PA['fieldChangeFunc'];
-        $md5ID = 'ID' . GeneralUtility::shortMD5($itemName);
-        $prefixOfFormElName = 'data[' . $table . '][' . $row['uid'] . '][' . $fieldName . ']';
-        $flexFormPath = '';
-        if (GeneralUtility::isFirstPartOfStr($PA['itemFormElName'], $prefixOfFormElName)) {
-            $flexFormPath = str_replace('][', '/', substr($PA['itemFormElName'], strlen($prefixOfFormElName) + 1, -1));
-        }
-
-        // Add a suffix-value if the item is a selector box with renderType "selectSingleBox":
-        if ($PA['fieldConf']['config']['type'] === 'select' && (int)$PA['fieldConf']['config']['maxitems'] > 1 && $PA['fieldConf']['config']['renderType'] === 'selectSingleBox') {
-            $itemName .= '[]';
-        }
-
-        $buttonWizards = [];
-        $otherWizards = [];
-        foreach ($wizConf as $wizardIdentifier => $wizardConfiguration) {
-            if (!isset($wizardConfiguration['module']['name']) && isset($wizardConfiguration['script'])) {
-                throw new \InvalidArgumentException('The way registering a wizard in TCA has changed in 6.2 and was removed in CMS 7. '
-                    . 'Please set module[name]=module_name instead of using script=path/to/script.php in your TCA. ', 1437750231);
-            }
-
-            // If an identifier starts with "_", this is a configuration option like _POSITION and not a wizard
-            if ($wizardIdentifier[0] === '_') {
-                continue;
-            }
-
-            // Sanitize wizard type
-            $wizardConfiguration['type'] = (string)$wizardConfiguration['type'];
-
-            // Wizards can be shown based on selected "type" of record. If this is the case, the wizard configuration
-            // is set to enableByTypeConfig = 1, and the wizardIdentifier is found in $wizardsEnabledByType
-            $wizardIsEnabled = true;
-            // Disable if wizard is for RTE fields only and the handled field is no RTE field or RTE can not be loaded
-            if (isset($wizardConfiguration['RTEonly']) && (bool)$wizardConfiguration['RTEonly'] && !$RTE) {
-                $wizardIsEnabled = false;
-            }
-            // Disable if wizard is for not-new records only and we're handling a new record
-            if (isset($wizardConfiguration['notNewRecords']) && $wizardConfiguration['notNewRecords'] && !MathUtility::canBeInterpretedAsInteger($row['uid'])) {
-                $wizardIsEnabled = false;
-            }
-            // Wizard types script, colorbox and popup must contain a module name configuration
-            if (!isset($wizardConfiguration['module']['name']) && in_array($wizardConfiguration['type'], ['script', 'colorbox', 'popup'], true)) {
-                $wizardIsEnabled = false;
-            }
-
-            if (!$wizardIsEnabled) {
-                continue;
-            }
-
-            // Title / icon:
-            $iTitle = htmlspecialchars($languageService->sL($wizardConfiguration['title']));
-            if (isset($wizardConfiguration['icon'])) {
-                $icon = FormEngineUtility::getIconHtml($wizardConfiguration['icon'], $iTitle, $iTitle);
-            } else {
-                $icon = $iTitle;
-            }
-
-            switch ($wizardConfiguration['type']) {
-                case 'userFunc':
-                    GeneralUtility::logDeprecatedFunction();
-                    $params = [];
-                    $params['params'] = $wizardConfiguration['params'];
-                    $params['exampleImg'] = $wizardConfiguration['exampleImg'];
-                    $params['table'] = $table;
-                    $params['uid'] = $row['uid'];
-                    $params['pid'] = $row['pid'];
-                    $params['field'] = $fieldName;
-                    $params['flexFormPath'] = $flexFormPath;
-                    $params['md5ID'] = $md5ID;
-                    $params['returnUrl'] = $this->data['returnUrl'];
-
-                    $params['formName'] = 'editform';
-                    $params['itemName'] = $itemName;
-                    $params['hmac'] = GeneralUtility::hmac($params['formName'] . $params['itemName'], 'wizard_js');
-                    $params['fieldChangeFunc'] = $fieldChangeFunc;
-                    $params['fieldChangeFuncHash'] = GeneralUtility::hmac(serialize($fieldChangeFunc));
-
-                    $params['item'] = $item;
-                    $params['icon'] = $icon;
-                    $params['iTitle'] = $iTitle;
-                    $params['wConf'] = $wizardConfiguration;
-                    $params['row'] = $row;
-                    $otherWizards[] = GeneralUtility::callUserFunction($wizardConfiguration['userFunc'], $params, $this);
-                    break;
-
-                case 'script':
-                    GeneralUtility::logDeprecatedFunction();
-                    $params = [];
-                    $params['params'] = $wizardConfiguration['params'];
-                    $params['exampleImg'] = $wizardConfiguration['exampleImg'];
-                    $params['table'] = $table;
-                    $params['uid'] = $row['uid'];
-                    $params['pid'] = $row['pid'];
-                    $params['field'] = $fieldName;
-                    $params['flexFormPath'] = $flexFormPath;
-                    $params['md5ID'] = $md5ID;
-                    $params['returnUrl'] = $this->data['returnUrl'];
-
-                    // Resolving script filename and setting URL.
-                    $urlParameters = [];
-                    if (isset($wizardConfiguration['module']['urlParameters']) && is_array($wizardConfiguration['module']['urlParameters'])) {
-                        $urlParameters = $wizardConfiguration['module']['urlParameters'];
-                    }
-                    $wScript = BackendUtility::getModuleUrl($wizardConfiguration['module']['name'], $urlParameters);
-                    $url = $wScript . (strstr($wScript, '?') ? '' : '?') . GeneralUtility::implodeArrayForUrl('', ['P' => $params]);
-                    $buttonWizards[] =
-                        '<a class="btn btn-default" href="' . htmlspecialchars($url) . '" onclick="this.blur(); return !TBE_EDITOR.isFormChanged();">'
-                            . $icon .
-                        '</a>';
-                    break;
-
-                case 'popup':
-                    GeneralUtility::logDeprecatedFunction();
-                    $params = [];
-                    $params['params'] = $wizardConfiguration['params'];
-                    $params['exampleImg'] = $wizardConfiguration['exampleImg'];
-                    $params['table'] = $table;
-                    $params['uid'] = $row['uid'];
-                    $params['pid'] = $row['pid'];
-                    $params['field'] = $fieldName;
-                    $params['flexFormPath'] = $flexFormPath;
-                    $params['md5ID'] = $md5ID;
-                    $params['returnUrl'] = $this->data['returnUrl'];
-
-                    $params['formName'] = 'editform';
-                    $params['itemName'] = $itemName;
-                    $params['hmac'] = GeneralUtility::hmac($params['formName'] . $params['itemName'], 'wizard_js');
-                    $params['fieldChangeFunc'] = $fieldChangeFunc;
-                    $params['fieldChangeFuncHash'] = GeneralUtility::hmac(serialize($fieldChangeFunc));
-
-                    // Resolving script filename and setting URL.
-                    $urlParameters = [];
-                    if (isset($wizardConfiguration['module']['urlParameters']) && is_array($wizardConfiguration['module']['urlParameters'])) {
-                        $urlParameters = $wizardConfiguration['module']['urlParameters'];
-                    }
-                    $wScript = BackendUtility::getModuleUrl($wizardConfiguration['module']['name'], $urlParameters);
-                    $url = $wScript . (strstr($wScript, '?') ? '' : '?') . GeneralUtility::implodeArrayForUrl('', ['P' => $params]);
-
-                    $onlyIfSelectedJS = '';
-                    if (isset($wizardConfiguration['popup_onlyOpenIfSelected']) && $wizardConfiguration['popup_onlyOpenIfSelected']) {
-                        $notSelectedText = $languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:mess.noSelItemForEdit');
-                        $onlyIfSelectedJS =
-                            'if (!TBE_EDITOR.curSelected(' . GeneralUtility::quoteJSvalue($itemName) . ')){' .
-                                'alert(' . GeneralUtility::quoteJSvalue($notSelectedText) . ');' .
-                                'return false;' .
-                            '}';
-                    }
-                    $aOnClick =
-                        'this.blur();' .
-                        $onlyIfSelectedJS .
-                        'vHWin=window.open(' . GeneralUtility::quoteJSvalue($url) . '+\'&P[currentValue]=\'+TBE_EDITOR.rawurlencode(' .
-                                'document.editform[' . GeneralUtility::quoteJSvalue($itemName) . '].value,300' .
-                            ')' .
-                            '+\'&P[currentSelectedValues]=\'+TBE_EDITOR.curSelected(' . GeneralUtility::quoteJSvalue($itemName) . '),' .
-                            GeneralUtility::quoteJSvalue('popUp' . $md5ID) . ',' .
-                            GeneralUtility::quoteJSvalue($wizardConfiguration['JSopenParams']) .
-                        ');' .
-                        'vHWin.focus();' .
-                        'return false;';
-
-                    $buttonWizards[] =
-                        '<a class="btn btn-default" href="#" onclick="' . htmlspecialchars($aOnClick) . '">' .
-                            $icon .
-                        '</a>';
-                    break;
-            }
-        }
-
-        if ($itemKinds === null) {
-            // Return an array with the two wizard types directly if the legacy mode
-            // is not enabled.
-            return [
-                'fieldControl' => $buttonWizards,
-                'fieldWizard' => $otherWizards,
+    protected function calculateColumnMarkup(int $cols): array
+    {
+        $colWidth = (int)floor(12 / $cols);
+        $colClass = 'col-md-12';
+        $colClear = [];
+        if ($colWidth === 6) {
+            $colClass = 'col-sm-6';
+            $colClear = [
+                2 => 'visible-sm-block visible-md-block visible-lg-block',
+            ];
+        } elseif ($colWidth === 4) {
+            $colClass = 'col-sm-4';
+            $colClear = [
+                3 => 'visible-sm-block visible-md-block visible-lg-block',
+            ];
+        } elseif ($colWidth === 3) {
+            $colClass = 'col-sm-6 col-md-3';
+            $colClear = [
+                2 => 'visible-sm-block',
+                4 => 'visible-md-block visible-lg-block',
+            ];
+        } elseif ($colWidth <= 2) {
+            $colClass = 'checkbox-column col-sm-6 col-md-3 col-lg-2';
+            $colClear = [
+                2 => 'visible-sm-block',
+                4 => 'visible-md-block',
+                6 => 'visible-lg-block'
             ];
         }
+        return [$colClass, $colClear];
+    }
 
-        // For each rendered wizard, put them together around the item.
-        if (!empty($buttonWizards) || !empty($otherWizards)) {
-            $innerContent = '';
-            if (!empty($buttonWizards)) {
-                $innerContent .= '<div class="btn-group' . ($wizConf['_VERTICAL'] ? ' btn-group-vertical' : '') . '">' . implode('', $buttonWizards) . '</div>';
-            }
-            $innerContent .= implode(' ', $otherWizards);
-
-            // Position
-            if ($wizConf['_POSITION'] === 'left') {
-                $innerContent = '<div class="form-wizards-items-aside">' . $innerContent . '</div><div class="form-wizards-element">' . $item . '</div>';
-            } elseif ($wizConf['_POSITION'] === 'top') {
-                $innerContent = '<div class="form-wizards-items-top">' . $innerContent . '</div><div class="form-wizards-element">' . $item . '</div>';
-            } elseif ($wizConf['_POSITION'] === 'bottom') {
-                $innerContent = '<div class="form-wizards-element">' . $item . '</div><div class="form-wizards-items-bottom">' . $innerContent . '</div>';
-            } else {
-                $innerContent = '<div class="form-wizards-element">' . $item . '</div><div class="form-wizards-items-aside">' . $innerContent . '</div>';
-            }
-            $item = '
-				<div class="form-wizards-wrap">
-					' . $innerContent . '
-				</div>';
+    /**
+     * Append the value of a form field to its label
+     *
+     * @param string|int $label The label which can also be an integer
+     * @param string|int $value The value which can also be an integer
+     * @return string|int
+     */
+    protected function appendValueToLabelInDebugMode($label, $value)
+    {
+        if ($value !== '' && $GLOBALS['TYPO3_CONF_VARS']['BE']['debug'] && $this->getBackendUser()->isAdmin()) {
+            return $label . ' [' . $value . ']';
         }
 
-        return $item;
+        return $label;
     }
 
     /**
@@ -610,5 +393,15 @@ abstract class AbstractFormElement extends AbstractNode
     protected function getLanguageService()
     {
         return $GLOBALS['LANG'];
+    }
+
+    /**
+     * Returns the current BE user.
+     *
+     * @return BackendUserAuthentication
+     */
+    protected function getBackendUser()
+    {
+        return $GLOBALS['BE_USER'];
     }
 }

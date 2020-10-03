@@ -14,9 +14,9 @@ namespace TYPO3\CMS\Core\Resource\Service;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Core\Log\LogManager;
 use TYPO3\CMS\Core\Resource;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\MathUtility;
 use TYPO3\CMS\Extbase\Object\ObjectManager;
 use TYPO3\CMS\Extbase\SignalSlot\Dispatcher;
 
@@ -40,11 +40,6 @@ class FileProcessingService
      */
     protected $signalSlotDispatcher;
 
-    /**
-     * @var \TYPO3\CMS\Core\Log\Logger
-     */
-    protected $logger;
-
     const SIGNAL_PreFileProcess = 'preFileProcess';
     const SIGNAL_PostFileProcess = 'postFileProcess';
 
@@ -58,10 +53,6 @@ class FileProcessingService
     {
         $this->storage = $storage;
         $this->driver = $driver;
-
-        /** @var $logManager LogManager */
-        $logManager = GeneralUtility::makeInstance(LogManager::class);
-        $this->logger = $logManager->getLogger(__CLASS__);
     }
 
     /**
@@ -77,7 +68,21 @@ class FileProcessingService
      */
     public function processFile(Resource\FileInterface $fileObject, Resource\ResourceStorage $targetStorage, $taskType, $configuration)
     {
-        /** @var $processedFileRepository Resource\ProcessedFileRepository */
+        // Enforce default configuration for preview processing here,
+        // to be sure we find already processed files below,
+        // which we wouldn't if we would change the configuration later, as configuration is part of the lookup.
+        if ($taskType === Resource\ProcessedFile::CONTEXT_IMAGEPREVIEW) {
+            $configuration = Resource\Processing\LocalPreviewHelper::preProcessConfiguration($configuration);
+        }
+        // Ensure that the processing configuration which is part of the hash sum is properly cast, so
+        // unnecessary duplicate images are not produced, see #80942
+        foreach ($configuration as &$value) {
+            if (MathUtility::canBeInterpretedAsInteger($value)) {
+                $value = (int)$value;
+            }
+        }
+
+        /** @var Resource\ProcessedFileRepository $processedFileRepository */
         $processedFileRepository = GeneralUtility::makeInstance(Resource\ProcessedFileRepository::class);
 
         $processedFile = $processedFileRepository->findOneByOriginalFileAndTaskTypeAndConfiguration($fileObject, $taskType, $configuration);
@@ -113,12 +118,12 @@ class FileProcessingService
         if ($processedFile->isNew() || (!$processedFile->usesOriginalFile() && !$processedFile->exists()) ||
             $processedFile->isOutdated()) {
             $task = $processedFile->getTask();
-            /** @var $processor Resource\Processing\LocalImageProcessor */
+            /** @var Resource\Processing\LocalImageProcessor $processor */
             $processor = GeneralUtility::makeInstance(Resource\Processing\LocalImageProcessor::class);
             $processor->processTask($task);
 
             if ($task->isExecuted() && $task->isSuccessful() && $processedFile->isProcessed()) {
-                /** @var $processedFileRepository Resource\ProcessedFileRepository */
+                /** @var Resource\ProcessedFileRepository $processedFileRepository */
                 $processedFileRepository = GeneralUtility::makeInstance(Resource\ProcessedFileRepository::class);
                 $processedFileRepository->add($processedFile);
             }

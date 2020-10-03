@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Finishers;
 
 /*
@@ -52,7 +52,7 @@ class ClosureFinisher extends AbstractFinisher
      */
     protected function executeInternal()
     {
-        /** @var $closure \Closure */
+        /** @var \Closure $closure */
         $closure = $this->parseOption('closure');
         if ($closure === null) {
             return;

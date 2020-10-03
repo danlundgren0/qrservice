@@ -14,6 +14,8 @@ namespace TYPO3\CMS\Frontend\ContentObject\Menu;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Type\File\ImageInfo;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
@@ -21,9 +23,16 @@ use TYPO3\CMS\Frontend\Imaging\GifBuilder;
 
 /**
  * ImageMap based menus
+ *
+ * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0
  */
 class ImageMenuContentObject extends AbstractMenuContentObject
 {
+    public function __construct()
+    {
+        trigger_error('IMGMENU and ImageMenuContentObject will be removed in TYPO3 v10.0, you should build accessible websites with TMENU/Text, and optional images on top, which can be achieved with TypoScript.', E_USER_DEPRECATED);
+    }
+
     /**
      * Calls procesItemStates() so that the common configuration for the menu items are resolved into individual configuration per item.
      * Calls makeImageMap() to generate the image map image-file
@@ -49,7 +58,7 @@ class ImageMenuContentObject extends AbstractMenuContentObject
      * The data of the files are stored in $this->result
      *
      * @param array $conf Array with configuration for each item.
-     * @access private
+     * @internal
      * @see generate()
      */
     public function makeImageMap($conf)
@@ -59,7 +68,6 @@ class ImageMenuContentObject extends AbstractMenuContentObject
         }
         if (is_array($this->mconf['main.'])) {
             $gifCreator = GeneralUtility::makeInstance(GifBuilder::class);
-            $gifCreator->init();
             $itemsConf = $conf;
             $conf = $this->mconf['main.'];
             if (is_array($conf)) {
@@ -191,7 +199,7 @@ class ImageMenuContentObject extends AbstractMenuContentObject
                     echo '<h3>Renumbered GIFBUILDER object:</h3>';
                     debug($gifCreator->setup);
                 }
-                GeneralUtility::mkdir_deep(PATH_site . 'typo3temp/assets/menu/');
+                GeneralUtility::mkdir_deep(Environment::getPublicPath() . '/typo3temp/assets/menu/');
                 $gifFileName = $gifCreator->fileName('assets/menu/');
                 // Gets the ImageMap from the cache...
                 $cache = $this->getCache();
@@ -199,9 +207,9 @@ class ImageMenuContentObject extends AbstractMenuContentObject
                 $imgMap = $cache->get($imgHash);
                 // File exists
                 if ($imgMap && file_exists($gifFileName)) {
-                    $info = @getimagesize($gifFileName);
-                    $w = $info[0];
-                    $h = $info[1];
+                    $imageInfo = GeneralUtility::makeInstance(ImageInfo::class, $gifFileName);
+                    $w = $imageInfo->getWidth();
+                    $h = $imageInfo->getHeight();
                 } else {
                     // file is generated
                     $gifCreator->make();

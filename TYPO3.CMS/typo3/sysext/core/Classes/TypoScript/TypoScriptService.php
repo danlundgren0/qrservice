@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\TypoScript;
 
 /*
@@ -29,13 +29,14 @@ class TypoScriptService
      *
      * @param array $typoScriptArray The TypoScript array (e.g. array('foo' => 'TEXT', 'foo.' => array('bar' => 'baz')))
      * @return array e.g. array('foo' => array('_typoScriptNodeValue' => 'TEXT', 'bar' => 'baz'))
+     * @internal
      */
     public function convertTypoScriptArrayToPlainArray(array $typoScriptArray): array
     {
         foreach ($typoScriptArray as $key => $value) {
             if (substr((string)$key, -1) === '.') {
                 $keyWithoutDot = substr((string)$key, 0, -1);
-                $typoScriptNodeValue = isset($typoScriptArray[$keyWithoutDot]) ? $typoScriptArray[$keyWithoutDot] : null;
+                $typoScriptNodeValue = $typoScriptArray[$keyWithoutDot] ?? null;
                 if (is_array($value)) {
                     $typoScriptArray[$keyWithoutDot] = $this->convertTypoScriptArrayToPlainArray($value);
                     if ($typoScriptNodeValue !== null) {
@@ -60,7 +61,6 @@ class TypoScriptService
      *
      * @param array $plainArray An TypoScript Array with Extbase Syntax (without dot but with _typoScriptNodeValue)
      * @return array array with TypoScript as usual (with dot)
-     * @api
      */
     public function convertPlainArrayToTypoScriptArray(array $plainArray): array
     {
@@ -73,7 +73,7 @@ class TypoScriptService
                 }
                 $typoScriptArray[$key . '.'] = $this->convertPlainArrayToTypoScriptArray($value);
             } else {
-                $typoScriptArray[$key] = $value === null ? '' : $value;
+                $typoScriptArray[$key] = $value ?? '';
             }
         }
         return $typoScriptArray;
@@ -90,6 +90,7 @@ class TypoScriptService
      * @param array $originalConfiguration A TypoScript array
      * @param int $splitCount The number of items for which to generated individual TypoScript arrays
      * @return array The individualized TypoScript array.
+     * @internal
      */
     public function explodeConfigurationForOptionSplit(array $originalConfiguration, int $splitCount): array
     {
@@ -124,13 +125,13 @@ class TypoScriptService
                         $firstC = count($first);
                     }
                     $middle = [];
-                    if ($main[1]) {
+                    if (!empty($main[1])) {
                         $middle = explode('||', $main[1]);
                         $middleC = count($middle);
                     }
                     $last = [];
                     $value = '';
-                    if ($main[2]) {
+                    if (!empty($main[2])) {
                         $last = explode('||', $main[2]);
                         $lastC = count($last);
                         $value = $last[0];

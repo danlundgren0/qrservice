@@ -1,4 +1,4 @@
-﻿.. ==================================================
+.. ==================================================
 .. FOR YOUR INFORMATION
 .. --------------------------------------------------
 .. -*- coding: utf-8 -*- with BOM.
@@ -9,8 +9,9 @@
 
 .. _installation:
 
-Installation
-------------
+====================
+Installation & setup
+====================
 
 
 .. toctree::
@@ -20,8 +21,6 @@ Installation
 
    Installing/Index
    SetupCheck/Index
-   SchedulerUser/Index
-   SchedulerShellScript/Index
    CronJob/Index
    BaseTasks/Index
 

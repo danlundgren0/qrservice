@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Tests\Unit;
 
 /*
@@ -16,17 +17,16 @@ namespace EBT\ExtensionBuilder\Tests\Unit;
 
 use EBT\ExtensionBuilder\Domain\Model\ClassObject\ClassObject;
 use EBT\ExtensionBuilder\Parser\NodeFactory;
-use EBT\ExtensionBuilder\Service\Parser;
+use EBT\ExtensionBuilder\Service\ParserService;
 use EBT\ExtensionBuilder\Service\Printer;
 use EBT\ExtensionBuilder\Tests\BaseUnitTest;
 use org\bovigo\vfs\vfsStream;
-use PhpParser\Lexer;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 class PrinterTest extends BaseUnitTest
 {
     /**
-     * @var \EBT\ExtensionBuilder\Service\Parser
+     * @var \EBT\ExtensionBuilder\Service\ParserService
      */
     protected $parserService = null;
     /**
@@ -47,7 +47,7 @@ class PrinterTest extends BaseUnitTest
         $this->printerService = $this->getAccessibleMock(Printer::class, ['dummy']);
         $nodeFactory = new NodeFactory();
         $this->printerService->_set('nodeFactory', $nodeFactory);
-        $this->parserService = new Parser(new Lexer());
+        $this->parserService = new ParserService();
     }
 
     /**
@@ -55,7 +55,8 @@ class PrinterTest extends BaseUnitTest
      */
     public function printSimplePropertyClass()
     {
-        self::assertTrue(is_writable($this->tmpDir), 'Directory not writable: ' . $this->tmpDir . '. Can\'t compare rendered files');
+        self::assertTrue(is_writable($this->tmpDir),
+            'Directory not writable: ' . $this->tmpDir . '. Can\'t compare rendered files');
         $fileName = 'SimpleProperty.php';
         $classFileObject = $this->parseAndWrite($fileName);
         $this->compareClasses($classFileObject, $this->tmpDir . $fileName);
@@ -237,7 +238,8 @@ class PrinterTest extends BaseUnitTest
         $classFileObject = $this->parseAndWrite($fileName);
         $tags = $classFileObject->getFirstClass()->getMethod('testMethod')->getTagValues('param');
         self::assertEquals(count($tags), 3);
-        self::assertSame($tags, ['$string', 'array $arr', '\\EBT\\ExtensionBuilder\\Parser\\Utility\\NodeConverter $n']);
+        self::assertSame($tags,
+            ['$string', 'array $arr', '\\EBT\\ExtensionBuilder\\Parser\\Utility\\NodeConverter $n']);
     }
 
     /**
@@ -277,9 +279,10 @@ class PrinterTest extends BaseUnitTest
                 0 => 'number',
                 1 => 'stringParam',
                 2 => 'arr',
-                3 => 'booleanParam',
-                4 => 'float',
-                5 => 'n',
+                3 => 'n',
+                4 => 'booleanParam',
+                5 => 'float',
+
             ]
         );
         $this->compareGeneratedCodeWithOriginal($fileName, $this->tmpDir . $fileName);
@@ -321,9 +324,11 @@ class PrinterTest extends BaseUnitTest
         if (!class_exists($className)) {
             require_once($pathToGeneratedFile);
         }
-        self::assertTrue(class_exists($className), 'Class "' . $className . '" does not exist! Tried ' . $pathToGeneratedFile);
+        self::assertTrue(class_exists($className),
+            'Class "' . $className . '" does not exist! Tried ' . $pathToGeneratedFile);
         $reflectedClass = new \ReflectionClass($className);
-        self::assertEquals(count($reflectedClass->getMethods()), count($classObject->getMethods()), 'Method count does not match');
+        self::assertEquals(count($reflectedClass->getMethods()), count($classObject->getMethods()),
+            'Method count does not match');
         self::assertEquals(count($reflectedClass->getProperties()), count($classObject->getProperties()));
         self::assertEquals(count($reflectedClass->getConstants()), count($classObject->getConstants()));
         if (strlen($classObject->getNamespaceName()) > 0) {

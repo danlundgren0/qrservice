@@ -15,16 +15,28 @@ namespace TYPO3\CMS\Core\Resource\Processing;
  */
 
 use TYPO3\CMS\Core\Imaging\GraphicalFunctions;
+use TYPO3\CMS\Core\Imaging\ImageMagickFile;
 use TYPO3\CMS\Core\Resource\File;
 use TYPO3\CMS\Core\Utility\CommandUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
+use TYPO3\CMS\Frontend\Imaging\GifBuilder;
 
 /**
  * Helper for creating local image previews using TYPO3s image processing classes.
  */
 class LocalPreviewHelper
 {
+    /**
+     * Default preview configuration
+     *
+     * @var array
+     */
+    protected static $defaultConfiguration = [
+        'width' => 64,
+        'height' => 64,
+    ];
+
     /**
      * @var LocalImageProcessor
      */
@@ -36,6 +48,20 @@ class LocalPreviewHelper
     public function __construct(LocalImageProcessor $processor)
     {
         $this->processor = $processor;
+    }
+
+    /**
+     * Enforce default configuration for preview processing
+     *
+     * @param array $configuration
+     * @return array
+     */
+    public static function preProcessConfiguration(array $configuration): array
+    {
+        $configuration = array_replace(static::$defaultConfiguration, $configuration);
+        $configuration['width'] = MathUtility::forceIntegerInRange($configuration['width'], 1, 1000);
+        $configuration['height'] = MathUtility::forceIntegerInRange($configuration['height'], 1, 1000);
+        return $configuration;
     }
 
     /**
@@ -55,16 +81,12 @@ class LocalPreviewHelper
      * with the returned width and height. This is for example useful for SVG images.
      *
      * @param TaskInterface $task
-     * @return array|NULL
+     * @return array|null
      */
     public function process(TaskInterface $task)
     {
         $sourceFile = $task->getSourceFile();
-
-        // Merge custom configuration with default configuration
-        $configuration = array_merge(['width' => 64, 'height' => 64], $task->getConfiguration());
-        $configuration['width'] = MathUtility::forceIntegerInRange($configuration['width'], 1);
-        $configuration['height'] = MathUtility::forceIntegerInRange($configuration['height'], 1);
+        $configuration = static::preProcessConfiguration($task->getConfiguration());
 
         // Do not scale up if the source file has a size and the target size is larger
         if ($sourceFile->getProperty('width') > 0 && $sourceFile->getProperty('height') > 0
@@ -116,10 +138,7 @@ class LocalPreviewHelper
 
         $originalFileName = $file->getForLocalProcessing(false);
         if ($file->getExtension() === 'svg') {
-            /** @var $gifBuilder \TYPO3\CMS\Frontend\Imaging\GifBuilder */
-            $gifBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Frontend\Imaging\GifBuilder::class);
-            $gifBuilder->init();
-            $gifBuilder->absPrefix = PATH_site;
+            $gifBuilder = GeneralUtility::makeInstance(GifBuilder::class);
             $info = $gifBuilder->getImageDimensions($originalFileName);
             $newInfo = $gifBuilder->getImageScale($info, $configuration['width'], $configuration['height'], []);
             $result = [
@@ -130,8 +149,13 @@ class LocalPreviewHelper
         } else {
             // Create the temporary file
             if ($GLOBALS['TYPO3_CONF_VARS']['GFX']['processor_enabled']) {
-                $parameters = '-sample ' . $configuration['width'] . 'x' . $configuration['height'] . ' '
-                    . CommandUtility::escapeShellArgument($originalFileName) . '[0] ' . CommandUtility::escapeShellArgument($targetFilePath);
+                $arguments = CommandUtility::escapeShellArguments([
+                    'width' => $configuration['width'],
+                    'height' => $configuration['height'],
+                ]);
+                $parameters = '-sample ' . $arguments['width'] . 'x' . $arguments['height']
+                    . ' ' . ImageMagickFile::fromFilePath($originalFileName, 0)
+                    . ' ' . CommandUtility::escapeShellArgument($targetFilePath);
 
                 $cmd = CommandUtility::imageMagickCommand('convert', $parameters) . ' 2>&1';
                 CommandUtility::exec($cmd);

@@ -27,18 +27,14 @@ $url_0: url(background_pixel.png);
 
 .module-body {
 	&.index {
-		#typo3-inner-docbody {
-			min-height: 900px;
-			padding: 0 !important;
-			position: relative !important;
-		}
+		min-height: 900px;
 		a {
 			color: $color_storm_dust_approx;
 			font-weight: 700;
 		}
 	}
-	&.domainmodelling #typo3-inner-docbody {
-		padding: 0 !important;
+	&.domainmodelling {
+		padding: 89px 0 0 0 !important;
 	}
 }
 
@@ -120,7 +116,6 @@ div {
 	}
 	&#domainModelEditor {
 		height: 100%;
-		margin-top: 65px;
 		width: 100%;
 	}
 	&.WireIt-Container-ddhandle {
@@ -170,6 +165,7 @@ div {
 		width: 149px;
 		textarea {
 			@extend %extend_1;
+			border: 1px solid #ddd;
 			width: 100%;
 			&:focus {
 				font-weight: 400;
@@ -295,6 +291,7 @@ div {
 		textarea {
 			@extend %extend_1;
 			width: 100%;
+			border: 1px solid #ddd;
 		}
 		input[type=text] {
 			@extend %extend_1;
@@ -483,7 +480,7 @@ div {
 }
 
 #modelingLayer {
-	height: 95%;
+	height: 100%;
 }
 
 #domainModelEditor {

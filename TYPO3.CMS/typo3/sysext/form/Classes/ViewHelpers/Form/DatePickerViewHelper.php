@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\ViewHelpers\Form;
 
 /*
@@ -19,7 +19,6 @@ namespace TYPO3\CMS\Form\ViewHelpers\Form;
 
 use TYPO3\CMS\Core\Page\PageRenderer;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Extbase\Property\PropertyMapper;
 use TYPO3\CMS\Fluid\ViewHelpers\Form\AbstractFormFieldViewHelper;
 use TYPO3\CMS\Form\ViewHelpers\RenderRenderableViewHelper;
 
@@ -29,7 +28,6 @@ use TYPO3\CMS\Form\ViewHelpers\RenderRenderableViewHelper;
  * Note: Requires jQuery UI to be included on the page.
  *
  * Scope: frontend
- * @api
  */
 class DatePickerViewHelper extends AbstractFormFieldViewHelper
 {
@@ -55,15 +53,13 @@ class DatePickerViewHelper extends AbstractFormFieldViewHelper
 
     /**
      * Initialize the arguments.
-     *
-     * @api
      */
     public function initializeArguments()
     {
         parent::initializeArguments();
         $this->registerTagAttribute('size', 'int', 'The size of the input field');
         $this->registerTagAttribute('placeholder', 'string', 'Specifies a short hint that describes the expected value of an input element');
-        $this->registerArgument('errorClass', 'string', 'CSS class to set if there are errors for this view helper', false, 'f3-form-error');
+        $this->registerArgument('errorClass', 'string', 'CSS class to set if there are errors for this ViewHelper', false, 'f3-form-error');
         $this->registerArgument('initialDate', 'string', 'Initial date (@see http://www.php.net/manual/en/datetime.formats.php for supported formats)');
         $this->registerArgument('enableDatePicker', 'bool', 'Enable the Datepicker', false, true);
         $this->registerArgument('previewMode', 'bool', 'Preview mde flag', true, false);
@@ -75,19 +71,18 @@ class DatePickerViewHelper extends AbstractFormFieldViewHelper
      * Renders the text field, hidden field and required javascript
      *
      * @return string
-     * @api
      */
     public function render()
     {
         $enableDatePicker = $this->arguments['enableDatePicker'];
         $dateFormat = $this->arguments['dateFormat'];
         $previewMode = (bool)$this->arguments['previewMode'];
-        $placeholder = $this->arguments['placeholder'];
+        $placeholder = $this->arguments['additionalAttributes']['placeholder'] ?? $this->arguments['placeholder'];
 
         $name = $this->getName();
         $this->registerFieldNameForFormTokenGeneration($name);
 
-        $this->tag->addAttribute('type', 'input');
+        $this->tag->addAttribute('type', 'text');
         $this->tag->addAttribute('name', $name . '[date]');
 
         if ($this->hasArgument('id')) {
@@ -101,7 +96,7 @@ class DatePickerViewHelper extends AbstractFormFieldViewHelper
         }
 
         if ($enableDatePicker) {
-            $this->tag->addAttribute('readonly', true);
+            $this->tag->addAttribute('readonly', 'readonly');
             if (!$previewMode) {
                 $datePickerDateFormat = $this->convertDateFormatToDatePickerFormat($dateFormat);
                 $this->renderInlineJavascript($id, $datePickerDateFormat);
@@ -123,12 +118,12 @@ class DatePickerViewHelper extends AbstractFormFieldViewHelper
     }
 
     /**
-     * @return null|\DateTime
+     * @return \DateTime|null
      */
     protected function getSelectedDate()
     {
         /** @var FormRuntime $formRuntime */
-        $formRuntime =  $this->renderingContext
+        $formRuntime = $this->renderingContext
             ->getViewHelperVariableContainer()
             ->get(RenderRenderableViewHelper::class, 'formRuntime');
 
@@ -194,7 +189,8 @@ class DatePickerViewHelper extends AbstractFormFieldViewHelper
                         });
                     });
                 }
-            ');
+            '
+        );
     }
 
     /**

@@ -18,6 +18,7 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Adds extra fields into 'media' flexform
+ * @internal this is a concrete TYPO3 hook implementation and solely used for EXT:frontend and not part of TYPO3's Core API.
  */
 class MediaItemHooks implements \TYPO3\CMS\Core\SingletonInterface
 {
@@ -29,11 +30,9 @@ class MediaItemHooks implements \TYPO3\CMS\Core\SingletonInterface
      */
     public function customMediaRenderTypes(&$params, $conf)
     {
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/hooks/class.tx_cms_mediaitems.php']['customMediaRenderTypes'])) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/hooks/class.tx_cms_mediaitems.php']['customMediaRenderTypes'] as $classRef) {
-                $hookObj = GeneralUtility::getUserObj($classRef);
-                $hookObj->customMediaRenderTypes($params, $conf);
-            }
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/hooks/class.tx_cms_mediaitems.php']['customMediaRenderTypes'] ?? [] as $className) {
+            $hookObj = GeneralUtility::makeInstance($className);
+            $hookObj->customMediaRenderTypes($params, $conf);
         }
     }
 
@@ -45,11 +44,9 @@ class MediaItemHooks implements \TYPO3\CMS\Core\SingletonInterface
      */
     public function customMediaParams(&$params, $conf)
     {
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/hooks/class.tx_cms_mediaitems.php']['customMediaParams'])) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/hooks/class.tx_cms_mediaitems.php']['customMediaParams'] as $classRef) {
-                $hookObj = GeneralUtility::getUserObj($classRef);
-                $hookObj->customMediaParams($params, $conf);
-            }
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/hooks/class.tx_cms_mediaitems.php']['customMediaParams'] ?? [] as $className) {
+            $hookObj = GeneralUtility::makeInstance($className);
+            $hookObj->customMediaParams($params, $conf);
         }
     }
 }

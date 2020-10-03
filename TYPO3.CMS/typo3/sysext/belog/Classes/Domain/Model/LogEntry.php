@@ -19,6 +19,7 @@ namespace TYPO3\CMS\Belog\Domain\Model;
  * This model is 'complete': All current database properties are in there.
  *
  * @todo : This should be stuffed to some more central place
+ * @internal This class is a TYPO3 Backend implementation and is not considered part of the Public TYPO3 API.
  */
 class LogEntry extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
 {
@@ -279,6 +280,24 @@ class LogEntry extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     }
 
     /**
+     * Get class name for the error code
+     *
+     * @return string
+     */
+    public function getErrorIconClass(): string
+    {
+        switch ($this->getError()) {
+            case 1:
+                return 'status-dialog-warning';
+            case 2:
+            case 3:
+                return 'status-dialog-error';
+            default:
+                return 'empty-empty';
+        }
+    }
+
+    /**
      * Set details
      *
      * @param string $details
@@ -295,6 +314,9 @@ class LogEntry extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
      */
     public function getDetails()
     {
+        if ($this->type === 255) {
+            return str_replace('###IP###', $this->ip, $this->details);
+        }
         return $this->details;
     }
 

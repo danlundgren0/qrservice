@@ -29,7 +29,7 @@ QRcodes Generator
 		comma,separated,list,of,keywords
 
 	:Copyright:
-		2017
+		2020
 
 	:Author:
 		Dan Lundgren

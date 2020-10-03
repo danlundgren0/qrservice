@@ -14,8 +14,8 @@ namespace TYPO3\CMS\Backend\Form\Container;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Render a given list of field of a TCA table.
@@ -38,7 +38,7 @@ class ListOfFieldsContainer extends AbstractContainer
         $recordTypeValue = $this->data['recordTypeValue'];
 
         // Load the description content for the table if requested
-        if ($GLOBALS['TCA'][$table]['interface']['always_description']) {
+        if (!empty($GLOBALS['TCA'][$table]['interface']['always_description'])) {
             $languageService = $this->getLanguageService();
             $languageService->loadSingleTableDescription($table);
         }

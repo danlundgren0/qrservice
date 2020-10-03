@@ -16,8 +16,10 @@ namespace TYPO3\CMS\Rsaauth\Controller;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use TYPO3\CMS\Rsaauth\Backend\BackendFactory;
-use TYPO3\CMS\Rsaauth\Storage\StorageFactory;
+use TYPO3\CMS\Core\Http\JsonResponse;
+use TYPO3\CMS\Core\Http\Response;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Rsaauth\RsaEncryptionEncoder;
 
 /**
  * eID script "RsaPublicKeyGenerationController" to generate an rsa key
@@ -25,25 +27,50 @@ use TYPO3\CMS\Rsaauth\Storage\StorageFactory;
 class RsaPublicKeyGenerationController
 {
     /**
+     * @var RsaEncryptionEncoder
+     */
+    protected $encoder;
+
+    /**
+     * Set up dependencies
+     * @param RsaEncryptionEncoder|null $encoder
+     */
+    public function __construct(RsaEncryptionEncoder $encoder = null)
+    {
+        $this->encoder = $encoder ?: GeneralUtility::makeInstance(RsaEncryptionEncoder::class);
+    }
+
+    /**
      * @param ServerRequestInterface $request
-     * @param ResponseInterface $response
      * @return ResponseInterface
      */
-    public function processRequest(ServerRequestInterface $request, ResponseInterface $response)
+    public function processRequest(ServerRequestInterface $request): ResponseInterface
     {
-        /** @var \TYPO3\CMS\Rsaauth\Backend\AbstractBackend $backend */
-        $backend = BackendFactory::getBackend();
-        if ($backend === null) {
+        $keyPair = $this->encoder->getRsaPublicKey();
+
+        if ($keyPair === null) {
             // add a HTTP 500 error code, if an error occurred
-            return $response->withStatus(500);
+            return new JsonResponse(null, 500);
         }
 
-        $keyPair = $backend->createNewKeyPair();
-        $storage = StorageFactory::getStorage();
-        $storage->put($keyPair->getPrivateKey());
-        session_commit();
-        $content = $keyPair->getPublicKeyModulus() . ':' . sprintf('%x', $keyPair->getExponent()) . ':';
-        $response->getBody()->write($content);
+        switch ($request->getHeaderLine('content-type')) {
+            case 'application/json':
+                $data = [
+                    'publicKeyModulus' => $keyPair->getPublicKeyModulus(),
+                    'exponent' => sprintf('%x', $keyPair->getExponent()),
+                ];
+                $response = new JsonResponse($data);
+                break;
+
+            default:
+                trigger_error('Requesting RSA public keys without "Content-Type: application/json" will be removed in TYPO3 v10.0. Add this header to your AJAX request.', E_USER_DEPRECATED);
+
+                $content = $keyPair->getPublicKeyModulus() . ':' . sprintf('%x', $keyPair->getExponent()) . ':';
+                $response = new Response('php://temp', 200, ['Content-Type' => 'application/json; charset=utf-8']);
+                $response->getBody()->write($content);
+                break;
+        }
+
         return $response;
     }
 }

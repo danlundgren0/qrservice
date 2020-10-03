@@ -20,8 +20,6 @@ use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
 
 /**
  * A web specific response implementation
- *
- * @api
  */
 class Response extends \TYPO3\CMS\Extbase\Mvc\Response
 {
@@ -66,10 +64,12 @@ class Response extends \TYPO3\CMS\Extbase\Mvc\Response
      * @var array
      */
     protected $statusMessages = [
+        // INFORMATIONAL CODES
         100 => 'Continue',
         101 => 'Switching Protocols',
         102 => 'Processing',
-        // RFC 2518
+        103 => 'Early Hints',
+        // SUCCESS CODES
         200 => 'OK',
         201 => 'Created',
         202 => 'Accepted',
@@ -77,14 +77,20 @@ class Response extends \TYPO3\CMS\Extbase\Mvc\Response
         204 => 'No Content',
         205 => 'Reset Content',
         206 => 'Partial Content',
-        207 => 'Multi-Status',
+        207 => 'Multi-status',
+        208 => 'Already Reported',
+        226 => 'IM Used',
+        // REDIRECTION CODES
         300 => 'Multiple Choices',
         301 => 'Moved Permanently',
         302 => 'Found',
         303 => 'See Other',
         304 => 'Not Modified',
         305 => 'Use Proxy',
+        306 => 'Switch Proxy', // Deprecated
         307 => 'Temporary Redirect',
+        308 => 'Permanent Redirect',
+        // CLIENT ERROR
         400 => 'Bad Request',
         401 => 'Unauthorized',
         402 => 'Payment Required',
@@ -99,18 +105,32 @@ class Response extends \TYPO3\CMS\Extbase\Mvc\Response
         411 => 'Length Required',
         412 => 'Precondition Failed',
         413 => 'Request Entity Too Large',
-        414 => 'Request-URI Too Long',
+        414 => 'URI Too Long',
         415 => 'Unsupported Media Type',
-        416 => 'Requested Range Not Satisfiable',
+        416 => 'Requested range not satisfiable',
         417 => 'Expectation Failed',
+        418 => 'I\'m a teapot',
+        422 => 'Unprocessable Entity',
+        423 => 'Locked',
+        424 => 'Failed Dependency',
+        425 => 'Unordered Collection',
+        426 => 'Upgrade Required',
+        428 => 'Precondition Required',
+        429 => 'Too Many Requests',
+        431 => 'Request Header Fields Too Large',
+        451 => 'Unavailable For Legal Reasons',
+        // SERVER ERROR
         500 => 'Internal Server Error',
         501 => 'Not Implemented',
         502 => 'Bad Gateway',
         503 => 'Service Unavailable',
-        504 => 'Gateway Timeout',
-        505 => 'HTTP Version Not Supported',
+        504 => 'Gateway Time-out',
+        505 => 'HTTP Version not supported',
+        506 => 'Variant Also Negotiates',
         507 => 'Insufficient Storage',
-        509 => 'Bandwidth Limit Exceeded'
+        508 => 'Loop Detected',
+        509 => 'Bandwidth Limit Exceeded',
+        511 => 'Network Authentication Required',
     ];
 
     /**
@@ -120,6 +140,7 @@ class Response extends \TYPO3\CMS\Extbase\Mvc\Response
 
     /**
      * @param \TYPO3\CMS\Extbase\Service\EnvironmentService $environmentService
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function injectEnvironmentService(\TYPO3\CMS\Extbase\Service\EnvironmentService $environmentService)
     {
@@ -132,7 +153,6 @@ class Response extends \TYPO3\CMS\Extbase\Mvc\Response
      * @param int $code The status code
      * @param string $message If specified, this message is sent instead of the standard message
      * @throws \InvalidArgumentException if the specified status code is not valid
-     * @api
      */
     public function setStatus($code, $message = null)
     {
@@ -143,18 +163,28 @@ class Response extends \TYPO3\CMS\Extbase\Mvc\Response
             throw new \InvalidArgumentException('No message found for HTTP status code "' . $code . '".', 1220526014);
         }
         $this->statusCode = $code;
-        $this->statusMessage = $message === null ? $this->statusMessages[$code] : $message;
+        $this->statusMessage = $message ?? $this->statusMessages[$code];
     }
 
     /**
      * Returns status code and status message.
      *
      * @return string The status code and status message, eg. "404 Not Found
-     * @api
      */
     public function getStatus()
     {
         return $this->statusCode . ' ' . $this->statusMessage;
+    }
+
+    /**
+     * Returns the status code, if not set, uses the OK status code 200
+     *
+     * @return int
+     * @internal only use for backend module handling
+     */
+    public function getStatusCode()
+    {
+        return $this->statusCode ?: 200;
     }
 
     /**
@@ -164,11 +194,10 @@ class Response extends \TYPO3\CMS\Extbase\Mvc\Response
      * @param mixed $value The value of the given header
      * @param bool $replaceExistingHeader If a header with the same name should be replaced. Default is TRUE.
      * @throws \InvalidArgumentException
-     * @api
      */
     public function setHeader($name, $value, $replaceExistingHeader = true)
     {
-        if (strtoupper(substr($name, 0, 4)) === 'HTTP') {
+        if (stripos($name, 'HTTP') === 0) {
             throw new \InvalidArgumentException('The HTTP status header must be set via setStatus().', 1220541963);
         }
         if ($replaceExistingHeader === true || !isset($this->headers[$name])) {
@@ -182,13 +211,12 @@ class Response extends \TYPO3\CMS\Extbase\Mvc\Response
      * Returns the HTTP headers - including the status header - of this web response
      *
      * @return string[] The HTTP headers
-     * @api
      */
     public function getHeaders()
     {
         $preparedHeaders = [];
         if ($this->statusCode !== null) {
-            $protocolVersion = isset($_SERVER['SERVER_PROTOCOL']) ? $_SERVER['SERVER_PROTOCOL'] : 'HTTP/1.0';
+            $protocolVersion = $_SERVER['SERVER_PROTOCOL'] ?? 'HTTP/1.0';
             $statusHeader = $protocolVersion . ' ' . $this->statusCode . ' ' . $this->statusMessage;
             $preparedHeaders[] = $statusHeader;
         }
@@ -201,11 +229,20 @@ class Response extends \TYPO3\CMS\Extbase\Mvc\Response
     }
 
     /**
+     * Returns the HTTP headers grouped by name without the status header
+     *
+     * @return array all headers set for this request
+     * @internal only used within TYPO3 Core to convert to PSR-7 response headers
+     */
+    public function getUnpreparedHeaders(): array
+    {
+        return $this->headers;
+    }
+
+    /**
      * Sends the HTTP headers.
      *
      * If headers have already been sent, this method fails silently.
-     *
-     * @api
      */
     public function sendHeaders()
     {
@@ -219,8 +256,6 @@ class Response extends \TYPO3\CMS\Extbase\Mvc\Response
 
     /**
      * Renders and sends the whole web response
-     *
-     * @api
      */
     public function send()
     {
@@ -238,7 +273,6 @@ class Response extends \TYPO3\CMS\Extbase\Mvc\Response
      * @TODO The workround and the $request member should be removed again, once the PageRender does support non-cached USER_INTs
      * @param string $additionalHeaderData The value additional header
      * @throws \InvalidArgumentException
-     * @api
      */
     public function addAdditionalHeaderData($additionalHeaderData)
     {
@@ -258,7 +292,6 @@ class Response extends \TYPO3\CMS\Extbase\Mvc\Response
      * Returns the additional header data
      *
      * @return array The additional header data
-     * @api
      */
     public function getAdditionalHeaderData()
     {
@@ -267,6 +300,7 @@ class Response extends \TYPO3\CMS\Extbase\Mvc\Response
 
     /**
      * @param \TYPO3\CMS\Extbase\Mvc\Web\Request $request
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function setRequest(\TYPO3\CMS\Extbase\Mvc\Web\Request $request)
     {
@@ -275,6 +309,7 @@ class Response extends \TYPO3\CMS\Extbase\Mvc\Response
 
     /**
      * @return \TYPO3\CMS\Extbase\Mvc\Web\Request
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function getRequest()
     {
@@ -284,7 +319,8 @@ class Response extends \TYPO3\CMS\Extbase\Mvc\Response
     /**
      * Sends additional headers and returns the content
      *
-     * @return null|string
+     * @return string|null
+     * @internal only to be used within Extbase, not part of TYPO3 Core API.
      */
     public function shutdown()
     {

@@ -14,30 +14,36 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Format;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
  * Formats a number with custom precision, decimal point and grouped thousands.
+ * See https://www.php.net/manual/function.number-format.php.
  *
- * @see http://www.php.net/manual/en/function.number-format.php
+ * Examples
+ * ========
  *
- * = Examples =
+ * Defaults
+ * --------
  *
- * <code title="Defaults">
- * <f:format.number>423423.234</f:format.number>
- * </code>
- * <output>
- * 423,423.20
- * </output>
+ * ::
  *
- * <code title="With all parameters">
- * <f:format.number decimals="1" decimalSeparator="," thousandsSeparator=".">423423.234</f:format.number>
- * </code>
- * <output>
- * 423.423,2
- * </output>
+ *    <f:format.number>423423.234</f:format.number>
+ *
+ * ``423,423.20``
+ *
+ * With all parameters
+ * -------------------
+ *
+ * ::
+ *
+ *    <f:format.number decimals="1" decimalSeparator="," thousandsSeparator=".">
+ *        423423.234
+ *    </f:format.number>
+ *
+ * ``423.423,2``
  */
 class NumberViewHelper extends AbstractViewHelper
 {
@@ -57,7 +63,6 @@ class NumberViewHelper extends AbstractViewHelper
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('decimals', 'int', 'The number of digits after the decimal point', false, '2');
         $this->registerArgument('decimalSeparator', 'string', 'The decimal point character', false, '.');
         $this->registerArgument('thousandsSeparator', 'string', 'The character for grouping the thousand digits', false, ',');
@@ -80,6 +85,6 @@ class NumberViewHelper extends AbstractViewHelper
         $thousandsSeparator = $arguments['thousandsSeparator'];
 
         $stringToFormat = $renderChildrenClosure();
-        return number_format($stringToFormat, $decimals, $decimalSeparator, $thousandsSeparator);
+        return number_format((float)$stringToFormat, $decimals, $decimalSeparator, $thousandsSeparator);
     }
 }

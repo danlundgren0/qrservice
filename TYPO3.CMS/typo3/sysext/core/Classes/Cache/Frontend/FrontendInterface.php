@@ -16,7 +16,6 @@ namespace TYPO3\CMS\Core\Cache\Frontend;
 
 /**
  * Contract for a Cache (frontend)
- * @api
  */
 interface FrontendInterface
 {
@@ -40,7 +39,6 @@ interface FrontendInterface
      * Returns this cache's identifier
      *
      * @return string The identifier for this cache
-     * @api
      */
     public function getIdentifier();
 
@@ -58,7 +56,6 @@ interface FrontendInterface
      * @param mixed $data The data to cache - also depends on the concrete cache implementation
      * @param array $tags Tags to associate with this cache entry
      * @param int $lifetime Lifetime of this cache entry in seconds. If NULL is specified, the default lifetime is used. "0" means unlimited lifetime.
-     * @api
      */
     public function set($entryIdentifier, $data, array $tags = [], $lifetime = null);
 
@@ -67,25 +64,14 @@ interface FrontendInterface
      *
      * @param string $entryIdentifier Something which identifies the cache entry - depends on concrete cache
      * @return mixed
-     * @api
      */
     public function get($entryIdentifier);
-
-    /**
-     * Finds and returns all cache entries which are tagged by the specified tag.
-     *
-     * @param string $tag The tag to search for
-     * @return array An array with the content of all matching entries. An empty array if no entries matched
-     * @api
-     */
-    public function getByTag($tag);
 
     /**
      * Checks if a cache entry with the specified identifier exists.
      *
      * @param string $entryIdentifier An identifier specifying the cache entry
      * @return bool TRUE if such an entry exists, FALSE if not
-     * @api
      */
     public function has($entryIdentifier);
 
@@ -106,7 +92,6 @@ interface FrontendInterface
      * Removes all cache entries of this cache which are tagged by the specified tag.
      *
      * @param string $tag The tag the entries must have
-     * @api
      */
     public function flushByTag($tag);
 
@@ -114,14 +99,11 @@ interface FrontendInterface
      * Removes all cache entries of this cache which are tagged by any of the specified tags.
      *
      * @param string[] $tags List of tags
-     * @api
      */
     public function flushByTags(array $tags);
 
     /**
      * Does garbage collection
-     *
-     * @api
      */
     public function collectGarbage();
 
@@ -130,7 +112,6 @@ interface FrontendInterface
      *
      * @param string $identifier An identifier to be checked for validity
      * @return bool
-     * @api
      */
     public function isValidEntryIdentifier($identifier);
 
@@ -139,7 +120,6 @@ interface FrontendInterface
      *
      * @param string $tag A tag to be checked for validity
      * @return bool
-     * @api
      */
     public function isValidTag($tag);
 }

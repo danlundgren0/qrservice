@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Controller;
 
 /*
@@ -23,6 +23,9 @@ use TYPO3\CMS\Backend\Form\InlineStackProcessor;
 use TYPO3\CMS\Backend\Form\NodeFactory;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\DataHandling\DataHandler;
+use TYPO3\CMS\Core\Http\JsonResponse;
+use TYPO3\CMS\Core\Messaging\AbstractMessage;
+use TYPO3\CMS\Core\Messaging\FlashMessageService;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
@@ -36,16 +39,21 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
      * Create a new inline child via AJAX.
      *
      * @param ServerRequestInterface $request
-     * @param ResponseInterface $response
      * @return ResponseInterface
      */
-    public function createAction(ServerRequestInterface $request, ResponseInterface $response)
+    public function createAction(ServerRequestInterface $request): ResponseInterface
     {
-        $ajaxArguments = isset($request->getParsedBody()['ajax']) ? $request->getParsedBody()['ajax'] : $request->getQueryParams()['ajax'];
+        $ajaxArguments = $request->getParsedBody()['ajax'] ?? $request->getQueryParams()['ajax'];
         $parentConfig = $this->extractSignedParentConfigFromRequest((string)$ajaxArguments['context']);
 
         $domObjectId = $ajaxArguments[0];
         $inlineFirstPid = $this->getInlineFirstPidFromDomObjectId($domObjectId);
+        if (!MathUtility::canBeInterpretedAsInteger($inlineFirstPid) && strpos($inlineFirstPid, 'NEW') !== 0) {
+            throw new \RuntimeException(
+                'inlineFirstPid should either be an integer or a "NEW..." string',
+                1521220491
+            );
+        }
         $childChildUid = null;
         if (isset($ajaxArguments[1]) && MathUtility::canBeInterpretedAsInteger($ajaxArguments[1])) {
             $childChildUid = (int)$ajaxArguments[1];
@@ -68,7 +76,7 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
             $childVanillaUid = -1 * abs((int)$child['uid']);
         } else {
             // Else inline first Pid is the storage pid of new inline records
-            $childVanillaUid = (int)$inlineFirstPid;
+            $childVanillaUid = $inlineFirstPid;
         }
 
         $childTableName = $parentConfig['foreign_table'];
@@ -97,21 +105,6 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
         }
         $childData = $formDataCompiler->compile($formDataCompilerInput);
 
-        // Set language of new child record to the language of the parent record:
-        // @todo: To my understanding, the below case can't happen: With localizationMode select, lang overlays
-        // @todo: of children are only created with the "synchronize" button that will trigger a different ajax action.
-        // @todo: The edge case of new page overlay together with localized media field, this code won't kick in either.
-        // @deprecated: IRRE 'localizationMode' is deprecated and will be removed in TYPO3 CMS 9
-        /*
-        if ($parent['localizationMode'] === 'select' && MathUtility::canBeInterpretedAsInteger($parent['uid'])) {
-            $parentRecord = $inlineRelatedRecordResolver->getRecord($parent['table'], $parent['uid']);
-            $parentLanguageField = $GLOBALS['TCA'][$parent['table']]['ctrl']['languageField'];
-            $childLanguageField = $GLOBALS['TCA'][$child['table']]['ctrl']['languageField'];
-            if ($parentRecord[$parentLanguageField] > 0) {
-                $record[$childLanguageField] = $parentRecord[$parentLanguageField];
-            }
-        }
-         */
         if ($parentConfig['foreign_selector'] && $parentConfig['appearance']['useCombination']) {
             // We have a foreign_selector. So, we just created a new record on an intermediate table in $childData.
             // Now, if a valid id is given as second ajax parameter, the intermediate row should be connected to an
@@ -131,17 +124,17 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
                 $formDataCompilerInput = [
                     'command' => 'new',
                     'tableName' => $childData['processedTca']['columns'][$parentConfig['foreign_selector']]['config']['foreign_table'],
-                    'vanillaUid' => (int)$inlineFirstPid,
+                    'vanillaUid' => $inlineFirstPid,
                     'isInlineChild' => true,
                     'isInlineAjaxOpeningContext' => true,
                     'inlineStructure' => $inlineStackProcessor->getStructure(),
-                    'inlineFirstPid' => (int)$inlineFirstPid,
+                    'inlineFirstPid' => $inlineFirstPid,
                 ];
                 $childData['combinationChild'] = $formDataCompiler->compile($formDataCompilerInput);
             }
         }
 
-        $childData['inlineParentUid'] = (int)$parent['uid'];
+        $childData['inlineParentUid'] = $parent['uid'];
         $childData['renderType'] = 'inlineRecordContainer';
         $nodeFactory = GeneralUtility::makeInstance(NodeFactory::class);
         $childResult = $nodeFactory->create($childData)->render();
@@ -175,23 +168,20 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
         // Fade out and fade in the new record in the browser view to catch the user's eye
         $jsonArray['scriptCall'][] = 'inline.fadeOutFadeIn(' . GeneralUtility::quoteJSvalue($objectId . '_div') . ');';
 
-        $response->getBody()->write(json_encode($jsonArray));
-
-        return $response;
+        return new JsonResponse($jsonArray);
     }
 
     /**
      * Show the details of a child record.
      *
      * @param ServerRequestInterface $request
-     * @param ResponseInterface $response
      * @return ResponseInterface
      */
-    public function detailsAction(ServerRequestInterface $request, ResponseInterface $response)
+    public function detailsAction(ServerRequestInterface $request): ResponseInterface
     {
-        $ajaxArguments = isset($request->getParsedBody()['ajax']) ? $request->getParsedBody()['ajax'] : $request->getQueryParams()['ajax'];
+        $ajaxArguments = $request->getParsedBody()['ajax'] ?? $request->getQueryParams()['ajax'];
 
-        $domObjectId = $ajaxArguments[0];
+        $domObjectId = $ajaxArguments[0] ?? null;
         $inlineFirstPid = $this->getInlineFirstPidFromDomObjectId($domObjectId);
         $parentConfig = $this->extractSignedParentConfigFromRequest((string)$ajaxArguments['context']);
 
@@ -217,8 +207,14 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
                     ],
                 ],
             ],
+            'uid' => $parent['uid'],
             'tableName' => $parent['table'],
             'inlineFirstPid' => $inlineFirstPid,
+            // Hand over given original return url to compile stack. Needed if inline children compile links to
+            // another view (eg. edit metadata in a nested inline situation like news with inline content element image),
+            // so the back link is still the link from the original request. See issue #82525. This is additionally
+            // given down in TcaInline data provider to compiled children data.
+            'returnUrl' => $parentConfig['originalReturnUrl'],
         ];
 
         // Child, a record from this table should be rendered
@@ -254,9 +250,7 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
             $jsonArray['scriptCall'][] = 'inline.collapseAllRecords(' . GeneralUtility::quoteJSvalue($objectId) . ',' . GeneralUtility::quoteJSvalue($objectPrefix) . ',\'' . (int)$child['uid'] . '\');';
         }
 
-        $response->getBody()->write(json_encode($jsonArray));
-
-        return $response;
+        return new JsonResponse($jsonArray);
     }
 
     /**
@@ -264,14 +258,13 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
      * Handle AJAX calls to localize all records of a parent, localize a single record or to synchronize with the original language parent.
      *
      * @param ServerRequestInterface $request the incoming request
-     * @param ResponseInterface $response the empty response
      * @return ResponseInterface the filled response
      */
-    public function synchronizeLocalizeAction(ServerRequestInterface $request, ResponseInterface $response)
+    public function synchronizeLocalizeAction(ServerRequestInterface $request): ResponseInterface
     {
-        $ajaxArguments = isset($request->getParsedBody()['ajax']) ? $request->getParsedBody()['ajax'] : $request->getQueryParams()['ajax'];
-        $domObjectId = $ajaxArguments[0];
-        $type = $ajaxArguments[1];
+        $ajaxArguments = $request->getParsedBody()['ajax'] ?? $request->getQueryParams()['ajax'];
+        $domObjectId = $ajaxArguments[0] ?? null;
+        $type = $ajaxArguments[1] ?? null;
         $parentConfig = $this->extractSignedParentConfigFromRequest((string)$ajaxArguments['context']);
 
         /** @var InlineStackProcessor $inlineStackProcessor */
@@ -281,7 +274,11 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
         $inlineStackProcessor->injectAjaxConfiguration($parentConfig);
         $inlineFirstPid = $this->getInlineFirstPidFromDomObjectId($domObjectId);
 
-        $jsonArray = false;
+        $jsonArray = [
+            'data' => '',
+            'stylesheetFiles' => [],
+            'scriptCall' => [],
+        ];
         if ($type === 'localize' || $type === 'synchronize' || MathUtility::canBeInterpretedAsInteger($type)) {
             // Parent, this table embeds the child table
             $parent = $inlineStackProcessor->getStructureLevel(-1);
@@ -331,8 +328,8 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
                     'language' => $parentLanguage,
                     'ids' => [$type],
                 ];
-            // Either localize or synchronize all child elements from default language of the parent element
             } else {
+                // Either localize or synchronize all child elements from default language of the parent element
                 $cmd[$parent['table']][$parent['uid']]['inlineLocalizeSynchronize'] = [
                     'field' => $parent['field'],
                     'language' => $parentLanguage,
@@ -340,23 +337,35 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
                 ];
             }
 
-            /** @var $tce DataHandler */
+            /** @var DataHandler $tce */
             $tce = GeneralUtility::makeInstance(DataHandler::class);
             $tce->start([], $cmd);
             $tce->process_cmdmap();
 
             $newItemList = $tce->registerDBList[$parent['table']][$parent['uid']][$parentFieldName];
 
-            $jsonArray = [
-                'data' => '',
-                'stylesheetFiles' => [],
-                'scriptCall' => [],
-            ];
             $nameObject = $inlineStackProcessor->getCurrentStructureDomObjectIdPrefix($inlineFirstPid);
             $nameObjectForeignTable = $nameObject . '-' . $child['table'];
 
             $oldItems = $this->getInlineRelatedRecordsUidArray($oldItemList);
             $newItems = $this->getInlineRelatedRecordsUidArray($newItemList);
+
+            // Render error messages from DataHandler
+            $tce->printLogErrorMessages();
+            $flashMessageService = GeneralUtility::makeInstance(FlashMessageService::class);
+            $messages = $flashMessageService->getMessageQueueByIdentifier()->getAllMessagesAndFlush();
+            if (!empty($messages)) {
+                foreach ($messages as $message) {
+                    $jsonArray['messages'][] = [
+                        'title'    => $message->getTitle(),
+                        'message'  => $message->getMessage(),
+                        'severity' => $message->getSeverity()
+                    ];
+                    if ($message->getSeverity() === AbstractMessage::ERROR) {
+                        $jsonArray['hasErrors'] = true;
+                    }
+                }
+            }
 
             // Set the items that should be removed in the forms view:
             $removedItems = array_diff($oldItems, $newItems);
@@ -399,22 +408,18 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
                 . ', json.data);';
             }
         }
-
-        $response->getBody()->write(json_encode($jsonArray));
-
-        return $response;
+        return new JsonResponse($jsonArray);
     }
 
     /**
      * Store status of inline children expand / collapse state in backend user uC.
      *
      * @param ServerRequestInterface $request the incoming request
-     * @param ResponseInterface $response the empty response
      * @return ResponseInterface the filled response
      */
-    public function expandOrCollapseAction(ServerRequestInterface $request, ResponseInterface $response)
+    public function expandOrCollapseAction(ServerRequestInterface $request): ResponseInterface
     {
-        $ajaxArguments = isset($request->getParsedBody()['ajax']) ? $request->getParsedBody()['ajax'] : $request->getQueryParams()['ajax'];
+        $ajaxArguments = $request->getParsedBody()['ajax'] ?? $request->getQueryParams()['ajax'];
         $domObjectId = $ajaxArguments[0];
 
         /** @var InlineStackProcessor $inlineStackProcessor */
@@ -452,9 +457,7 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
                 $backendUser->writeUC();
             }
         }
-
-        $response->getBody()->write(json_encode([]));
-        return $response;
+        return (new JsonResponse())->setPayload([]);
     }
 
     /**
@@ -490,6 +493,7 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
             'command' => 'edit',
             'tableName' => $childTableName,
             'vanillaUid' => (int)$childUid,
+            'returnUrl' => $parentData['returnUrl'],
             'isInlineChild' => true,
             'inlineStructure' => $inlineStructure,
             'inlineFirstPid' => $parentData['inlineFirstPid'],
@@ -498,11 +502,11 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
 
             // values of the current parent element
             // it is always a string either an id or new...
-            'inlineParentUid' => $parentData['databaseRow']['uid'],
+            'inlineParentUid' => $parentData['databaseRow']['uid'] ?? $parentData['uid'],
             'inlineParentTableName' => $parentData['tableName'],
             'inlineParentFieldName' => $parentFieldName,
 
-             // values of the top most parent element set on first level and not overridden on following levels
+            // values of the top most parent element set on first level and not overridden on following levels
             'inlineTopMostParentUid' => $inlineTopMostParent['uid'],
             'inlineTopMostParentTableName' => $inlineTopMostParent['table'],
             'inlineTopMostParentFieldName' => $inlineTopMostParent['field'],
@@ -658,7 +662,7 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
             return [];
         }
 
-        $inlineView = unserialize($backendUser->uc['inlineView']);
+        $inlineView = unserialize($backendUser->uc['inlineView'], ['allowed_classes' => false]);
         if (!is_array($inlineView)) {
             $inlineView = [];
         }
@@ -715,7 +719,7 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
      * Get inlineFirstPid from a given objectId string
      *
      * @param string $domObjectId The id attribute of an element
-     * @return int|NULL Pid or null
+     * @return int|null Pid or null
      */
     protected function getInlineFirstPidFromDomObjectId($domObjectId)
     {
@@ -746,10 +750,10 @@ class FormInlineAjaxController extends AbstractFormEngineAjaxController
         if (empty($context['config'])) {
             throw new \RuntimeException('Empty context config section given', 1489751362);
         }
-        if (!\hash_equals(GeneralUtility::hmac(json_encode($context['config']), 'InlineContext'), $context['hmac'])) {
+        if (!hash_equals(GeneralUtility::hmac((string)$context['config'], 'InlineContext'), (string)$context['hmac'])) {
             throw new \RuntimeException('Hash does not validate', 1489751363);
         }
-        return $context['config'];
+        return json_decode($context['config'], true);
     }
 
     /**

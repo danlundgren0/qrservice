@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Core\Resource\Rendering;
 
 use TYPO3\CMS\Core\Resource\FileInterface;
 use TYPO3\CMS\Core\Resource\FileReference;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Class VideoTagRenderer
@@ -27,7 +28,7 @@ class VideoTagRenderer implements FileRendererInterface
      *
      * @var array
      */
-    protected $possibleMimeTypes = ['video/mp4', 'video/webm', 'video/ogg', 'application/ogg'];
+    protected $possibleMimeTypes = ['video/mp4', 'video/webm', 'video/ogg', 'video/x-m4v', 'application/ogg'];
 
     /**
      * Returns the priority of the renderer
@@ -76,6 +77,15 @@ class VideoTagRenderer implements FileRendererInterface
         }
 
         $attributes = [];
+        if (isset($options['additionalAttributes']) && is_array($options['additionalAttributes'])) {
+            $attributes[] = GeneralUtility::implodeAttributes($options['additionalAttributes'], true, true);
+        }
+        if (isset($options['data']) && is_array($options['data'])) {
+            array_walk($options['data'], function (&$value, $key) {
+                $value = 'data-' . htmlspecialchars($key) . '="' . htmlspecialchars($value) . '"';
+            });
+            $attributes[] = implode(' ', $options['data']);
+        }
         if ((int)$width > 0) {
             $attributes[] = 'width="' . (int)$width . '"';
         }
@@ -94,11 +104,22 @@ class VideoTagRenderer implements FileRendererInterface
         if (!empty($options['loop'])) {
             $attributes[] = 'loop';
         }
-        foreach (['class', 'dir', 'id', 'lang', 'style', 'title', 'accesskey', 'tabindex', 'onclick', 'controlsList'] as $key) {
+        if (isset($options['additionalConfig']) && is_array($options['additionalConfig'])) {
+            foreach ($options['additionalConfig'] as $key => $value) {
+                if ((bool)$value) {
+                    $attributes[] = htmlspecialchars($key);
+                }
+            }
+        }
+
+        foreach (['class', 'dir', 'id', 'lang', 'style', 'title', 'accesskey', 'tabindex', 'onclick', 'controlsList', 'preload'] as $key) {
             if (!empty($options[$key])) {
                 $attributes[] = $key . '="' . htmlspecialchars($options[$key]) . '"';
             }
         }
+
+        // Clean up duplicate attributes
+        $attributes = array_unique($attributes);
 
         return sprintf(
             '<video%s><source src="%s" type="%s"></video>',

@@ -1,7 +1,8 @@
 <?php
 
 \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::addStaticFile('gridelements', 'Configuration/TypoScript/', 'Gridelements');
-\TYPO3\CMS\Core\Utility\ExtensionManagementUtility::addStaticFile('gridelements', 'Configuration/TypoScript/DataProcessing', 'Gridelements w/DataProcessing');
+\TYPO3\CMS\Core\Utility\ExtensionManagementUtility::addStaticFile('gridelements', 'Configuration/TypoScript/DataProcessing', 'Gridelements (deprecated beta version)');
+\TYPO3\CMS\Core\Utility\ExtensionManagementUtility::addStaticFile('gridelements', 'Configuration/TypoScript/DataProcessingLibContentElement', 'Gridelements w/DataProcessing (recommended)');
 
 \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::addPlugin([
     'LLL:EXT:gridelements/Resources/Private/Language/locallang_db.xml:tt_content.CType_pi1',
@@ -53,9 +54,6 @@
                 ],
                 'inline' => [
                     'inlineNewButtonStyle' => 'display: inline-block;',
-                ],
-                'behaviour' => [
-                    'localizeChildrenAtParentLocalization' => true,
                 ],
                 'foreign_table' => 'tt_content',
                 'foreign_field' => 'tx_gridelements_container',
@@ -126,7 +124,7 @@ $GLOBALS['TCA']['tt_content']['columns']['records']['config']['allowed'] .= ',pa
 
 $GLOBALS['TCA']['tt_content']['types']['gridelements_pi1']['showitem'] = '
 	--palette--;LLL:EXT:frontend/Resources/Private/Language/locallang_ttc.xlf:palette.general;general,
-	--palette--;LLL:EXT:frontend/Resources/Private/Language/locallang_ttc.xlf:palette.header;header,
+	--palette--;;headers,
 	tx_gridelements_backend_layout,
 	pi_flexform,
 	tx_gridelements_children,
@@ -138,7 +136,7 @@ $GLOBALS['TCA']['tt_content']['types']['gridelements_pi1']['showitem'] = '
     --div--;LLL:EXT:core/Resources/Private/Language/Form/locallang_tabs.xlf:access,
     --palette--;;hidden,
     --palette--;LLL:EXT:frontend/Resources/Private/Language/locallang_ttc.xlf:palette.access;access,
-    --div--;LLL:EXT:lang/Resources/Private/Language/locallang_tca.xlf:sys_category.tabs.category,
+    --div--;LLL:EXT:core/Resources/Private/Language/locallang_tca.xlf:sys_category.tabs.category,
 	categories,
     --div--;LLL:EXT:core/Resources/Private/Language/Form/locallang_tabs.xlf:notes,rowDescription
 	';

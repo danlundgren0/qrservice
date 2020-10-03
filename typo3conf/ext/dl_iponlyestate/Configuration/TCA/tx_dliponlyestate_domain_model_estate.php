@@ -21,7 +21,7 @@ return array(
 			'endtime' => 'endtime',
 		),
 		'searchFields' => 'name,estate_description,admin_note,enable_admin_note,page_link,adress,image,postal_code,city,width,length,door_position,latitude,longitude,responsible_technician,control_points,node_type,',
-		'iconfile' => \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::extRelPath('dl_iponlyestate') . 'Resources/Public/Icons/tx_dliponlyestate_domain_model_estate.gif'
+		'iconfile' => \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::siteRelPath('dl_iponlyestate') . 'Resources/Public/Icons/tx_dliponlyestate_domain_model_estate.gif'
 	),
 	'interface' => array(
 		'showRecordFieldList' => 'sys_language_uid, l10n_parent, l10n_diffsource, hidden, name, estate_description, admin_note, enable_admin_note, page_link, adress, image, postal_code, city, width, length, door_position, latitude, longitude, responsible_technician, control_points, node_type',

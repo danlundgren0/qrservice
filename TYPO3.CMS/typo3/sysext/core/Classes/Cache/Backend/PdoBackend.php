@@ -14,11 +14,16 @@ namespace TYPO3\CMS\Core\Cache\Backend;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Cache\Exception;
+use TYPO3\CMS\Core\Cache\Exception\InvalidDataException;
+use TYPO3\CMS\Core\Cache\Frontend\FrontendInterface;
+use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+
 /**
  * A PDO database cache backend
- * @api
  */
-class PdoBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implements \TYPO3\CMS\Core\Cache\Backend\TaggableBackendInterface
+class PdoBackend extends AbstractBackend implements TaggableBackendInterface
 {
     /**
      * @var string
@@ -49,7 +54,6 @@ class PdoBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
      * Sets the DSN to use
      *
      * @param string $DSN The DSN to use for connecting to the DB
-     * @api
      */
     public function setDataSourceName($DSN)
     {
@@ -60,7 +64,6 @@ class PdoBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
      * Sets the username to use
      *
      * @param string $username The username to use for connecting to the DB
-     * @api
      */
     public function setUsername($username)
     {
@@ -71,7 +74,6 @@ class PdoBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
      * Sets the password to use
      *
      * @param string $password The password to use for connecting to the DB
-     * @api
      */
     public function setPassword($password)
     {
@@ -93,31 +95,30 @@ class PdoBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
      * @param string $data The data to be stored
      * @param array $tags Tags to associate with this cache entry
      * @param int $lifetime Lifetime of this cache entry in seconds. If NULL is specified, the default lifetime is used. "0" means unlimited lifetime.
-     * @throws \TYPO3\CMS\Core\Cache\Exception if no cache frontend has been set.
+     * @throws Exception if no cache frontend has been set.
      * @throws \InvalidArgumentException if the identifier is not valid
-     * @throws \TYPO3\CMS\Core\Cache\Exception\InvalidDataException if $data is not a string
-     * @api
+     * @throws InvalidDataException if $data is not a string
      */
     public function set($entryIdentifier, $data, array $tags = [], $lifetime = null)
     {
-        if (!$this->cache instanceof \TYPO3\CMS\Core\Cache\Frontend\FrontendInterface) {
-            throw new \TYPO3\CMS\Core\Cache\Exception('No cache frontend has been set yet via setCache().', 1259515600);
+        if (!$this->cache instanceof FrontendInterface) {
+            throw new Exception('No cache frontend has been set yet via setCache().', 1259515600);
         }
         if (!is_string($data)) {
-            throw new \TYPO3\CMS\Core\Cache\Exception\InvalidDataException('The specified data is of type "' . gettype($data) . '" but a string is expected.', 1259515601);
+            throw new InvalidDataException('The specified data is of type "' . gettype($data) . '" but a string is expected.', 1259515601);
         }
         $this->remove($entryIdentifier);
-        $lifetime = $lifetime === null ? $this->defaultLifetime : $lifetime;
+        $lifetime = $lifetime ?? $this->defaultLifetime;
         $statementHandle = $this->databaseHandle->prepare('INSERT INTO "cache" ("identifier", "context", "cache", "created", "lifetime", "content") VALUES (?, ?, ?, ?, ?, ?)');
         $result = $statementHandle->execute([$entryIdentifier, $this->context, $this->cacheIdentifier, $GLOBALS['EXEC_TIME'], $lifetime, $data]);
         if ($result === false) {
-            throw new \TYPO3\CMS\Core\Cache\Exception('The cache entry "' . $entryIdentifier . '" could not be written.', 1259530791);
+            throw new Exception('The cache entry "' . $entryIdentifier . '" could not be written.', 1259530791);
         }
         $statementHandle = $this->databaseHandle->prepare('INSERT INTO "tags" ("identifier", "context", "cache", "tag") VALUES (?, ?, ?, ?)');
         foreach ($tags as $tag) {
             $result = $statementHandle->execute([$entryIdentifier, $this->context, $this->cacheIdentifier, $tag]);
             if ($result === false) {
-                throw new \TYPO3\CMS\Core\Cache\Exception('The tag "' . $tag . ' for cache entry "' . $entryIdentifier . '" could not be written.', 1259530751);
+                throw new Exception('The tag "' . $tag . ' for cache entry "' . $entryIdentifier . '" could not be written.', 1259530751);
             }
         }
     }
@@ -127,7 +128,6 @@ class PdoBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
      *
      * @param string $entryIdentifier An identifier which describes the cache entry to load
      * @return mixed The cache entry's content as a string or FALSE if the cache entry could not be loaded
-     * @api
      */
     public function get($entryIdentifier)
     {
@@ -141,7 +141,6 @@ class PdoBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
      *
      * @param string $entryIdentifier An identifier specifying the cache entry
      * @return bool TRUE if such an entry exists, FALSE if not
-     * @api
      */
     public function has($entryIdentifier)
     {
@@ -157,7 +156,6 @@ class PdoBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
      *
      * @param string $entryIdentifier Specifies the cache entry to remove
      * @return bool TRUE if (at least) an entry could be removed or FALSE if no entry was found
-     * @api
      */
     public function remove($entryIdentifier)
     {
@@ -170,8 +168,6 @@ class PdoBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
 
     /**
      * Removes all cache entries of this cache.
-     *
-     * @api
      */
     public function flush()
     {
@@ -185,7 +181,6 @@ class PdoBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
      * Removes all cache entries of this cache which are tagged by the specified tag.
      *
      * @param string $tag The tag the entries must have
-     * @api
      */
     public function flushByTag($tag)
     {
@@ -201,7 +196,6 @@ class PdoBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
      *
      * @param string $tag The tag to search for
      * @return array An array with identifiers of all matching entries. An empty array if no entries matched
-     * @api
      */
     public function findIdentifiersByTag($tag)
     {
@@ -212,8 +206,6 @@ class PdoBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
 
     /**
      * Does garbage collection
-     *
-     * @api
      */
     public function collectGarbage()
     {
@@ -244,13 +236,13 @@ class PdoBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
             $splitdsn = explode(':', $this->dataSourceName, 2);
             $this->pdoDriver = $splitdsn[0];
             if ($this->pdoDriver === 'sqlite' && !file_exists($splitdsn[1])) {
-                $this->databaseHandle = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\PDO::class, $this->dataSourceName, $this->username, $this->password);
+                $this->databaseHandle = GeneralUtility::makeInstance(\PDO::class, $this->dataSourceName, $this->username, $this->password);
                 $this->createCacheTables();
             } else {
-                $this->databaseHandle = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\PDO::class, $this->dataSourceName, $this->username, $this->password);
+                $this->databaseHandle = GeneralUtility::makeInstance(\PDO::class, $this->dataSourceName, $this->username, $this->password);
             }
             $this->databaseHandle->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-            if (substr($this->pdoDriver, 0, 5) === 'mysql') {
+            if (strpos($this->pdoDriver, 'mysql') === 0) {
                 $this->databaseHandle->exec('SET SESSION sql_mode=\'ANSI\';');
             }
         } catch (\PDOException $e) {
@@ -266,14 +258,42 @@ class PdoBackend extends \TYPO3\CMS\Core\Cache\Backend\AbstractBackend implement
     protected function createCacheTables()
     {
         try {
-            \TYPO3\CMS\Core\Database\PdoHelper::importSql(
+            $this->importSql(
                 $this->databaseHandle,
                 $this->pdoDriver,
-                \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::extPath('core') .
+                ExtensionManagementUtility::extPath('core') .
                 'Resources/Private/Sql/Cache/Backend/PdoBackendCacheAndTags.sql'
             );
         } catch (\PDOException $e) {
             throw new \RuntimeException('Could not create cache tables with DSN "' . $this->dataSourceName . '". PDO error: ' . $e->getMessage(), 1259576985);
+        }
+    }
+
+    /**
+     * Pumps the SQL into the database. Use for DDL only.
+     *
+     * Important: key definitions with length specifiers (needed for MySQL) must
+     * be given as "field"(xyz) - no space between double quote and parenthesis -
+     * so they can be removed automatically.
+     *
+     * @param \PDO $databaseHandle
+     * @param string $pdoDriver
+     * @param string $pathAndFilename
+     */
+    protected function importSql(\PDO $databaseHandle, string $pdoDriver, string $pathAndFilename): void
+    {
+        $sql = file($pathAndFilename, FILE_IGNORE_NEW_LINES & FILE_SKIP_EMPTY_LINES);
+        // Remove MySQL style key length delimiters (yuck!) if we are not setting up a MySQL db
+        if (strpos($pdoDriver, 'mysql') !== 0) {
+            $sql = preg_replace('/"\\([0-9]+\\)/', '"', $sql);
+        }
+        $statement = '';
+        foreach ($sql as $line) {
+            $statement .= ' ' . trim($line);
+            if (substr($statement, -1) === ';') {
+                $databaseHandle->exec($statement);
+                $statement = '';
+            }
         }
     }
 }

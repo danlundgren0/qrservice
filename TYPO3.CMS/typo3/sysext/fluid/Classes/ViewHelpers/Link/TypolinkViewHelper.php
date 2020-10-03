@@ -13,42 +13,64 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Link;
  *
  * The TYPO3 project - inspiring people to share!
  */
+
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
-use TYPO3\CMS\Fluid\Core\ViewHelper\Exception;
 use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
 use TYPO3\CMS\Frontend\Service\TypoLinkCodecService;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
+use TYPO3Fluid\Fluid\Core\ViewHelper\Exception;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
  * A ViewHelper to create links from fields supported by the link wizard
  *
- * == Example ==
+ * Example
+ * =======
  *
- * {link} contains "19 _blank - "testtitle with whitespace" &X=y"
+ * ``{link}`` contains: ``t3://page?uid=2&arg1=val1#9 _blank some-css-class "Title containing Whitespace"``.
  *
- * <code title="minimal usage">
- * <f:link.typolink parameter="{link}">
- * Linktext
- * </f:link.typolink>
- * <output>
- * <a href="index.php?id=19&X=y" title="testtitle with whitespace" target="_blank">
- * Linktext
- * </a>
- * </output>
- * </code>
+ * Or a legacy version from older TYPO3 versions:
+ * ``{link}`` contains: ``9 _blank - "testtitle with whitespace" &X=y``.
  *
- * <code title="Full parameter usage">
- * <f:link.typolink parameter="{link}" target="_blank" class="ico-class" title="some title" additionalParams="&u=b" additionalAttributes="{type:'button'}" useCacheHash="true">
- * Linktext
- * </f:link.typolink>
- * </code>
- * <output>
- * <a href="index.php?id=19&X=y&u=b" title="some title" target="_blank" class="ico-class" type="button">
- * Linktext
- * </a>
- * </output>
+ * Minimal usage
+ * -------------
+ *
+ * ::
+ *
+ *    <f:link.typolink parameter="{link}">
+ *       Linktext
+ *    </f:link.typolink>
+ *
+ * Output::
+ *
+ *    <a href="/page/path/name.html?X=y" title="testtitle with whitespace" target="_blank">
+ *       Linktext
+ *    </a>
+ *
+ * Depending on current page, routing and page path configuration.
+ *
+ * Full parameter usage
+ * --------------------
+ *
+ * ::
+ *
+ *    <f:link.typolink parameter="{link}" additionalParams="&u=b"
+ *        target="_blank"
+ *        class="ico-class" title="some title"
+ *        additionalAttributes="{type:'button'}"
+ *        useCacheHash="true"
+ *    >
+ *       Linktext
+ *    </f:link.typolink>
+ *
+ * Output::
+ *
+ *    <a href="/page/path/name.html?X=y&u=b" title="some title" target="_blank" class="ico-class" type="button">
+ *        Linktext
+ *    </a>
+ *
+ * Depending on routing and page path configuration.
  */
 class TypolinkViewHelper extends AbstractViewHelper
 {
@@ -66,7 +88,6 @@ class TypolinkViewHelper extends AbstractViewHelper
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('parameter', 'string', 'stdWrap.typolink style parameter string', true);
         $this->registerArgument('target', 'string', '', false, '');
         $this->registerArgument('class', 'string', '', false, '');
@@ -74,6 +95,10 @@ class TypolinkViewHelper extends AbstractViewHelper
         $this->registerArgument('additionalParams', 'string', '', false, '');
         $this->registerArgument('additionalAttributes', 'array', '', false, []);
         $this->registerArgument('useCacheHash', 'bool', '', false, false);
+        $this->registerArgument('addQueryString', 'bool', '', false, false);
+        $this->registerArgument('addQueryStringMethod', 'string', '', false, 'GET');
+        $this->registerArgument('addQueryStringExclude', 'string', '', false, '');
+        $this->registerArgument('absolute', 'bool', 'Ensure the resulting URL is an absolute URL', false, false);
     }
 
     /**
@@ -88,13 +113,17 @@ class TypolinkViewHelper extends AbstractViewHelper
      */
     public static function renderStatic(array $arguments, \Closure $renderChildrenClosure, RenderingContextInterface $renderingContext)
     {
-        $parameter = $arguments['parameter'];
-        $target = $arguments['target'];
-        $class = $arguments['class'];
-        $title = $arguments['title'];
-        $additionalParams = $arguments['additionalParams'];
-        $additionalAttributes = $arguments['additionalAttributes'];
-        $useCacheHash = $arguments['useCacheHash'];
+        $parameter = $arguments['parameter'] ?? '';
+        $target = $arguments['target'] ?? '';
+        $class = $arguments['class'] ?? '';
+        $title = $arguments['title'] ?? '';
+        $additionalParams = $arguments['additionalParams'] ?? '';
+        $additionalAttributes = $arguments['additionalAttributes'] ?? [];
+        $useCacheHash = $arguments['useCacheHash'] ?? false;
+        $addQueryString = $arguments['addQueryString'] ?? false;
+        $addQueryStringMethod = $arguments['addQueryStringMethod'] ?? 'GET';
+        $addQueryStringExclude = $arguments['addQueryStringExclude'] ?? '';
+        $absolute = $arguments['absolute'] ?? false;
 
         // Merge the $parameter with other arguments
         $typolinkParameter = self::createTypolinkParameterArrayFromArguments($parameter, $target, $class, $title, $additionalParams);
@@ -120,6 +149,12 @@ class TypolinkViewHelper extends AbstractViewHelper
                         'parameter' => $typolinkParameter,
                         'ATagParams' => $aTagParams,
                         'useCacheHash' => $useCacheHash,
+                        'addQueryString' => $addQueryString,
+                        'addQueryString.' => [
+                            'method' => $addQueryStringMethod,
+                            'exclude' => $addQueryStringExclude
+                        ],
+                        'forceAbsoluteUrl' => $absolute
                     ]
                 ]
             );

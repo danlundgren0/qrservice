@@ -14,16 +14,20 @@ namespace TYPO3\CMS\Extbase\Persistence\Generic;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Extbase\DomainObject\AbstractDomainObject;
 use TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface;
+use TYPO3\CMS\Extbase\Object\ObjectManagerInterface;
+use TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper;
 
 /**
  * A proxy that can replace any object and replaces itself in it's parent on
  * first access (call, get, set, isset, unset).
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
-class LazyLoadingProxy implements \Iterator, \TYPO3\CMS\Extbase\Persistence\Generic\LoadingStrategyInterface
+class LazyLoadingProxy implements \Iterator, LoadingStrategyInterface
 {
     /**
-     * @var \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper
+     * @var ?DataMapper
      */
     protected $dataMapper;
 
@@ -49,11 +53,16 @@ class LazyLoadingProxy implements \Iterator, \TYPO3\CMS\Extbase\Persistence\Gene
     private $fieldValue;
 
     /**
-     * @param \TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper $dataMapper
+     * @var ObjectManagerInterface
      */
-    public function injectDataMapper(\TYPO3\CMS\Extbase\Persistence\Generic\Mapper\DataMapper $dataMapper)
+    protected $objectManager;
+
+    /**
+     * @param ObjectManagerInterface $objectManager
+     */
+    public function injectObjectManager(ObjectManagerInterface $objectManager)
     {
-        $this->dataMapper = $dataMapper;
+        $this->objectManager = $objectManager;
     }
 
     /**
@@ -62,12 +71,24 @@ class LazyLoadingProxy implements \Iterator, \TYPO3\CMS\Extbase\Persistence\Gene
      * @param DomainObjectInterface $parentObject The object instance this proxy is part of
      * @param string $propertyName The name of the proxied property in it's parent
      * @param mixed $fieldValue The raw field value.
+     * @param ?DataMapper $dataMapper
      */
-    public function __construct($parentObject, $propertyName, $fieldValue)
+    public function __construct($parentObject, $propertyName, $fieldValue, ?DataMapper $dataMapper = null)
     {
         $this->parentObject = $parentObject;
         $this->propertyName = $propertyName;
         $this->fieldValue = $fieldValue;
+        $this->dataMapper = $dataMapper;
+    }
+
+    /**
+     * Object initialization called when object is created with ObjectManager, after constructor
+     */
+    public function initializeObject()
+    {
+        if (!$this->dataMapper) {
+            $this->dataMapper = $this->objectManager->get(DataMapper::class);
+        }
     }
 
     /**
@@ -80,15 +101,26 @@ class LazyLoadingProxy implements \Iterator, \TYPO3\CMS\Extbase\Persistence\Gene
         // this check safeguards against a proxy being activated multiple times
         // usually that does not happen, but if the proxy is held from outside
         // its parent ... the result would be weird.
-        if ($this->parentObject->_getProperty($this->propertyName) instanceof \TYPO3\CMS\Extbase\Persistence\Generic\LazyLoadingProxy) {
-            $objects = $this->dataMapper->fetchRelated($this->parentObject, $this->propertyName, $this->fieldValue, false, false);
+        if ($this->parentObject instanceof AbstractDomainObject
+            && $this->parentObject->_getProperty($this->propertyName) instanceof LazyLoadingProxy
+            && $this->dataMapper
+        ) {
+            $objects = $this->dataMapper->fetchRelated($this->parentObject, $this->propertyName, $this->fieldValue, false);
             $propertyValue = $this->dataMapper->mapResultToPropertyValue($this->parentObject, $this->propertyName, $objects);
             $this->parentObject->_setProperty($this->propertyName, $propertyValue);
             $this->parentObject->_memorizeCleanState($this->propertyName);
             return $propertyValue;
-        } else {
-            return $this->parentObject->_getProperty($this->propertyName);
         }
+        return $this->parentObject->_getProperty($this->propertyName);
+    }
+
+    /**
+     * @return string
+     */
+    public function _getTypeAndUidString()
+    {
+        $type = $this->dataMapper->getType(get_class($this->parentObject), $this->propertyName);
+        return $type . ':' . $this->fieldValue;
     }
 
     /**

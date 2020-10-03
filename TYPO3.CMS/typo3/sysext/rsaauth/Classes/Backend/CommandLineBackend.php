@@ -14,6 +14,8 @@ namespace TYPO3\CMS\Rsaauth\Backend;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Utility\CommandUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\StringUtility;
@@ -40,7 +42,7 @@ class CommandLineBackend extends AbstractBackend
     /**
      * Temporary directory. It is best of it is outside of the web site root and
      * not publicly readable.
-     * For now we use typo3temp/var/ (stored in the variable without the trailing slash).
+     * For now we use Environment::getVarPath() . '/transient' (stored in the variable without the trailing slash).
      *
      * @var string
      */
@@ -54,17 +56,26 @@ class CommandLineBackend extends AbstractBackend
     {
         $this->opensslPath = CommandUtility::getCommand('openssl');
         // Get temporary directory from the configuration
-        $extconf = unserialize($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['rsaauth'], ['allowed_classes' => false]);
-        if (
-            $extconf['temporaryDirectory'] !== ''
-            && $extconf['temporaryDirectory'][0] === '/'
-            && @is_dir($extconf['temporaryDirectory'])
-            && is_writable($extconf['temporaryDirectory'])
-        ) {
-            $this->temporaryDirectory = $extconf['temporaryDirectory'];
+        $path = trim(GeneralUtility::makeInstance(ExtensionConfiguration::class)->get('rsaauth', 'temporaryDirectory'));
+        if ($path !== '' && $path[0] === '/' && @is_dir($path) && is_writable($path)) {
+            $this->temporaryDirectory = $path;
         } else {
-            $this->temporaryDirectory = PATH_site . 'typo3temp/var/transient';
+            $this->temporaryDirectory = Environment::getVarPath() . '/transient';
         }
+    }
+
+    /**
+     * Denies deserialization.
+     */
+    public function __wakeup()
+    {
+        $this->opensslPath = null;
+        $this->temporaryDirectory = null;
+
+        throw new \RuntimeException(
+            __CLASS__ . ' cannot be unserialized',
+            1531336156
+        );
     }
 
     /**
@@ -73,11 +84,11 @@ class CommandLineBackend extends AbstractBackend
      * There should only be one key pair per request because the second private key would overwrites the first private
      * key. So the submitting the form with the first public key would not work anymore.
      *
-     * @return \TYPO3\CMS\Rsaauth\Keypair|NULL a key pair or NULL in case of error
+     * @return \TYPO3\CMS\Rsaauth\Keypair|null a key pair or NULL in case of error
      */
     public function createNewKeyPair()
     {
-        /** @var $keyPair \TYPO3\CMS\Rsaauth\Keypair */
+        /** @var \TYPO3\CMS\Rsaauth\Keypair $keyPair */
         $keyPair = GeneralUtility::makeInstance(\TYPO3\CMS\Rsaauth\Keypair::class);
         if ($keyPair->isReady()) {
             return $keyPair;
@@ -96,7 +107,7 @@ class CommandLineBackend extends AbstractBackend
         // to do the same and use the F4 (0x10001) exponent. This is the most
         // secure.
         $command = $this->opensslPath . ' genrsa -out ' . escapeshellarg($privateKeyFile) . ' 1024';
-        if (TYPO3_OS === 'WIN') {
+        if (Environment::isWindows()) {
             $command .= ' 2>NUL';
         } else {
             $command .= ' 2>/dev/null';
@@ -108,7 +119,7 @@ class CommandLineBackend extends AbstractBackend
             // Ok, we got the private key. Get the modulus.
             $command = $this->opensslPath . ' rsa -noout -modulus -in ' . escapeshellarg($privateKeyFile);
             $value = CommandUtility::exec($command);
-            if (substr($value, 0, 8) === 'Modulus=') {
+            if (strpos($value, 'Modulus=') === 0) {
                 $publicKey = substr($value, 8);
 
                 $keyPair->setExponent(self::DEFAULT_EXPONENT);
@@ -160,7 +171,7 @@ class CommandLineBackend extends AbstractBackend
         if ($this->opensslPath) {
             // If path exists, test that command runs and can produce output
             $test = CommandUtility::exec($this->opensslPath . ' version');
-            $result = substr($test, 0, 8) === 'OpenSSL ';
+            $result = strpos($test, 'OpenSSL ') === 0;
         }
         return $result;
     }

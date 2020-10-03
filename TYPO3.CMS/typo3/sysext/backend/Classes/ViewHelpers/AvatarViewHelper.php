@@ -17,12 +17,47 @@ namespace TYPO3\CMS\Backend\ViewHelpers;
 use TYPO3\CMS\Backend\Backend\Avatar\Avatar;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
- * Render the avatar img tag for a given backend user
+ * Render the avatar markup, including the :html:`<img>` tag, for a given backend user.
+ *
+ * Examples
+ * ========
+ *
+ * Default
+ * -------
+ *
+ * ::
+ *
+ *    <be:avatar backendUser="{user.uid}" size="32" showIcon="true" />
+ *
+ * Output::
+ *
+ *    <span class="avatar">
+ *        <span class="avatar-image">
+ *            <img src="/typo3/sysext/core/Resources/Public/Icons/T3Icons/avatar/avatar-default.svg" width="32" height="32" />
+ *        </span>
+ *    </span>
+ *
+ * If the given backend user hasn't added a custom avatar yet, a default one is used.
+ *
+ * Inline notation
+ * ---------------
+ *
+ * ::
+ *
+ *    {be:avatar(backendUser: user.id, size: 32, showIcon: 'true')}
+ *
+ * Output::
+ *
+ *    <span class="avatar">
+ *        <span class="avatar-image">
+ *            <img src="/fileadmin/_processed_/7/9/csm_custom-avatar_4ea4a18f58.jpg" width="32" height="32" />
+ *        </span>
+ *    </span>
  */
 class AvatarViewHelper extends AbstractViewHelper
 {
@@ -40,7 +75,6 @@ class AvatarViewHelper extends AbstractViewHelper
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('backendUser', 'int', 'uid of the backend user', false, 0);
         $this->registerArgument('size', 'int', 'width and height of the image', false, 32);
         $this->registerArgument('showIcon', 'bool', 'show the record icon as well', false, false);

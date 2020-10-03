@@ -1,12 +1,17 @@
 <h1><f:format.raw>{pageTitle}</f:format.raw></h1>
 
-<f:if condition="{infoBoxMessage}">
-	<f:be.infobox title="{infoBoxMessageTitle}">
-		{infoBoxMessage -> f:format.nl2br()}
+<f:if condition="{recordDescription}">
+	<f:be.infobox title="{f:translate(key:'LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.recordInformation')}">
+		{recordDescription -> f:format.nl2br()}
+	</f:be.infobox>
+</f:if>
+<f:if condition="{recordReadonly}">
+	<f:be.infobox title="{f:translate(key:'LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.recordInformation')}">
+		{f:translate(key:'LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.recordReadonly')}
 	</f:be.infobox>
 </f:if>
 
-<div class="typo3-TCEforms">
+<div class="typo3-TCEforms{f:if(condition:isNewRecord, then:' has-change')}">
 	<f:format.raw>{fieldInformationHtml}</f:format.raw>
 	<f:format.raw>{fieldWizardHtml}</f:format.raw>
 	<f:format.raw>{childHtml}</f:format.raw>

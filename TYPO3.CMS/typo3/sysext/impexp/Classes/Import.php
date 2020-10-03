@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Impexp;
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Configuration\FlexForm\FlexFormTools;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\DataHandling\DataHandler;
 use TYPO3\CMS\Core\Exception;
@@ -33,6 +34,7 @@ use TYPO3\CMS\Core\Utility\StringUtility;
 
 /**
  * T3D file Import library (TYPO3 Record Document)
+ * @internal this is not part of TYPO3's Core API.
  */
 class Import extends ImportExport
 {
@@ -82,9 +84,9 @@ class Import extends ImportExport
     protected $storageObjects = [];
 
     /**
-     * @var NULL|string
+     * @var string|null
      */
-    protected $filesPathForImport = null;
+    protected $filesPathForImport;
 
     /**
      * @var array
@@ -148,7 +150,7 @@ class Import extends ImportExport
      */
     protected function initializeStorageObjects()
     {
-        /** @var $storageRepository StorageRepository */
+        /** @var StorageRepository $storageRepository */
         $storageRepository = GeneralUtility::makeInstance(StorageRepository::class);
         $this->storageObjects = $storageRepository->findAll();
     }
@@ -386,7 +388,7 @@ class Import extends ImportExport
             // using a storage from the local storage is only allowed, if the uid is present in the
             // mapping. Only in this case we could be sure, that it's a local, online and writable storage.
             if ($useStorageFromStorageRecords && isset($storageRecords[$fileRecord['storage']])) {
-                /** @var $storage \TYPO3\CMS\Core\Resource\ResourceStorage */
+                /** @var \TYPO3\CMS\Core\Resource\ResourceStorage $storage */
                 $storage = ResourceFactory::getInstance()->getStorageObject($fileRecord['storage'], $storageRecords[$fileRecord['storage']]);
             } elseif ($this->isFallbackStorage($fileRecord['storage'])) {
                 $storage = ResourceFactory::getInstance()->getStorageObject(0);
@@ -429,8 +431,14 @@ class Import extends ImportExport
                     $importFolder = $storage->getFolder($folderName);
                 }
 
+                $this->callHook('before_addSysFileRecord', [
+                    'fileRecord' => $fileRecord,
+                    'importFolder' => $importFolder,
+                    'temporaryFile' => $temporaryFile
+                ]);
+
                 try {
-                    /** @var $newFile File */
+                    /** @var File $newFile */
                     $newFile = $storage->addFile($temporaryFile, $importFolder, $fileRecord['name']);
                 } catch (Exception $e) {
                     $this->error('Error: File could not be added to the storage: "' . $fileRecord['identifier'] . '" with storage uid "' . $fileRecord['storage'] . '"');
@@ -469,9 +477,10 @@ class Import extends ImportExport
             if (!in_array($fileReferenceRecord['uid_local'], $this->import_mapId['sys_file'])) {
                 unset($this->dat['header']['records']['sys_file_reference'][$sysFileReferenceUid]);
                 unset($this->dat['records']['sys_file_reference:' . $sysFileReferenceUid]);
-                $this->error('Error: sys_file_reference record ' . (int)$sysFileReferenceUid
-                             . ' with relation to sys_file record ' . (int)$fileReferenceRecord['uid_local']
-                             . ', which is not part of the import data, was not imported.'
+                $this->error(
+                    'Error: sys_file_reference record ' . (int)$sysFileReferenceUid
+                    . ' with relation to sys_file record ' . (int)$fileReferenceRecord['uid_local']
+                    . ', which is not part of the import data, was not imported.'
                 );
             }
         }
@@ -502,7 +511,7 @@ class Import extends ImportExport
      *
      * @param int $oldFileUid
      * @param int $newFileUid
-    */
+     */
     protected function fixUidLocalInSysFileReferenceRecords($oldFileUid, $newFileUid)
     {
         if (!isset($this->dat['header']['records']['sys_file_reference'])) {
@@ -510,10 +519,11 @@ class Import extends ImportExport
         }
 
         foreach ($this->dat['header']['records']['sys_file_reference'] as $sysFileReferenceUid => $_) {
-            $fileReferenceRecord = $this->dat['records']['sys_file_reference:' . $sysFileReferenceUid]['data'];
-            if ($fileReferenceRecord['uid_local'] == $oldFileUid) {
-                $fileReferenceRecord['uid_local'] = $newFileUid;
-                $this->dat['records']['sys_file_reference:' . $sysFileReferenceUid]['data'] = $fileReferenceRecord;
+            if (!isset($this->dat['records']['sys_file_reference:' . $sysFileReferenceUid]['hasBeenMapped'])
+                && $this->dat['records']['sys_file_reference:' . $sysFileReferenceUid]['data']['uid_local'] == $oldFileUid
+            ) {
+                $this->dat['records']['sys_file_reference:' . $sysFileReferenceUid]['hasBeenMapped'] = true;
+                $this->dat['records']['sys_file_reference:' . $sysFileReferenceUid]['data']['uid_local'] = $newFileUid;
             }
         }
     }
@@ -555,11 +565,7 @@ class Import extends ImportExport
             clearstatcache();
             if (@is_file($temporaryFilePathInternal)) {
                 $this->unlinkFiles[] = $temporaryFilePathInternal;
-                if (filesize($temporaryFilePathInternal) == $this->dat[$dataKey][$fileId]['filesize']) {
-                    $temporaryFilePath = $temporaryFilePathInternal;
-                } else {
-                    $this->error('Error: temporary file ' . $temporaryFilePathInternal . ' had a size (' . filesize($temporaryFilePathInternal) . ') different from the original (' . $this->dat[$dataKey][$fileId]['filesize'] . ')');
-                }
+                $temporaryFilePath = $temporaryFilePathInternal;
             } else {
                 $this->error('Error: temporary file ' . $temporaryFilePathInternal . ' was not written as it should have been!');
             }
@@ -589,7 +595,7 @@ class Import extends ImportExport
                 foreach ($pagesFromTree as $uid) {
                     $thisRec = $this->dat['header']['records']['pages'][$uid];
                     // PID: Set the main $pid, unless a NEW-id is found
-                    $setPid = isset($this->import_newId_pids[$thisRec['pid']]) ? $this->import_newId_pids[$thisRec['pid']] : $pid;
+                    $setPid = $this->import_newId_pids[$thisRec['pid']] ?? $pid;
                     $this->addSingle('pages', $uid, $setPid);
                     unset($pageRecords[$uid]);
                 }
@@ -627,7 +633,7 @@ class Import extends ImportExport
      * Organize all updated pages in page tree so they are related like in the import file
      * Only used for updates and when $this->dat['header']['pagetree'] is an array.
      *
-     * @access private
+     * @internal
      * @see writeRecords_pages(), writeRecords_records_order()
      */
     public function writeRecords_pages_order()
@@ -638,7 +644,7 @@ class Import extends ImportExport
         foreach ($pidsFromTree as $origPid => $newPid) {
             if ($newPid >= 0 && $this->dontIgnorePid('pages', $origPid)) {
                 // If the page had a new id (because it was created) use that instead!
-                if (substr($this->import_newId_pids[$origPid], 0, 3) === 'NEW') {
+                if (strpos($this->import_newId_pids[$origPid], 'NEW') === 0) {
                     if ($this->import_mapId['pages'][$origPid]) {
                         $mappedPid = $this->import_mapId['pages'][$origPid];
                         $cmd_data['pages'][$mappedPid]['move'] = $newPid;
@@ -750,7 +756,7 @@ class Import extends ImportExport
      * Only used for updates
      *
      * @param int $mainPid Main PID into which we import.
-     * @access private
+     * @internal
      * @see writeRecords_records(), writeRecords_pages_order()
      */
     public function writeRecords_records_order($mainPid)
@@ -763,7 +769,7 @@ class Import extends ImportExport
         }
         if (is_array($this->dat['header']['pid_lookup'])) {
             foreach ($this->dat['header']['pid_lookup'] as $pid => $recList) {
-                $newPid = isset($this->import_mapId['pages'][$pid]) ? $this->import_mapId['pages'][$pid] : $mainPid;
+                $newPid = $this->import_mapId['pages'][$pid] ?? $mainPid;
                 if (MathUtility::canBeInterpretedAsInteger($newPid)) {
                     foreach ($recList as $tableName => $uidList) {
                         // If $mainPid===$newPid then we are on root level and we can consider to move pages as well!
@@ -773,7 +779,6 @@ class Import extends ImportExport
                             foreach ($uidList as $uid) {
                                 if ($this->dontIgnorePid($tableName, $uid)) {
                                     $cmd_data[$tableName][$uid]['move'] = $newPid;
-                                } else {
                                 }
                             }
                         }
@@ -959,7 +964,7 @@ class Import extends ImportExport
     public function unlinkTempFiles()
     {
         foreach ($this->unlinkFiles as $fileName) {
-            if (GeneralUtility::isFirstPartOfStr($fileName, PATH_site . 'typo3temp/')) {
+            if (GeneralUtility::isFirstPartOfStr($fileName, Environment::getPublicPath() . '/typo3temp/')) {
                 GeneralUtility::unlink_tempfile($fileName);
                 clearstatcache();
                 if (is_file($fileName)) {
@@ -1092,7 +1097,7 @@ class Import extends ImportExport
      * Writes the file from import array to temp dir and returns the filename of it.
      *
      * @param array $fI File information with three keys: "filename" = filename without path, "ID_absFile" = absolute filepath to the file (including the filename), "ID" = md5 hash of "ID_absFile
-     * @return string|NULL Absolute filename of the temporary filename of the file. In ->alternativeFileName the original name is set.
+     * @return string|null Absolute filename of the temporary filename of the file. In ->alternativeFileName the original name is set.
      */
     public function import_addFileNameToBeCopied($fI)
     {
@@ -1112,16 +1117,11 @@ class Import extends ImportExport
             clearstatcache();
             if (@is_file($tmpFile)) {
                 $this->unlinkFiles[] = $tmpFile;
-                if (filesize($tmpFile) == $this->dat['files'][$fI['ID']]['filesize']) {
-                    $this->alternativeFileName[$tmpFile] = $fI['filename'];
-                    $this->alternativeFilePath[$tmpFile] = $this->dat['files'][$fI['ID']]['relFileRef'];
-                    return $tmpFile;
-                } else {
-                    $this->error('Error: temporary file ' . $tmpFile . ' had a size (' . filesize($tmpFile) . ') different from the original (' . $this->dat['files'][$fI['ID']]['filesize'] . ')');
-                }
-            } else {
-                $this->error('Error: temporary file ' . $tmpFile . ' was not written as it should have been!');
+                $this->alternativeFileName[$tmpFile] = $fI['filename'];
+                $this->alternativeFilePath[$tmpFile] = $this->dat['files'][$fI['ID']]['relFileRef'];
+                return $tmpFile;
             }
+            $this->error('Error: temporary file ' . $tmpFile . ' was not written as it should have been!');
         } else {
             $this->error('Error: No file found for ID ' . $fI['ID']);
         }
@@ -1291,7 +1291,7 @@ class Import extends ImportExport
                                         $dataStructureArray = $flexFormTools->parseDataStructureByIdentifier($dataStructureIdentifier);
                                         $currentValueArray = GeneralUtility::xml2array($origRecordRow[$field]);
                                         // Do recursive processing of the XML data:
-                                        /** @var $iteratorObj DataHandler */
+                                        /** @var DataHandler $iteratorObj */
                                         $iteratorObj = GeneralUtility::makeInstance(DataHandler::class);
                                         $iteratorObj->callBackObj = $this;
                                         $currentValueArray['data'] = $iteratorObj->checkValue_flex_procInData($currentValueArray['data'], [], [], $dataStructureArray, [$table, $uid, $field, $softRefCfgs], 'processSoftReferences_flexFormCallBack');
@@ -1442,11 +1442,11 @@ class Import extends ImportExport
             if ($rteOrigName && GeneralUtility::isFirstPartOfStr($dirPrefix, 'uploads/')) {
                 // RTE:
                 // First, find unique RTE file name:
-                if (@is_dir((PATH_site . $dirPrefix))) {
+                if (@is_dir(Environment::getPublicPath() . '/' . $dirPrefix)) {
                     // From the "original" RTE filename, produce a new "original" destination filename which is unused.
                     // Even if updated, the image should be unique. Currently the problem with this is that it leaves a lot of unused RTE images...
                     $fileProcObj = $this->getFileProcObj();
-                    $origDestName = $fileProcObj->getUniqueName($rteOrigName, PATH_site . $dirPrefix);
+                    $origDestName = $fileProcObj->getUniqueName($rteOrigName, Environment::getPublicPath() . '/' . $dirPrefix);
                     // Create copy file name:
                     $pI = pathinfo($relFileName);
                     $copyDestName = PathUtility::dirname($origDestName) . '/RTEmagicC_' . substr(PathUtility::basename($origDestName), 10) . '.' . $pI['extension'];
@@ -1461,14 +1461,13 @@ class Import extends ImportExport
                             $this->writeFileVerify($origDestName, $fileHeaderInfo['RTE_ORIG_ID'], true);
                             // Return the relative path of the copy file name:
                             return PathUtility::stripPathSitePrefix($copyDestName);
-                        } else {
-                            $this->error('ERROR: Could not find original file ID');
                         }
+                        $this->error('ERROR: Could not find original file ID');
                     } else {
                         $this->error('ERROR: The destination filenames "' . $copyDestName . '" and "' . $origDestName . '" either existed or have non-valid names');
                     }
                 } else {
-                    $this->error('ERROR: "' . PATH_site . $dirPrefix . '" was not a directory, so could not process file "' . $relFileName . '"');
+                    $this->error('ERROR: "' . Environment::getPublicPath() . '/' . $dirPrefix . '" was not a directory, so could not process file "' . $relFileName . '"');
                 }
             } elseif (GeneralUtility::isFirstPartOfStr($dirPrefix, $this->fileadminFolderName . '/')) {
                 // File in fileadmin/ folder:
@@ -1485,7 +1484,7 @@ class Import extends ImportExport
         } else {
             $this->error('ERROR: Could not find file ID in header.');
         }
-        // Return (new) filename relative to PATH_site:
+        // Return (new) filename relative to public web path
         return $relFileName;
     }
 
@@ -1497,7 +1496,7 @@ class Import extends ImportExport
      * @param string $fileID File ID from import memory
      * @param string $table Table for which the processing occurs
      * @param string $uid UID of record from table
-     * @return string|NULL New relative filename, if any
+     * @return string|null New relative filename, if any
      */
     public function processSoftReferences_saveFile_createRelFile($origDirPrefix, $fileName, $fileID, $table, $uid)
     {
@@ -1516,11 +1515,11 @@ class Import extends ImportExport
 
             // Write main file:
             if ($updMode) {
-                $newName = PATH_site . $dirPrefix . $fileName;
+                $newName = Environment::getPublicPath() . '/' . $dirPrefix . $fileName;
             } else {
                 // Create unique filename:
                 $fileProcObj = $this->getFileProcObj();
-                $newName = $fileProcObj->getUniqueName($fileName, PATH_site . $dirPrefix);
+                $newName = $fileProcObj->getUniqueName($fileName, Environment::getPublicPath() . '/' . $dirPrefix);
             }
             if ($this->writeFileVerify($newName, $fileID)) {
                 // If the resource was an HTML/CSS file with resources attached, we will write those as well!
@@ -1533,9 +1532,9 @@ class Import extends ImportExport
                             if ($this->dat['files'][$res_fileID]['filename']) {
                                 // Resolve original filename:
                                 $relResourceFileName = $this->dat['files'][$res_fileID]['parentRelFileName'];
-                                $absResourceFileName = GeneralUtility::resolveBackPath(PATH_site . $origDirPrefix . $relResourceFileName);
+                                $absResourceFileName = GeneralUtility::resolveBackPath(Environment::getPublicPath() . '/' . $origDirPrefix . $relResourceFileName);
                                 $absResourceFileName = GeneralUtility::getFileAbsFileName($absResourceFileName);
-                                if ($absResourceFileName && GeneralUtility::isFirstPartOfStr($absResourceFileName, PATH_site . $this->fileadminFolderName . '/')) {
+                                if ($absResourceFileName && GeneralUtility::isFirstPartOfStr($absResourceFileName, Environment::getPublicPath() . '/' . $this->fileadminFolderName . '/')) {
                                     $destDir = PathUtility::stripPathSitePrefix(PathUtility::dirname($absResourceFileName) . '/');
                                     if ($this->verifyFolderAccess($destDir, true) && $this->checkOrCreateDir($destDir)) {
                                         $this->writeFileVerify($absResourceFileName, $res_fileID);
@@ -1576,9 +1575,9 @@ class Import extends ImportExport
     }
 
     /**
-     * Writes a file from the import memory having $fileID to file name $fileName which must be an absolute path inside PATH_site
+     * Writes a file from the import memory having $fileID to file name $fileName which must be an absolute path inside public web path
      *
-     * @param string $fileName Absolute filename inside PATH_site to write to
+     * @param string $fileName Absolute filename inside public web path to write to
      * @param string $fileID File ID from import memory
      * @param bool $bypassMountCheck Bypasses the checking against filemounts - only for RTE files!
      * @return bool Returns TRUE if it went well. Notice that the content of the file is read again, and md5 from import memory is validated.
@@ -1593,7 +1592,7 @@ class Import extends ImportExport
         // Just for security, check again. Should actually not be necessary.
         if (!$bypassMountCheck) {
             try {
-                ResourceFactory::getInstance()->getFolderObjectFromCombinedIdentifier(dirname($fileName));
+                ResourceFactory::getInstance()->getFolderObjectFromCombinedIdentifier(PathUtility::dirname($fileName));
             } catch (InsufficientFolderAccessPermissionsException $e) {
                 $this->error('ERROR: Filename "' . $fileName . '" was not allowed in destination path!');
                 return false;
@@ -1614,18 +1613,17 @@ class Import extends ImportExport
         }
         GeneralUtility::writeFile($fileName, $this->dat['files'][$fileID]['content']);
         $this->fileIDMap[$fileID] = $fileName;
-        if (md5(file_get_contents($fileName)) == $this->dat['files'][$fileID]['content_md5']) {
+        if (hash_equals(md5(file_get_contents($fileName)), $this->dat['files'][$fileID]['content_md5'])) {
             return true;
-        } else {
-            $this->error('ERROR: File content "' . $fileName . '" was corrupted');
-            return false;
         }
+        $this->error('ERROR: File content "' . $fileName . '" was corrupted');
+        return false;
     }
 
     /**
      * Returns TRUE if directory exists  and if it doesn't it will create directory and return TRUE if that succeeded.
      *
-     * @param string $dirPrefix Directory to create. Having a trailing slash. Must be in fileadmin/. Relative to PATH_site
+     * @param string $dirPrefix Directory to create. Having a trailing slash. Must be in fileadmin/. Relative to public web path
      * @return bool TRUE, if directory exists (was created)
      */
     public function checkOrCreateDir($dirPrefix)
@@ -1638,8 +1636,8 @@ class Import extends ImportExport
             foreach ($filePathParts as $dirname) {
                 $pathAcc .= '/' . $dirname;
                 if (strlen($dirname)) {
-                    if (!@is_dir((PATH_site . $this->fileadminFolderName . $pathAcc))) {
-                        if (!GeneralUtility::mkdir((PATH_site . $this->fileadminFolderName . $pathAcc))) {
+                    if (!@is_dir(Environment::getPublicPath() . '/' . $this->fileadminFolderName . $pathAcc)) {
+                        if (!GeneralUtility::mkdir(Environment::getPublicPath() . '/' . $this->fileadminFolderName . $pathAcc)) {
                             $this->error('ERROR: Directory could not be created....B');
                             return false;
                         }
@@ -1691,9 +1689,8 @@ class Import extends ImportExport
                     if ($this->dat['_DOCUMENT_TAG'] === 'T3RecordDocument' && is_array($this->dat['header']) && is_array($this->dat['records'])) {
                         $this->loadInit();
                         return true;
-                    } else {
-                        $this->error('XML file did not contain proper XML for TYPO3 Import');
                     }
+                    $this->error('XML file did not contain proper XML for TYPO3 Import');
                 } else {
                     $this->error('XML could not be parsed: ' . $this->dat);
                 }
@@ -1711,9 +1708,9 @@ class Import extends ImportExport
                 }
                 $this->loadInit();
                 return true;
-            } else {
-                $this->error('Error opening file: ' . $filename);
             }
+            $this->error('Error opening file: ' . $filename);
+
             fclose($fd);
         }
         return false;
@@ -1725,8 +1722,8 @@ class Import extends ImportExport
      * @param resource $fd File pointer
      * @param bool $unserialize If set, the returned content is unserialized into an array, otherwise you get the raw string
      * @param string $name For error messages this indicates the section of the problem.
-     * @return string|NULL Data string or NULL in case of an error
-     * @access private
+     * @return string|null Data string or NULL in case of an error
+     * @internal
      * @see loadFile()
      */
     public function getNextFilePart($fd, $unserialize = false, $name = '')
@@ -1749,7 +1746,7 @@ class Import extends ImportExport
         }
         $datString = fread($fd, (int)$initStrDat[2]);
         fread($fd, 1);
-        if (md5($datString) === $initStrDat[0]) {
+        if (hash_equals($initStrDat[0], md5($datString))) {
             if ($initStrDat[1]) {
                 if ($this->compress) {
                     $datString = gzuncompress($datString);
@@ -1759,9 +1756,9 @@ class Import extends ImportExport
                 }
             }
             return $unserialize ? unserialize($datString, ['allowed_classes' => false]) : $datString;
-        } else {
-            $this->error('MD5 check failed (' . $name . ')');
         }
+        $this->error('MD5 check failed (' . $name . ')');
+
         return null;
     }
 
@@ -1787,7 +1784,7 @@ class Import extends ImportExport
      * @param int $pointer File pointer (where to read from)
      * @param bool $unserialize If set, the returned content is unserialized into an array, otherwise you get the raw string
      * @param string $name For error messages this indicates the section of the problem.
-     * @return string|NULL Data string
+     * @return string|null Data string
      */
     public function getNextContentPart($filecontent, &$pointer, $unserialize = false, $name = '')
     {
@@ -1802,14 +1799,13 @@ class Import extends ImportExport
         }
         $datString = substr($filecontent, $pointer, (int)$initStrDat[2]);
         $pointer += (int)$initStrDat[2] + 1;
-        if (md5($datString) === $initStrDat[0]) {
+        if (hash_equals($initStrDat[0], md5($datString))) {
             if ($initStrDat[1]) {
                 if ($this->compress) {
                     $datString = gzuncompress($datString);
                     return $unserialize ? unserialize($datString, ['allowed_classes' => false]) : $datString;
-                } else {
-                    $this->error('Content read error: This file requires decompression, but this server does not offer gzcompress()/gzuncompress() functions.');
                 }
+                $this->error('Content read error: This file requires decompression, but this server does not offer gzcompress()/gzuncompress() functions.');
             }
         } else {
             $this->error('MD5 check failed (' . $name . ')');

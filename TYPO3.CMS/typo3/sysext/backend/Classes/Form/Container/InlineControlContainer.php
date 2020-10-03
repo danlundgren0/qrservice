@@ -20,11 +20,12 @@ use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Resource\Folder;
 use TYPO3\CMS\Core\Resource\OnlineMedia\Helpers\OnlineMediaHelperRegistry;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
-use TYPO3\CMS\Lang\LanguageService;
+use TYPO3\CMS\Core\Utility\StringUtility;
 
 /**
  * Inline element entry container.
@@ -60,6 +61,17 @@ class InlineControlContainer extends AbstractContainer
      * @var string[]
      */
     protected $requireJsModules = [];
+
+    /**
+     * Default field information enabled for this element.
+     *
+     * @var array
+     */
+    protected $defaultFieldInformation = [
+        'tcaDescription' => [
+            'renderType' => 'tcaDescription',
+        ],
+    ];
 
     /**
      * @var array Default wizards
@@ -107,7 +119,7 @@ class InlineControlContainer extends AbstractContainer
 
         $config = $parameterArray['fieldConf']['config'];
         $foreign_table = $config['foreign_table'];
-
+        $isReadOnly = isset($config['readOnly']) && $config['readOnly'];
         $language = 0;
         $languageFieldName = $GLOBALS['TCA'][$table]['ctrl']['languageField'];
         if (BackendUtility::isTableLocalizable($table)) {
@@ -120,7 +132,6 @@ class InlineControlContainer extends AbstractContainer
             'uid' => $row['uid'],
             'field' => $field,
             'config' => $config,
-            'localizationMode' => BackendUtility::getInlineLocalizationMode($table, $config),
         ];
         // Extract FlexForm parts (if any) from element name, e.g. array('vDEF', 'lDEF', 'FlexField', 'vDEF')
         if (!empty($parameterArray['itemFormElName'])) {
@@ -131,12 +142,17 @@ class InlineControlContainer extends AbstractContainer
         }
         $inlineStackProcessor->pushStableStructureItem($newStructureItem);
 
-        // Transport the flexform DS identifier fields to the FormAjaxInlineController
+        // Transport the flexform DS identifier fields to the FormInlineAjaxController
         if (!empty($newStructureItem['flexform'])
             && isset($this->data['processedTca']['columns'][$field]['config']['dataStructureIdentifier'])
         ) {
             $config['dataStructureIdentifier'] = $this->data['processedTca']['columns'][$field]['config']['dataStructureIdentifier'];
         }
+
+        // Hand over original returnUrl to FormInlineAjaxController. Needed if opening for instance a
+        // nested element in a new view to then go back to the original returnUrl and not the url of
+        // the inline ajax controller
+        $config['originalReturnUrl'] = $this->data['returnUrl'];
 
         // e.g. data[<table>][<uid>][<field>]
         $nameForm = $inlineStackProcessor->getCurrentStructureFormPrefix();
@@ -160,6 +176,7 @@ class InlineControlContainer extends AbstractContainer
             'table' => $foreign_table,
             'md5' => md5($nameObject)
         ];
+        $configJson = json_encode($config);
         $this->inlineData['config'][$nameObject . '-' . $foreign_table] = [
             'min' => $config['minitems'],
             'max' => $config['maxitems'],
@@ -169,8 +186,8 @@ class InlineControlContainer extends AbstractContainer
                 'uid' => $top['uid']
             ],
             'context' => [
-                'config' => $config,
-                'hmac' => GeneralUtility::hmac(json_encode($config), 'InlineContext'),
+                'config' => $configJson,
+                'hmac' => GeneralUtility::hmac($configJson, 'InlineContext'),
             ],
         ];
         $this->inlineData['nested'][$nameObject] = $this->data['tabAndInlineStack'];
@@ -180,6 +197,7 @@ class InlineControlContainer extends AbstractContainer
 
         if ($config['foreign_unique']) {
             // Add inlineData['unique'] with JS unique configuration
+            // @todo: Improve validation and throw an exception if type is neither select nor group here
             $type = $config['selectorOrUniqueConfiguration']['config']['type'] === 'select' ? 'select' : 'groupdb';
             foreach ($parameterArray['fieldConf']['children'] as $child) {
                 // Determine used unique ids, skip not localized records
@@ -187,18 +205,24 @@ class InlineControlContainer extends AbstractContainer
                     $value = $child['databaseRow'][$config['foreign_unique']];
                     // We're assuming there is only one connected value here for both select and group
                     if ($type === 'select') {
-                        // A resolved select field is an array - take first value
+                        // A select field is an array of uids. See TcaSelectItems data provider for details.
+                        // Pick first entry, ends up as eg. $value = 42.
                         $value = $value['0'];
                     } else {
-                        // A group field is still a list with pipe separated uid|tableName
-                        $valueParts = GeneralUtility::trimExplode('|', $value);
-                        $itemParts = explode('_', $valueParts[0]);
+                        // A group field is an array of arrays containing uid + table + title + row.
+                        // See TcaGroup data provider for details.
+                        // Pick the first one (always on 0), and use uid + table only. Exclude title + row
+                        // since the entire inlineData['unique'] array ends up in JavaScript in the end
+                        // and we don't need and want the title and the entire row data in the frontend.
+                        // Ends up as $value = [ 'uid' => '42', 'table' => 'tx_my_table' ]
                         $value = [
-                            'uid' => array_pop($itemParts),
-                            'table' => implode('_', $itemParts)
+                            'uid' => $value[0]['uid'],
+                            'table' => $value[0]['table'],
                         ];
                     }
-                    // @todo: This is weird, $value has different structure for group and select fields?
+                    // Note structure of $value is different in select vs. group: It's a uid for select, but an
+                    // array with uid + table for group. This is handled differently on JavaScript side, search
+                    // for 'groupdb' in jsfunc.inline.js for details.
                     $uniqueIds[$child['databaseRow']['uid']] = $value;
                 }
             }
@@ -231,10 +255,10 @@ class InlineControlContainer extends AbstractContainer
         $numberOfNotYetLocalizedChildren = 0;
         foreach ($this->data['parameterArray']['fieldConf']['children'] as $child) {
             if (!$child['isInlineDefaultLanguageRecordInLocalizedParentContext']) {
-                $numberOfFullLocalizedChildren ++;
+                $numberOfFullLocalizedChildren++;
             }
             if ($isLocalizedParent && $child['isInlineDefaultLanguageRecordInLocalizedParentContext']) {
-                $numberOfNotYetLocalizedChildren ++;
+                $numberOfNotYetLocalizedChildren++;
             }
         }
 
@@ -252,7 +276,7 @@ class InlineControlContainer extends AbstractContainer
         }
 
         // Define how to show the "Create new record" link - if there are more than maxitems, hide it
-        if ($numberOfFullLocalizedChildren >= $config['maxitems'] || $uniqueMax > 0 && $numberOfFullLocalizedChildren >= $uniqueMax) {
+        if ($isReadOnly || $numberOfFullLocalizedChildren >= $config['maxitems'] || ($uniqueMax > 0 && $numberOfFullLocalizedChildren >= $uniqueMax)) {
             $config['inline']['inlineNewButtonStyle'] = 'display: none;';
             $config['inline']['inlineNewRelationButtonStyle'] = 'display: none;';
             $config['inline']['inlineOnlineMediaAddButtonStyle'] = 'display: none;';
@@ -265,13 +289,18 @@ class InlineControlContainer extends AbstractContainer
         }
         // Wrap all inline fields of a record with a <div> (like a container)
         $html = '<div class="form-group" id="' . $nameObject . '">';
+
+        $fieldInformationResult = $this->renderFieldInformation();
+        $html .= $fieldInformationResult['html'];
+        $resultArray = $this->mergeChildReturnIntoExistingResult($resultArray, $fieldInformationResult, false);
+
         // Add the level links before all child records:
         if ($config['appearance']['levelLinksPosition'] === 'both' || $config['appearance']['levelLinksPosition'] === 'top') {
             $html .= '<div class="form-group t3js-formengine-validation-marker">' . $levelLinks . $localizationLinks . '</div>';
         }
 
         // If it's required to select from possible child records (reusable children), add a selector box
-        if ($config['foreign_selector'] && $config['appearance']['showPossibleRecordsSelector'] !== false) {
+        if (!$isReadOnly && $config['foreign_selector'] && $config['appearance']['showPossibleRecordsSelector'] !== false) {
             if ($config['selectorOrUniqueConfiguration']['config']['type'] === 'select') {
                 $selectorBox = $this->renderPossibleRecordsSelectorTypeSelect($config, $uniqueIds);
             } else {
@@ -311,21 +340,28 @@ class InlineControlContainer extends AbstractContainer
         $html .= $fieldWizardHtml;
 
         // Add the level links after all child records:
-        if ($config['appearance']['levelLinksPosition'] ===  'both' || $config['appearance']['levelLinksPosition'] === 'bottom') {
+        if (!$isReadOnly && ($config['appearance']['levelLinksPosition'] === 'both' || $config['appearance']['levelLinksPosition'] === 'bottom')) {
             $html .= $levelLinks . $localizationLinks;
         }
         if (is_array($config['customControls'])) {
             $html .= '<div id="' . $nameObject . '_customControls">';
             foreach ($config['customControls'] as $customControlConfig) {
+                if (!isset($customControlConfig['userFunc'])) {
+                    trigger_error('Support for customControl without a userFunc key will be removed in TYPO3 v10.0.', E_USER_DEPRECATED);
+                    $customControlConfig = [
+                        'userFunc' => $customControlConfig
+                    ];
+                }
                 $parameters = [
                     'table' => $table,
                     'field' => $field,
                     'row' => $row,
                     'nameObject' => $nameObject,
                     'nameForm' => $nameForm,
-                    'config' => $config
+                    'config' => $config,
+                    'customControlConfig' => $customControlConfig,
                 ];
-                $html .= GeneralUtility::callUserFunction($customControlConfig, $parameters, $this);
+                $html .= GeneralUtility::callUserFunction($customControlConfig['userFunc'], $parameters, $this);
             }
             $html .= '</div>';
         }
@@ -362,8 +398,8 @@ class InlineControlContainer extends AbstractContainer
         $attributes = [];
         switch ($type) {
             case 'newRecord':
-                $title = htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:cm.createnew'));
-                $icon = 'actions-document-new';
+                $title = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:cm.createnew'));
+                $icon = 'actions-add';
                 $className = 'typo3-newRecordLink';
                 $attributes['class'] = 'btn btn-default inlineNewButton ' . $this->inlineData['config'][$nameObject]['md5'];
                 $attributes['onclick'] = 'return inline.createNewRecord(' . GeneralUtility::quoteJSvalue($objectPrefix) . ')';
@@ -372,7 +408,7 @@ class InlineControlContainer extends AbstractContainer
                 }
                 if (!empty($conf['appearance']['newRecordLinkAddTitle'])) {
                     $title = htmlspecialchars(sprintf(
-                        $languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:cm.createnew.link'),
+                        $languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:cm.createnew.link'),
                         $languageService->sL($GLOBALS['TCA'][$conf['foreign_table']]['ctrl']['title'])
                     ));
                 } elseif (isset($conf['appearance']['newRecordLinkTitle']) && $conf['appearance']['newRecordLinkTitle'] !== '') {
@@ -380,14 +416,14 @@ class InlineControlContainer extends AbstractContainer
                 }
                 break;
             case 'localize':
-                $title = htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_misc.xlf:localizeAllRecords'));
+                $title = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_misc.xlf:localizeAllRecords'));
                 $icon = 'actions-document-localize';
                 $className = 'typo3-localizationLink';
                 $attributes['class'] = 'btn btn-default';
                 $attributes['onclick'] = 'return inline.synchronizeLocalizeRecords(' . GeneralUtility::quoteJSvalue($objectPrefix) . ', \'localize\')';
                 break;
             case 'synchronize':
-                $title = htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_misc.xlf:synchronizeWithOriginalLanguage'));
+                $title = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_misc.xlf:synchronizeWithOriginalLanguage'));
                 $icon = 'actions-document-synchronize';
                 $className = 'typo3-synchronizationLink';
                 $attributes['class'] = 'btn btn-default inlineNewButton ' . $this->inlineData['config'][$nameObject]['md5'];
@@ -400,7 +436,7 @@ class InlineControlContainer extends AbstractContainer
         }
         // Create the link:
         $icon = $icon ? $this->iconFactory->getIcon($icon, Icon::SIZE_SMALL)->render() : '';
-        $link = $this->wrapWithAnchor($icon . $title, '#', $attributes);
+        $link = $this->wrapWithAnchor($icon . ' ' . $title, '#', $attributes);
         return '<div' . ($className ? ' class="' . $className . '"' : '') . 'title="' . $title . '">' . $link . '</div>';
     }
 
@@ -414,13 +450,8 @@ class InlineControlContainer extends AbstractContainer
      */
     protected function wrapWithAnchor($text, $link, $attributes = [])
     {
-        $link = trim($link);
-        $result = '<a href="' . ($link ?: '#') . '"';
-        foreach ($attributes as $key => $value) {
-            $result .= ' ' . $key . '="' . htmlspecialchars(trim($value)) . '"';
-        }
-        $result .= '>' . $text . '</a>';
-        return $result;
+        $attributes['href'] = trim($link ?: '#');
+        return '<a ' . GeneralUtility::implodeAttributes($attributes, true, true) . '>' . $text . '</a>';
     }
 
     /**
@@ -439,15 +470,16 @@ class InlineControlContainer extends AbstractContainer
 
         $foreign_table = $inlineConfiguration['foreign_table'];
         $allowed = $groupFieldConfiguration['allowed'];
-        $objectPrefix = $this->inlineStackProcessor->getCurrentStructureDomObjectIdPrefix($this->data['inlineFirstPid']) . '-' . $foreign_table;
-        $nameObject = $this->inlineStackProcessor->getCurrentStructureDomObjectIdPrefix($this->data['inlineFirstPid']);
+        $currentStructureDomObjectIdPrefix = $this->inlineStackProcessor->getCurrentStructureDomObjectIdPrefix($this->data['inlineFirstPid']);
+        $objectPrefix = $currentStructureDomObjectIdPrefix . '-' . $foreign_table;
+        $nameObject = $currentStructureDomObjectIdPrefix;
         $mode = 'db';
         $showUpload = false;
         $elementBrowserEnabled = true;
         if (!empty($inlineConfiguration['appearance']['createNewRelationLinkTitle'])) {
             $createNewRelationText = htmlspecialchars($languageService->sL($inlineConfiguration['appearance']['createNewRelationLinkTitle']));
         } else {
-            $createNewRelationText = htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:cm.createNewRelation'));
+            $createNewRelationText = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:cm.createNewRelation'));
         }
         if (is_array($groupFieldConfiguration['appearance'])) {
             if (isset($groupFieldConfiguration['appearance']['elementBrowserType'])) {
@@ -466,6 +498,8 @@ class InlineControlContainer extends AbstractContainer
                 $elementBrowserEnabled = (bool)$inlineConfiguration['appearance']['elementBrowserEnabled'];
             }
         }
+        // Remove any white-spaces from the allowed extension lists
+        $allowed = implode(',', GeneralUtility::trimExplode(',', $allowed, true));
         $browserParams = '|||' . $allowed . '|' . $objectPrefix . '|inline.checkUniqueElement||inline.importElement';
         $onClick = 'setFormValueOpenBrowser(' . GeneralUtility::quoteJSvalue($mode) . ', ' . GeneralUtility::quoteJSvalue($browserParams) . '); return false;';
 
@@ -491,7 +525,7 @@ class InlineControlContainer extends AbstractContainer
         }
         if ($showUpload && $isDirectFileUploadEnabled) {
             $folder = $backendUser->getDefaultUploadFolder(
-                $this->data['parentPageRow']['uid'],
+                $this->data['tableName'] === 'pages' ? $this->data['vanillaUid'] : $this->data['parentPageRow']['uid'],
                 $this->data['tableName'],
                 $this->data['fieldName']
             );
@@ -502,7 +536,7 @@ class InlineControlContainer extends AbstractContainer
                 $maxFileSize = GeneralUtility::getMaxUploadFileSize() * 1024;
                 $item .= ' <a href="#" class="btn btn-default t3js-drag-uploader inlineNewFileUploadButton ' . $this->inlineData['config'][$nameObject]['md5'] . '"
 					' . $buttonStyle . '
-					data-dropzone-target="#' . htmlspecialchars($this->inlineStackProcessor->getCurrentStructureDomObjectIdPrefix($this->data['inlineFirstPid'])) . '"
+					data-dropzone-target="#' . htmlspecialchars(StringUtility::escapeCssSelector($currentStructureDomObjectIdPrefix)) . '"
 					data-insert-dropzone-before="1"
 					data-file-irre-object="' . htmlspecialchars($objectPrefix) . '"
 					data-file-allowed="' . htmlspecialchars($allowed) . '"
@@ -510,7 +544,7 @@ class InlineControlContainer extends AbstractContainer
 					data-max-file-size="' . htmlspecialchars($maxFileSize) . '"
 					>';
                 $item .= $this->iconFactory->getIcon('actions-upload', Icon::SIZE_SMALL)->render() . ' ';
-                $item .= htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:file_upload.select-and-submit'));
+                $item .= htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:file_upload.select-and-submit'));
                 $item .= '</a>';
 
                 $this->requireJsModules[] = ['TYPO3/CMS/Backend/DragUploader' => 'function(dragUploader){dragUploader.initialize()}'];
@@ -520,14 +554,16 @@ class InlineControlContainer extends AbstractContainer
                         $buttonStyle = ' style="' . $inlineConfiguration['inline']['inlineOnlineMediaAddButtonStyle'] . '"';
                     }
                     $this->requireJsModules[] = 'TYPO3/CMS/Backend/OnlineMedia';
-                    $buttonText = htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:online_media.new_media.button'));
-                    $placeholder = htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:online_media.new_media.placeholder'));
-                    $buttonSubmit = htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:online_media.new_media.submit'));
+                    $buttonText = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:online_media.new_media.button'));
+                    $placeholder = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:online_media.new_media.placeholder'));
+                    $buttonSubmit = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:online_media.new_media.submit'));
+                    $allowedMediaUrl = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:cm.allowEmbedSources'));
                     $item .= '
 						<span class="btn btn-default t3js-online-media-add-btn ' . $this->inlineData['config'][$nameObject]['md5'] . '"
 							' . $buttonStyle . '
 							data-file-irre-object="' . htmlspecialchars($objectPrefix) . '"
 							data-online-media-allowed="' . htmlspecialchars(implode(',', $onlineMediaAllowed)) . '"
+							data-online-media-allowed-help-text="' . $allowedMediaUrl . '"
 							data-target-folder="' . htmlspecialchars($folder->getCombinedIdentifier()) . '"
 							title="' . $buttonText . '"
 							data-btn-submit="' . $buttonSubmit . '"
@@ -541,7 +577,8 @@ class InlineControlContainer extends AbstractContainer
 
         $item = '<div class="form-control-wrap">' . $item . '</div>';
         $allowedList = '';
-        $allowedLabel = htmlspecialchars($languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:cm.allowedFileExtensions'));
+        $allowedLabelKey = ($mode === 'file') ? 'allowedFileExtensions' : 'allowedRelations';
+        $allowedLabel = htmlspecialchars($languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:cm.' . $allowedLabelKey));
         foreach ($allowedArray as $allowedItem) {
             $allowedList .= '<span class="label label-success">' . strtoupper($allowedItem) . '</span> ';
         }
@@ -589,12 +626,12 @@ class InlineControlContainer extends AbstractContainer
             if (!empty($config['appearance']['createNewRelationLinkTitle'])) {
                 $createNewRelationText = htmlspecialchars($this->getLanguageService()->sL($config['appearance']['createNewRelationLinkTitle']));
             } else {
-                $createNewRelationText = htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:cm.createNewRelation'));
+                $createNewRelationText = htmlspecialchars($this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:cm.createNewRelation'));
             }
             $item .= '
             <span class="input-group-btn">
                 <a href="#" class="btn btn-default" onclick="' . htmlspecialchars($onChange) . '" title="' . $createNewRelationText . '">
-                    ' . $this->iconFactory->getIcon('actions-document-new', Icon::SIZE_SMALL)->render() . $createNewRelationText . '
+                    ' . $this->iconFactory->getIcon('actions-add', Icon::SIZE_SMALL)->render() . $createNewRelationText . '
                 </a>
             </span>';
         } else {
@@ -613,7 +650,7 @@ class InlineControlContainer extends AbstractContainer
      * Helper method used in inline
      *
      * @param string $formElementName The form element name
-     * @return array|NULL
+     * @return array|null
      */
     protected function extractFlexFormParts($formElementName)
     {

@@ -23,12 +23,12 @@ namespace TYPO3\CMS\Fluid\Core\Widget;
  * by various ViewHelpers (like <f:widget.link>, <f:widget.uri>, <f:widget.renderChildren>),
  * to get knowledge over the current widget's configuration.
  *
- * It is a purely internal class which should not be used outside of Fluid.
+ * @internal It is a purely internal class which should not be used outside of Fluid.
  */
 class WidgetContext
 {
     /**
-     * Uniquely idenfies a Widget Instance on a certain page.
+     * Uniquely identifies a Widget Instance on a certain page.
      *
      * @var string
      */
@@ -60,8 +60,7 @@ class WidgetContext
      * The child nodes of the Widget ViewHelper.
      * Only available inside non-AJAX requests.
      *
-     * @var \TYPO3\CMS\Fluid\Core\Parser\SyntaxTree\RootNode
-     * @transient
+     * @var \TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\RootNode
      */
     protected $viewHelperChildNodes;
 
@@ -71,7 +70,6 @@ class WidgetContext
      * @todo rename to something more meaningful.
      *
      * @var \TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface
-     * @transient
      */
     protected $viewHelperChildNodeRenderingContext;
 
@@ -79,6 +77,11 @@ class WidgetContext
      * @var string
      */
     protected $parentPluginNamespace;
+
+    /**
+     * @var string
+     */
+    protected $parentVendorName;
 
     /**
      * @var string
@@ -168,6 +171,26 @@ class WidgetContext
     }
 
     /**
+     * Sets the Vendor name of the plugin that contains the widget
+     *
+     * @param string $parentVendorName
+     */
+    public function setParentVendorName($parentVendorName)
+    {
+        $this->parentVendorName = $parentVendorName;
+    }
+
+    /**
+     * Returns the Vendor name of the plugin that contains the widget
+     *
+     * @return string
+     */
+    public function getParentVendorName()
+    {
+        return $this->parentVendorName;
+    }
+
+    /**
      * Sets the name of the plugin that contains the widget
      *
      * @param string $parentPluginName
@@ -240,17 +263,17 @@ class WidgetContext
     }
 
     /**
-     * @param \TYPO3\CMS\Fluid\Core\Parser\SyntaxTree\RootNode $viewHelperChildNodes
+     * @param \TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\RootNode $viewHelperChildNodes
      * @param \TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface $viewHelperChildNodeRenderingContext
      */
-    public function setViewHelperChildNodes(\TYPO3\CMS\Fluid\Core\Parser\SyntaxTree\RootNode $viewHelperChildNodes, \TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface $viewHelperChildNodeRenderingContext)
+    public function setViewHelperChildNodes(\TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\RootNode $viewHelperChildNodes, \TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface $viewHelperChildNodeRenderingContext)
     {
         $this->viewHelperChildNodes = $viewHelperChildNodes;
         $this->viewHelperChildNodeRenderingContext = $viewHelperChildNodeRenderingContext;
     }
 
     /**
-     * @return \TYPO3\CMS\Fluid\Core\Parser\SyntaxTree\RootNode
+     * @return \TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\RootNode
      */
     public function getViewHelperChildNodes()
     {
@@ -270,6 +293,6 @@ class WidgetContext
      */
     public function __sleep()
     {
-        return ['widgetIdentifier', 'ajaxWidgetIdentifier', 'widgetConfiguration', 'controllerObjectName', 'parentPluginNamespace', 'parentExtensionName', 'parentPluginName', 'widgetViewHelperClassName'];
+        return ['widgetIdentifier', 'ajaxWidgetIdentifier', 'widgetConfiguration', 'controllerObjectName', 'parentPluginNamespace', 'parentVendorName', 'parentExtensionName', 'parentPluginName', 'widgetViewHelperClassName'];
     }
 }

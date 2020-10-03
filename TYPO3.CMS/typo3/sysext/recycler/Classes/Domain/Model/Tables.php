@@ -20,6 +20,7 @@ use TYPO3\CMS\Recycler\Utility\RecyclerUtility;
 
 /**
  * Model class for the 'recycler' extension.
+ * @internal This class is a specific domain model implementation and is not part of the Public TYPO3 API.
  */
 class Tables
 {
@@ -28,7 +29,7 @@ class Tables
      *
      * @param int $startUid UID from selected page
      * @param int $depth How many levels recursive
-     * @return string The tables to be displayed
+     * @return array The tables to be displayed
      */
     public function getTables($startUid, $depth = 0)
     {
@@ -36,6 +37,7 @@ class Tables
         $lang = $this->getLanguageService();
         $tables = [];
         $connection = GeneralUtility::makeInstance(ConnectionPool::class);
+
         foreach (RecyclerUtility::getModifyableTables() as $tableName) {
             $deletedField = RecyclerUtility::getDeletedField($tableName);
             if ($deletedField) {
@@ -55,7 +57,7 @@ class Tables
                     ->fetchColumn();
 
                 if ($deletedCount) {
-                    /* @var $deletedDataObject DeletedRecords */
+                    /* @var DeletedRecords $deletedDataObject */
                     $deletedDataObject = GeneralUtility::makeInstance(DeletedRecords::class);
                     $deletedData = $deletedDataObject->loadData($startUid, $tableName, $depth)->getDeletedRows();
                     if (isset($deletedData[$tableName])) {
@@ -64,7 +66,7 @@ class Tables
                             $tables[] = [
                                 $tableName,
                                 $deletedRecordsInTable,
-                                $lang->sL($GLOBALS['TCA'][$tableName]['ctrl']['title'])
+                                $lang->sL($GLOBALS['TCA'][$tableName]['ctrl']['title'] ?? $tableName)
                             ];
                         }
                     }
@@ -75,7 +77,7 @@ class Tables
         array_unshift($jsonArray, [
             '',
             $deletedRecordsTotal,
-            $lang->sL('LLL:EXT:recycler/mod1/locallang.xlf:label_allrecordtypes')
+            $lang->sL('LLL:EXT:recycler/Resources/Private/Language/locallang.xlf:label_allrecordtypes')
         ]);
         return $jsonArray;
     }
@@ -83,7 +85,7 @@ class Tables
     /**
      * Returns an instance of LanguageService
      *
-     * @return \TYPO3\CMS\Lang\LanguageService
+     * @return \TYPO3\CMS\Core\Localization\LanguageService
      */
     protected function getLanguageService()
     {

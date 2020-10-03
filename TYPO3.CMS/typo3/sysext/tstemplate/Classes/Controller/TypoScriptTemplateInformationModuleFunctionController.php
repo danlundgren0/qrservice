@@ -14,32 +14,56 @@ namespace TYPO3\CMS\Tstemplate\Controller;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Backend\Module\AbstractFunctionModule;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
-use TYPO3\CMS\Core\DataHandling\DataHandler;
+use TYPO3\CMS\Core\Compatibility\PublicMethodDeprecationTrait;
+use TYPO3\CMS\Core\Compatibility\PublicPropertyDeprecationTrait;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\TypoScript\ExtendedTemplateService;
-use TYPO3\CMS\Core\TypoScript\Parser\TypoScriptParser;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\HttpUtility;
 use TYPO3\CMS\Fluid\View\StandaloneView;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * This class displays the Info/Modify screen of the Web > Template module
+ * @internal This is a specific Backend Controller implementation and is not considered part of the Public TYPO3 API.
  */
-class TypoScriptTemplateInformationModuleFunctionController extends AbstractFunctionModule
+class TypoScriptTemplateInformationModuleFunctionController
 {
+    use PublicPropertyDeprecationTrait;
+    use PublicMethodDeprecationTrait;
+
+    /**
+     * @var array
+     */
+    private $deprecatedPublicProperties = [
+        'pObj' => 'Using TypoScriptTemplateInformationModuleFunctionController::$pObj is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'function_key' => 'Using TypoScriptTemplateInformationModuleFunctionController::$function_key is deprecated, property will be removed in TYPO3 v10.0.',
+        'extClassConf' => 'Using TypoScriptTemplateInformationModuleFunctionController::$extClassConf is deprecated, property will be removed in TYPO3 v10.0.',
+        'localLangFile' => 'Using TypoScriptTemplateInformationModuleFunctionController::$localLangFile is deprecated, property will be removed in TYPO3 v10.0.',
+        'tce_processed' => 'Using TypoScriptTemplateInformationModuleFunctionController::$tce_processed is deprecated, property will be removed in TYPO3 v10.0.',
+    ];
+
+    /**
+     * @var array
+     */
+    private $deprecatedPublicMethods = [
+        'initialize_editor' => 'Using TypoScriptTemplateInformationModuleFunctionController::initialize_editor() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'tableRowData' => 'Using TypoScriptTemplateInformationModuleFunctionController::tableRowData() is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'handleExternalFunctionValue' => 'Using TypoScriptTemplateInformationModuleFunctionController::handleExternalFunctionValue() is deprecated, method will be removed in TYPO3 v10.0.',
+    ];
+
     /**
      * Indicator for t3editor, whether data is stored
      *
      * @var bool
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
      */
-    public $tce_processed = false;
+    protected $tce_processed = false;
 
     /**
      * @var TypoScriptTemplateModuleController
      */
-    public $pObj;
+    protected $pObj;
 
     /**
      * The currently selected sys_template record
@@ -53,6 +77,56 @@ class TypoScriptTemplateInformationModuleFunctionController extends AbstractFunc
     protected $templateService;
 
     /**
+     * @var int GET/POST var 'id'
+     */
+    protected $id;
+
+    /**
+     * Can be hardcoded to the name of a locallang.xlf file (from the same directory as the class file) to use/load
+     * and is included / added to $GLOBALS['LOCAL_LANG']
+     *
+     * @see init()
+     * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected $localLangFile = '';
+
+    /**
+     * Contains module configuration parts from TBE_MODULES_EXT if found
+     *
+     * @see handleExternalFunctionValue()
+     * @var array
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected $extClassConf;
+
+    /**
+     * If this value is set it points to a key in the TBE_MODULES_EXT array (not on the top level..) where another classname/filepath/title can be defined for sub-subfunctions.
+     * This is a little hard to explain, so see it in action; it used in the extension 'func_wizards' in order to provide yet a layer of interfacing with the backend module.
+     * The extension 'func_wizards' has this description: 'Adds the 'Wizards' item to the function menu in Web>Func. This is just a framework for wizard extensions.' - so as you can see it is designed to allow further connectivity - 'level 2'
+     *
+     * @var string
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected $function_key = '';
+
+    /**
+     * Init, called from parent object
+     *
+     * @param TypoScriptTemplateModuleController $pObj A reference to the parent (calling) object
+     */
+    public function init($pObj)
+    {
+        $this->pObj = $pObj;
+        // Local lang:
+        if (!empty($this->localLangFile)) {
+            // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+            $this->getLanguageService()->includeLLFile($this->localLangFile);
+        }
+        $this->id = (int)GeneralUtility::_GP('id');
+    }
+
+    /**
      * Gets the data for a row of a HTML table in the fluid template
      *
      * @param string $label The label to be shown (e.g. 'Title:', 'Sitetitle:')
@@ -61,34 +135,28 @@ class TypoScriptTemplateInformationModuleFunctionController extends AbstractFunc
      * @param int $id The field/variable to be sent on clicking the edit icon (e.g. 'title', 'sitetitle')
      * @return array Data for a row of a HTML table
      */
-    public function tableRowData($label, $data, $field, $id)
+    protected function tableRowData($label, $data, $field, $id)
     {
-        if ($field === 'config' || $field === 'constants') {
-            $urlParameters = [
-                'id' => $this->pObj->id,
-                'e' => [
-                    $field => 1
+        $urlParameters = [
+            'id' => $this->id,
+            'edit' => [
+                'sys_template' => [
+                    $id => 'edit'
                 ]
-            ];
-            $url = BackendUtility::getModuleUrl('web_ts', $urlParameters);
-        } else {
-            $urlParameters = [
-                'edit' => [
-                    'sys_template' => [
-                        $id => 'edit'
-                    ]
-                ],
-                'columnsOnly' => $field,
-                'createExtension' => 0,
-                'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI')
-            ];
-            $url = BackendUtility::getModuleUrl('record_edit', $urlParameters);
-        }
-        $row = [];
-        $row['url'] = $url;
-        $row['data'] = $data;
-        $row['label'] = $label;
-        return $row;
+            ],
+            'columnsOnly' => $field,
+            'createExtension' => 0,
+            'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI')
+        ];
+        /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
+        $url = (string)$uriBuilder->buildUriFromRoute('record_edit', $urlParameters);
+
+        return [
+            'url' => $url,
+            'data' => $data,
+            'label' => $label
+        ];
     }
 
     /**
@@ -102,68 +170,25 @@ class TypoScriptTemplateInformationModuleFunctionController extends AbstractFunc
      * @param int $template_uid The uid of the template record to be rendered (only if more than one template on the current page)
      * @return bool Returns TRUE if a template record was found, otherwise FALSE
      */
-    public function initialize_editor($pageId, $template_uid = 0)
+    protected function initialize_editor($pageId, $template_uid = 0)
     {
         $this->templateService = GeneralUtility::makeInstance(ExtendedTemplateService::class);
-        $this->templateService->init();
 
         // Get the row of the first VISIBLE template of the page. where clause like the frontend.
         $this->templateRow = $this->templateService->ext_getFirstTemplate($pageId, $template_uid);
         if (is_array($this->templateRow)) {
-            $this->templateRow = $this->processTemplateRowAfterLoading($this->templateRow);
             return true;
         }
         return false;
     }
 
     /**
-     * Process template row after loading
-     *
-     * @param array $tplRow Template row
-     * @return array Preprocessed template row
-     */
-    public function processTemplateRowAfterLoading(array $tplRow)
-    {
-        if ($this->pObj->MOD_SETTINGS['includeTypoScriptFileContent']) {
-            // Let the recursion detection counter start at 91, so that only 10 recursive calls will be resolved
-            // Otherwise the editor will be bloated with way to many lines making it hard the break the cyclic recursion.
-            $tplRow['config'] = TypoScriptParser::checkIncludeLines($tplRow['config'], 91);
-            $tplRow['constants'] = TypoScriptParser::checkIncludeLines($tplRow['constants'], 91);
-        }
-        return $tplRow;
-    }
-
-    /**
-     * Process template row before saving
-     *
-     * @param array $tplRow Template row
-     * @return array Preprocessed template row
-     */
-    public function processTemplateRowBeforeSaving(array $tplRow)
-    {
-        if ($this->pObj->MOD_SETTINGS['includeTypoScriptFileContent']) {
-            $tplRow = TypoScriptParser::extractIncludes_array($tplRow);
-        }
-        return $tplRow;
-    }
-
-    /**
-     * @return LanguageService
-     */
-    protected function getLanguageService()
-    {
-        return $GLOBALS['LANG'];
-    }
-
-    /**
-     * The main processing method if this class
+     * Main, called from parent object
      *
      * @return string Information of the template status or the taken actions as HTML string
      */
     public function main()
     {
-        $this->pObj->MOD_MENU['includeTypoScriptFileContent'] = true;
-        $e = $this->pObj->e;
         // Checking for more than one template an if, set a menu...
         $manyTemplatesMenu = $this->pObj->templateMenu();
         $template_uid = 0;
@@ -171,20 +196,22 @@ class TypoScriptTemplateInformationModuleFunctionController extends AbstractFunc
             $template_uid = $this->pObj->MOD_SETTINGS['templatesOnPage'];
         }
         // Initialize
-        $existTemplate = $this->initialize_editor($this->pObj->id, $template_uid);
+        $existTemplate = $this->initialize_editor($this->id, $template_uid);
         $saveId = 0;
         if ($existTemplate) {
-            $saveId = $this->templateRow['_ORIG_uid'] ? : $this->templateRow['uid'];
+            $saveId = $this->templateRow['_ORIG_uid'] ?: $this->templateRow['uid'];
         }
+        /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
         // Create extension template
-        $newId = $this->pObj->createTemplate($this->pObj->id, $saveId);
+        $newId = $this->pObj->createTemplate($this->id, $saveId);
         if ($newId) {
             // Switch to new template
             $urlParameters = [
-                'id' => $this->pObj->id,
+                'id' => $this->id,
                 'SET[templatesOnPage]' => $newId
             ];
-            $url = BackendUtility::getModuleUrl('web_ts', $urlParameters);
+            $url = (string)$uriBuilder->buildUriFromRoute('web_ts', $urlParameters);
             HttpUtility::redirect($url);
         }
         $tce = null;
@@ -193,78 +220,12 @@ class TypoScriptTemplateInformationModuleFunctionController extends AbstractFunc
             $lang->includeLLFile('EXT:tstemplate/Resources/Private/Language/locallang_info.xlf');
             $assigns = [];
             $assigns['LLPrefix'] = 'LLL:EXT:tstemplate/Resources/Private/Language/locallang_info.xlf:';
-            // Update template ?
-            $POST = GeneralUtility::_POST();
-            if (
-                isset($POST['_savedok'])
-                || isset($POST['_saveandclosedok'])
-            ) {
-                // Set the data to be saved
-                $recData = [];
-                $alternativeFileName = [];
-                if (is_array($POST['data'])) {
-                    foreach ($POST['data'] as $field => $val) {
-                        switch ($field) {
-                            case 'constants':
-                            case 'config':
-                                $recData['sys_template'][$saveId][$field] = $val;
-                            break;
-                        }
-                    }
-                }
-                if (!empty($recData)) {
-                    $recData['sys_template'][$saveId] = $this->processTemplateRowBeforeSaving($recData['sys_template'][$saveId]);
-                    // Create new  tce-object
-                    $tce = GeneralUtility::makeInstance(DataHandler::class);
-                    $tce->alternativeFileName = $alternativeFileName;
-                    // Initialize
-                    $tce->start($recData, []);
-                    // Saved the stuff
-                    $tce->process_datamap();
-                    // Clear the cache (note: currently only admin-users can clear the cache in tce_main.php)
-                    $tce->clear_cacheCmd('all');
-                    // tce were processed successfully
-                    $this->tce_processed = true;
-                    // re-read the template ...
-                    $this->initialize_editor($this->pObj->id, $template_uid);
-                    // reload template menu
-                    $manyTemplatesMenu = $this->pObj->templateMenu();
-                }
-            }
-            // Hook post updating template/TCE processing
-            if (isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/tstemplate_info/class.tx_tstemplateinfo.php']['postTCEProcessingHook'])) {
-                $postTCEProcessingHook = &$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/tstemplate_info/class.tx_tstemplateinfo.php']['postTCEProcessingHook'];
-                if (is_array($postTCEProcessingHook)) {
-                    $hookParameters = [
-                        'POST' => $POST,
-                        'tce' => $tce
-                    ];
-                    foreach ($postTCEProcessingHook as $hookFunction) {
-                        GeneralUtility::callUserFunction($hookFunction, $hookParameters, $this);
-                    }
-                }
-            }
+
             $assigns['title'] = trim($this->templateRow['title']);
             $assigns['siteTitle'] = trim($this->templateRow['sitetitle']);
             $assigns['templateRecord'] = $this->templateRow;
             if ($manyTemplatesMenu) {
                 $assigns['manyTemplatesMenu'] = $manyTemplatesMenu;
-            }
-            $numberOfRows = 35;
-            $assigns['numberOfRows'] = $numberOfRows;
-            // If abort pressed, nothing should be edited:
-            if (isset($POST['_saveandclosedok'])) {
-                unset($e);
-            }
-            if (isset($e['constants'])) {
-                $assigns['showConstantsEditor'] = true;
-                $assigns['constants'] = $this->templateRow['constants'];
-                $assigns['constantsLabel'] = BackendUtility::getFuncCheck($this->pObj->id, 'SET[includeTypoScriptFileContent]', $this->pObj->MOD_SETTINGS['includeTypoScriptFileContent'], '', '&e[constants]=1', 'id="checkIncludeTypoScriptFileContent"');
-            }
-            if (isset($e['config'])) {
-                $assigns['showConfigEditor'] = true;
-                $assigns['config'] = $this->templateRow['config'];
-                $assigns['configLabel'] = BackendUtility::getFuncCheck($this->pObj->id, 'SET[includeTypoScriptFileContent]', $this->pObj->MOD_SETTINGS['includeTypoScriptFileContent'], '', '&e[config]=1', 'id="checkIncludeTypoScriptFileContent"');
             }
 
             // Processing:
@@ -286,7 +247,7 @@ class TypoScriptTemplateInformationModuleFunctionController extends AbstractFunc
                 'createExtension' => 0,
                 'returnUrl' => GeneralUtility::getIndpEnv('REQUEST_URI')
             ];
-            $assigns['editAllUrl'] = BackendUtility::getModuleUrl('record_edit', $urlParameters);
+            $assigns['editAllUrl'] = (string)$uriBuilder->buildUriFromRoute('record_edit', $urlParameters);
 
             // Rendering of the output via fluid
             $view = GeneralUtility::makeInstance(StandaloneView::class);
@@ -295,26 +256,32 @@ class TypoScriptTemplateInformationModuleFunctionController extends AbstractFunc
             ));
             $view->assignMultiple($assigns);
             $theOutput = $view->render();
-
-            // hook after compiling the output
-            if (isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/tstemplate_info/class.tx_tstemplateinfo.php']['postOutputProcessingHook'])) {
-                $postOutputProcessingHook = &$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/tstemplate_info/class.tx_tstemplateinfo.php']['postOutputProcessingHook'];
-                if (is_array($postOutputProcessingHook)) {
-                    $hookParameters = [
-                        'theOutput' => &$theOutput,
-                        'POST' => $POST,
-                        'e' => $e,
-                        'tplRow' => $this->templateRow,
-                        'numberOfRows' => $numberOfRows
-                    ];
-                    foreach ($postOutputProcessingHook as $hookFunction) {
-                        GeneralUtility::callUserFunction($hookFunction, $hookParameters, $this);
-                    }
-                }
-            }
         } else {
             $theOutput = $this->pObj->noTemplate(1);
         }
         return $theOutput;
+    }
+
+    /**
+     * If $this->function_key is set (which means there are two levels of object connectivity) then
+     * $this->extClassConf is loaded with the TBE_MODULES_EXT configuration for that sub-sub-module
+     *
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
+     */
+    protected function handleExternalFunctionValue()
+    {
+        // Must clean first to make sure the correct key is set...
+        $this->pObj->MOD_SETTINGS = BackendUtility::getModuleData($this->pObj->MOD_MENU, GeneralUtility::_GP('SET'), 'web_ts');
+        if ($this->function_key) {
+            $this->extClassConf = $this->pObj->getExternalItemConfig('web_ts', $this->function_key, $this->pObj->MOD_SETTINGS[$this->function_key]);
+        }
+    }
+
+    /**
+     * @return LanguageService
+     */
+    protected function getLanguageService(): LanguageService
+    {
+        return $GLOBALS['LANG'];
     }
 }

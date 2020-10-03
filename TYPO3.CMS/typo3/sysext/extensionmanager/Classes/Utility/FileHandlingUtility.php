@@ -1,6 +1,12 @@
 <?php
 namespace TYPO3\CMS\Extensionmanager\Utility;
 
+use Psr\Log\LoggerAwareInterface;
+use Psr\Log\LoggerAwareTrait;
+use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Exception\Archive\ExtractException;
+use TYPO3\CMS\Core\Service\Archive\ZipService;
+use TYPO3\CMS\Core\SingletonInterface;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\PathUtility;
 use TYPO3\CMS\Extensionmanager\Domain\Model\Extension;
@@ -21,9 +27,12 @@ use TYPO3\CMS\Extensionmanager\Exception\ExtensionManagerException;
 
 /**
  * Utility for dealing with files and folders
+ * @internal This class is a specific ExtensionManager implementation and is not part of the Public TYPO3 API.
  */
-class FileHandlingUtility implements \TYPO3\CMS\Core\SingletonInterface
+class FileHandlingUtility implements SingletonInterface, LoggerAwareInterface
 {
+    use LoggerAwareTrait;
+
     /**
      * @var \TYPO3\CMS\Extensionmanager\Utility\EmConfUtility
      */
@@ -35,7 +44,7 @@ class FileHandlingUtility implements \TYPO3\CMS\Core\SingletonInterface
     protected $installUtility;
 
     /**
-     * @var \TYPO3\CMS\Lang\LanguageService
+     * @var \TYPO3\CMS\Core\Localization\LanguageService
      */
     protected $languageService;
 
@@ -56,9 +65,9 @@ class FileHandlingUtility implements \TYPO3\CMS\Core\SingletonInterface
     }
 
     /**
-     * @param \TYPO3\CMS\Lang\LanguageService $languageService
+     * @param \TYPO3\CMS\Core\Localization\LanguageService $languageService
      */
-    public function injectLanguageService(\TYPO3\CMS\Lang\LanguageService $languageService)
+    public function injectLanguageService(\TYPO3\CMS\Core\Localization\LanguageService $languageService)
     {
         $this->languageService = $languageService;
     }
@@ -195,7 +204,7 @@ class FileHandlingUtility implements \TYPO3\CMS\Core\SingletonInterface
     public function getExtensionDir($extensionKey, $pathType = 'Local')
     {
         $paths = Extension::returnInstallPaths();
-        $path = $paths[$pathType];
+        $path = $paths[$pathType] ?? '';
         if (!$path || !is_dir($path) || !$extensionKey) {
             throw new ExtensionManagerException(
                 sprintf($this->languageService->getLL('fileHandling.installPathWasNoDirectory'), $this->getRelativePath($path)),
@@ -293,7 +302,7 @@ class FileHandlingUtility implements \TYPO3\CMS\Core\SingletonInterface
     {
         $extDirPath = GeneralUtility::fixWindowsFilePath($extDirPath);
         $extensionPathWithoutTrailingSlash = rtrim($extDirPath, '/');
-        if (is_link($extensionPathWithoutTrailingSlash) && TYPO3_OS !== 'WIN') {
+        if (is_link($extensionPathWithoutTrailingSlash) && !Environment::isWindows()) {
             $result = unlink($extensionPathWithoutTrailingSlash);
         } else {
             $result = GeneralUtility::rmdir($extDirPath, true);
@@ -356,7 +365,7 @@ class FileHandlingUtility implements \TYPO3\CMS\Core\SingletonInterface
      */
     protected function getAbsolutePath($relativePath)
     {
-        $absolutePath = GeneralUtility::getFileAbsFileName(GeneralUtility::resolveBackPath(PATH_site . $relativePath));
+        $absolutePath = GeneralUtility::getFileAbsFileName(GeneralUtility::resolveBackPath(Environment::getPublicPath() . '/' . $relativePath));
         if (empty($absolutePath)) {
             throw new ExtensionManagerException('Illegal relative path given', 1350742864);
         }
@@ -415,13 +424,14 @@ class FileHandlingUtility implements \TYPO3\CMS\Core\SingletonInterface
 
         $version = $this->getExtensionVersion($extension);
         if (empty($version)) {
-            $version =  '0.0.0';
+            $version = '0.0.0';
         }
 
-        if (!@is_dir(PATH_site . 'typo3temp/var/ExtensionManager/')) {
-            GeneralUtility::mkdir(PATH_site . 'typo3temp/var/ExtensionManager/');
+        $temporaryPath = Environment::getVarPath() . '/transient/';
+        if (!@is_dir($temporaryPath)) {
+            GeneralUtility::mkdir($temporaryPath);
         }
-        $fileName = $this->getAbsolutePath('typo3temp/var/ExtensionManager/' . $extension . '_' . $version . '_' . date('YmdHi', $GLOBALS['EXEC_TIME']) . '.zip');
+        $fileName = $temporaryPath . $extension . '_' . $version . '_' . date('YmdHi', $GLOBALS['EXEC_TIME']) . '.zip';
 
         $zip = new \ZipArchive();
         $zip->open($fileName, \ZipArchive::CREATE);
@@ -430,11 +440,11 @@ class FileHandlingUtility implements \TYPO3\CMS\Core\SingletonInterface
 
         // Get all the files of the extension, but exclude the ones specified in the excludePattern
         $files = GeneralUtility::getAllFilesAndFoldersInPath(
-            [],            // No files pre-added
-            $extensionPath,        // Start from here
-            '',                    // Do not filter files by extension
-            true,                // Include subdirectories
-            PHP_INT_MAX,        // Recursion level
+            [], // No files pre-added
+            $extensionPath, // Start from here
+            '', // Do not filter files by extension
+            true, // Include subdirectories
+            PHP_INT_MAX, // Recursion level
             $excludePattern        // Files and directories to exclude.
         );
 
@@ -470,29 +480,18 @@ class FileHandlingUtility implements \TYPO3\CMS\Core\SingletonInterface
     public function unzipExtensionFromFile($file, $fileName, $pathType = 'Local')
     {
         $extensionDir = $this->makeAndClearExtensionDir($fileName, $pathType);
-        $zip = zip_open($file);
-        if (is_resource($zip)) {
-            while (($zipEntry = zip_read($zip)) !== false) {
-                if (strpos(zip_entry_name($zipEntry), '/') !== false) {
-                    $last = strrpos(zip_entry_name($zipEntry), '/');
-                    $dir = substr(zip_entry_name($zipEntry), 0, $last);
-                    $file = substr(zip_entry_name($zipEntry), strrpos(zip_entry_name($zipEntry), '/') + 1);
-                    if (!is_dir($extensionDir . $dir)) {
-                        GeneralUtility::mkdir_deep($extensionDir . $dir);
-                    }
-                    if (trim($file) !== '') {
-                        $return = GeneralUtility::writeFile($extensionDir . $dir . '/' . $file, zip_entry_read($zipEntry, zip_entry_filesize($zipEntry)));
-                        if ($return === false) {
-                            throw new ExtensionManagerException('Could not write file ' . $this->getRelativePath($file), 1344691048);
-                        }
-                    }
-                } else {
-                    GeneralUtility::writeFile($extensionDir . zip_entry_name($zipEntry), zip_entry_read($zipEntry, zip_entry_filesize($zipEntry)));
-                }
+
+        try {
+            $zipService = GeneralUtility::makeInstance(ZipService::class);
+            if ($zipService->verify($file)) {
+                $zipService->extract($file, $extensionDir);
             }
-        } else {
-            throw new ExtensionManagerException('Unable to open zip file ' . $this->getRelativePath($file), 1344691049);
+        } catch (ExtractException $e) {
+            $this->logger->error('Extracting the extension archive failed', ['exception' => $e]);
+            throw new ExtensionManagerException('Extracting the extension archive failed: ' . $e->getMessage(), 1565777179, $e);
         }
+
+        GeneralUtility::fixPermissions($extensionDir, true);
     }
 
     /**
@@ -504,32 +503,11 @@ class FileHandlingUtility implements \TYPO3\CMS\Core\SingletonInterface
     public function sendZipFileToBrowserAndDelete($fileName, $downloadName = '')
     {
         if ($downloadName === '') {
-            $downloadName = basename($fileName, '.zip');
+            $downloadName = PathUtility::basename($fileName);
         }
         header('Content-Type: application/zip');
         header('Content-Length: ' . filesize($fileName));
-        header('Content-Disposition: attachment; filename="' . $downloadName . '.zip"');
-        readfile($fileName);
-        unlink($fileName);
-        die;
-    }
-
-    /**
-     * Sends the sql dump file to the browser and deletes it afterwards
-     *
-     * @param string $fileName
-     * @param string $downloadName
-     */
-    public function sendSqlDumpFileToBrowserAndDelete($fileName, $downloadName = '')
-    {
-        if ($downloadName === '') {
-            $downloadName = basename($fileName, '.sql');
-        } else {
-            $downloadName = basename($downloadName, '.sql');
-        }
-        header('Content-Type: text');
-        header('Content-Length: ' . filesize($fileName));
-        header('Content-Disposition: attachment; filename="' . $downloadName . '.sql"');
+        header('Content-Disposition: attachment; filename="' . $downloadName . '"');
         readfile($fileName);
         unlink($fileName);
         die;

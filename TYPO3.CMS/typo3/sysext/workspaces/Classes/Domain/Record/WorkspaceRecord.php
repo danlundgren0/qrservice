@@ -28,7 +28,7 @@ class WorkspaceRecord extends AbstractRecord
     protected $internalStages = [
         StagesService::STAGE_EDIT_ID => [
             'name' => 'edit',
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_mod_user_ws.xlf:stage_editing'
+            'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_mod_user_ws.xlf:stage_editing'
         ],
         StagesService::STAGE_PUBLISH_ID => [
             'name' => 'publish',
@@ -36,7 +36,7 @@ class WorkspaceRecord extends AbstractRecord
         ],
         StagesService::STAGE_PUBLISH_EXECUTE_ID => [
             'name' => 'execute',
-            'label' => 'LLL:EXT:lang/Resources/Private/Language/locallang_mod_user_ws.xlf:stage_publish'
+            'label' => 'LLL:EXT:workspaces/Resources/Private/Language/locallang_mod_user_ws.xlf:stage_publish'
         ],
     ];
 
@@ -142,7 +142,7 @@ class WorkspaceRecord extends AbstractRecord
 
     /**
      * @param int $stageId
-     * @return NULL|StageRecord
+     * @return StageRecord|null
      */
     public function getStage($stageId)
     {
@@ -156,7 +156,7 @@ class WorkspaceRecord extends AbstractRecord
 
     /**
      * @param int $stageId
-     * @return NULL|StageRecord
+     * @return StageRecord|null
      */
     public function getPreviousStage($stageId)
     {
@@ -175,7 +175,7 @@ class WorkspaceRecord extends AbstractRecord
 
     /**
      * @param int $stageId
-     * @return NULL|StageRecord
+     * @return StageRecord|null
      */
     public function getNextStage($stageId)
     {

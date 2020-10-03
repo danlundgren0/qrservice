@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Database;
 
 /*
@@ -20,12 +20,17 @@ use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\Driver;
 use Doctrine\DBAL\Driver\Statement;
 use Doctrine\DBAL\Platforms\PostgreSqlPlatform;
+use Doctrine\DBAL\Platforms\SQLServer2012Platform;
+use Psr\Log\LoggerAwareInterface;
+use Psr\Log\LoggerAwareTrait;
 use TYPO3\CMS\Core\Database\Query\Expression\ExpressionBuilder;
 use TYPO3\CMS\Core\Database\Query\QueryBuilder;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
-class Connection extends \Doctrine\DBAL\Connection
+class Connection extends \Doctrine\DBAL\Connection implements LoggerAwareInterface
 {
+    use LoggerAwareTrait;
+
     /**
      * Represents a SQL NULL data type.
      */
@@ -57,6 +62,11 @@ class Connection extends \Doctrine\DBAL\Connection
     const PARAM_BOOL = \PDO::PARAM_BOOL; // 5
 
     /**
+     * @var array
+     */
+    private $prepareConnectionCommands = [];
+
+    /**
      * Initializes a new instance of the Connection class.
      *
      * @param array $params The connection parameters.
@@ -70,6 +80,27 @@ class Connection extends \Doctrine\DBAL\Connection
     {
         parent::__construct($params, $driver, $config, $em);
         $this->_expr = GeneralUtility::makeInstance(ExpressionBuilder::class, $this);
+    }
+
+    /**
+     * Gets the DatabasePlatform for the connection and initializes custom types and event listeners.
+     *
+     * @return bool
+     */
+    public function connect(): bool
+    {
+        // Early return if the connection is already open and custom setup has been done.
+        if (!parent::connect()) {
+            return false;
+        }
+
+        foreach ($this->prepareConnectionCommands as $command) {
+            if ($this->executeUpdate($command) === false) {
+                $this->logger->critical('Could not initialize DB connection with query "' . $command . '": ' . $this->errorInfo());
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -176,8 +207,8 @@ class Connection extends \Doctrine\DBAL\Connection
      * Table expression and columns are not escaped and are not safe for user-input.
      *
      * @param string $tableName The name of the table to insert data into.
-     * @param array $data An array containing associative arrays of column-value pairs.
-     * @param array $columns An array containing associative arrays of column-value pairs.
+     * @param array $data An array containing associative arrays of column-value pairs or just the values to be inserted.
+     * @param array $columns An array containing the column names of the data which should be inserted.
      * @param array $types Types of the inserted data.
      *
      * @return int The number of affected rows.
@@ -385,7 +416,7 @@ class Connection extends \Doctrine\DBAL\Connection
             return;
         }
 
-        $commandsToPerform = GeneralUtility::trimExplode(
+        $this->prepareConnectionCommands = GeneralUtility::trimExplode(
             LF,
             str_replace(
                 '\' . LF . \'',
@@ -394,16 +425,6 @@ class Connection extends \Doctrine\DBAL\Connection
             ),
             true
         );
-
-        foreach ($commandsToPerform as $command) {
-            if ($this->executeUpdate($command) === false) {
-                GeneralUtility::sysLog(
-                    'Could not initialize DB connection with query "' . $command . '": ' . $this->errorInfo(),
-                    'core',
-                    GeneralUtility::SYSLOG_SEVERITY_ERROR
-                );
-            }
-        }
     }
 
     /**
@@ -418,8 +439,15 @@ class Connection extends \Doctrine\DBAL\Connection
      */
     public function lastInsertId($tableName = null, string $fieldName = 'uid'): string
     {
-        if ($this->getDatabasePlatform() instanceof PostgreSqlPlatform) {
+        $databasePlatform = $this->getDatabasePlatform();
+        if ($databasePlatform instanceof PostgreSqlPlatform) {
             return parent::lastInsertId(trim(implode('_', [$tableName, $fieldName, 'seq']), '_'));
+        }
+        if ($databasePlatform instanceof SQLServer2012Platform) {
+            // lastInsertId() in mssql >2012 takes a sequence name and not the table name as
+            // argument. If no argument is given, last insert id of latest table is returned.
+            // https://docs.microsoft.com/de-de/sql/connect/php/pdo-lastinsertid?view=sql-server-2017
+            return (string)parent::lastInsertId();
         }
 
         return (string)parent::lastInsertId($tableName);

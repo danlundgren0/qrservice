@@ -14,10 +14,10 @@ namespace TYPO3\CMS\Extbase\Domain\Model;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Extbase\Annotation as Extbase;
+
 /**
  * This model represents a file mount.
- *
- * @api
  */
 class FileMount extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
 {
@@ -25,7 +25,7 @@ class FileMount extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
      * Title of the file mount.
      *
      * @var string
-     * @validate notEmpty
+     * @Extbase\Validate("NotEmpty")
      */
     protected $title = '';
 
@@ -40,7 +40,7 @@ class FileMount extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
      * Path of the file mount.
      *
      * @var string
-     * @validate notEmpty
+     * @Extbase\Validate("NotEmpty")
      */
     protected $path = '';
 

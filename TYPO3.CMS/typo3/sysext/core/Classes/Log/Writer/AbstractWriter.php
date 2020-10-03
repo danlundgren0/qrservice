@@ -15,12 +15,15 @@ namespace TYPO3\CMS\Core\Log\Writer;
  */
 
 use TYPO3\CMS\Core\Log\Exception\InvalidLogWriterConfigurationException;
+use TYPO3\CMS\Core\Security\BlockSerializationTrait;
 
 /**
  * Abstract implementation of a log writer
  */
 abstract class AbstractWriter implements WriterInterface
 {
+    use BlockSerializationTrait;
+
     /**
      * Constructs this log writer
      *
@@ -34,7 +37,7 @@ abstract class AbstractWriter implements WriterInterface
             if (method_exists($this, $methodName)) {
                 $this->{$methodName}($optionValue);
             } else {
-                throw new InvalidLogWriterConfigurationException('Invalid LogWriter configuration option "' . $optionKey . '" for log writer of type "' . get_class($this) . '"', 1321696152);
+                throw new InvalidLogWriterConfigurationException('Invalid LogWriter configuration option "' . $optionKey . '" for log writer of type "' . static::class . '"', 1321696152);
             }
         }
     }

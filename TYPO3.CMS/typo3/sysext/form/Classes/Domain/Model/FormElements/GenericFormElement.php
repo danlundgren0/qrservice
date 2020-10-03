@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Model\FormElements;
 
 /*
@@ -21,7 +21,6 @@ namespace TYPO3\CMS\Form\Domain\Model\FormElements;
  * A generic form element
  *
  * Scope: frontend
- * @api
  */
 class GenericFormElement extends AbstractFormElement
 {

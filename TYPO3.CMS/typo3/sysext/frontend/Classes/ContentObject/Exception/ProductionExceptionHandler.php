@@ -14,17 +14,21 @@ namespace TYPO3\CMS\Frontend\ContentObject\Exception;
  * The TYPO3 project - inspiring people to share!
  */
 
-use Psr\Log\LoggerInterface;
+use Psr\Log\LoggerAwareInterface;
+use Psr\Log\LoggerAwareTrait;
 use TYPO3\CMS\Core\Crypto\Random;
-use TYPO3\CMS\Core\Log\LogManager;
+use TYPO3\CMS\Core\Http\ImmediateResponseException;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Frontend\ContentObject\AbstractContentObject;
 
 /**
  * Exception handler class for content object rendering
+ * @internal this is a concrete TYPO3 implementation and solely used for EXT:frontend and not part of TYPO3's Core API.
  */
-class ProductionExceptionHandler implements ExceptionHandlerInterface
+class ProductionExceptionHandler implements ExceptionHandlerInterface, LoggerAwareInterface
 {
+    use LoggerAwareTrait;
+
     /**
      * @var array
      */
@@ -51,12 +55,17 @@ class ProductionExceptionHandler implements ExceptionHandlerInterface
      */
     public function handle(\Exception $exception, AbstractContentObject $contentObject = null, $contentObjectConfiguration = [])
     {
+        // ImmediateResponseException should work similar to exit / die and must therefore not be handled by this ExceptionHandler.
+        if ($exception instanceof ImmediateResponseException) {
+            throw $exception;
+        }
+
         if (!empty($this->configuration['ignoreCodes.'])) {
             if (in_array($exception->getCode(), array_map('intval', $this->configuration['ignoreCodes.']), true)) {
                 throw $exception;
             }
         }
-        $errorMessage = isset($this->configuration['errorMessage']) ? $this->configuration['errorMessage'] : 'Oops, an error occurred! Code: %s';
+        $errorMessage = $this->configuration['errorMessage'] ?? 'Oops, an error occurred! Code: %s';
         $code = date('YmdHis', $_SERVER['REQUEST_TIME']) . GeneralUtility::makeInstance(Random::class)->generateRandomHexString(8);
 
         $this->logException($exception, $errorMessage, $code);
@@ -71,14 +80,6 @@ class ProductionExceptionHandler implements ExceptionHandlerInterface
      */
     protected function logException(\Exception $exception, $errorMessage, $code)
     {
-        $this->getLogger()->alert(sprintf($errorMessage, $code), ['exception' => $exception]);
-    }
-
-    /**
-     * @return LoggerInterface
-     */
-    protected function getLogger()
-    {
-        return GeneralUtility::makeInstance(LogManager::class)->getLogger(__CLASS__);
+        $this->logger->alert(sprintf($errorMessage, $code), ['exception' => $exception]);
     }
 }

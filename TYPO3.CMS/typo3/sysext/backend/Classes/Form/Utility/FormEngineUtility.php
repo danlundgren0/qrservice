@@ -16,12 +16,12 @@ namespace TYPO3\CMS\Backend\Form\Utility;
 
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Cache\CacheManager;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\PathUtility;
-use TYPO3\CMS\Core\Utility\StringUtility;
 
 /**
  * This is a static, internal and intermediate helper class for various
@@ -67,8 +67,8 @@ class FormEngineUtility
     {
         if (is_array($TSconfig)) {
             $TSconfig = GeneralUtility::removeDotsFromTS($TSconfig);
-            $type = $fieldConfig['type'];
-            if (is_array($TSconfig['config']) && is_array(static::$allowOverrideMatrix[$type])) {
+            $type = $fieldConfig['type'] ?? '';
+            if (isset($TSconfig['config']) && is_array($TSconfig['config']) && is_array(static::$allowOverrideMatrix[$type])) {
                 // Check if the keys in TSconfig['config'] are allowed to override TCA field config:
                 foreach ($TSconfig['config'] as $key => $_) {
                     if (!in_array($key, static::$allowOverrideMatrix[$type], true)) {
@@ -96,15 +96,14 @@ class FormEngineUtility
      */
     public static function getTSconfigForTableRow($table, $row, $field = '')
     {
-        static $cache;
-        if (is_null($cache)) {
-            $cache = [];
-        }
+        $runtimeCache = GeneralUtility::makeInstance(CacheManager::class)->getCache('cache_runtime');
+        $cache = $runtimeCache->get('formEngineUtilityTsConfigForTableRow') ?: [];
         $cacheIdentifier = $table . ':' . $row['uid'];
         if (!isset($cache[$cacheIdentifier])) {
             $cache[$cacheIdentifier] = BackendUtility::getTCEFORM_TSconfig($table, $row);
+            $runtimeCache->set('formEngineUtilityTsConfigForTableRow', $cache);
         }
-        if ($field) {
+        if ($field && isset($cache[$cacheIdentifier][$field])) {
             return $cache[$cacheIdentifier][$field];
         }
         return $cache[$cacheIdentifier];
@@ -124,21 +123,15 @@ class FormEngineUtility
         $icon = (string)$icon;
         $absoluteFilePath = GeneralUtility::getFileAbsFileName($icon);
         if (!empty($absoluteFilePath) && is_file($absoluteFilePath)) {
-            $iconInfo = StringUtility::endsWith($absoluteFilePath, '.svg')
-                ? true
-                : getimagesize($absoluteFilePath);
-
-            if ($iconInfo !== false) {
-                return '<img'
-                    . ' src="' . htmlspecialchars(PathUtility::getAbsoluteWebPath($absoluteFilePath)) . '"'
-                    . ' alt="' . htmlspecialchars($alt) . '" '
-                    . ($title ? 'title="' . htmlspecialchars($title) . '"' : '')
+            return '<img'
+                . ' src="' . htmlspecialchars(PathUtility::getAbsoluteWebPath($absoluteFilePath)) . '"'
+                . ' alt="' . htmlspecialchars($alt) . '" '
+                . ($title ? 'title="' . htmlspecialchars($title) . '"' : '')
                 . ' />';
-            }
         }
 
         $iconFactory = GeneralUtility::makeInstance(IconFactory::class);
-        return '<span alt="' . htmlspecialchars($alt) . '" title="' . htmlspecialchars($title) . '">'
+        return '<span title="' . htmlspecialchars($title) . '">'
             . $iconFactory->getIcon($icon, Icon::SIZE_SMALL)->render()
             . '</span>';
     }
@@ -154,7 +147,7 @@ class FormEngineUtility
     {
         $backendUser = static::getBackendUserAuthentication();
         if (isset($uc['inlineView']) && is_array($uc['inlineView'])) {
-            $inlineView = (array)unserialize($backendUser->uc['inlineView']);
+            $inlineView = (array)unserialize($backendUser->uc['inlineView'], ['allowed_classes' => false]);
             foreach ($uc['inlineView'] as $topTable => $topRecords) {
                 foreach ($topRecords as $topUid => $childElements) {
                     foreach ($childElements as $childTable => $childRecords) {

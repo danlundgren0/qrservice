@@ -94,8 +94,8 @@ abstract class AbstractContainer extends AbstractNode
         }
         return [
             'fieldName' => $fieldArray[0],
-            'fieldLabel' => $fieldArray[1] ?: null,
-            'paletteName' => $fieldArray[2] ?: null,
+            'fieldLabel' => !empty($fieldArray[1]) ? $fieldArray[1] : null,
+            'paletteName' => !empty($fieldArray[2]) ? $fieldArray[2] : null,
         ];
     }
 
@@ -105,6 +105,7 @@ abstract class AbstractContainer extends AbstractNode
      *
      * @param array $menuItems Tab elements, each element is an array with "label" and "content"
      * @param string $domId DOM id attribute, will be appended with an iteration number per tab.
+     * @param int $defaultTabIndex
      * @return string
      */
     protected function renderTabMenu(array $menuItems, $domId, $defaultTabIndex = 1)

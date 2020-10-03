@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Extensionmanager\Report;
 
 /**
  * Extension status reports
+ * @internal This class is a specific EXT:reports implementation and is not part of the Public TYPO3 API.
  */
 class ExtensionStatus implements \TYPO3\CMS\Reports\StatusProviderInterface
 {
@@ -37,22 +38,22 @@ class ExtensionStatus implements \TYPO3\CMS\Reports\StatusProviderInterface
     /**
      * @var \TYPO3\CMS\Extbase\Object\ObjectManager
      */
-    protected $objectManager = null;
+    protected $objectManager;
 
     /**
      * @var \TYPO3\CMS\Extensionmanager\Domain\Repository\RepositoryRepository
      */
-    protected $repositoryRepository = null;
+    protected $repositoryRepository;
 
     /**
      * @var \TYPO3\CMS\Extensionmanager\Utility\ListUtility
      */
-    protected $listUtility = null;
+    protected $listUtility;
 
     /**
-     * @var \TYPO3\CMS\Lang\LanguageService
+     * @var \TYPO3\CMS\Core\Localization\LanguageService
      */
-    protected $languageService = null;
+    protected $languageService;
 
     /**
      * Default constructor
@@ -62,7 +63,7 @@ class ExtensionStatus implements \TYPO3\CMS\Reports\StatusProviderInterface
         $this->objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Extbase\Object\ObjectManager::class);
         $this->repositoryRepository = $this->objectManager->get(\TYPO3\CMS\Extensionmanager\Domain\Repository\RepositoryRepository::class);
         $this->listUtility = $this->objectManager->get(\TYPO3\CMS\Extensionmanager\Utility\ListUtility::class);
-        $this->languageService = $this->objectManager->get(\TYPO3\CMS\Lang\LanguageService::class);
+        $this->languageService = $this->objectManager->get(\TYPO3\CMS\Core\Localization\LanguageService::class);
         $this->languageService->includeLLFile('EXT:extensionmanager/Resources/Private/Language/locallang.xlf');
     }
 
@@ -77,10 +78,10 @@ class ExtensionStatus implements \TYPO3\CMS\Reports\StatusProviderInterface
         $status['mainRepositoryStatus'] = $this->getMainRepositoryStatus();
 
         $extensionStatus = $this->getSecurityStatusOfExtensions();
-        $status['extensionsSecurityStatusInstalled'] = $extensionStatus->loaded;
-        $status['extensionsSecurityStatusNotInstalled'] = $extensionStatus->existing;
-        $status['extensionsOutdatedStatusInstalled'] = $extensionStatus->loadedoutdated;
-        $status['extensionsOutdatedStatusNotInstalled'] = $extensionStatus->existingoutdated;
+        $status['extensionsSecurityStatusInstalled'] = $extensionStatus->loaded ?? [];
+        $status['extensionsSecurityStatusNotInstalled'] = $extensionStatus->existing ?? [];
+        $status['extensionsOutdatedStatusInstalled'] = $extensionStatus->loadedoutdated ?? [];
+        $status['extensionsOutdatedStatusNotInstalled'] = $extensionStatus->existingoutdated ?? [];
 
         return $status;
     }
@@ -88,14 +89,14 @@ class ExtensionStatus implements \TYPO3\CMS\Reports\StatusProviderInterface
     /**
      * Check main repository status: existence, has extensions, last update younger than 7 days
      *
-     * @return \TYPO3\CMS\Reports\Report\Status\Status
+     * @return \TYPO3\CMS\Reports\Status
      */
     protected function getMainRepositoryStatus()
     {
-        /** @var $mainRepository \TYPO3\CMS\Extensionmanager\Domain\Model\Repository */
+        /** @var \TYPO3\CMS\Extensionmanager\Domain\Model\Repository $mainRepository */
         $mainRepository = $this->repositoryRepository->findOneTypo3OrgRepository();
 
-        if (is_null($mainRepository) === true) {
+        if ($mainRepository === null) {
             $value = $this->languageService->getLL('report.status.mainRepository.notFound.value');
             $message = $this->languageService->getLL('report.status.mainRepository.notFound.message');
             $severity = \TYPO3\CMS\Reports\Status::ERROR;
@@ -109,7 +110,7 @@ class ExtensionStatus implements \TYPO3\CMS\Reports\StatusProviderInterface
             $severity = \TYPO3\CMS\Reports\Status::OK;
         }
 
-        /** @var $status \TYPO3\CMS\Reports\Status */
+        /** @var \TYPO3\CMS\Reports\Status $status */
         $status = $this->objectManager->get(
             \TYPO3\CMS\Reports\Status::class,
             $this->languageService->getLL('report.status.mainRepository.title'),
@@ -138,7 +139,7 @@ class ExtensionStatus implements \TYPO3\CMS\Reports\StatusProviderInterface
                 array_key_exists('terObject', $information)
                 && $information['terObject'] instanceof \TYPO3\CMS\Extensionmanager\Domain\Model\Extension
             ) {
-                /** @var $terObject \TYPO3\CMS\Extensionmanager\Domain\Model\Extension */
+                /** @var \TYPO3\CMS\Extensionmanager\Domain\Model\Extension $terObject */
                 $terObject = $information['terObject'];
                 $insecureStatus = $terObject->getReviewState();
                 if ($insecureStatus === -1) {

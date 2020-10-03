@@ -28,14 +28,14 @@ class Uri implements UriInterface
     /**
      * Sub-delimiters used in query strings and fragments.
      *
-     * @const string
+     * @var string
      */
     const SUBDELIMITER_CHARLIST = '!\$&\'\(\)\*\+,;=';
 
     /**
      * Unreserved characters used in paths, query strings, and fragments.
      *
-     * @const string
+     * @var string
      */
     const UNRESERVED_CHARLIST = 'a-zA-Z0-9_\-\.~';
 
@@ -73,9 +73,9 @@ class Uri implements UriInterface
 
     /**
      * The port of the URI (empty if it is the standard port for the scheme)
-     * @var int|NULL
+     * @var int|null
      */
-    protected $port = null;
+    protected $port;
 
     /**
      * The path part of the URI (can be empty or /)
@@ -87,7 +87,7 @@ class Uri implements UriInterface
      * The query part of the URI without the ?
      * @var string
      */
-    protected $query;
+    protected $query = '';
 
     /**
      * The fragment part of the URI without the # before
@@ -259,7 +259,7 @@ class Uri implements UriInterface
      * If no port is present, but a scheme is present, this method MAY return
      * the standard port for that scheme, but SHOULD return null.
      *
-     * @return null|int The URI port.
+     * @return int|null The URI port.
      */
     public function getPort()
     {
@@ -355,7 +355,7 @@ class Uri implements UriInterface
      *
      * @param string $scheme The scheme to use with the new instance.
      *
-     * @return self A new instance with the specified scheme.
+     * @return static A new instance with the specified scheme.
      * @throws \InvalidArgumentException for invalid or unsupported schemes.
      */
     public function withScheme($scheme)
@@ -378,9 +378,9 @@ class Uri implements UriInterface
      * information.
      *
      * @param string $user The user name to use for authority.
-     * @param null|string $password The password associated with $user.
+     * @param string|null $password The password associated with $user.
      *
-     * @return self A new instance with the specified user information.
+     * @return static A new instance with the specified user information.
      */
     public function withUserInfo($user, $password = null)
     {
@@ -404,7 +404,7 @@ class Uri implements UriInterface
      *
      * @param string $host The hostname to use with the new instance.
      *
-     * @return self A new instance with the specified host.
+     * @return static A new instance with the specified host.
      * @throws \InvalidArgumentException for invalid hostnames.
      */
     public function withHost($host)
@@ -426,22 +426,24 @@ class Uri implements UriInterface
      * A null value provided for the port is equivalent to removing the port
      * information.
      *
-     * @param null|int $port The port to use with the new instance; a null value
+     * @param int|null $port The port to use with the new instance; a null value
      *     removes the port information.
      *
-     * @return self A new instance with the specified port.
+     * @return static A new instance with the specified port.
      * @throws \InvalidArgumentException for invalid ports.
      */
     public function withPort($port)
     {
-        if (\TYPO3\CMS\Core\Utility\MathUtility::canBeInterpretedAsInteger($port) === false) {
-            $argumentType = is_object($port) ? get_class($port) : gettype($port);
-            throw new \InvalidArgumentException('Invalid port "' . $argumentType . '" specified, must be an integer.', 1436717324);
-        }
+        if ($port !== null) {
+            if (\TYPO3\CMS\Core\Utility\MathUtility::canBeInterpretedAsInteger($port) === false) {
+                $argumentType = is_object($port) ? get_class($port) : gettype($port);
+                throw new \InvalidArgumentException('Invalid port "' . $argumentType . '" specified, must be an integer.', 1436717324);
+            }
 
-        $port = (int)$port;
-        if ($port < 1 || $port > 65535) {
-            throw new \InvalidArgumentException('Invalid port "' . $port . '" specified, must be a valid TCP/UDP port.', 1436717326);
+            $port = (int)$port;
+            if ($port < 1 || $port > 65535) {
+                throw new \InvalidArgumentException('Invalid port "' . $port . '" specified, must be a valid TCP/UDP port.', 1436717326);
+            }
         }
 
         $clonedObject = clone $this;
@@ -469,7 +471,7 @@ class Uri implements UriInterface
      *
      * @param string $path The path to use with the new instance.
      *
-     * @return self A new instance with the specified path.
+     * @return static A new instance with the specified path.
      * @throws \InvalidArgumentException for invalid paths.
      */
     public function withPath($path)
@@ -505,7 +507,7 @@ class Uri implements UriInterface
      *
      * @param string $query The query string to use with the new instance.
      *
-     * @return self A new instance with the specified query string.
+     * @return static A new instance with the specified query string.
      * @throws \InvalidArgumentException for invalid query strings.
      */
     public function withQuery($query)
@@ -537,7 +539,7 @@ class Uri implements UriInterface
      *
      * @param string $fragment The fragment to use with the new instance.
      *
-     * @return self A new instance with the specified fragment.
+     * @return static A new instance with the specified fragment.
      */
     public function withFragment($fragment)
     {
@@ -575,12 +577,12 @@ class Uri implements UriInterface
         $uri = '';
 
         if (!empty($this->scheme)) {
-            $uri .= $this->scheme . '://';
+            $uri .= $this->scheme . ':';
         }
 
         $authority = $this->getAuthority();
         if (!empty($authority)) {
-            $uri .= $authority;
+            $uri .= '//' . $authority;
         }
 
         $path = $this->getPath();
@@ -608,7 +610,7 @@ class Uri implements UriInterface
     protected function isNonStandardPort($scheme, $host, $port)
     {
         if (empty($scheme)) {
-            return true;
+            return empty($host) || !empty($port);
         }
 
         if (empty($host) || empty($port)) {
@@ -704,7 +706,7 @@ class Uri implements UriInterface
     /**
      * Filter a fragment value to ensure it is properly encoded.
      *
-     * @param null|string $fragment
+     * @param string|null $fragment
      * @return string
      */
     protected function sanitizeFragment($fragment)

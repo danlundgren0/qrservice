@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\Form\FieldWizard;
 
 /*
@@ -20,8 +20,8 @@ use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Render details of selected records,
@@ -53,9 +53,9 @@ class RecordsOverview extends AbstractNode
         $iconFactory = GeneralUtility::makeInstance(IconFactory::class);
         $recordsOverviewHtml = [];
         foreach ($selectedItems as $selectedItem) {
-            $title = $selectedItem['title'];
+            $title = (string)$selectedItem['title'];
             if (empty($title)) {
-                $title = '[' . $languageService->sL('LLL:EXT:lang/Resources/Private/Language/locallang_core.xlf:labels.no_title') . ']';
+                $title = '[' . $languageService->sL('LLL:EXT:core/Resources/Private/Language/locallang_core.xlf:labels.no_title') . ']';
             }
             $shortenedTitle = GeneralUtility::fixed_lgd_cs($title, $maxTitleLength);
             $linkedIcon = BackendUtility::wrapClickMenuOnIcon(
@@ -64,7 +64,7 @@ class RecordsOverview extends AbstractNode
                 $selectedItem['uid']
             );
             $linkedTitle = BackendUtility::wrapClickMenuOnIcon(
-                $shortenedTitle,
+                htmlspecialchars($shortenedTitle),
                 $selectedItem['table'],
                 $selectedItem['uid']
             );

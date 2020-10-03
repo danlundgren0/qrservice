@@ -14,12 +14,13 @@ namespace TYPO3\CMS\Install\Configuration\Image;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Install\Configuration;
+use TYPO3\CMS\Core\Core\Environment;
 
 /**
  * Preset for ImageMagick version 6 or higher
+ * @internal only to be used within EXT:install
  */
-class ImageMagick6Preset extends AbstractImagePreset implements Configuration\PresetInterface
+class ImageMagick6Preset extends AbstractImagePreset
 {
     /**
      * @var string Name of preset
@@ -40,7 +41,7 @@ class ImageMagick6Preset extends AbstractImagePreset implements Configuration\Pr
         'GFX/processor_path' => '',
         'GFX/processor_path_lzw' => '',
         'GFX/processor' => 'ImageMagick',
-        'GFX/processor_effects' => 1,
+        'GFX/processor_effects' => true,
         'GFX/processor_allowTemporaryMasksAsPng' => false,
         'GFX/processor_colorspace' => 'sRGB',
     ];
@@ -66,8 +67,12 @@ class ImageMagick6Preset extends AbstractImagePreset implements Configuration\Pr
     {
         $result = false;
         foreach ($searchPaths as $path) {
-            if (TYPO3_OS === 'WIN') {
+            if (Environment::isWindows()) {
                 $executable = 'identify.exe';
+
+                if (!@is_file($path . $executable)) {
+                    $executable = 'magick.exe';
+                }
             } else {
                 $executable = 'identify';
             }

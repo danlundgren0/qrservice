@@ -14,12 +14,14 @@ namespace TYPO3\CMS\Install\Service;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Core\Bootstrap;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Basic service to clear caches within the install tool.
- * This is NOT an API class, it is for internal use in the install tool only.
+ * @internal This is NOT an API class, it is for internal use in the install tool only.
  */
 class ClearCacheService
 {
@@ -39,12 +41,7 @@ class ClearCacheService
     public function clearAll()
     {
         // Delete typo3temp/Cache
-        GeneralUtility::flushDirectory(PATH_site . 'typo3temp/var/Cache', true, true);
-
-        $bootstrap = \TYPO3\CMS\Core\Core\Bootstrap::getInstance();
-        $bootstrap
-            ->initializeCachingFramework()
-            ->initializePackageManagement(\TYPO3\CMS\Core\Package\PackageManager::class);
+        GeneralUtility::flushDirectory(Environment::getVarPath() . '/cache', true, true);
 
         // Get all table names from Default connection starting with 'cf_' and truncate them
         $connectionPool = GeneralUtility::makeInstance(ConnectionPool::class);
@@ -69,13 +66,10 @@ class ClearCacheService
         // From this point on, the code may fatal, if some broken extension is loaded.
 
         // Use bootstrap to load all ext_localconf and ext_tables
-        $bootstrap
-            ->loadTypo3LoadedExtAndExtLocalconf(false)
-            ->defineLoggingAndExceptionConstants()
-            ->unsetReservedGlobalVariables()
-            ->initializeTypo3DbGlobal()
-            ->loadBaseTca(false)
-            ->loadExtTables(false);
+        Bootstrap::loadTypo3LoadedExtAndExtLocalconf(false);
+        Bootstrap::unsetReservedGlobalVariables();
+        Bootstrap::loadBaseTca(false);
+        Bootstrap::loadExtTables(false);
 
         // The cache manager is already instantiated in the install tool
         // with some hacked settings to disable caching of extbase and fluid.

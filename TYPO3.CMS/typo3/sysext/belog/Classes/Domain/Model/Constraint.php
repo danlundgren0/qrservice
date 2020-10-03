@@ -16,8 +16,9 @@ namespace TYPO3\CMS\Belog\Domain\Model;
 
 /**
  * Constraints for log entries
+ * @internal This class is a TYPO3 Backend implementation and is not considered part of the Public TYPO3 API.
  */
-class Constraint extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
+class Constraint
 {
     /**
      * Selected user/group; possible values are "gr-<uid>" for a group, "us-<uid>" for a user or -1 for "all users"
@@ -79,20 +80,13 @@ class Constraint extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
      * Manual date start
      * @var \DateTime
      */
-    protected $manualDateStart = null;
+    protected $manualDateStart;
 
     /**
      * Manual date stop
      * @var \DateTime
      */
-    protected $manualDateStop = null;
-
-    /**
-     * Whether the plugin is called in page context (submodule of Web > Info)
-     *
-     * @var bool
-     */
-    protected $isInPageContext = false;
+    protected $manualDateStop;
 
     /**
      * Selected page ID in page context
@@ -107,24 +101,6 @@ class Constraint extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
      * @var int
      */
     protected $depth = 0;
-
-    /**
-     * Default constructor
-     */
-    public function __construct()
-    {
-    }
-
-    /**
-     * added to prevent the deprecation message
-     * in Extbase\DomainObject\AbstractDomainObject
-     *
-     * @todo the constraints model needs another way of storing
-     * persisted search data than serialisation
-     */
-    public function __wakeup()
-    {
-    }
 
     /**
      * Set user
@@ -284,26 +260,6 @@ class Constraint extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     public function getEndTimestamp()
     {
         return $this->endTimestamp;
-    }
-
-    /**
-     * Set page context
-     *
-     * @param bool $pageContext
-     */
-    public function setIsInPageContext($pageContext)
-    {
-        $this->isInPageContext = $pageContext;
-    }
-
-    /**
-     * Get page context
-     *
-     * @return bool
-     */
-    public function getIsInPageContext()
-    {
-        return (bool)$this->isInPageContext;
     }
 
     /**

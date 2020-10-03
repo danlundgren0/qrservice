@@ -25,12 +25,16 @@ use TYPO3\CMS\Core\Resource\Filter\FileExtensionFilter;
 use TYPO3\CMS\Core\Resource\Folder;
 use TYPO3\CMS\Core\Resource\ProcessedFile;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
+use TYPO3\CMS\Core\Resource\Search\FileSearchDemand;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\HttpUtility;
+use TYPO3\CMS\Core\Utility\MathUtility;
 use TYPO3\CMS\Recordlist\Tree\View\LinkParameterProviderInterface;
 use TYPO3\CMS\Recordlist\View\FolderUtilityRenderer;
 
 /**
  * Browser for files
+ * @internal This class is a specific LinkBrowser implementation and is not part of the TYPO3's Core API.
  */
 class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterface, LinkParameterProviderInterface
 {
@@ -40,7 +44,7 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
      * If the value is NOT set, then it will be restored from the module session data.
      * Example value: "/www/htdocs/typo3/32/3dsplm/fileadmin/css/"
      *
-     * @var string|NULL
+     * @var string|null
      */
     protected $expandFolder;
 
@@ -57,14 +61,19 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
     protected $elements = [];
 
     /**
-    * @var string
-    */
+     * @var string
+     */
     protected $searchWord;
 
     /**
      * @var FileRepository
      */
     protected $fileRepository;
+
+    /**
+     * @var array
+     */
+    protected $thumbnailConfiguration = [];
 
     /**
      * Loads additional JavaScript
@@ -74,6 +83,14 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
         parent::initialize();
         $this->pageRenderer->loadRequireJsModule('TYPO3/CMS/Recordlist/BrowseFiles');
         $this->fileRepository = GeneralUtility::makeInstance(FileRepository::class);
+
+        $thumbnailConfig = $this->getBackendUser()->getTSConfig()['options.']['file_list.']['thumbnail.'] ?? [];
+        if (isset($thumbnailConfig['width']) && MathUtility::canBeInterpretedAsInteger($thumbnailConfig['width'])) {
+            $this->thumbnailConfiguration['width'] = (int)$thumbnailConfig['width'];
+        }
+        if (isset($thumbnailConfig['height']) && MathUtility::canBeInterpretedAsInteger($thumbnailConfig['height'])) {
+            $this->thumbnailConfiguration['height'] = (int)$thumbnailConfig['height'];
+        }
     }
 
     /**
@@ -120,7 +137,7 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
             $filterObject->setAllowedFileExtensions($allowedFileExtensions);
             // Set file extension filters on all storages
             $storages = $backendUser->getFileStorages();
-            /** @var $storage \TYPO3\CMS\Core\Resource\ResourceStorage */
+            /** @var \TYPO3\CMS\Core\Resource\ResourceStorage $storage */
             foreach ($storages as $storage) {
                 $storage->addFileAndFolderNameFilter([$filterObject, 'filterFileList']);
             }
@@ -149,7 +166,8 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
         // Or get the user's default upload folder
         if (!$this->selectedFolder) {
             try {
-                $this->selectedFolder = $backendUser->getDefaultUploadFolder();
+                [, $pid, $table,, $field] = explode('-', explode('|', $this->bparams)[4]);
+                $this->selectedFolder = $backendUser->getDefaultUploadFolder($pid, $table, $field);
             } catch (\Exception $e) {
                 // The configured default user folder does not exist
             }
@@ -164,7 +182,7 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
         }
 
         // Getting flag for showing/not showing thumbnails:
-        $noThumbs = $backendUser->getTSConfigVal('options.noThumbsInEB');
+        $noThumbs = $backendUser->getTSConfig()['options.']['noThumbsInEB'] ?? false;
         $_MOD_SETTINGS = [];
         if (!$noThumbs) {
             // MENU-ITEMS, fetching the setting for thumbnails from File>List module:
@@ -172,7 +190,8 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
             $_MCONF['name'] = 'file_list';
             $_MOD_SETTINGS = BackendUtility::getModuleData($_MOD_MENU, GeneralUtility::_GP('SET'), $_MCONF['name']);
         }
-        $noThumbs = $noThumbs ?: !$_MOD_SETTINGS['displayThumbs'];
+        $displayThumbs = $_MOD_SETTINGS['displayThumbs'] ?? false;
+        $noThumbs = $noThumbs ?: !$displayThumbs;
         // Create folder tree:
         /** @var ElementBrowserFolderTreeView $folderTree */
         $folderTree = GeneralUtility::makeInstance(ElementBrowserFolderTreeView::class);
@@ -195,7 +214,6 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
         $markup[] = '   <div class="element-browser-panel element-browser-main">';
         $markup[] = '       <div class="element-browser-main-sidebar">';
         $markup[] = '           <div class="element-browser-body">';
-        $markup[] = '               <h3>' . htmlspecialchars($this->getLanguageService()->getLL('folderTree')) . ':</h3>';
         $markup[] = '               ' . $tree;
         $markup[] = '           </div>';
         $markup[] = '       </div>';
@@ -233,7 +251,8 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
         $titleLen = (int)$this->getBackendUser()->uc['titleLen'];
 
         if ($this->searchWord !== '') {
-            $files = $this->fileRepository->searchByName($folder, $this->searchWord);
+            $searchDemand = FileSearchDemand::createForSearchTerm($this->searchWord)->withRecursive();
+            $files = $folder->searchFiles($searchDemand);
         } else {
             $extensionList = !empty($extensionList) && $extensionList[0] === '*' ? [] : $extensionList;
             $files = $this->getFilesInFolder($folder, $extensionList);
@@ -247,7 +266,7 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
 
         $lines[] = '
 			<tr>
-				<th class="col-title nowrap">' . $folderIcon . ' ' . htmlspecialchars(GeneralUtility::fixed_lgd_cs($folder->getIdentifier(), $titleLen)) . '</th>
+				<th class="col-title nowrap">' . $folderIcon . ' ' . htmlspecialchars(GeneralUtility::fixed_lgd_cs($folder->getStorage()->getName() . ':' . $folder->getReadablePath(), $titleLen)) . '</th>
 				<th class="col-control nowrap"></th>
 				<th class="col-clipboard nowrap">
 					<a href="#" class="btn btn-default" id="t3js-importSelection" title="' . htmlspecialchars($lang->getLL('importSelection')) . '">' . $this->iconFactory->getIcon('actions-document-import-t3d', Icon::SIZE_SMALL) . '</a>
@@ -270,7 +289,7 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
             if (!$noThumbs && GeneralUtility::inList(strtolower($GLOBALS['TYPO3_CONF_VARS']['GFX']['imagefile_ext'] . ',' . $GLOBALS['TYPO3_CONF_VARS']['SYS']['mediafile_ext']), strtolower($fileExtension))) {
                 $processedFile = $fileObject->process(
                     ProcessedFile::CONTEXT_IMAGEPREVIEW,
-                    ['width' => 64, 'height' => 64]
+                    $this->thumbnailConfiguration
                 );
                 $imageUrl = $processedFile->getPublicUrl(true);
                 $imgInfo = [
@@ -287,8 +306,8 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
                 $pDim = '';
             }
             // Create file icon:
-            $size = ' (' . GeneralUtility::formatSize($fileObject->getSize(), $this->getLanguageService()->sL('LLL:EXT:lang/Resources/Private/Language/locallang_common.xlf:byteSizeUnits')) . ($pDim ? ', ' . $pDim : '') . ')';
-            $icon = '<span title="' . htmlspecialchars($fileObject->getName() . $size) . '">' . $this->iconFactory->getIconForResource($fileObject, Icon::SIZE_SMALL) . '</span>';
+            $size = ' (' . GeneralUtility::formatSize($fileObject->getSize(), $this->getLanguageService()->sL('LLL:EXT:core/Resources/Private/Language/locallang_common.xlf:byteSizeUnits')) . ($pDim ? ', ' . $pDim : '') . ')';
+            $icon = '<span title="id=' . htmlspecialchars($fileObject->getUid()) . '">' . $this->iconFactory->getIconForResource($fileObject, Icon::SIZE_SMALL) . '</span>';
             // Create links for adding the file:
             $filesIndex = count($this->elements);
             $this->elements['file_' . $filesIndex] = [
@@ -303,7 +322,7 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
             if ($this->fileIsSelectableInFileList($fileObject, $imgInfo)) {
                 $ATag = '<a href="#" class="btn btn-default" title="' . htmlspecialchars($fileObject->getName()) . '" data-file-index="' . htmlspecialchars($filesIndex) . '" data-close="0">';
                 $ATag .= '<span title="' . htmlspecialchars($lang->getLL('addToList')) . '">' . $this->iconFactory->getIcon('actions-add', Icon::SIZE_SMALL)->render() . '</span>';
-                $ATag_alt = '<a href="#" title="' . htmlspecialchars($fileObject->getName()) . '" data-file-index="' . htmlspecialchars($filesIndex) . '" data-close="1">';
+                $ATag_alt = '<a href="#" title="' . htmlspecialchars($fileObject->getName()) . $size . '" data-file-index="' . htmlspecialchars($filesIndex) . '" data-close="1">';
                 $ATag_e = '</a>';
                 $bulkCheckBox = '<label class="btn btn-default btn-checkbox"><input type="checkbox" class="typo3-bulk-item" name="file_' . $filesIndex . '" value="0" /><span class="t3-icon fa"></span></label>';
             } else {
@@ -312,8 +331,10 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
                 $ATag_e = '';
                 $bulkCheckBox = '';
             }
+            /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+            $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
             // Create link to showing details about the file in a window:
-            $Ahref = BackendUtility::getModuleUrl('show_item', [
+            $Ahref = (string)$uriBuilder->buildUriFromRoute('show_item', [
                 'type' => 'file',
                 'table' => '_FILE',
                 'uid' => $fileObject->getCombinedIdentifier(),
@@ -392,13 +413,13 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
         $out = '';
 
         // Getting flag for showing/not showing thumbnails:
-        $noThumbsInEB = $this->getBackendUser()->getTSConfigVal('options.noThumbsInEB');
+        $noThumbsInEB = $this->getBackendUser()->getTSConfig()['options.']['noThumbsInEB'] ?? false;
         if (!$noThumbsInEB && $this->selectedFolder) {
             // MENU-ITEMS, fetching the setting for thumbnails from File>List module:
             $_MOD_MENU = ['displayThumbs' => ''];
             $_MCONF['name'] = 'file_list';
             $_MOD_SETTINGS = BackendUtility::getModuleData($_MOD_MENU, GeneralUtility::_GP('SET'), $_MCONF['name']);
-            $addParams = GeneralUtility::implodeArrayForUrl('', $this->getUrlParameters(['identifier' => $this->selectedFolder->getCombinedIdentifier()]));
+            $addParams = HttpUtility::buildQueryString($this->getUrlParameters(['identifier' => $this->selectedFolder->getCombinedIdentifier()]), '&');
             $thumbNailCheck = '<div class="checkbox" style="padding:5px 0 15px 0"><label for="checkDisplayThumbs">'
                 . BackendUtility::getFuncCheck(
                     '',
@@ -408,7 +429,7 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
                     $addParams,
                     'id="checkDisplayThumbs"'
                 )
-                . htmlspecialchars($lang->sL('LLL:EXT:lang/Resources/Private/Language/locallang_mod_file_list.xlf:displayThumbs')) . '</label></div>';
+                . htmlspecialchars($lang->sL('LLL:EXT:filelist/Resources/Private/Language/locallang_mod_file_list.xlf:displayThumbs')) . '</label></div>';
             $out .= $thumbNailCheck;
         } else {
             $out .= '<div style="padding-top: 15px;"></div>';
@@ -449,7 +470,7 @@ class FileBrowser extends AbstractElementBrowser implements ElementBrowserInterf
     {
         return [
             'mode' => 'file',
-            'expandFolder' => isset($values['identifier']) ? $values['identifier'] : $this->expandFolder,
+            'expandFolder' => $values['identifier'] ?? $this->expandFolder,
             'bparams' => $this->bparams
         ];
     }

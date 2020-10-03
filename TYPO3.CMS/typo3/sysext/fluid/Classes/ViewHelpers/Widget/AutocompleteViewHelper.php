@@ -13,28 +13,35 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Widget;
  *
  * The TYPO3 project - inspiring people to share!
  */
+use TYPO3\CMS\Extbase\Persistence\QueryResultInterface;
 
 /**
- * Simple paginate widget
- * Note: Make sure to include jQuery and jQuery UI in the HTML, like that:
- * <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script>
- * <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.4/jquery-ui.min.js"></script>
- * <link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.3/themes/base/jquery-ui.css" type="text/css" media="all" />
- * <link rel="stylesheet" href="http://static.jquery.com/ui/css/demo-docs-theme/ui.theme.css" type="text/css" media="all" />
- * You can include the provided TS template that includes the above snippet to the pages headerData.
+ * Simple autocomplete widget.
  *
- * = Examples =
+ * .. note::
+ *     Make sure to include jQuery and jQuery UI in the HTML, like that::
  *
- * <code title="Render lib object">
- * <input type="text" id="name" />
- * <f:widget.autocomplete for="name" objects="{posts}" searchProperty="author">
- * </code>
- * <output>
- * <input type="text" id="name" />
- * the input field and the required JavaScript for the Ajax communication (see Resources/Private/Templates/ViewHelpers/Widget/Autocomplete/Index.html
- * </output>
+ *         <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script>
+ *         <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.4/jquery-ui.min.js"></script>
+ *         <link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.3/themes/base/jquery-ui.css" type="text/css" media="all" />
+ *         <link rel="stylesheet" href="http://static.jquery.com/ui/css/demo-docs-theme/ui.theme.css" type="text/css" media="all" />
  *
- * @api
+ * You can include the provided TypoScript template that includes the above snippet to the pages headerData.
+ *
+ * Examples
+ * ========
+ *
+ * Render lib object::
+ *
+ *    <input type="text" id="name" />
+ *    <f:widget.autocomplete for="name" objects="{posts}" searchProperty="author">
+ *
+ * Output::
+ *
+ *    <input type="text" id="name" />
+ *
+ * The input field and the required JavaScript for the Ajax communication.
+ * See Resources/Private/Templates/ViewHelpers/Widget/Autocomplete/Index.html
  */
 class AutocompleteViewHelper extends \TYPO3\CMS\Fluid\Core\Widget\AbstractWidgetViewHelper
 {
@@ -49,6 +56,17 @@ class AutocompleteViewHelper extends \TYPO3\CMS\Fluid\Core\Widget\AbstractWidget
     protected $controller;
 
     /**
+     * Initialize arguments
+     */
+    public function initializeArguments()
+    {
+        parent::initializeArguments();
+        $this->registerArgument('objects', QueryResultInterface::class, 'Objects to auto-complete', true);
+        $this->registerArgument('for', 'string', 'Property to fill', true);
+        $this->registerArgument('searchProperty', 'string', 'Property to search within when filtering list', true);
+    }
+
+    /**
      * @param \TYPO3\CMS\Fluid\ViewHelpers\Widget\Controller\AutocompleteController $controller
      */
     public function injectAutocompleteController(\TYPO3\CMS\Fluid\ViewHelpers\Widget\Controller\AutocompleteController $controller)
@@ -57,12 +75,9 @@ class AutocompleteViewHelper extends \TYPO3\CMS\Fluid\Core\Widget\AbstractWidget
     }
 
     /**
-     * @param \TYPO3\CMS\Extbase\Persistence\Generic\QueryResult $objects
-     * @param string $for
-     * @param string $searchProperty
      * @return string
      */
-    public function render(\TYPO3\CMS\Extbase\Persistence\Generic\QueryResult $objects, $for, $searchProperty)
+    public function render()
     {
         return $this->initiateSubRequest();
     }

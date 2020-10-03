@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\LinkHandling;
 
 /*
@@ -34,8 +34,6 @@ class LinkService implements SingletonInterface
     const TYPE_RECORD = 'record';
     const TYPE_UNKNOWN = 'unknown';
 
-    // @TODO There needs to be an API to make these types extensible as the former 'typolinkLinkHandler' does not work anymore! forge #79647
-
     /**
      * All registered LinkHandlers
      *
@@ -50,7 +48,7 @@ class LinkService implements SingletonInterface
     {
         if (!empty($GLOBALS['TYPO3_CONF_VARS']['SYS']['linkHandler'])) {
             foreach ($GLOBALS['TYPO3_CONF_VARS']['SYS']['linkHandler'] as $type => $handler) {
-                if (!is_object($this->handlers[$type])) {
+                if (!isset($this->handlers[$type]) || !is_object($this->handlers[$type])) {
                     $this->handlers[$type] = GeneralUtility::makeInstance($handler);
                 }
             }
@@ -85,7 +83,7 @@ class LinkService implements SingletonInterface
     }
 
     /**
-     * Returns a array with data interpretation of the link target, something like t3:blabla.
+     * Returns an array with data interpretation of the link target, something like t3://page?uid=23.
      *
      * @param string $urn
      * @return array
@@ -123,7 +121,17 @@ class LinkService implements SingletonInterface
             $result = $this->handlers[self::TYPE_EMAIL]->resolveHandlerData(['email' => $urn]);
             $result['type'] = self::TYPE_EMAIL;
         } else {
-            throw new Exception\UnknownUrnException('No valid URN to resolve found', 1457177667);
+            $result = [];
+            if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['Link']['resolveByStringRepresentation'] ?? null)) {
+                $params = ['urn' => $urn, 'result' => &$result];
+                foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['Link']['resolveByStringRepresentation'] as $hookMethod) {
+                    $fakeThis = false;
+                    GeneralUtility::callUserFunction($hookMethod, $params, $fakeThis);
+                }
+            }
+            if (empty($result) || empty($result['type'])) {
+                throw new Exception\UnknownUrnException('No valid URN to resolve found', 1457177667);
+            }
         }
 
         return $result;
@@ -146,7 +154,8 @@ class LinkService implements SingletonInterface
     {
         if (is_object($this->handlers[$parameters['type']])) {
             return $this->handlers[$parameters['type']]->asString($parameters);
-        } elseif (isset($parameters['url']) && !empty($parameters['url'])) {
+        }
+        if (isset($parameters['url']) && !empty($parameters['url'])) {
             // This usually happens for tel: or other types where a URL is available and the
             // legacy link service could resolve at least something
             return $parameters['url'];

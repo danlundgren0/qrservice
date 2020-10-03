@@ -36,8 +36,8 @@ class DriverRegistry implements \TYPO3\CMS\Core\SingletonInterface
     {
         $driverConfigurations = $GLOBALS['TYPO3_CONF_VARS']['SYS']['fal']['registeredDrivers'];
         foreach ($driverConfigurations as $shortName => $driverConfig) {
-            $shortName = $shortName ?: $driverConfig['shortName'];
-            $this->registerDriverClass($driverConfig['class'], $shortName, $driverConfig['label'], $driverConfig['flexFormDS']);
+            $shortName = $shortName ?: $driverConfig['shortName'] ?? '';
+            $this->registerDriverClass($driverConfig['class'] ?? '', $shortName, $driverConfig['label'] ?? '', $driverConfig['flexFormDS'] ?? '');
         }
     }
 
@@ -68,9 +68,8 @@ class DriverRegistry implements \TYPO3\CMS\Core\SingletonInterface
             // Return immediately without changing configuration
             if ($this->drivers[$shortName] === $className) {
                 return true;
-            } else {
-                throw new \InvalidArgumentException('Driver ' . $shortName . ' is already registered.', 1314979451);
             }
+            throw new \InvalidArgumentException('Driver ' . $shortName . ' is already registered.', 1314979451);
         }
         $this->drivers[$shortName] = $className;
         $this->driverConfigurations[$shortName] = [
@@ -114,7 +113,8 @@ class DriverRegistry implements \TYPO3\CMS\Core\SingletonInterface
         if (!array_key_exists($shortName, $this->drivers)) {
             throw new \InvalidArgumentException(
                 'Desired storage "' . $shortName . '" is not in the list of available storages.',
-                1314085990);
+                1314085990
+            );
         }
         return $this->drivers[$shortName];
     }

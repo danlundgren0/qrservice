@@ -13,36 +13,47 @@ namespace TYPO3\CMS\Fluid\ViewHelpers\Uri;
  *
  * The TYPO3 project - inspiring people to share!
  */
+
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
 use TYPO3\CMS\Frontend\Service\TypoLinkCodecService;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
+use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
 use TYPO3Fluid\Fluid\Core\ViewHelper\Traits\CompileWithRenderStatic;
 
 /**
- * A ViewHelper to create uris from fields supported by the link wizard
+ * A ViewHelper to create uris from fields supported by the link wizard.
  *
- * == Example ==
+ * Example
+ * =======
  *
- * {link} contains "19 - - - &X=y"
- * Please note that due to the nature of typolink you have to provide a
- * full set of parameters if you use the parameter only. Target, class
- * and title will be discarded.
+ * ``{link}`` contains ``19 - - - &X=y``
  *
- * <code title="minimal usage">
- * <f:uri.typolink parameter="{link}" />
- * <output>
- * index.php?id=19&X=y
- * </output>
- * </code>
+ * Please note that due to the nature of typolink you have to provide a full
+ * set of parameters.
+ * If you use the parameter only, then target, class and title will be discarded.
  *
- * <code title="Full parameter usage">
- * <f:uri.typolink parameter="{link}" additionalParams="&u=b" useCacheHash="true" />
- * </code>
- * <output>
- * index.php?id=19&X=y&u=b
- * </output>
+ * Minimal usage
+ * -------------
+ *
+ * ::
+ *
+ *    <f:uri.typolink parameter="{link}" />
+ *
+ * ``/page/path/name.html?X=y``
+ *
+ * Depending on routing and page path configuration.
+ *
+ * Full parameter usage
+ * --------------------
+ *
+ * ::
+ *
+ *    <f:uri.typolink parameter="{link}" additionalParams="&u=b" useCacheHash="true" />
+ *
+ * ``/page/path/name.html?X=y&u=b``
+ *
+ * Depending on routing and page path configuration.
  */
 class TypolinkViewHelper extends AbstractViewHelper
 {
@@ -53,10 +64,13 @@ class TypolinkViewHelper extends AbstractViewHelper
      */
     public function initializeArguments()
     {
-        parent::initializeArguments();
         $this->registerArgument('parameter', 'string', 'stdWrap.typolink style parameter string', true);
         $this->registerArgument('additionalParams', 'string', 'stdWrap.typolink additionalParams', false, '');
         $this->registerArgument('useCacheHash', 'bool', '', false, false);
+        $this->registerArgument('addQueryString', 'bool', '', false, false);
+        $this->registerArgument('addQueryStringMethod', 'string', '', false, 'GET');
+        $this->registerArgument('addQueryStringExclude', 'string', '', false, '');
+        $this->registerArgument('absolute', 'bool', 'Ensure the resulting URL is an absolute URL', false, false);
     }
 
     /**
@@ -71,6 +85,10 @@ class TypolinkViewHelper extends AbstractViewHelper
         $parameter = $arguments['parameter'];
         $additionalParams = $arguments['additionalParams'];
         $useCacheHash = $arguments['useCacheHash'];
+        $addQueryString = $arguments['addQueryString'];
+        $addQueryStringMethod = $arguments['addQueryStringMethod'];
+        $addQueryStringExclude = $arguments['addQueryStringExclude'];
+        $absolute = $arguments['absolute'];
 
         $content = '';
         if ($parameter) {
@@ -79,6 +97,12 @@ class TypolinkViewHelper extends AbstractViewHelper
                 [
                     'parameter' => self::createTypolinkParameterFromArguments($parameter, $additionalParams),
                     'useCacheHash' => $useCacheHash,
+                    'addQueryString' => $addQueryString,
+                    'addQueryString.' => [
+                        'method' => $addQueryStringMethod,
+                        'exclude' => $addQueryStringExclude
+                    ],
+                    'forceAbsoluteUrl' => $absolute
                 ]
             );
         }

@@ -14,6 +14,8 @@ namespace TYPO3\CMS\Core\Utility;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Utility\Exception\MissingArrayPathException;
+
 /**
  * Class with helper functions for array handling
  */
@@ -36,7 +38,8 @@ class ArrayUtility
                     'The options "%s" were not allowed (allowed were: "%s")',
                     implode(', ', $notAllowedArrayKeys),
                     implode(', ', $allowedArrayKeys)
-                ), 1325697085
+                ),
+                1325697085
             );
         }
     }
@@ -105,11 +108,11 @@ class ArrayUtility
         // Write to $resultArray (by reference!) if types and value match
         $callback = function (&$value, $key) use ($needle, &$resultArray) {
             if ($value === $needle) {
-                ($resultArray[$key] = $value);
+                $resultArray[$key] = $value;
             } elseif (is_array($value)) {
-                ($subArrayMatches = static::filterByValueRecursive($needle, $value));
+                $subArrayMatches = static::filterByValueRecursive($needle, $value);
                 if (!empty($subArrayMatches)) {
-                    ($resultArray[$key] = $subArrayMatches);
+                    $resultArray[$key] = $subArrayMatches;
                 }
             }
         };
@@ -141,9 +144,8 @@ class ArrayUtility
     {
         $isValid = true;
         try {
-            // Use late static binding to enable mocking of this call in unit tests
             static::getValueByPath($array, $path, $delimiter);
-        } catch (\RuntimeException $e) {
+        } catch (MissingArrayPathException $e) {
             $isValid = false;
         }
         return $isValid;
@@ -179,21 +181,23 @@ class ArrayUtility
         // Extract parts of the path
         if (is_string($path)) {
             if ($path === '') {
+                // Programming error has to be sanitized before calling the method -> global exception
                 throw new \RuntimeException('Path must not be empty', 1341397767);
             }
             $path = str_getcsv($path, $delimiter);
         } elseif (!is_array($path)) {
+            // Programming error has to be sanitized before calling the method -> global exception
             throw new \InvalidArgumentException('getValueByPath() expects $path to be string or array, "' . gettype($path) . '" given.', 1476557628);
         }
         // Loop through each part and extract its value
         $value = $array;
         foreach ($path as $segment) {
-            if (array_key_exists($segment, $value)) {
+            if (is_array($value) && array_key_exists($segment, $value)) {
                 // Replace current value with child
                 $value = $value[$segment];
             } else {
-                // Fail if key does not exist
-                throw new \RuntimeException('Path does not exist in array', 1341397869);
+                // Throw specific exception if there is no such path
+                throw new MissingArrayPathException('Segment ' . $segment . ' of path ' . implode($delimiter, $path) . ' does not exist in array', 1341397869);
             }
         }
         return $value;
@@ -325,7 +329,7 @@ class ArrayUtility
                 throw new \RuntimeException('Invalid path segment specified', 1371757720);
             }
             if (!array_key_exists($segment, $pointer)) {
-                throw new \RuntimeException('Path segment ' . $segment . ' does not exist in array', 1371758436);
+                throw new MissingArrayPathException('Segment ' . $segment . ' of path ' . implode($delimiter, $path) . ' does not exist in array', 1371758436);
             }
             if ($currentDepth === $pathDepth) {
                 unset($pointer[$segment]);
@@ -392,7 +396,7 @@ class ArrayUtility
      */
     public static function arrayExport(array $array = [], $level = 0)
     {
-        $lines = '[' . LF;
+        $lines = "[\n";
         $level++;
         $writeKeyIndex = false;
         $expectedKeyIndex = 0;
@@ -416,26 +420,25 @@ class ArrayUtility
                 if (!empty($value)) {
                     $lines .= self::arrayExport($value, $level);
                 } else {
-                    $lines .= '[],' . LF;
+                    $lines .= "[],\n";
                 }
             } elseif (is_int($value) || is_float($value)) {
-                $lines .= $value . ',' . LF;
-            } elseif (is_null($value)) {
-                $lines .= 'null' . ',' . LF;
+                $lines .= $value . ",\n";
+            } elseif ($value === null) {
+                $lines .= "null,\n";
             } elseif (is_bool($value)) {
                 $lines .= $value ? 'true' : 'false';
-                $lines .= ',' . LF;
+                $lines .= ",\n";
             } elseif (is_string($value)) {
                 // Quote \ to \\
-                $stringContent = str_replace('\\', '\\\\', $value);
                 // Quote ' to \'
-                $stringContent = str_replace('\'', '\\\'', $stringContent);
-                $lines .= '\'' . $stringContent . '\'' . ',' . LF;
+                $stringContent = str_replace(['\\', '\''], ['\\\\', '\\\''], $value);
+                $lines .= '\'' . $stringContent . "',\n";
             } else {
                 throw new \RuntimeException('Objects are not supported', 1342294987);
             }
         }
-        $lines .= str_repeat('    ', ($level - 1)) . ']' . ($level - 1 == 0 ? '' : ',' . LF);
+        $lines .= str_repeat('    ', $level - 1) . ']' . ($level - 1 == 0 ? '' : ",\n");
         return $lines;
     }
 
@@ -470,6 +473,7 @@ class ArrayUtility
      *
      * @param array $array The (relative) array to be converted
      * @param string $prefix The (relative) prefix to be used (e.g. 'section.')
+     * @param bool $keepDots
      * @return array
      */
     public static function flatten(array $array, $prefix = '')
@@ -571,7 +575,7 @@ class ArrayUtility
         $level++;
         $allKeysAreNumeric = true;
         foreach ($array as $key => $_) {
-            if (is_numeric($key) === false) {
+            if (is_int($key) === false) {
                 $allKeysAreNumeric = false;
                 break;
             }
@@ -630,40 +634,6 @@ class ArrayUtility
     }
 
     /**
-     * Check if an string item exists in an array.
-     * Please note that the order of function parameters is reverse compared to the PHP function in_array()!!!
-     *
-     * Comparison to PHP in_array():
-     * -> $array = array(0, 1, 2, 3);
-     * -> variant_a := \TYPO3\CMS\Core\Utility\ArrayUtility::inArray($array, $needle)
-     * -> variant_b := in_array($needle, $array)
-     * -> variant_c := in_array($needle, $array, TRUE)
-     * +---------+-----------+-----------+-----------+
-     * | $needle | variant_a | variant_b | variant_c |
-     * +---------+-----------+-----------+-----------+
-     * | '1a'    | FALSE     | TRUE      | FALSE     |
-     * | ''      | FALSE     | TRUE      | FALSE     |
-     * | '0'     | TRUE      | TRUE      | FALSE     |
-     * | 0       | TRUE      | TRUE      | TRUE      |
-     * +---------+-----------+-----------+-----------+
-     *
-     * @param array $in_array One-dimensional array of items
-     * @param string $item Item to check for
-     * @return bool TRUE if $item is in the one-dimensional array $in_array
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9, use in_array instead
-     */
-    public static function inArray(array $in_array, $item)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        foreach ($in_array as $val) {
-            if (!is_array($val) && (string)$val === (string)$item) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
      * Removes the value $cmpValue from the $array if found there. Returns the modified array
      *
      * @param array $array Array containing the values
@@ -718,10 +688,11 @@ class ArrayUtility
             }
             // Do the filtering:
             if (is_array($keepItems) && !empty($keepItems)) {
+                $keepItems = array_flip($keepItems);
                 foreach ($array as $key => $value) {
                     // Get the value to compare by using the callback function:
                     $keepValue = isset($getValueFunc) ? call_user_func($getValueFunc, $value) : $value;
-                    if (!in_array($keepValue, $keepItems)) {
+                    if (!isset($keepItems[$keepValue])) {
                         unset($array[$key]);
                     }
                 }
@@ -748,7 +719,7 @@ class ArrayUtility
 
     /**
      * Filters keys off from first array that also exist in second array. Comparison is done by keys.
-     * This method is a recursive version of php array_diff_assoc()
+     * This method is a recursive version of php array_diff_key()
      *
      * @param array $array1 Source array
      * @param array $array2 Reduce source array by this array
@@ -762,7 +733,10 @@ class ArrayUtility
                 $differenceArray[$key] = $value;
             } elseif (is_array($value)) {
                 if (is_array($array2[$key])) {
-                    $differenceArray[$key] = self::arrayDiffAssocRecursive($value, $array2[$key]);
+                    $recursiveResult = self::arrayDiffAssocRecursive($value, $array2[$key]);
+                    if (!empty($recursiveResult)) {
+                        $differenceArray[$key] = $recursiveResult;
+                    }
                 }
             }
         }
@@ -854,12 +828,37 @@ class ArrayUtility
         foreach ($result as $key => $value) {
             if (is_array($value)) {
                 $result[$key] = self::stripTagsFromValuesRecursive($value);
-            } else {
-                if (!is_bool($value)) {
-                    $result[$key] = strip_tags($value);
-                }
+            } elseif (is_string($value) || (is_object($value) && method_exists($value, '__toString'))) {
+                $result[$key] = strip_tags($value);
             }
         }
         return $result;
+    }
+
+    /**
+     * Recursively filter an array
+     *
+     * @param array $array
+     * @param callable|null $callback
+     * @return array the filtered array
+     * @see https://secure.php.net/manual/en/function.array-filter.php
+     */
+    public static function filterRecursive(array $array, callable $callback = null): array
+    {
+        $callback = $callback ?: function ($value) {
+            return (bool)$value;
+        };
+
+        foreach ($array as $key => $value) {
+            if (is_array($value)) {
+                $array[$key] = self::filterRecursive($value, $callback);
+            }
+
+            if (!call_user_func($callback, $value)) {
+                unset($array[$key]);
+            }
+        }
+
+        return $array;
     }
 }

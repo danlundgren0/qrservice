@@ -14,6 +14,8 @@ namespace TYPO3\CMS\Core\Cache\Backend;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Cache\Exception;
+use TYPO3\CMS\Core\Cache\Exception\InvalidDataException;
 use TYPO3\CMS\Core\Utility\StringUtility;
 
 /**
@@ -21,9 +23,8 @@ use TYPO3\CMS\Core\Utility\StringUtility;
  * PHP module. Redis is a noSQL database with very good scaling characteristics
  * in proportion to the amount of entries and data size.
  *
- * @see http://code.google.com/p/redis/
- * @see http://github.com/owlient/phpredis
- * @api
+ * @see https://redis.io/
+ * @see https://github.com/phpredis/phpredis
  */
 class RedisBackend extends AbstractBackend implements TaggableBackendInterface
 {
@@ -37,7 +38,7 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
      * To save these additional calls on every set(),
      * we just make every entry volatile and treat a high number as "unlimited"
      *
-     * @see http://code.google.com/p/redis/wiki/ExpireCommand
+     * @see https://redis.io/commands/expire
      * @var int Faked unlimited lifetime
      */
     const FAKED_UNLIMITED_LIFETIME = 31536000;
@@ -132,14 +133,14 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
     /**
      * Construct this backend
      *
-     * @param string $context FLOW3's application context
+     * @param string $context Unused, for backward compatibility only
      * @param array $options Configuration options
-     * @throws \TYPO3\CMS\Core\Cache\Exception if php redis module is not loaded
+     * @throws Exception if php redis module is not loaded
      */
     public function __construct($context, array $options = [])
     {
         if (!extension_loaded('redis')) {
-            throw new \TYPO3\CMS\Core\Cache\Exception('The PHP extension "redis" must be installed and loaded in order to use the redis backend.', 1279462933);
+            throw new Exception('The PHP extension "redis" must be installed and loaded in order to use the redis backend.', 1279462933);
         }
         parent::__construct($context, $options);
     }
@@ -147,31 +148,31 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
     /**
      * Initializes the redis backend
      *
-     * @throws \TYPO3\CMS\Core\Cache\Exception if access to redis with password is denied or if database selection fails
+     * @throws Exception if access to redis with password is denied or if database selection fails
      */
     public function initializeObject()
     {
         $this->redis = new \Redis();
         try {
             if ($this->persistentConnection) {
-                $this->connected = $this->redis->pconnect($this->hostname, $this->port, $this->connectionTimeout);
+                $this->connected = $this->redis->pconnect($this->hostname, $this->port, $this->connectionTimeout, (string)$this->database);
             } else {
                 $this->connected = $this->redis->connect($this->hostname, $this->port, $this->connectionTimeout);
             }
         } catch (\Exception $e) {
-            \TYPO3\CMS\Core\Utility\GeneralUtility::sysLog('Could not connect to redis server.', 'core', \TYPO3\CMS\Core\Utility\GeneralUtility::SYSLOG_SEVERITY_ERROR);
+            $this->logger->alert('Could not connect to redis server.', ['exception' => $e]);
         }
         if ($this->connected) {
             if ($this->password !== '') {
                 $success = $this->redis->auth($this->password);
                 if (!$success) {
-                    throw new \TYPO3\CMS\Core\Cache\Exception('The given password was not accepted by the redis server.', 1279765134);
+                    throw new Exception('The given password was not accepted by the redis server.', 1279765134);
                 }
             }
-            if ($this->database > 0) {
+            if ($this->database >= 0) {
                 $success = $this->redis->select($this->database);
                 if (!$success) {
-                    throw new \TYPO3\CMS\Core\Cache\Exception('The given database "' . $this->database . '" could not be selected.', 1279765144);
+                    throw new Exception('The given database "' . $this->database . '" could not be selected.', 1279765144);
                 }
             }
         }
@@ -181,7 +182,6 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
      * Setter for persistent connection
      *
      * @param bool $persistentConnection
-     * @api
      */
     public function setPersistentConnection($persistentConnection)
     {
@@ -192,7 +192,6 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
      * Setter for server hostname
      *
      * @param string $hostname Hostname
-     * @api
      */
     public function setHostname($hostname)
     {
@@ -203,7 +202,6 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
      * Setter for server port
      *
      * @param int $port Port
-     * @api
      */
     public function setPort($port)
     {
@@ -215,7 +213,6 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
      *
      * @param int $database Database
      * @throws \InvalidArgumentException if database number is not valid
-     * @api
      */
     public function setDatabase($database)
     {
@@ -232,7 +229,6 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
      * Setter for authentication password
      *
      * @param string $password Password
-     * @api
      */
     public function setPassword($password)
     {
@@ -244,7 +240,6 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
      *
      * @param bool $compression TRUE to enable compression
      * @throws \InvalidArgumentException if compression parameter is not of type boolean
-     * @api
      */
     public function setCompression($compression)
     {
@@ -261,7 +256,6 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
      *
      * @param int $compressionLevel -1 to 9: Compression level
      * @throws \InvalidArgumentException if compressionLevel parameter is not within allowed bounds
-     * @api
      */
     public function setCompressionLevel($compressionLevel)
     {
@@ -282,7 +276,6 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
      *
      * @param int $connectionTimeout limit in seconds, a value greater or equal than 0
      * @throws \InvalidArgumentException if compressionLevel parameter is not within allowed bounds
-     * @api
      */
     public function setConnectionTimeout($connectionTimeout)
     {
@@ -308,8 +301,7 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
      * @param array $tags Tags to associate with this cache entry
      * @param int $lifetime Lifetime of this cache entry in seconds. If NULL is specified, default lifetime is used. "0" means unlimited lifetime.
      * @throws \InvalidArgumentException if identifier is not valid
-     * @throws \TYPO3\CMS\Core\Cache\Exception\InvalidDataException if data is not a string
-     * @api
+     * @throws InvalidDataException if data is not a string
      */
     public function set($entryIdentifier, $data, array $tags = [], $lifetime = null)
     {
@@ -317,9 +309,9 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
             throw new \InvalidArgumentException('The specified identifier is of type "' . gettype($entryIdentifier) . '" which can\'t be converted to string.', 1377006651);
         }
         if (!is_string($data)) {
-            throw new \TYPO3\CMS\Core\Cache\Exception\InvalidDataException('The specified data is of type "' . gettype($data) . '" but a string is expected.', 1279469941);
+            throw new InvalidDataException('The specified data is of type "' . gettype($data) . '" but a string is expected.', 1279469941);
         }
-        $lifetime = $lifetime === null ? $this->defaultLifetime : $lifetime;
+        $lifetime = $lifetime ?? $this->defaultLifetime;
         if (!is_int($lifetime)) {
             throw new \InvalidArgumentException('The specified lifetime is of type "' . gettype($lifetime) . '" but an integer or NULL is expected.', 1279488008);
         }
@@ -342,8 +334,8 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
             if (!empty($removeTags) || !empty($addTags)) {
                 $queue = $this->redis->multi(\Redis::PIPELINE);
                 foreach ($removeTags as $tag) {
-                    $queue->sRemove(self::IDENTIFIER_TAGS_PREFIX . $entryIdentifier, $tag);
-                    $queue->sRemove(self::TAG_IDENTIFIERS_PREFIX . $tag, $entryIdentifier);
+                    $queue->sRem(self::IDENTIFIER_TAGS_PREFIX . $entryIdentifier, $tag);
+                    $queue->sRem(self::TAG_IDENTIFIERS_PREFIX . $tag, $entryIdentifier);
                 }
                 foreach ($addTags as $tag) {
                     $queue->sAdd(self::IDENTIFIER_TAGS_PREFIX . $entryIdentifier, $tag);
@@ -362,7 +354,6 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
      * @param string $entryIdentifier An identifier which describes the cache entry to load
      * @return mixed The cache entry's content as a string or FALSE if the cache entry could not be loaded
      * @throws \InvalidArgumentException if identifier is not a string
-     * @api
      */
     public function get($entryIdentifier)
     {
@@ -387,7 +378,6 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
      * @param string $entryIdentifier Identifier specifying the cache entry
      * @return bool TRUE if such an entry exists, FALSE if not
      * @throws \InvalidArgumentException if identifier is not a string
-     * @api
      */
     public function has($entryIdentifier)
     {
@@ -406,7 +396,6 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
      * @param string $entryIdentifier Specifies the cache entry to remove
      * @return bool TRUE if (at least) an entry could be removed or FALSE if no entry was found
      * @throws \InvalidArgumentException if identifier is not a string
-     * @api
      */
     public function remove($entryIdentifier)
     {
@@ -419,9 +408,9 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
                 $assignedTags = $this->redis->sMembers(self::IDENTIFIER_TAGS_PREFIX . $entryIdentifier);
                 $queue = $this->redis->multi(\Redis::PIPELINE);
                 foreach ($assignedTags as $tag) {
-                    $queue->sRemove(self::TAG_IDENTIFIERS_PREFIX . $tag, $entryIdentifier);
+                    $queue->sRem(self::TAG_IDENTIFIERS_PREFIX . $tag, $entryIdentifier);
                 }
-                $queue->delete(self::IDENTIFIER_DATA_PREFIX . $entryIdentifier, self::IDENTIFIER_TAGS_PREFIX . $entryIdentifier);
+                $queue->del(self::IDENTIFIER_DATA_PREFIX . $entryIdentifier, self::IDENTIFIER_TAGS_PREFIX . $entryIdentifier);
                 $queue->exec();
                 $elementsDeleted = true;
             }
@@ -439,7 +428,6 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
      * @param string $tag The tag to search for
      * @return array An array of entries with all matching entries. An empty array if no entries matched
      * @throws \InvalidArgumentException if tag is not a string
-     * @api
      */
     public function findIdentifiersByTag($tag)
     {
@@ -457,8 +445,6 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
      * Removes all cache entries of this cache.
      *
      * Scales O(1) with number of cache entries
-     *
-     * @api
      */
     public function flush()
     {
@@ -475,7 +461,6 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
      *
      * @param string $tag Tag the entries must have
      * @throws \InvalidArgumentException if identifier is not a string
-     * @api
      */
     public function flushByTag($tag)
     {
@@ -497,21 +482,19 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
      * This methods finds those entries and cleans them up.
      *
      * Scales O(n*m) with number of cache entries (n) and number of tags (m)
-     *
-     * @api
      */
     public function collectGarbage()
     {
-        $identifierToTagsKeys = $this->redis->getKeys(self::IDENTIFIER_TAGS_PREFIX . '*');
+        $identifierToTagsKeys = $this->redis->keys(self::IDENTIFIER_TAGS_PREFIX . '*');
         foreach ($identifierToTagsKeys as $identifierToTagsKey) {
             list(, $identifier) = explode(':', $identifierToTagsKey);
             // Check if the data entry still exists
-            if (!$this->redis->exists((self::IDENTIFIER_DATA_PREFIX . $identifier))) {
+            if (!$this->redis->exists(self::IDENTIFIER_DATA_PREFIX . $identifier)) {
                 $tagsToRemoveIdentifierFrom = $this->redis->sMembers($identifierToTagsKey);
                 $queue = $this->redis->multi(\Redis::PIPELINE);
-                $queue->delete($identifierToTagsKey);
+                $queue->del($identifierToTagsKey);
                 foreach ($tagsToRemoveIdentifierFrom as $tag) {
-                    $queue->sRemove(self::TAG_IDENTIFIERS_PREFIX . $tag, $identifier);
+                    $queue->sRem(self::TAG_IDENTIFIERS_PREFIX . $tag, $identifier);
                 }
                 $queue->exec();
             }
@@ -554,7 +537,7 @@ class RedisBackend extends AbstractBackend implements TaggableBackendInterface
         foreach ($tagToIdentifiersSetsToRemoveIdentifiersFrom as $tagToIdentifiersSet) {
             $queue->sDiffStore(self::TAG_IDENTIFIERS_PREFIX . $tagToIdentifiersSet, self::TAG_IDENTIFIERS_PREFIX . $tagToIdentifiersSet, $uniqueTempKey);
         }
-        $queue->delete(array_merge($prefixedKeysToDelete, $prefixedIdentifierToTagsKeysToDelete));
+        $queue->del(array_merge($prefixedKeysToDelete, $prefixedIdentifierToTagsKeysToDelete));
         $queue->exec();
     }
 

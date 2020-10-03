@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Lowlevel\Command;
 
 /*
@@ -21,6 +21,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use TYPO3\CMS\Core\Core\Bootstrap;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\ReferenceIndex;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -82,7 +83,7 @@ If you want to get more detailed information, use the --verbose option.')
     protected function execute(InputInterface $input, OutputInterface $output)
     {
         // Make sure the _cli_ user is loaded
-        Bootstrap::getInstance()->initializeBackendAuthentication();
+        Bootstrap::initializeBackendAuthentication();
 
         $io = new SymfonyStyle($input, $output);
         $io->title($this->getDescription());
@@ -168,8 +169,8 @@ If you want to get more detailed information, use the --verbose option.')
 
         // Traverse the references and check if the files exists
         while ($record = $result->fetch()) {
-            $fileName = $record['ref_string'];
-            if (empty($record['softref_key']) && !@is_file((PATH_site . $fileName))) {
+            $fileName = $this->getFileNameWithoutAnchor($record['ref_string']);
+            if (empty($record['softref_key']) && !@is_file(Environment::getPublicPath() . '/' . $fileName)) {
                 $missingReferences[$fileName][$record['hash']] = $this->formatReferenceIndexEntryToString($record);
             }
         }
@@ -201,12 +202,26 @@ If you want to get more detailed information, use the --verbose option.')
 
         // Traverse the references and check if the files exists
         while ($record = $result->fetch()) {
-            $fileName = $record['ref_string'];
-            if (!@is_file((PATH_site . $fileName))) {
+            $fileName = $this->getFileNameWithoutAnchor($record['ref_string']);
+            if (!@is_file(Environment::getPublicPath() . '/' . $fileName)) {
                 $missingReferences[] = $fileName . ' - ' . $record['hash'] . ' - ' . $this->formatReferenceIndexEntryToString($record);
             }
         }
         return $missingReferences;
+    }
+
+    /**
+     * Remove a possible anchor like 'my-path/file.pdf#page15'
+     *
+     * @param string $fileName a filename as found in sys_refindex.ref_string
+     * @return string the filename but leaving everything behind #page15 behind
+     */
+    protected function getFileNameWithoutAnchor(string $fileName): string
+    {
+        if (strpos($fileName, '#') !== false) {
+            [$fileName] = explode('#', $fileName);
+        }
+        return $fileName;
     }
 
     /**

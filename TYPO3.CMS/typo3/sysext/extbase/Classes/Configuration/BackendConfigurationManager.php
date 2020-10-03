@@ -18,15 +18,17 @@ use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
 use TYPO3\CMS\Core\Database\Query\Restriction\HiddenRestriction;
 use TYPO3\CMS\Core\Database\QueryGenerator;
+use TYPO3\CMS\Core\Type\Bitmask\Permission;
 use TYPO3\CMS\Core\TypoScript\TemplateService;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\RootlineUtility;
 use TYPO3\CMS\Extbase\Mvc\Web\BackendRequestHandler;
 use TYPO3\CMS\Extbase\Mvc\Web\FrontendRequestHandler;
-use TYPO3\CMS\Frontend\Page\PageRepository;
 
 /**
  * A general purpose configuration manager used in backend mode.
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 class BackendConfigurationManager extends AbstractConfigurationManager
 {
@@ -51,20 +53,20 @@ class BackendConfigurationManager extends AbstractConfigurationManager
         $pageId = $this->getCurrentPageId();
 
         if (!array_key_exists($pageId, $this->typoScriptSetupCache)) {
-            /** @var $template TemplateService */
+            /** @var TemplateService $template */
             $template = GeneralUtility::makeInstance(TemplateService::class);
             // do not log time-performance information
-            $template->tt_track = 0;
+            $template->tt_track = false;
             // Explicitly trigger processing of extension static files
             $template->setProcessExtensionStatics(true);
-            $template->init();
             // Get the root line
             $rootline = [];
             if ($pageId > 0) {
-                /** @var $sysPage PageRepository */
-                $sysPage = GeneralUtility::makeInstance(PageRepository::class);
-                // Get the rootline for the current page
-                $rootline = $sysPage->getRootLine($pageId, '', true);
+                try {
+                    $rootline = GeneralUtility::makeInstance(RootlineUtility::class, $pageId)->get();
+                } catch (\RuntimeException $e) {
+                    $rootline = [];
+                }
             }
             // This generates the constants/config + hierarchy info for the template.
             $template->runThroughTemplates($rootline, 0);
@@ -86,12 +88,12 @@ class BackendConfigurationManager extends AbstractConfigurationManager
     {
         $setup = $this->getTypoScriptSetup();
         $pluginConfiguration = [];
-        if (is_array($setup['module.']['tx_' . strtolower($extensionName) . '.'])) {
+        if (is_array($setup['module.']['tx_' . strtolower($extensionName) . '.'] ?? false)) {
             $pluginConfiguration = $this->typoScriptService->convertTypoScriptArrayToPlainArray($setup['module.']['tx_' . strtolower($extensionName) . '.']);
         }
         if ($pluginName !== null) {
             $pluginSignature = strtolower($extensionName . '_' . $pluginName);
-            if (is_array($setup['module.']['tx_' . $pluginSignature . '.'])) {
+            if (is_array($setup['module.']['tx_' . $pluginSignature . '.'] ?? false)) {
                 $overruleConfiguration = $this->typoScriptService->convertTypoScriptArrayToPlainArray($setup['module.']['tx_' . $pluginSignature . '.']);
                 ArrayUtility::mergeRecursiveWithOverrule($pluginConfiguration, $overruleConfiguration);
             }
@@ -112,7 +114,7 @@ class BackendConfigurationManager extends AbstractConfigurationManager
      */
     protected function getSwitchableControllerActions($extensionName, $pluginName)
     {
-        $switchableControllerActions = $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['extensions'][$extensionName]['modules'][$pluginName]['controllers'];
+        $switchableControllerActions = $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['extbase']['extensions'][$extensionName]['modules'][$pluginName]['controllers'] ?? false;
         if (!is_array($switchableControllerActions)) {
             $switchableControllerActions = [];
         }
@@ -168,7 +170,8 @@ class BackendConfigurationManager extends AbstractConfigurationManager
             ->select('uid')
             ->from('pages')
             ->where(
-                $queryBuilder->expr()->eq('is_siteroot', $queryBuilder->createNamedParameter(1, \PDO::PARAM_INT))
+                $queryBuilder->expr()->eq('is_siteroot', $queryBuilder->createNamedParameter(1, \PDO::PARAM_INT)),
+                $queryBuilder->expr()->eq('sys_language_uid', $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT))
             )
             ->orderBy('sorting')
             ->execute()
@@ -258,7 +261,7 @@ class BackendConfigurationManager extends AbstractConfigurationManager
 
         $recursiveStoragePids = '';
         $storagePids = GeneralUtility::intExplode(',', $storagePid);
-        $permsClause = $this->getBackendUser()->getPagePermsClause(1);
+        $permsClause = $this->getBackendUser()->getPagePermsClause(Permission::PAGE_SHOW);
         $queryGenerator = GeneralUtility::makeInstance(QueryGenerator::class);
         foreach ($storagePids as $startPid) {
             $pids = $queryGenerator->getTreeList($startPid, $recursionDepth, 0, $permsClause);

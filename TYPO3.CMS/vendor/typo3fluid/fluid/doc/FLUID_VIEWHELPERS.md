@@ -15,29 +15,29 @@ registered namespace available in _all template files_ without further importing
 
 ```php
 $view = new TemplateView();
-$view->getTemplatePaths()->addNamespace('foo', 'Vendor\\Foo\\ViewHelpers');
+$view->getRenderingContext()->getViewHelperResolver()->addNamespace('foo', 'Vendor\\Foo\\ViewHelpers');
 ```
 
 And the latter method which can be used in each template file that requires the ViewHelpers:
 
 ```xml
-<f:fluid xmlns:foo="Vendor\Foo\ViewHelpers">
+<html xmlns:foo="Vendor\Foo\ViewHelpers">
 <f:layout name="Default" />
 <f:section name="Main">
     <!-- ... --->
 </f:section>
-</f:fluid>
+</html>
 ```
 
 Or using the alternative `xmlns` approach:
 
 ```xml
-<f:fluid xmlns:foo="http://typo3.org/ns/Vendor/Foo/ViewHelpers">
+<html xmlns:foo="http://typo3.org/ns/Vendor/Foo/ViewHelpers">
 <f:layout name="Default" />
     <f:section name="Main">
         <!-- ... --->
     </f:section>
-</f:fluid>
+</html>
 ```
 
 Once you have registered/imported the ViewHelper collection (we call it a collection here even if it contains only one class) you

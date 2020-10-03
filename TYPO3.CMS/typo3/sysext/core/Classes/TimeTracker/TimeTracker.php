@@ -44,7 +44,7 @@ class TimeTracker implements SingletonInterface
      *
      * @var bool
      */
-    public $LR = 1;
+    public $LR = true;
 
     /**
      * @var array
@@ -349,8 +349,8 @@ class TimeTracker implements SingletonInterface
         foreach ($this->tsStackLog as $uniqueId => $data) {
             $this->createHierarchyArray($arr, $data['level'], $uniqueId);
         }
-        // Parsing the registeret content and create icon-html for the tree
-        $this->tsStackLog[$arr['0.'][0]]['content'] = $this->fixContent($arr['0.'], $this->tsStackLog[$arr['0.'][0]]['content'], '', 0, $arr['0.'][0]);
+        // Parsing the registered content and create icon-html for the tree
+        $this->tsStackLog[$arr['0.'][0]]['content'] = $this->fixContent($arr['0.'], $this->tsStackLog[$arr['0.'][0]]['content'] ?? '', '', $arr['0.'][0]);
         // Displaying the tree:
         $outputArr = [];
         $outputArr[] = $this->fw('TypoScript Key');
@@ -375,10 +375,9 @@ class TimeTracker implements SingletonInterface
         $keyLgd = $this->printConf['keyLgd'];
         $c = 0;
         foreach ($this->tsStackLog as $uniqueId => $data) {
+            $logRowClass = '';
             if ($this->highlightLongerThan && (int)$data['owntime'] > (int)$this->highlightLongerThan) {
                 $logRowClass = 'typo3-adminPanel-logRow-highlight';
-            } else {
-                $logRowClass = $c % 2 ? 'line-odd' : 'line-even';
             }
             $item = '';
             // If first...
@@ -392,13 +391,13 @@ class TimeTracker implements SingletonInterface
             if (!$flag_tree && $data['stackPointer']) {
                 $temp = [];
                 foreach ($data['tsStack'] as $k => $v) {
-                    $temp[] = GeneralUtility::fixed_lgd_cs(implode($v, $k ? '.' : '/'), -$keyLgd);
+                    $temp[] = GeneralUtility::fixed_lgd_cs(implode($k ? '.' : '/', $v), -$keyLgd);
                 }
                 array_pop($temp);
                 $temp = array_reverse($temp);
                 array_pop($temp);
                 if (!empty($temp)) {
-                    $keyLabel = '<br /><span style="color:#999999;">' . implode($temp, '<br />') . '</span>';
+                    $keyLabel = '<br /><span style="color:#999999;">' . implode('<br />', $temp) . '</span>';
                 }
             }
             if ($flag_tree) {
@@ -410,7 +409,7 @@ class TimeTracker implements SingletonInterface
             $theLabel = GeneralUtility::fixed_lgd_cs($theLabel, -$keyLgd);
             $theLabel = $data['stackPointer'] ? '<span class="stackPointer">' . $theLabel . '</span>' : $theLabel;
             $keyLabel = $theLabel . $keyLabel;
-            $item .= '<td class="typo3-adminPanel-table-cell-nowrap ' . $logRowClass . '">' . ($flag_tree ? $data['icons'] : '') . $this->fw($keyLabel) . '</td>';
+            $item .= '<th scope="row" class="typo3-adminPanel-table-cell-key ' . $logRowClass . '">' . ($flag_tree ? $data['icons'] : '') . $this->fw($keyLabel) . '</th>';
             // Key value:
             $keyValue = $data['value'];
             $item .= '<td class="' . $logRowClass . ' typo3-adminPanel-tsLogTime">' . $this->fw(htmlspecialchars($keyValue)) . '</td>';
@@ -442,13 +441,13 @@ class TimeTracker implements SingletonInterface
                 $msgArr[] = nl2br($data['content']);
             }
             if (!empty($msgArr)) {
-                $msg = implode($msgArr, '<hr />');
+                $msg = implode('<hr />', $msgArr);
             }
             $item .= '<td class="typo3-adminPanel-table-cell-content">' . $this->fw($msg) . '</td>';
             $out .= '<tr>' . $item . '</tr>';
             $c++;
         }
-        $out = '<div class="typo3-adminPanel-table-overflow"><table class="typo3-adminPanel-table">' . $out . '</table></div>';
+        $out = '<div class="typo3-adminPanel-table-overflow"><table class="typo3-adminPanel-table typo3-adminPanel-table-debug">' . $out . '</table></div>';
         return $out;
     }
 
@@ -458,18 +457,18 @@ class TimeTracker implements SingletonInterface
      * @param array $arr Array which is modified with content. Reference
      * @param string $content Current content string for the level
      * @param string $depthData Prefixed icons for new PM icons
-     * @param bool $first Set this for the first call from outside.
      * @param string $vKey Seems to be the previous tsStackLog key
      * @return string Returns the $content string generated/modified. Also the $arr array is modified!
      */
-    protected function fixContent(&$arr, $content, $depthData = '', $first = 0, $vKey = '')
+    protected function fixContent(&$arr, $content, $depthData = '', $vKey = '')
     {
-        $ac = 0;
+        $entriesCount = 0;
         $c = 0;
         // First, find number of entries
         foreach ($arr as $k => $v) {
+            //do not count subentries (the one ending with dot, eg. '9.'
             if (\TYPO3\CMS\Core\Utility\MathUtility::canBeInterpretedAsInteger($k)) {
-                $ac++;
+                $entriesCount++;
             }
         }
         // Traverse through entries
@@ -477,18 +476,18 @@ class TimeTracker implements SingletonInterface
         foreach ($arr as $k => $v) {
             if (\TYPO3\CMS\Core\Utility\MathUtility::canBeInterpretedAsInteger($k)) {
                 $c++;
-                $deeper = is_array($arr[$k . '.']) ? 1 : 0;
-                $LN = $ac == $c ? 'blank' : 'line';
+                $hasChildren = isset($arr[$k . '.']);
+                $lastEntry = $entriesCount === $c;
 
-                $BTM = $ac == $c ? 'bottom' : '';
-                $PM = is_array($arr[$k . '.']) ? '<i class="fa fa-' . ($deeper ? 'minus' : 'plus') . '-square-o"></i>' : '<span class="treeline-icon treeline-icon-join' . ($BTM ? 'bottom' : '') . '"></span>';
+                $PM = '<span class="treeline-icon treeline-icon-join' . ($lastEntry ? 'bottom' : '') . '"></span>';
 
-                $this->tsStackLog[$v]['icons'] = $depthData . ($first ? '' : $PM);
+                $this->tsStackLog[$v]['icons'] = $depthData . $PM;
                 if ($this->tsStackLog[$v]['content'] !== '') {
                     $content = str_replace($this->tsStackLog[$v]['content'], $v, $content);
                 }
-                if (is_array($arr[$k . '.'])) {
-                    $this->tsStackLog[$v]['content'] = $this->fixContent($arr[$k . '.'], $this->tsStackLog[$v]['content'], $depthData . ($first ? '' : '<span class="treeline-icon treeline-icon-' . $LN . '"></span>'), 0, $v);
+                if ($hasChildren) {
+                    $lineClass = $lastEntry ? 'treeline-icon-clear' : 'treeline-icon-line';
+                    $this->tsStackLog[$v]['content'] = $this->fixContent($arr[$k . '.'], $this->tsStackLog[$v]['content'], $depthData . '<span class="treeline-icon ' . $lineClass . '"></span>', $v);
                 } else {
                     $this->tsStackLog[$v]['content'] = $this->fixCLen($this->tsStackLog[$v]['content'], $this->tsStackLog[$v]['value']);
                     $this->tsStackLog[$v]['subtime'] = '';
@@ -550,7 +549,7 @@ class TimeTracker implements SingletonInterface
      * @param array $arr Array (passed by reference) and modified
      * @param int $pointer Pointer value
      * @param string $uniqueId Unique ID string
-     * @access private
+     * @internal
      * @see printTSlog()
      */
     protected function createHierarchyArray(&$arr, $pointer, $uniqueId)

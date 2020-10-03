@@ -14,11 +14,12 @@ namespace TYPO3\CMS\Core\Authentication;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Crypto\PasswordHashing\PasswordHashFactory;
 use TYPO3\CMS\Core\Crypto\Random;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Saltedpasswords\Salt\SaltFactory;
 
 /**
  * TYPO3 backend user authentication on a CLI level
@@ -40,7 +41,7 @@ class CommandLineUserAuthentication extends BackendUserAuthentication
      */
     public function __construct()
     {
-        if (!(TYPO3_REQUESTTYPE & TYPO3_REQUESTTYPE_CLI)) {
+        if (!Environment::isCli()) {
             throw new \RuntimeException('Creating a CLI-based user object on non-CLI level is not allowed', 1483971165);
         }
         if (!$this->isUserAllowedToLogin()) {
@@ -48,6 +49,28 @@ class CommandLineUserAuthentication extends BackendUserAuthentication
         }
         $this->dontSetCookie = true;
         parent::__construct();
+    }
+
+    /**
+     * Replacement for AbstactUserAuthentication::start()
+     *
+     * We do not need support for sessions, cookies, $_GET-modes, the postUserLookup hook or
+     * a database connectiona during CLI Bootstrap
+     */
+    public function start()
+    {
+        $this->logger->debug('## Beginning of auth logging.');
+        // svConfig is unused, but we set it, as the property is public and might be used by extensions
+        $this->svConfig = $GLOBALS['TYPO3_CONF_VARS']['SVCONF']['auth'] ?? [];
+    }
+
+    /**
+     * Replacement for AbstactUserAuthentication::checkAuthentication()
+     *
+     * Not required in CLI mode, therefore empty.
+     */
+    public function checkAuthentication()
+    {
     }
 
     /**
@@ -147,7 +170,7 @@ class CommandLineUserAuthentication extends BackendUserAuthentication
     {
         $cryptoService = GeneralUtility::makeInstance(Random::class);
         $password = $cryptoService->generateRandomBytes(20);
-        $saltFactory = SaltFactory::getSaltingInstance(null, 'BE');
-        return $saltFactory->getHashedPassword($password);
+        $hashInstance = GeneralUtility::makeInstance(PasswordHashFactory::class)->getDefaultHashInstance('BE');
+        return $hashInstance->getHashedPassword($password);
     }
 }

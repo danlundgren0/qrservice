@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\ViewHelpers\Be;
 
 /*
@@ -34,6 +35,7 @@ class ConfigurationViewHelper extends AbstractBackendViewHelper
 
         $baseUrl = '../' . ExtensionManagementUtility::siteRelPath('extension_builder');
         $this->pageRenderer->disableCompressJavascript();
+        $this->pageRenderer->addJsFile($baseUrl . 'Resources/Public/jsDomainModeling/jquery.min.js');
         // SECTION: JAVASCRIPT FILES
         // YUI Basis Files
         $this->pageRenderer->addJsFile($baseUrl . 'Resources/Public/jsDomainModeling/wireit/lib/yui/utilities/utilities.js');
@@ -67,7 +69,8 @@ class ConfigurationViewHelper extends AbstractBackendViewHelper
         $this->pageRenderer->addJsFile($baseUrl . 'Resources/Public/jsDomainModeling/wireit/lib/inputex/js/fields/TypeField.js');
 
         // WireIt
-        $this->pageRenderer->addJsFile($baseUrl . 'Resources/Public/jsDomainModeling/wireit/lib/excanvas.js', 'text/javascript', true, false, '<!--[if IE]>|<![endif]-->');
+        $this->pageRenderer->addJsFile($baseUrl . 'Resources/Public/jsDomainModeling/wireit/lib/excanvas.js',
+            'text/javascript', true, false, '<!--[if IE]>|<![endif]-->');
         $this->pageRenderer->addJsFile($baseUrl . 'Resources/Public/jsDomainModeling/wireit/js/WireIt.js');
         $this->pageRenderer->addJsFile($baseUrl . 'Resources/Public/jsDomainModeling/wireit/js/CanvasElement.js');
         $this->pageRenderer->addJsFile($baseUrl . 'Resources/Public/jsDomainModeling/wireit/js/Wire.js');
@@ -129,7 +132,8 @@ class ConfigurationViewHelper extends AbstractBackendViewHelper
     private function setLocallangSettings()
     {
         $languageFactory = GeneralUtility::makeInstance(LocalizationFactory::class);
-        $LL = $languageFactory->getParsedData('EXT:extension_builder/Resources/Private/Language/locallang.xml', 'default');
+        $LL = $languageFactory->getParsedData('EXT:extension_builder/Resources/Private/Language/locallang.xml',
+            'default');
         if (!empty($LL['default']) && is_array($LL['default'])) {
             foreach ($LL['default'] as $key => $value) {
                 $this->pageRenderer->addInlineSetting(

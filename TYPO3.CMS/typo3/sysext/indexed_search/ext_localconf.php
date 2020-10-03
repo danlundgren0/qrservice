@@ -8,7 +8,10 @@ defined('TYPO3_MODE') or die();
 $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/class.tslib_fe.php']['pageIndexing'][] = \TYPO3\CMS\IndexedSearch\Indexer::class;
 $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/class.tslib_fe.php']['headerNoCache']['tx_indexedsearch'] = \TYPO3\CMS\IndexedSearch\Hook\TypoScriptFrontendHook::class . '->headerNoCache';
 // Register with "crawler" extension:
-$GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['crawler']['procInstructions']['tx_indexedsearch_reindex'] = 'Re-indexing';
+$GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['crawler']['procInstructions']['indexed_search'] = [
+    'key' => 'tx_indexedsearch_reindex',
+    'value' => 'Re-indexing'
+];
 $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['crawler']['cli_hooks']['tx_indexedsearch_crawl'] = \TYPO3\CMS\IndexedSearch\Hook\CrawlerHook::class;
 // Register with DataHandler:
 $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_tcemain.php']['processCmdmapClass']['tx_indexedsearch'] = \TYPO3\CMS\IndexedSearch\Hook\CrawlerHook::class;
@@ -44,23 +47,18 @@ $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['external_parsers'] = [
     'tif'  => \TYPO3\CMS\IndexedSearch\FileContentParser::class
 ];
 
-// unserializing the configuration so we can use it here:
-$extConf = [];
-if (isset($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['indexed_search'])) {
-    $extConf = unserialize(
-        $GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['indexed_search'],
-        ['allowed_classes' => false]
-    );
-}
+$extConf = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(
+    \TYPO3\CMS\Core\Configuration\ExtensionConfiguration::class
+)->get('indexed_search');
 
-if (isset($extConf['useMysqlFulltext']) && $extConf['useMysqlFulltext'] === '1') {
+if (isset($extConf['useMysqlFulltext']) && (bool)$extConf['useMysqlFulltext']) {
     // Use all index_* tables except "index_rel" and "index_words"
     $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['use_tables'] =
         'index_phash,index_fulltext,index_section,index_grlist,index_stat_search,index_stat_word,index_debug,index_config';
     // Register schema analyzer slot to hook in required fulltext index definition
     $signalSlotDispatcher = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Extbase\SignalSlot\Dispatcher::class);
     $signalSlotDispatcher->connect(
-        \TYPO3\CMS\Install\Service\SqlExpectedSchemaService::class,
+        'TYPO3\\CMS\\Install\\Service\\SqlExpectedSchemaService',
         'tablesDefinitionIsBeingBuilt',
         \TYPO3\CMS\IndexedSearch\Service\DatabaseSchemaService::class,
         'addMysqlFulltextIndex'
@@ -72,25 +70,37 @@ if (isset($extConf['useMysqlFulltext']) && $extConf['useMysqlFulltext'] === '1')
 }
 
 // Add search to new content element wizard
-if (TYPO3_MODE === 'BE') {
-    \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::addPageTSConfig('
-    mod.wizards.newContentElement.wizardItems.forms {
-        elements.search {
-            iconIdentifier = content-elements-searchform
-            title = LLL:EXT:indexed_search/Resources/Private/Language/locallang_pi.xlf:pi_wizard_title
-            description = LLL:EXT:indexed_search/Resources/Private/Language/locallang_pi.xlf:pi_wizard_description
-            tt_content_defValues {
-                CType = list
-                list_type = indexedsearch_pi2
-            }
+\TYPO3\CMS\Core\Utility\ExtensionManagementUtility::addPageTSConfig('
+mod.wizards.newContentElement.wizardItems.forms {
+    elements.search {
+        iconIdentifier = content-elements-searchform
+        title = LLL:EXT:indexed_search/Resources/Private/Language/locallang_pi.xlf:pi_wizard_title
+        description = LLL:EXT:indexed_search/Resources/Private/Language/locallang_pi.xlf:pi_wizard_description
+        tt_content_defValues {
+            CType = list
+            list_type = indexedsearch_pi2
         }
-        show :=addToList(search)
     }
-    ');
+    show :=addToList(search)
 }
+');
 
 // Use the advanced doubleMetaphone parser instead of the internal one (usage of metaphone parsers is generally disabled by default)
 if (isset($extConf['enableMetaphoneSearch']) && (int)$extConf['enableMetaphoneSearch'] == 2) {
     $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['indexed_search']['metaphone'] = \TYPO3\CMS\IndexedSearch\Utility\DoubleMetaPhoneUtility::class;
 }
 unset($extConf);
+
+if (isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['scheduler']['tasks'][\TYPO3\CMS\Scheduler\Task\TableGarbageCollectionTask::class]['options']['tables'])) {
+    $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['scheduler']['tasks'][\TYPO3\CMS\Scheduler\Task\TableGarbageCollectionTask::class]['options']['tables']['index_stat_search'] = [
+        'dateField' => 'tstamp',
+        'expirePeriod' => 90
+    ];
+}
+
+if (isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['scheduler']['tasks'][\TYPO3\CMS\Scheduler\Task\IpAnonymizationTask::class]['options']['tables'])) {
+    $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['scheduler']['tasks'][\TYPO3\CMS\Scheduler\Task\IpAnonymizationTask::class]['options']['tables']['index_stat_search'] = [
+        'dateField' => 'tstamp',
+        'ipField' => 'IP'
+    ];
+}

@@ -21,12 +21,14 @@ namespace GridElementsTeam\Gridelements\Plugin;
  ***************************************************************/
 
 use GridElementsTeam\Gridelements\Backend\LayoutSetup;
+use TYPO3\CMS\Core\Context\Context;
+use TYPO3\CMS\Core\Context\LanguageAspect;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\QueryBuilder;
 use TYPO3\CMS\Core\Database\Query\Restriction\FrontendRestrictionContainer;
 use TYPO3\CMS\Core\Page\PageRenderer;
-use TYPO3\CMS\Extbase\Service\FlexFormService;
+use TYPO3\CMS\Core\Service\FlexFormService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\MathUtility;
 use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
@@ -66,6 +68,10 @@ class Gridelements extends ContentObjectRenderer
      * @var PageRenderer
      */
     protected $pageRenderer;
+    /**
+     * @var LanguageAspect
+     */
+    protected $languageAspect;
 
     /**
      * The main method of the PlugIn
@@ -83,10 +89,12 @@ class Gridelements extends ContentObjectRenderer
         $this->initPluginFlexForm();
         $this->getPluginFlexFormData();
 
+        $this->languageAspect = GeneralUtility::makeInstance(Context::class)->getAspect('language');
+
         // now we have to find the children of this grid container regardless of their column
         // so we can get them within a single DB query instead of doing a query per column
         // but we will only fetch those columns that are used by the current grid layout
-        if ($this->getTSFE()->sys_language_contentOL && $this->cObj->data['l18n_parent'] && $this->cObj->data['sys_language_uid'] > 0) {
+        if ($this->languageAspect->getLegacyOverlayType() && $this->cObj->data['l18n_parent'] && $this->cObj->data['sys_language_uid'] > 0) {
             $element = $this->cObj->data['l18n_parent'];
         } else {
             $element = $this->cObj->data['uid'];
@@ -341,8 +349,8 @@ class Gridelements extends ContentObjectRenderer
         $translationOverlay = [];
         $translationNoOverlay = [];
 
-        if ($this->getTSFE()->sys_language_content > 0) {
-            if ($this->getTSFE()->sys_language_contentOL) {
+        if ($this->languageAspect->getContentId() > 0) {
+            if ($this->languageAspect->getLegacyOverlayType()) {
                 if (isset($this->cObj->data['_LOCALIZED_UID']) && $this->cObj->data['_LOCALIZED_UID'] !== 0) {
                     $element = (int)$this->cObj->data['_LOCALIZED_UID'];
                 }
@@ -362,7 +370,7 @@ class Gridelements extends ContentObjectRenderer
                         $queryBuilder->expr()->in(
                             'sys_language_uid',
                             $queryBuilder->createNamedParameter(
-                                [-1, $this->getTSFE()->sys_language_content],
+                                [-1, $this->languageAspect->getContentId()],
                                 Connection::PARAM_INT_ARRAY
                             )
                         ),
@@ -391,7 +399,7 @@ class Gridelements extends ContentObjectRenderer
                         $queryBuilder->expr()->in(
                             'sys_language_uid',
                             $queryBuilder->createNamedParameter(
-                                [-1, $this->getTSFE()->sys_language_content],
+                                [-1, $this->languageAspect->getContentId()],
                                 Connection::PARAM_INT_ARRAY
                             )
                         )
@@ -422,12 +430,12 @@ class Gridelements extends ContentObjectRenderer
             // Language overlay:
             if (is_array($child)) {
                 $child['sorting'] = $sorting;
-                if ($this->getTSFE()->sys_language_contentOL) {
+                if ($this->languageAspect->getLegacyOverlayType()) {
                     $child = $this->getTSFE()->sys_page->getRecordOverlay(
                         'tt_content',
                         $child,
-                        $this->getTSFE()->sys_language_content,
-                        $this->getTSFE()->sys_language_contentOL
+                        $this->languageAspect->getContentId(),
+                        $this->languageAspect->getLegacyOverlayType()
                     );
                 }
                 if (!empty($child)) {

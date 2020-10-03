@@ -15,6 +15,7 @@ namespace TYPO3\CMS\Core\Core;
  */
 
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\PathUtility;
 use TYPO3\CMS\Core\Utility\StringUtility;
 
 /**
@@ -38,6 +39,17 @@ use TYPO3\CMS\Core\Utility\StringUtility;
  */
 class SystemEnvironmentBuilder
 {
+    /** @internal */
+    const REQUESTTYPE_FE = 1;
+    /** @internal */
+    const REQUESTTYPE_BE = 2;
+    /** @internal */
+    const REQUESTTYPE_CLI = 4;
+    /** @internal */
+    const REQUESTTYPE_AJAX = 8;
+    /** @internal */
+    const REQUESTTYPE_INSTALL = 16;
+
     /**
      * A list of supported CGI server APIs
      * NOTICE: This is a duplicate of the SAME array in GeneralUtility!
@@ -58,7 +70,7 @@ class SystemEnvironmentBuilder
      *
      * @var string[]
      */
-    protected static $disabledFunctions = null;
+    protected static $disabledFunctions;
 
     /**
      * Run base setup.
@@ -66,15 +78,38 @@ class SystemEnvironmentBuilder
      *
      * @internal This method should not be used by 3rd party code. It will change without further notice.
      * @param int $entryPointLevel Number of subdirectories where the entry script is located under the document root
+     * @param int $requestType
      */
-    public static function run($entryPointLevel = 0)
+    public static function run(int $entryPointLevel = 0, int $requestType = self::REQUESTTYPE_FE)
     {
         self::defineBaseConstants();
-        self::definePaths($entryPointLevel);
+        self::defineTypo3RequestTypes();
+        self::setRequestType($requestType | ($requestType === self::REQUESTTYPE_BE && strpos($_REQUEST['route'] ?? '', '/ajax/') === 0 ? TYPO3_REQUESTTYPE_AJAX : 0));
+        self::defineLegacyConstants($requestType === self::REQUESTTYPE_FE ? 'FE' : 'BE');
+        self::definePaths($entryPointLevel, $requestType);
         self::checkMainPathsExist();
         self::initializeGlobalVariables();
         self::initializeGlobalTimeTrackingVariables();
         self::initializeBasicErrorReporting();
+
+        $applicationContext = static::createApplicationContext();
+        self::initializeEnvironment($applicationContext, $requestType);
+        GeneralUtility::presetApplicationContext($applicationContext);
+    }
+
+    /**
+     * Some notes:
+     *
+     * HTTP_TYPO3_CONTEXT -> used with Apache suexec support
+     * REDIRECT_TYPO3_CONTEXT -> used under some circumstances when value is set in the webserver and proxying the values to FPM
+     * @return ApplicationContext
+     * @throws \TYPO3\CMS\Core\Exception
+     */
+    protected static function createApplicationContext(): ApplicationContext
+    {
+        $applicationContext = getenv('TYPO3_CONTEXT') ?: (getenv('REDIRECT_TYPO3_CONTEXT') ?: (getenv('HTTP_TYPO3_CONTEXT') ?: 'Production'));
+
+        return new ApplicationContext($applicationContext);
     }
 
     /**
@@ -82,15 +117,24 @@ class SystemEnvironmentBuilder
      */
     protected static function defineBaseConstants()
     {
+        // Check one of the constants and return early if defined already
+        if (defined('TYPO3_version')) {
+            return;
+        }
+
         // This version, branch and copyright
-        define('TYPO3_version', '8.7.3');
-        define('TYPO3_branch', '8.7');
-        define('TYPO3_copyright_year', '1998-2017');
+        define('TYPO3_version', '9.5.21');
+        define('TYPO3_branch', '9.5');
+        define('TYPO3_copyright_year', '1998-' . date('Y'));
 
         // TYPO3 external links
         define('TYPO3_URL_GENERAL', 'https://typo3.org/');
         define('TYPO3_URL_LICENSE', 'https://typo3.org/typo3-cms/overview/licenses/');
         define('TYPO3_URL_EXCEPTION', 'https://typo3.org/go/exception/CMS/');
+        define('TYPO3_URL_DONATE', 'https://typo3.org/community/contribute/donate/');
+        define('TYPO3_URL_WIKI_OPCODECACHE', 'https://wiki.typo3.org/Opcode_Cache');
+
+        // @deprecated since TYPO3 v9.4 and will be removed in TYPO3 v10.0
         define('TYPO3_URL_MAILINGLISTS', 'http://lists.typo3.org/cgi-bin/mailman/listinfo');
         define('TYPO3_URL_DOCUMENTATION', 'https://typo3.org/documentation/');
         define('TYPO3_URL_DOCUMENTATION_TSREF', 'https://docs.typo3.org/typo3cms/TyposcriptReference/');
@@ -100,27 +144,28 @@ class SystemEnvironmentBuilder
         define('TYPO3_URL_SECURITY', 'https://typo3.org/teams/security/');
         define('TYPO3_URL_DOWNLOAD', 'https://typo3.org/download/');
         define('TYPO3_URL_SYSTEMREQUIREMENTS', 'https://typo3.org/typo3-cms/overview/requirements/');
-        define('TYPO3_URL_DONATE', 'https://typo3.org/donate/online-donation/');
-        define('TYPO3_URL_WIKI_OPCODECACHE', 'https://wiki.typo3.org/Opcode_Cache');
 
-        // A null, a tabulator, a linefeed, a carriage return, a substitution, a CR-LF combination
-        defined('NUL') ?: define('NUL', chr(0));
-        defined('TAB') ?: define('TAB', chr(9));
+        // A linefeed, a carriage return, a CR-LF combination
         defined('LF') ?: define('LF', chr(10));
         defined('CR') ?: define('CR', chr(13));
-        defined('SUB') ?: define('SUB', chr(26));
         defined('CRLF') ?: define('CRLF', CR . LF);
 
+        // @deprecated since TYPO3 v9.4 and will be removed in TYPO3 v10.0
+        defined('NUL') ?: define('NUL', "\0");
+        defined('TAB') ?: define('TAB', "\t");
+        defined('SUB') ?: define('SUB', chr(26));
+
         // Security related constant: Default value of fileDenyPattern
-        define('FILE_DENY_PATTERN_DEFAULT', '\\.(php[3-7]?|phpsh|phtml)(\\..*)?$|^\\.htaccess$');
+        define('FILE_DENY_PATTERN_DEFAULT', '\\.(php[3-8]?|phpsh|phtml|pht|phar|shtml|cgi)(\\..*)?$|\\.pl$|^\\.htaccess$');
         // Security related constant: List of file extensions that should be registered as php script file extensions
-        define('PHP_EXTENSIONS_DEFAULT', 'php,php3,php4,php5,php6,php7,phpsh,inc,phtml');
+        define('PHP_EXTENSIONS_DEFAULT', 'php,php3,php4,php5,php6,php7,php8,phpsh,inc,phtml,pht,phar');
 
         // Operating system identifier
         // Either "WIN" or empty string
         defined('TYPO3_OS') ?: define('TYPO3_OS', self::getTypo3Os());
 
         // Service error constants
+        // @deprecated since TYPO3 v9.3, will be removed in TYPO3 v10.0, use the class constants in AbstractService instead.
         // General error - something went wrong
         define('T3_ERR_SV_GENERAL', -1);
         // During execution it showed that the service is not available and should be ignored. The service itself should call $this->setNonAvailable()
@@ -145,18 +190,17 @@ class SystemEnvironmentBuilder
      * Calculate all required base paths and set as constants.
      *
      * @param int $entryPointLevel Number of subdirectories where the entry script is located under the document root
+     * @param int $requestType
      */
-    protected static function definePaths($entryPointLevel = 0)
+    protected static function definePaths(int $entryPointLevel, int $requestType)
     {
+        $isCli = self::isCliRequestType($requestType);
         // Absolute path of the entry script that was called
-        $scriptPath = GeneralUtility::fixWindowsFilePath(self::getPathThisScript());
+        $scriptPath = GeneralUtility::fixWindowsFilePath(self::getPathThisScript($isCli));
         $rootPath = self::getRootPathFromScriptPath($scriptPath, $entryPointLevel);
         // Check if the root path has been set in the environment (e.g. by the composer installer)
         if (getenv('TYPO3_PATH_ROOT')) {
-            if ((TYPO3_REQUESTTYPE & TYPO3_REQUESTTYPE_CLI)
-                && Bootstrap::usesComposerClassLoading()
-                && StringUtility::endsWith($scriptPath, 'typo3')
-            ) {
+            if ($isCli && self::usesComposerClassLoading() && StringUtility::endsWith($scriptPath, 'typo3')) {
                 // PATH_thisScript is used for various path calculations based on the document root
                 // Therefore we assume it is always a subdirectory of the document root, which is not the case
                 // in composer mode on cli, as the binary is in the composer bin directory.
@@ -166,28 +210,38 @@ class SystemEnvironmentBuilder
                 // Base the script path on the path taken from the environment
                 // to make relative path calculations work in case only one of both is symlinked
                 // or has the real path
-                $scriptName =  substr($scriptPath, strlen($rootPath));
+                $scriptName = substr($scriptPath, strlen($rootPath));
             }
             $rootPath = GeneralUtility::fixWindowsFilePath(getenv('TYPO3_PATH_ROOT'));
             $scriptPath = $rootPath . $scriptName;
         }
 
         if (!defined('PATH_thisScript')) {
+            // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
             define('PATH_thisScript', $scriptPath);
         }
         // Absolute path of the document root of the instance with trailing slash
         if (!defined('PATH_site')) {
+            // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
             define('PATH_site', $rootPath . '/');
         }
         // Relative path from document root to typo3/ directory
         // Hardcoded to "typo3/"
-        define('TYPO3_mainDir', 'typo3/');
+        if (!defined('TYPO3_mainDir')) {
+            define('TYPO3_mainDir', 'typo3/');
+        }
         // Absolute path of the typo3 directory of the instance with trailing slash
         // Example "/var/www/instance-name/htdocs/typo3/"
-        define('PATH_typo3', PATH_site . TYPO3_mainDir);
+        if (!defined('PATH_typo3')) {
+            // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
+            define('PATH_typo3', PATH_site . TYPO3_mainDir);
+        }
         // Absolute path to the typo3conf directory with trailing slash
         // Example "/var/www/instance-name/htdocs/typo3conf/"
-        define('PATH_typo3conf', PATH_site . 'typo3conf/');
+        if (!defined('PATH_typo3conf')) {
+            // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
+            define('PATH_typo3conf', PATH_site . 'typo3conf/');
+        }
     }
 
     /**
@@ -198,13 +252,6 @@ class SystemEnvironmentBuilder
         if (!is_file(PATH_thisScript)) {
             static::exitWithMessage('Unable to determine path to entry script.');
         }
-        if (!is_dir(PATH_typo3 . 'sysext')) {
-            static::exitWithMessage('Calculated absolute path to typo3/sysext directory does not exist.' . LF . LF
-                . 'Something in the main file, folder and link structure is wrong and must be fixed! A typical document root contains a couple of symbolic links:' . LF
-                . '* A symlink "typo3_src" pointing to the TYPO3 CMS core.' . LF
-                . '* A symlink "typo3" - the backend entry point - pointing to "typo3_src/typo3"' . LF
-                . '* A symlink "index.php" - the frontend entry point - points to "typo3_src/index.php"');
-        }
     }
 
     /**
@@ -213,7 +260,6 @@ class SystemEnvironmentBuilder
     protected static function initializeGlobalVariables()
     {
         // Unset variable(s) in global scope (security issue #13959)
-        unset($GLOBALS['error']);
         $GLOBALS['TYPO3_MISC'] = [];
         $GLOBALS['T3_VAR'] = [];
         $GLOBALS['T3_SERVICES'] = [];
@@ -225,8 +271,6 @@ class SystemEnvironmentBuilder
      */
     protected static function initializeGlobalTimeTrackingVariables()
     {
-        // Set PARSETIME_START to the system time in milliseconds.
-        $GLOBALS['PARSETIME_START'] = GeneralUtility::milliseconds();
         // Microtime of (nearly) script start
         $GLOBALS['TYPO3_MISC']['microtime_start'] = microtime(true);
         // EXEC_TIME is set so that the rest of the script has a common value for the script execution time
@@ -238,6 +282,44 @@ class SystemEnvironmentBuilder
         $GLOBALS['SIM_EXEC_TIME'] = $GLOBALS['EXEC_TIME'];
         // If $SIM_EXEC_TIME is changed this value must be set accordingly
         $GLOBALS['SIM_ACCESS_TIME'] = $GLOBALS['ACCESS_TIME'];
+    }
+
+    /**
+     * Initialize the Environment class
+     *
+     * @param ApplicationContext $context
+     * @param int|null $requestType
+     */
+    public static function initializeEnvironment(ApplicationContext $context, int $requestType = null)
+    {
+        // Absolute path of the entry script that was called
+        $scriptPath = PATH_thisScript;
+        $sitePath = rtrim(PATH_site, '/');
+
+        if (getenv('TYPO3_PATH_ROOT')) {
+            $rootPathFromEnvironment = GeneralUtility::fixWindowsFilePath(getenv('TYPO3_PATH_ROOT'));
+            if ($sitePath !== $rootPathFromEnvironment) {
+                // This means, that we re-initialized the environment during a single request
+                // This currently only happens in custom code or during functional testing
+                // Once the constants are removed, we might be able to remove this code here as well and directly pass an environment to the application
+                $scriptPath = $rootPathFromEnvironment . substr($scriptPath, strlen($sitePath));
+                $sitePath = $rootPathFromEnvironment;
+            }
+        }
+
+        $projectRootPath = GeneralUtility::fixWindowsFilePath(getenv('TYPO3_PATH_APP'));
+        $isDifferentRootPath = ($projectRootPath && $projectRootPath !== $sitePath);
+        Environment::initialize(
+            $context,
+            self::isCliRequestType($requestType),
+            self::usesComposerClassLoading(),
+            $isDifferentRootPath ? $projectRootPath : $sitePath,
+            $sitePath,
+            $isDifferentRootPath ? $projectRootPath . '/var'    : $sitePath . '/typo3temp/var',
+            $isDifferentRootPath ? $projectRootPath . '/config' : $sitePath . '/typo3conf',
+            $scriptPath,
+            self::getTypo3Os() === 'WIN' ? 'WINDOWS' : 'UNIX'
+        );
     }
 
     /**
@@ -280,11 +362,12 @@ class SystemEnvironmentBuilder
      * find out the script name that was called in the first place and to subtract the local
      * part from it to find the document root.
      *
+     * @param bool $isCli
      * @return string Absolute path to entry script
      */
-    protected static function getPathThisScript()
+    protected static function getPathThisScript(bool $isCli)
     {
-        if (TYPO3_REQUESTTYPE & TYPO3_REQUESTTYPE_CLI) {
+        if ($isCli) {
             return self::getPathThisScriptCli();
         }
         return self::getPathThisScriptNonCli();
@@ -337,7 +420,7 @@ class SystemEnvironmentBuilder
         }
         // Find out if path is relative or not
         $isRelativePath = false;
-        if (TYPO3_OS === 'WIN') {
+        if (self::getTypo3Os() === 'WIN') {
             if (!preg_match('/^([a-zA-Z]:)?\\\\/', $scriptPath)) {
                 $isRelativePath = true;
             }
@@ -365,7 +448,7 @@ class SystemEnvironmentBuilder
      * The following main scenarios for entry points exist by default in the TYPO3 core:
      * - Directly called documentRoot/index.php (-> FE call or eiD include): index.php is located in the same directory
      * as the main project. The document root is identical to the directory the script is located at.
-     * - The install tool, located under typo3/sysext/install/Start/Install.php.
+     * - The install tool, located under typo3/install.php.
      * - A Backend script: This is the case for the typo3/index.php dispatcher and other entry scripts like 'typo3/sysext/core/bin/typo3'
      * or 'typo3/index.php' that are located inside typo3/ directly.
      *
@@ -375,7 +458,7 @@ class SystemEnvironmentBuilder
      */
     protected static function getRootPathFromScriptPath($scriptPath, $entryPointLevel)
     {
-        $entryScriptDirectory = dirname($scriptPath);
+        $entryScriptDirectory = PathUtility::dirnameDuringBootstrap($scriptPath);
         if ($entryPointLevel > 0) {
             list($rootPath) = GeneralUtility::revExplode('/', $entryScriptDirectory, $entryPointLevel + 1);
         } else {
@@ -420,5 +503,71 @@ class SystemEnvironmentBuilder
         }
 
         return false;
+    }
+
+    /**
+     * @return bool
+     */
+    protected static function usesComposerClassLoading(): bool
+    {
+        return defined('TYPO3_COMPOSER_MODE') && TYPO3_COMPOSER_MODE;
+    }
+
+    /**
+     * Define TYPO3_REQUESTTYPE* constants that can be used for developers to see if any context has been hit
+     * also see setRequestType(). Is done at the very beginning so these parameters are always available.
+     */
+    protected static function defineTypo3RequestTypes()
+    {
+        if (defined('TYPO3_REQUESTTYPE_FE')) { // @todo remove once Bootstrap::getInstance() is dropped
+            return;
+        }
+        define('TYPO3_REQUESTTYPE_FE', self::REQUESTTYPE_FE);
+        define('TYPO3_REQUESTTYPE_BE', self::REQUESTTYPE_BE);
+        define('TYPO3_REQUESTTYPE_CLI', self::REQUESTTYPE_CLI);
+        define('TYPO3_REQUESTTYPE_AJAX', self::REQUESTTYPE_AJAX);
+        define('TYPO3_REQUESTTYPE_INSTALL', self::REQUESTTYPE_INSTALL);
+    }
+
+    /**
+     * Defines the TYPO3_REQUESTTYPE constant so the environment knows which context the request is running.
+     *
+     * @param int $requestType
+     */
+    protected static function setRequestType(int $requestType)
+    {
+        if (defined('TYPO3_REQUESTTYPE')) { // @todo remove once Bootstrap::getInstance() is dropped
+            return;
+        }
+        define('TYPO3_REQUESTTYPE', $requestType);
+    }
+
+    /**
+     * Define constants and variables
+     *
+     * @param string
+     */
+    protected static function defineLegacyConstants(string $mode)
+    {
+        if (defined('TYPO3_MODE')) { // @todo remove once Bootstrap::getInstance() is dropped
+            return;
+        }
+        define('TYPO3_MODE', $mode);
+    }
+
+    /**
+     * Checks if request type is cli.
+     * Falls back to check PHP_SAPI in case request type is not provided
+     *
+     * @param int|null $requestType
+     * @return bool
+     */
+    protected static function isCliRequestType(?int $requestType): bool
+    {
+        if ($requestType === null) {
+            $requestType = PHP_SAPI === 'cli' ? self::REQUESTTYPE_CLI : self::REQUESTTYPE_FE;
+        }
+
+        return ($requestType & self::REQUESTTYPE_CLI) === self::REQUESTTYPE_CLI;
     }
 }

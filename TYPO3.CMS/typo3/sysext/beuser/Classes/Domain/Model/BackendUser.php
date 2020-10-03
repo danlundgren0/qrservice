@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Beuser\Domain\Model;
 
 /**
  * Model for backend user
+ * @internal This class is a TYPO3 Backend implementation and is not considered part of the Public TYPO3 API.
  */
 class BackendUser extends \TYPO3\CMS\Extbase\Domain\Model\BackendUser
 {
@@ -77,22 +78,6 @@ class BackendUser extends \TYPO3\CMS\Extbase\Domain\Model\BackendUser
     public function getDbMountPoints()
     {
         return $this->dbMountPoints;
-    }
-
-    /**
-     * @return string
-     */
-    public function getDescription()
-    {
-        return $this->description;
-    }
-
-    /**
-     * @param string $description
-     */
-    public function setDescription($description)
-    {
-        $this->description = $description;
     }
 
     /**

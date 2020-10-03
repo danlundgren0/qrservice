@@ -14,14 +14,16 @@ namespace TYPO3\CMS\Core\Integrity;
  * The TYPO3 project - inspiring people to share!
  */
 
-use Doctrine\DBAL\Types\Type;
+use Doctrine\DBAL\Types\Types;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Expression\ExpressionBuilder;
 use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
 use TYPO3\CMS\Core\Database\RelationHandler;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\PathUtility;
 
 /**
  * This class holds functions used by the TYPO3 backend to check the integrity of the database (The DBint module, 'lowlevel' extension)
@@ -29,7 +31,7 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  * Depends on \TYPO3\CMS\Core\Database\RelationHandler
  *
  * @todo Need to really extend this class when the DataHandler library has been updated and the whole API is better defined. There are some known bugs in this library. Further it would be nice with a facility to not only analyze but also clean up!
- * @see \TYPO3\CMS\Lowlevel\View\DatabaseIntegrityView::func_relations(), \TYPO3\CMS\Lowlevel\View\DatabaseIntegrityView::func_records()
+ * @see \TYPO3\CMS\Lowlevel\Controller\DatabaseIntegrityController::func_relations(), \TYPO3\CMS\Lowlevel\Controller\DatabaseIntegrityController::func_records()
  */
 class DatabaseIntegrityCheck
 {
@@ -52,6 +54,11 @@ class DatabaseIntegrityCheck
      * @var array Will hold id/rec pairs from genTree()
      */
     public $page_idArray = [];
+
+    /**
+     * @var array Will hold id/rec pairs from genTree() that are not default language
+     */
+    protected $page_translatedPageIDArray = [];
 
     /**
      * @var array
@@ -93,6 +100,22 @@ class DatabaseIntegrityCheck
     public $lostPagesList = '';
 
     /**
+     * DatabaseIntegrityCheck constructor.
+     */
+    public function __construct()
+    {
+        trigger_error('TYPO3\CMS\Core\Integrity\DatabaseIntegrityCheck will be removed in TYPO3 v10.0, use TYPO3\CMS\Lowlevel\Integrity\DatabaseIntegrityCheck instead.', E_USER_DEPRECATED);
+    }
+
+    /**
+     * @return array
+     */
+    public function getPageTranslatedPageIDArray(): array
+    {
+        return $this->page_translatedPageIDArray;
+    }
+
+    /**
      * Generates a list of Page-uid's that corresponds to the tables in the tree.
      * This list should ideally include all records in the pages-table.
      *
@@ -107,7 +130,7 @@ class DatabaseIntegrityCheck
         if (!$this->genTree_includeDeleted) {
             $queryBuilder->getRestrictions()->add(GeneralUtility::makeInstance(DeletedRestriction::class));
         }
-        $queryBuilder->select('uid', 'title', 'doktype', 'deleted', 'hidden')
+        $queryBuilder->select('uid', 'title', 'doktype', 'deleted', 'hidden', 'sys_language_uid')
             ->from('pages')
             ->orderBy('sorting');
         if ($versions) {
@@ -126,7 +149,11 @@ class DatabaseIntegrityCheck
         while ($row = $result->fetch()) {
             $newID = $row['uid'];
             // Register various data for this item:
-            $this->page_idArray[$newID] = $row;
+            if ($row['sys_language_uid'] === 0) {
+                $this->page_idArray[$newID] = $row;
+            } else {
+                $this->page_translatedPageIDArray[$newID] = $row;
+            }
             $this->recStats['all_valid']['pages'][$newID] = $newID;
             if ($row['deleted']) {
                 $this->recStats['deleted']['pages'][$newID] = $newID;
@@ -264,7 +291,7 @@ class DatabaseIntegrityCheck
      */
     public function fixLostRecord($table, $uid)
     {
-        if ($table && $GLOBALS['TCA'][$table] && $uid && is_array($this->lRecords[$table][$uid]) && $GLOBALS['BE_USER']->user['admin']) {
+        if ($table && $GLOBALS['TCA'][$table] && $uid && is_array($this->lRecords[$table][$uid]) && $GLOBALS['BE_USER']->isAdmin()) {
             $updateFields = [
                 'pid' => 0
             ];
@@ -276,9 +303,8 @@ class DatabaseIntegrityCheck
                 ->getConnectionForTable($table)
                 ->update($table, $updateFields, ['uid' => (int)$uid]);
             return true;
-        } else {
-            return false;
         }
+        return false;
     }
 
     /**
@@ -353,6 +379,7 @@ class DatabaseIntegrityCheck
             foreach ($cols as $field => $config) {
                 if ($config['config']['type'] === 'group') {
                     if ((!$mode || $mode === 'file') && $config['config']['internal_type'] === 'file' || (!$mode || $mode === 'db') && $config['config']['internal_type'] === 'db') {
+                        // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Deprecation logged by TcaMigration class. Remove the type=file specific code.
                         $result[$table][] = $field;
                     }
                 }
@@ -372,6 +399,7 @@ class DatabaseIntegrityCheck
      *
      * @param string $uploadfolder Path to uploadfolder
      * @return array An array with all fields listed that have references to files in the $uploadfolder
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Deprecation logged by TcaMigration class.
      */
     public function getFileFields($uploadfolder)
     {
@@ -441,10 +469,18 @@ class DatabaseIntegrityCheck
                         // It is quoted for keywords
                         $column = $tableColumns[strtolower($fieldName)]
                             ?? $tableColumns[$connection->quoteIdentifier(strtolower($fieldName))];
+                        if (!$column) {
+                            // Throw meaningful exception if field does not exist in DB - 'none' is not filtered here since the
+                            // method is only called with type=group fields
+                            throw new \RuntimeException(
+                                'Field ' . $fieldName . ' for table ' . $table . ' has been defined in TCA, but does not exist in DB',
+                                1536248936
+                            );
+                        }
                         $fieldType = $column->getType()->getName();
                         if (in_array(
                             $fieldType,
-                            [Type::BIGINT, Type::INTEGER, Type::SMALLINT, Type::DECIMAL, Type::FLOAT],
+                            [Types::BIGINT, Types::INTEGER, Types::SMALLINT, Types::DECIMAL, Types::FLOAT],
                             true
                         )) {
                             $whereClause[] = $queryBuilder->expr()->andX(
@@ -454,7 +490,7 @@ class DatabaseIntegrityCheck
                                     $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT)
                                 )
                             );
-                        } elseif (in_array($fieldType, [Type::STRING, Type::TEXT], true)) {
+                        } elseif (in_array($fieldType, [Types::STRING, Types::TEXT], true)) {
                             $whereClause[] = $queryBuilder->expr()->andX(
                                 $queryBuilder->expr()->isNotNull($fieldName),
                                 $queryBuilder->expr()->neq(
@@ -462,7 +498,7 @@ class DatabaseIntegrityCheck
                                     $queryBuilder->createNamedParameter('', \PDO::PARAM_STR)
                                 )
                             );
-                        } elseif (in_array($fieldType, [Type::BLOB], true)) {
+                        } elseif ($fieldType === Types::BLOB) {
                             $whereClause[] = $queryBuilder->expr()->andX(
                                 $queryBuilder->expr()->isNotNull($fieldName),
                                 $queryBuilder->expr()
@@ -482,6 +518,7 @@ class DatabaseIntegrityCheck
                                 $fieldConf = $GLOBALS['TCA'][$table]['columns'][$field]['config'];
                                 if ($fieldConf['type'] === 'group') {
                                     if ($fieldConf['internal_type'] === 'file') {
+                                        // @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Deprecation logged by TcaMigration class.
                                         // Files...
                                         if ($fieldConf['MM']) {
                                             $tempArr = [];
@@ -563,19 +600,19 @@ class DatabaseIntegrityCheck
                     $references = 1;
                 }
                 // The directory must be empty (prevents checking of the root directory)
-                $directory = dirname($file);
+                $directory = PathUtility::dirname($file);
                 if ($directory !== '') {
-                    $newCheckFileRefs[$directory][basename($file)] = $references;
+                    $newCheckFileRefs[$directory][PathUtility::basename($file)] = $references;
                 }
             }
         }
         $this->checkFileRefs = $newCheckFileRefs;
         foreach ($this->checkFileRefs as $folder => $fileArr) {
-            $path = PATH_site . $folder;
+            $path = Environment::getPublicPath() . '/' . $folder;
             if (@is_dir($path) && @is_readable($path)) {
                 $d = dir($path);
                 while ($entry = $d->read()) {
-                    if (@is_file(($path . '/' . $entry))) {
+                    if (@is_file($path . '/' . $entry)) {
                         if (isset($fileArr[$entry])) {
                             if ($fileArr[$entry] > 1) {
                                 $temp = $this->whereIsFileReferenced($folder, $entry);
@@ -588,7 +625,7 @@ class DatabaseIntegrityCheck
                             unset($fileArr[$entry]);
                         } else {
                             // Contains workaround for direct references
-                            if (!strstr($entry, 'index.htm') && !preg_match(('/^' . preg_quote($GLOBALS['TYPO3_CONF_VARS']['BE']['fileadminDir'], '/') . '/'), $folder)) {
+                            if (!strstr($entry, 'index.htm') && !preg_match('/^' . preg_quote($GLOBALS['TYPO3_CONF_VARS']['BE']['fileadminDir'], '/') . '/', $folder)) {
                                 $output['noReferences'][] = [$path, $entry];
                             }
                         }
@@ -601,7 +638,7 @@ class DatabaseIntegrityCheck
                     if (preg_match('/^' . preg_quote($GLOBALS['TYPO3_CONF_VARS']['BE']['fileadminDir'], '/') . '/', $folder)) {
                         $file = $folder . '/' . $file;
                         $folder = '';
-                        $path = substr(PATH_site, 0, -1);
+                        $path = Environment::getPublicPath();
                     }
                     $temp = $this->whereIsFileReferenced($folder, $file);
                     $tempList = '';

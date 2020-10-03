@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form\Domain\Model\FormElements;
 
 /*
@@ -27,6 +27,19 @@ use TYPO3\CMS\Form\Domain\Exception\TypeDefinitionNotValidException;
  */
 class GridContainer extends Section implements GridContainerInterface
 {
+    /**
+     * Initializes the Form Element
+     *
+     * @internal
+     */
+    public function initializeFormElement()
+    {
+        trigger_error(
+            '"GridContainer" form elements will be removed in TYPO3 v10.0. Use "GridRow" form elements instead.',
+            E_USER_DEPRECATED
+        );
+        parent::initializeFormElement();
+    }
 
     /**
      * Register this element at the parent form, if there is a connection to the parent form.
@@ -51,7 +64,6 @@ class GridContainer extends Section implements GridContainerInterface
      * Add a new row element at the end of the grid container
      *
      * @param FormElementInterface $formElement The form element to add
-     * @api
      */
     public function addElement(FormElementInterface $formElement)
     {
@@ -71,7 +83,6 @@ class GridContainer extends Section implements GridContainerInterface
      * @param string $typeName type of the new form element
      * @return FormElementInterface the newly created grid row
      * @throws TypeDefinitionNotValidException
-     * @api
      */
     public function createElement(string $identifier, string $typeName): FormElementInterface
     {

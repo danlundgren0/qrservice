@@ -1,15 +1,33 @@
 {
 	"name": "typo3/cms-feedit",
 	"type": "typo3-cms-framework",
-	"description": "TYPO3 Core",
+	"description": "",
 	"homepage": "https://typo3.org",
-	"license": ["GPL-3.0+"],
-
-	"require": {
-		"typo3/cms-core": "*"
+	"license": ["GPL-2.0-or-later"],
+	"authors": [{
+		"name": "TYPO3 Core Team",
+		"email": "typo3cms@typo3.org",
+		"role": "Developer"
+	}],
+	"config": {
+		"sort-packages": true
 	},
-	"replace": {
-		"feedit": "*"
+	"require": {
+		"typo3/cms-adminpanel": "9.5.21",
+		"typo3/cms-backend": "9.5.21",
+		"typo3/cms-core": "9.5.21",
+		"typo3/cms-frontend": "9.5.21",
+		"psr/http-message": "^1.0",
+		"psr/http-server-handler": "^1.0",
+		"psr/http-server-middleware": "^1.0"
+	},
+	"conflict": {
+		"typo3/cms": "*"
+	},
+	"extra": {
+		"typo3/cms": {
+			"extension-key": "feedit"
+		}
 	},
 	"autoload": {
 		"psr-4": {

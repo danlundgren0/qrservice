@@ -15,12 +15,12 @@ namespace TYPO3\CMS\Beuser\Hook;
  */
 
 use TYPO3\CMS\Backend\Controller\BackendController;
-use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Core\Page\PageRenderer;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
- * This class adds import export related JavaScript to the backend
+ * This class adds Access-permission related JavaScript to the backend
+ * @internal This class is a TYPO3 core-internal hook implementation and is not considered part of the Public TYPO3 API.
  */
 class BackendControllerHook
 {
@@ -32,7 +32,9 @@ class BackendControllerHook
      */
     public function addJavaScript(array $configuration, BackendController $backendController)
     {
-        $this->getPageRenderer()->addInlineSetting('AccessPermissions', 'moduleUrl', BackendUtility::getModuleUrl('system_BeuserTxPermission'));
+        /** @var \TYPO3\CMS\Backend\Routing\UriBuilder $uriBuilder */
+        $uriBuilder = GeneralUtility::makeInstance(\TYPO3\CMS\Backend\Routing\UriBuilder::class);
+        $this->getPageRenderer()->addInlineSetting('AccessPermissions', 'moduleUrl', (string)$uriBuilder->buildUriFromRoute('system_BeuserTxPermission'));
     }
 
     /**

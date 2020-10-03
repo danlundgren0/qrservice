@@ -46,8 +46,10 @@ $GLOBALS['TCA']['fe_users']['types']['Tx_DlIponlyestate_Technician']['showitem']
 $GLOBALS['TCA']['fe_users']['types']['Tx_DlIponlyestate_Technician']['showitem'] .= '';
 
 $GLOBALS['TCA']['fe_users']['columns'][$GLOBALS['TCA']['fe_users']['ctrl']['type']]['config']['items'][] = array('LLL:EXT:dl_iponlyestate/Resources/Private/Language/locallang_db.xlf:fe_users.tx_extbase_type.Tx_DlIponlyestate_Technician','Tx_DlIponlyestate_Technician');
-
+/*
 \TYPO3\CMS\Core\Utility\ExtensionManagementUtility::addLLrefForTCAdescr(
 	'',
 	'EXT:/Resources/Private/Language/locallang_csh_.xlf'
-);## EXTENSION BUILDER DEFAULTS END TOKEN - Everything BEFORE this line is overwritten with the defaults of the extension builder
+);
+*/
+## EXTENSION BUILDER DEFAULTS END TOKEN - Everything BEFORE this line is overwritten with the defaults of the extension builder

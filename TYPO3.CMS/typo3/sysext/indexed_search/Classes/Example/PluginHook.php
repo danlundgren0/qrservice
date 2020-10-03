@@ -21,6 +21,7 @@ namespace TYPO3\CMS\IndexedSearch\Example;
  * Index search frontend - EXAMPLE hook for alternative searching / display etc.
  * Hooks are configured in ext_localconf.php as key => hook-reference pairs in $TYPO3_CONF_VARS['EXTCONF']['indexed_search']['pi1_hooks']. See example in ext_localconf.php for "indexed_search"
  * Each hook must have an entry, the key must match the hook-key in class.tx_indexed_search.php and generally the key equals the function name in the hook object (a convension used)
+ * @internal just an example, not for public use, but used as a blue-print
  */
 class PluginHook
 {
@@ -44,10 +45,28 @@ class PluginHook
     }
 
     /**
+     * Example of how the content displayed in the result rows can be extended or modified
+     * before the data is assigned to the fluid template as {resultsets}.
+     * The code example replaces all occurrences of the search string with the replacement
+     * string in the description of all rows in the result.
+     *
+     * @param array $result
+     * @return array
+     */
+    public function getDisplayResults_postProc(array $result): array
+    {
+        if ($result['count'] > 0) {
+            foreach ($result['rows'] as $rowIndex => $row) {
+                $result['rows'][$rowIndex]['description'] = \str_replace('foo', 'bar', $row['description']);
+            }
+        }
+        return $result;
+    }
+
+    /**
      * Providing an alternative search algorithm!
      *
      * @param array $sWArr Array of search words
-     * @return array Array of first row, result rows, count
      */
     public function getResultRows($sWArr)
     {

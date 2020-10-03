@@ -6,8 +6,6 @@ namespace TYPO3Fluid\Fluid\ViewHelpers;
  * See LICENSE.txt that was shipped with this package.
  */
 
-use TYPO3Fluid\Fluid\Core\Compiler\TemplateCompiler;
-use TYPO3Fluid\Fluid\Core\Parser\SyntaxTree\ViewHelperNode;
 use TYPO3Fluid\Fluid\Core\Rendering\RenderingContextInterface;
 use TYPO3Fluid\Fluid\Core\ViewHelper;
 use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
@@ -64,7 +62,7 @@ class ForViewHelper extends AbstractViewHelper
 {
 
     use CompileWithRenderStatic;
-    
+
     /**
      * @var boolean
      */
@@ -107,7 +105,7 @@ class ForViewHelper extends AbstractViewHelper
                 $each = $arguments['each'];
                 $arguments['each'] = iterator_to_array($each);
             }
-            $arguments['each'] = array_reverse($arguments['each']);
+            $arguments['each'] = array_reverse($arguments['each'], true);
         }
         if (isset($arguments['iteration'])) {
             $iterationData = [

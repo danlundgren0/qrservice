@@ -14,16 +14,16 @@ namespace TYPO3\CMS\Extbase\Domain\Model;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Extbase\Annotation as Extbase;
+
 /**
  * This model represents a category (for anything).
- *
- * @api
  */
 class Category extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
 {
     /**
      * @var string
-     * @validate notEmpty
+     * @Extbase\Validate("NotEmpty")
      */
     protected $title = '';
 
@@ -33,21 +33,15 @@ class Category extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     protected $description = '';
 
     /**
-     * @var string
+     * @var \TYPO3\CMS\Extbase\Domain\Model\Category|null
+     * @Extbase\ORM\Lazy
      */
-    protected $icon = '';
-
-    /**
-     * @var \TYPO3\CMS\Extbase\Domain\Model\Category|NULL
-     * @lazy
-     */
-    protected $parent = null;
+    protected $parent;
 
     /**
      * Gets the title.
      *
      * @return string the title, might be empty
-     * @api
      */
     public function getTitle()
     {
@@ -58,7 +52,6 @@ class Category extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
      * Sets the title.
      *
      * @param string $title the title to set, may be empty
-     * @api
      */
     public function setTitle($title)
     {
@@ -69,7 +62,6 @@ class Category extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
      * Gets the description.
      *
      * @return string the description, might be empty
-     * @api
      */
     public function getDescription()
     {
@@ -80,7 +72,6 @@ class Category extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
      * Sets the description.
      *
      * @param string $description the description to set, may be empty
-     * @api
      */
     public function setDescription($description)
     {
@@ -88,34 +79,9 @@ class Category extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     }
 
     /**
-     * Returns the icon
-     *
-     * @return string $icon
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function getIcon()
-    {
-        \TYPO3\CMS\Core\Utility\GeneralUtility::logDeprecatedFunction();
-        return $this->icon;
-    }
-
-    /**
-     * Sets the icon
-     *
-     * @param string $icon
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function setIcon($icon)
-    {
-        \TYPO3\CMS\Core\Utility\GeneralUtility::logDeprecatedFunction();
-        $this->icon = $icon;
-    }
-
-    /**
      * Gets the parent category.
      *
-     * @return \TYPO3\CMS\Extbase\Domain\Model\Category|NULL the parent category
-     * @api
+     * @return \TYPO3\CMS\Extbase\Domain\Model\Category|null the parent category
      */
     public function getParent()
     {
@@ -129,7 +95,6 @@ class Category extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
      * Sets the parent category.
      *
      * @param \TYPO3\CMS\Extbase\Domain\Model\Category $parent the parent category
-     * @api
      */
     public function setParent(\TYPO3\CMS\Extbase\Domain\Model\Category $parent)
     {

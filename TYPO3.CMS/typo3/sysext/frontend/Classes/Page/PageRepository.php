@@ -14,18 +14,30 @@ namespace TYPO3\CMS\Frontend\Page;
  * The TYPO3 project - inspiring people to share!
  */
 
+use Psr\Log\LoggerAwareInterface;
+use Psr\Log\LoggerAwareTrait;
 use TYPO3\CMS\Core\Cache\CacheManager;
+use TYPO3\CMS\Core\Cache\Frontend\VariableFrontend;
+use TYPO3\CMS\Core\Compatibility\PublicMethodDeprecationTrait;
+use TYPO3\CMS\Core\Compatibility\PublicPropertyDeprecationTrait;
+use TYPO3\CMS\Core\Context\Context;
+use TYPO3\CMS\Core\Context\Exception\AspectNotFoundException;
+use TYPO3\CMS\Core\Context\LanguageAspect;
+use TYPO3\CMS\Core\Context\UserAspect;
 use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\QueryHelper;
 use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
+use TYPO3\CMS\Core\Database\Query\Restriction\FrontendGroupRestriction;
 use TYPO3\CMS\Core\Database\Query\Restriction\FrontendRestrictionContainer;
 use TYPO3\CMS\Core\Database\Query\Restriction\FrontendWorkspaceRestriction;
+use TYPO3\CMS\Core\Database\Query\Restriction\HiddenRestriction;
+use TYPO3\CMS\Core\Error\Http\ShortcutTargetPageNotFoundException;
 use TYPO3\CMS\Core\Resource\Exception\FileDoesNotExistException;
 use TYPO3\CMS\Core\Resource\FileRepository;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Core\Utility\HttpUtility;
+use TYPO3\CMS\Core\Utility\MathUtility;
 use TYPO3\CMS\Core\Utility\RootlineUtility;
 use TYPO3\CMS\Core\Versioning\VersionState;
 
@@ -37,12 +49,34 @@ use TYPO3\CMS\Core\Versioning\VersionState;
  * functions operate properly
  * @see \TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController::fetch_the_id()
  */
-class PageRepository
+class PageRepository implements LoggerAwareInterface
 {
+    use LoggerAwareTrait;
+    use PublicPropertyDeprecationTrait;
+    use PublicMethodDeprecationTrait;
+
     /**
+     * List of all deprecated public properties
      * @var array
      */
-    public $urltypes = ['', 'http://', 'ftp://', 'mailto:', 'https://'];
+    protected $deprecatedPublicProperties = [
+        'versioningPreview' => 'Using $versioningPreview of class PageRepository is discouraged, just use versioningWorkspaceId to determine if a workspace should be previewed.',
+        'workspaceCache' => 'Using $workspaceCache of class PageRepository from the outside is discouraged, as this only reflects a local runtime cache.',
+        'error_getRootLine' => 'Using $error_getRootLine of class PageRepository from the outside is deprecated as this property only exists for legacy reasons.',
+        'error_getRootLine_failPid' => 'Using $error_getRootLine_failPid of class PageRepository from the outside is deprecated as this property only exists for legacy reasons.',
+        'sys_language_uid' => 'Using $sys_language_uid of class PageRepository from the outside is deprecated as this information is now stored within the Context Language Aspect given by the constructor.',
+        'versioningWorkspaceId' => 'Using $versioningWorkspaceId of class PageRepository from the outside is deprecated as this information is now stored within the Context Workspace Aspect given by the constructor.',
+    ];
+
+    /**
+     * List of all deprecated public methods
+     * @var array
+     */
+    protected $deprecatedPublicMethods = [
+        'init' => 'init() is now called implicitly on object creation, and is not necessary anymore to be called explicitly. Calling init() will throw an error in TYPO3 v10.0.',
+        'movePlhOL' => 'Using movePlhOL is deprecated and will not be possible anymore in TYPO3 v10.0.',
+        'getMovePlaceholder' => 'Using getMovePlaceholder is deprecated and will not be possible anymore in TYPO3 v10.0.'
+    ];
 
     /**
      * This is not the final clauses. There will normally be conditions for the
@@ -62,8 +96,10 @@ class PageRepository
 
     /**
      * @var int
+     * @deprecated will be removed in TYPO3 v10.0, all occurrences should be replaced with the language->id() aspect property in TYPO3 v10.0
+     * However, the usage within the class is kept as the property could be overwritten by third-party classes
      */
-    public $sys_language_uid = 0;
+    protected $sys_language_uid = 0;
 
     /**
      * If TRUE, versioning preview of other record versions is allowed. THIS MUST
@@ -71,34 +107,39 @@ class PageRepository
      * user!!!
      *
      * @var bool
+     * @deprecated since TYPO3 v9.3, will be removed in TYPO3 v10.0. As $versioningWorkspaceId now indicates what records to fetch.
      */
-    public $versioningPreview = false;
+    protected $versioningPreview = false;
 
     /**
      * Workspace ID for preview
+     * If > 0, versioning preview of other record versions is allowed. THIS MUST
+     * ONLY BE SET IF the page is not cached and truly previewed by a backend
+     * user!
      *
      * @var int
+     * @deprecated This method will be kept protected from TYPO3 v10.0 on, instantiate a new pageRepository object with a custom workspace aspect to override this setting.
      */
-    public $versioningWorkspaceId = 0;
+    protected $versioningWorkspaceId = 0;
 
     /**
      * @var array
      */
-    public $workspaceCache = [];
+    protected $workspaceCache = [];
 
     /**
      * Error string set by getRootLine()
      *
      * @var string
      */
-    public $error_getRootLine = '';
+    protected $error_getRootLine = '';
 
     /**
      * Error uid set by getRootLine()
      *
      * @var int
      */
-    public $error_getRootLine_failPid = 0;
+    protected $error_getRootLine_failPid = 0;
 
     /**
      * @var array
@@ -121,14 +162,6 @@ class PageRepository
     protected $cache_getMountPointInfo = [];
 
     /**
-     * @var array
-     */
-    protected $tableNamesAllowedOnRootLevel = [
-        'sys_file_metadata',
-        'sys_category',
-    ];
-
-    /**
      * Computed properties that are added to database rows.
      *
      * @var array
@@ -141,6 +174,7 @@ class PageRepository
         '_PAGES_OVERLAY',
         '_PAGES_OVERLAY_UID',
         '_PAGES_OVERLAY_LANGUAGE',
+        '_PAGES_OVERLAY_REQUESTEDLANGUAGE',
     ];
 
     /**
@@ -164,40 +198,78 @@ class PageRepository
     const SHORTCUT_MODE_PARENT_PAGE = 3;
 
     /**
+     * @var Context
+     */
+    protected $context;
+
+    /**
+     * PageRepository constructor to set the base context, this will effectively remove the necessity for
+     * setting properties from the outside.
+     *
+     * @param Context $context
+     */
+    public function __construct(Context $context = null)
+    {
+        $this->context = $context ?? GeneralUtility::makeInstance(Context::class);
+        $this->versioningWorkspaceId = $this->context->getPropertyFromAspect('workspace', 'id');
+        // Only set up the where clauses for pages when TCA is set. This usually happens only in tests.
+        // Once all tests are written very well, this can be removed again
+        if (isset($GLOBALS['TCA']['pages'])) {
+            $this->init($this->context->getPropertyFromAspect('visibility', 'includeHiddenPages'));
+            $this->where_groupAccess = $this->getMultipleGroupsWhereClause('pages.fe_group', 'pages');
+            $this->sys_language_uid = (int)$this->context->getPropertyFromAspect('language', 'id', 0);
+        }
+    }
+
+    /**
      * init() MUST be run directly after creating a new template-object
      * This sets the internal variable $this->where_hid_del to the correct where
      * clause for page records taking deleted/hidden/starttime/endtime/t3ver_state
      * into account
      *
      * @param bool $show_hidden If $show_hidden is TRUE, the hidden-field is ignored!! Normally this should be FALSE. Is used for previewing.
-     * @see \TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController::fetch_the_id(), \TYPO3\CMS\Tstemplate\Controller\TemplateAnalyzerModuleFunctionController::initialize_editor()
+     * @internal
      */
-    public function init($show_hidden)
+    protected function init($show_hidden)
     {
         $this->where_groupAccess = '';
 
-        if ($this->versioningPreview) {
-            // For version previewing, make sure that enable-fields are not
-            // de-selecting hidden pages - we need versionOL() to unset them only
-            // if the overlay record instructs us to.
-            // Clear where_hid_del and restrict to live and current workspaces
+        $cache = $this->getRuntimeCache();
+        $cacheIdentifier = 'PageRepository_hidDelWhere' . ($show_hidden ? 'ShowHidden' : '') . '_' . (int)$this->versioningWorkspaceId;
+        $cacheEntry = $cache->get($cacheIdentifier);
+        if ($cacheEntry) {
+            $this->where_hid_del = $cacheEntry;
+        } else {
             $expressionBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
                 ->getQueryBuilderForTable('pages')
                 ->expr();
-            $this->where_hid_del = ' AND ' . $expressionBuilder->andX(
-                $expressionBuilder->eq('pages.deleted', 0),
-                $expressionBuilder->orX(
-                    $expressionBuilder->eq('pages.t3ver_wsid', 0),
-                    $expressionBuilder->eq('pages.t3ver_wsid', (int)$this->versioningWorkspaceId)
-                )
-            );
-        } else {
-            // add starttime / endtime, and check for hidden/deleted
-            // Filter out new/deleted place-holder pages in case we are NOT in a
-            // versioning preview (that means we are online!)
-            $this->where_hid_del = $this->enableFields('pages', $show_hidden, ['fe_group' => true], true);
+            if ($this->versioningWorkspaceId > 0) {
+                // For version previewing, make sure that enable-fields are not
+                // de-selecting hidden pages - we need versionOL() to unset them only
+                // if the overlay record instructs us to.
+                // Clear where_hid_del and restrict to live and current workspaces
+                $this->where_hid_del = ' AND ' . $expressionBuilder->andX(
+                    $expressionBuilder->eq('pages.deleted', 0),
+                    $expressionBuilder->orX(
+                        $expressionBuilder->eq('pages.t3ver_wsid', 0),
+                        $expressionBuilder->eq('pages.t3ver_wsid', (int)$this->versioningWorkspaceId)
+                    ),
+                    $expressionBuilder->lt('pages.doktype', 200)
+                );
+            } else {
+                // add starttime / endtime, and check for hidden/deleted
+                // Filter out new/deleted place-holder pages in case we are NOT in a
+                // versioning preview (that means we are online!)
+                $this->where_hid_del = ' AND ' . (string)$expressionBuilder->andX(
+                    QueryHelper::stripLogicalOperatorPrefix(
+                        $this->enableFields('pages', $show_hidden, ['fe_group' => true], true)
+                    ),
+                    $expressionBuilder->lt('pages.doktype', 200)
+                );
+            }
+            $cache->set($cacheIdentifier, $this->where_hid_del);
         }
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['init'])) {
+        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['init'] ?? false)) {
             foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS'][self::class]['init'] as $classRef) {
                 $hookObject = GeneralUtility::makeInstance($classRef);
                 if (!$hookObject instanceof PageRepositoryInitHookInterface) {
@@ -215,40 +287,58 @@ class PageRepository
      **************************/
 
     /**
-     * Returns the $row for the page with uid = $uid (observing ->where_hid_del)
-     * Any pages_language_overlay will be applied before the result is returned.
-     * If no page is found an empty array is returned.
+     * Loads the full page record for the given page ID.
      *
-     * @param int $uid The page id to look up.
-     * @param bool $disableGroupAccessCheck If set, the check for group access is disabled. VERY rarely used
+     * The page record is either served from a first-level cache or loaded from the
+     * database. If no page can be found, an empty array is returned.
+     *
+     * Language overlay and versioning overlay are applied. Mount Point
+     * handling is not done, an overlaid Mount Point is not replaced.
+     *
+     * The result is conditioned by the public properties where_groupAccess
+     * and where_hid_del that are preset by the init() method.
+     *
+     * @see PageRepository::where_groupAccess
+     * @see PageRepository::where_hid_del
+     *
+     * By default the usergroup access check is enabled. Use the second method argument
+     * to disable the usergroup access check.
+     *
+     * The given UID can be preprocessed by registering a hook class that is
+     * implementing the PageRepositoryGetPageHookInterface into the configuration array
+     * $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_page.php']['getPage'].
+     *
+     * @param int $uid The page id to look up
+     * @param bool $disableGroupAccessCheck set to true to disable group access check
+     * @return array The resulting page record with overlays or empty array
      * @throws \UnexpectedValueException
-     * @return array The page row with overlaid localized fields. Empty it no page.
-     * @see getPage_noCheck()
+     * @see PageRepository::getPage_noCheck()
      */
     public function getPage($uid, $disableGroupAccessCheck = false)
     {
         // Hook to manipulate the page uid for special overlay handling
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_page.php']['getPage'])) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_page.php']['getPage'] as $classRef) {
-                $hookObject = GeneralUtility::getUserObj($classRef);
-                if (!$hookObject instanceof PageRepositoryGetPageHookInterface) {
-                    throw new \UnexpectedValueException($classRef . ' must implement interface ' . PageRepositoryGetPageHookInterface::class, 1251476766);
-                }
-                $hookObject->getPage_preProcess($uid, $disableGroupAccessCheck, $this);
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_page.php']['getPage'] ?? [] as $className) {
+            $hookObject = GeneralUtility::makeInstance($className);
+            if (!$hookObject instanceof PageRepositoryGetPageHookInterface) {
+                throw new \UnexpectedValueException($className . ' must implement interface ' . PageRepositoryGetPageHookInterface::class, 1251476766);
             }
+            $hookObject->getPage_preProcess($uid, $disableGroupAccessCheck, $this);
         }
-        $cacheKey = md5(
+        $cacheIdentifier = 'PageRepository_getPage_' . md5(
             implode(
                 '-',
                 [
-                    ($disableGroupAccessCheck ? '' : $this->where_groupAccess),
+                    $uid,
+                    $disableGroupAccessCheck ? '' : $this->where_groupAccess,
                     $this->where_hid_del,
                     $this->sys_language_uid
                 ]
             )
         );
-        if (is_array($this->cache_getPage[$uid][$cacheKey])) {
-            return $this->cache_getPage[$uid][$cacheKey];
+        $cache = $this->getRuntimeCache();
+        $cacheEntry = $cache->get($cacheIdentifier);
+        if (is_array($cacheEntry)) {
+            return $cacheEntry;
         }
         $result = [];
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
@@ -260,8 +350,12 @@ class PageRepository
                 QueryHelper::stripLogicalOperatorPrefix($this->where_hid_del)
             );
 
+        $originalWhereGroupAccess = '';
         if (!$disableGroupAccessCheck) {
             $queryBuilder->andWhere(QueryHelper::stripLogicalOperatorPrefix($this->where_groupAccess));
+        } else {
+            $originalWhereGroupAccess = $this->where_groupAccess;
+            $this->where_groupAccess = '';
         }
 
         $row = $queryBuilder->execute()->fetch();
@@ -271,7 +365,12 @@ class PageRepository
                 $result = $this->getPageOverlay($row);
             }
         }
-        $this->cache_getPage[$uid][$cacheKey] = $result;
+
+        if ($disableGroupAccessCheck) {
+            $this->where_groupAccess = $originalWhereGroupAccess;
+        }
+
+        $cache->set($cacheIdentifier, $result);
         return $result;
     }
 
@@ -285,8 +384,11 @@ class PageRepository
      */
     public function getPage_noCheck($uid)
     {
-        if ($this->cache_getPage_noCheck[$uid]) {
-            return $this->cache_getPage_noCheck[$uid];
+        $cache = $this->getRuntimeCache();
+        $cacheIdentifier = 'PageRepository_getPage_noCheck_' . $uid . '_' . $this->sys_language_uid . '_' . $this->versioningWorkspaceId;
+        $cacheEntry = $cache->get($cacheIdentifier);
+        if ($cacheEntry !== false) {
+            return $cacheEntry;
         }
 
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
@@ -306,7 +408,7 @@ class PageRepository
                 $result = $this->getPageOverlay($row);
             }
         }
-        $this->cache_getPage_noCheck[$uid] = $result;
+        $cache->set($cacheIdentifier, $result);
         return $result;
     }
 
@@ -316,9 +418,11 @@ class PageRepository
      * @param int $uid The page id for which to fetch first subpages (PID)
      * @return mixed If found: The page record (with overlaid localized fields, if any). If NOT found: blank value (not array!)
      * @see \TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController::fetch_the_id()
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0. Use getMenu() to fetch all subpages of a page.
      */
     public function getFirstWebPage($uid)
     {
+        trigger_error('PageRepository->getFirstWebPage() will be removed in TYPO3 v10.0. Use "getMenu()" instead.', E_USER_DEPRECATED);
         $output = '';
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
         $queryBuilder->getRestrictions()->removeAll();
@@ -353,8 +457,11 @@ class PageRepository
     public function getPageIdFromAlias($alias)
     {
         $alias = strtolower($alias);
-        if ($this->cache_getPageIdFromAlias[$alias]) {
-            return $this->cache_getPageIdFromAlias[$alias];
+        $cacheIdentifier = 'PageRepository_getPageIdFromAlias_' . md5($alias);
+        $cache = $this->getRuntimeCache();
+        $cacheEntry = $cache->get($cacheIdentifier);
+        if ($cacheEntry !== false) {
+            return $cacheEntry;
         }
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
         $queryBuilder->getRestrictions()
@@ -373,114 +480,119 @@ class PageRepository
             ->fetch();
 
         if ($row) {
-            $this->cache_getPageIdFromAlias[$alias] = $row['uid'];
+            $cache->set($cacheIdentifier, $row['uid']);
             return $row['uid'];
         }
-        $this->cache_getPageIdFromAlias[$alias] = 0;
+        $cache->set($cacheIdentifier, 0);
         return 0;
+    }
+
+    /**
+     * Master helper method to overlay a record to a language.
+     *
+     * Be aware that for pages the languageId is taken, and for all other records the contentId.
+     * This might change through a feature switch in the future.
+     *
+     * @param string $table the name of the table, should be a TCA table with localization enabled
+     * @param array $row the current (full-fletched) record.
+     * @return array|null
+     */
+    public function getLanguageOverlay(string $table, array $row)
+    {
+        // table is not localizable, so return directly
+        if (!isset($GLOBALS['TCA'][$table]['ctrl']['languageField'])) {
+            return $row;
+        }
+        try {
+            /** @var LanguageAspect $languageAspect */
+            $languageAspect = $this->context->getAspect('language');
+            if ($languageAspect->doOverlays()) {
+                if ($table === 'pages') {
+                    return $this->getPageOverlay($row, $languageAspect->getId());
+                }
+                return $this->getRecordOverlay(
+                    $table,
+                    $row,
+                    $languageAspect->getContentId(),
+                    $languageAspect->getOverlayType() === $languageAspect::OVERLAYS_MIXED ? '1' : 'hideNonTranslated'
+                );
+            }
+        } catch (AspectNotFoundException $e) {
+            // no overlays
+        }
+        return $row;
     }
 
     /**
      * Returns the relevant page overlay record fields
      *
      * @param mixed $pageInput If $pageInput is an integer, it's the pid of the pageOverlay record and thus the page overlay record is returned. If $pageInput is an array, it's a page-record and based on this page record the language record is found and OVERLAID before the page record is returned.
-     * @param int $lUid Language UID if you want to set an alternative value to $this->sys_language_uid which is default. Should be >=0
+     * @param int $languageUid Language UID if you want to set an alternative value to $this->sys_language_uid which is default. Should be >=0
      * @throws \UnexpectedValueException
      * @return array Page row which is overlaid with language_overlay record (or the overlay record alone)
      */
-    public function getPageOverlay($pageInput, $lUid = -1)
+    public function getPageOverlay($pageInput, $languageUid = null)
     {
-        $rows = $this->getPagesOverlay([$pageInput], $lUid);
+        if ($languageUid === -1) {
+            trigger_error('Calling getPageOverlay() with "-1" as languageId is discouraged and will be unsupported in TYPO3 v10.0. Omit the parameter or use "null" instead.', E_USER_DEPRECATED);
+            $languageUid = null;
+        }
+        $rows = $this->getPagesOverlay([$pageInput], $languageUid);
         // Always an array in return
-        return isset($rows[0]) ? $rows[0] : [];
+        return $rows[0] ?? [];
     }
 
     /**
      * Returns the relevant page overlay record fields
      *
      * @param array $pagesInput Array of integers or array of arrays. If each value is an integer, it's the pids of the pageOverlay records and thus the page overlay records are returned. If each value is an array, it's page-records and based on this page records the language records are found and OVERLAID before the page records are returned.
-     * @param int $lUid Language UID if you want to set an alternative value to $this->sys_language_uid which is default. Should be >=0
+     * @param int $languageUid Language UID if you want to set an alternative value to $this->sys_language_uid which is default. Should be >=0
      * @throws \UnexpectedValueException
      * @return array Page rows which are overlaid with language_overlay record.
      *               If the input was an array of integers, missing records are not
      *               included. If the input were page rows, untranslated pages
      *               are returned.
      */
-    public function getPagesOverlay(array $pagesInput, $lUid = -1)
+    public function getPagesOverlay(array $pagesInput, $languageUid = null)
     {
         if (empty($pagesInput)) {
             return [];
         }
-        // Initialize:
-        if ($lUid < 0) {
-            $lUid = $this->sys_language_uid;
+        if ($languageUid === null) {
+            $languageUid = $this->sys_language_uid;
+        } elseif ($languageUid < 0) {
+            trigger_error('Calling getPagesOverlay() with "-1" as languageId is discouraged and will be unsupported in TYPO3 v10.0. Omit the parameter or use "null" instead.', E_USER_DEPRECATED);
+            $languageUid = $this->sys_language_uid;
         }
-        $row = null;
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_page.php']['getPageOverlay'])) {
-            foreach ($pagesInput as &$origPage) {
-                foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_page.php']['getPageOverlay'] as $classRef) {
-                    $hookObject = GeneralUtility::getUserObj($classRef);
-                    if (!$hookObject instanceof PageRepositoryGetPageOverlayHookInterface) {
-                        throw new \UnexpectedValueException($classRef . ' must implement interface ' . PageRepositoryGetPageOverlayHookInterface::class, 1269878881);
-                    }
-                    $hookObject->getPageOverlay_preProcess($origPage, $lUid, $this);
+        foreach ($pagesInput as &$origPage) {
+            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_page.php']['getPageOverlay'] ?? [] as $className) {
+                $hookObject = GeneralUtility::makeInstance($className);
+                if (!$hookObject instanceof PageRepositoryGetPageOverlayHookInterface) {
+                    throw new \UnexpectedValueException($className . ' must implement interface ' . PageRepositoryGetPageOverlayHookInterface::class, 1269878881);
                 }
+                $hookObject->getPageOverlay_preProcess($origPage, $languageUid, $this);
             }
-            unset($origPage);
         }
-        // If language UID is different from zero, do overlay:
-        if ($lUid) {
-            $page_ids = [];
+        unset($origPage);
 
-            $origPage = reset($pagesInput);
+        $overlays = [];
+        // If language UID is different from zero, do overlay:
+        if ($languageUid) {
+            $languageUids = array_merge([$languageUid], $this->getLanguageFallbackChain(null));
+
+            $pageIds = [];
             foreach ($pagesInput as $origPage) {
                 if (is_array($origPage)) {
                     // Was the whole record
-                    $page_ids[] = $origPage['uid'];
+                    $pageIds[] = (int)$origPage['uid'];
                 } else {
                     // Was the id
-                    $page_ids[] = $origPage;
+                    $pageIds[] = (int)$origPage;
                 }
             }
-            // NOTE regarding the query restrictions
-            // Currently the showHiddenRecords of TSFE set will allow
-            // pages_language_overlay records to be selected as they are
-            // child-records of a page.
-            // However you may argue that the showHiddenField flag should
-            // determine this. But that's not how it's done right now.
-            // Selecting overlay record:
-            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
-                ->getQueryBuilderForTable('pages_language_overlay');
-            $queryBuilder->setRestrictions(GeneralUtility::makeInstance(FrontendRestrictionContainer::class));
-            $result = $queryBuilder->select('*')
-                ->from('pages_language_overlay')
-                ->where(
-                    $queryBuilder->expr()->in(
-                        'pid',
-                        $queryBuilder->createNamedParameter($page_ids, Connection::PARAM_INT_ARRAY)
-                    ),
-                    $queryBuilder->expr()->eq(
-                        'sys_language_uid',
-                        $queryBuilder->createNamedParameter($lUid, \PDO::PARAM_INT)
-                    )
-                )
-                ->execute();
-
-            $overlays = [];
-            while ($row = $result->fetch()) {
-                $this->versionOL('pages_language_overlay', $row);
-                if (is_array($row)) {
-                    $row['_PAGES_OVERLAY'] = true;
-                    $row['_PAGES_OVERLAY_UID'] = $row['uid'];
-                    $row['_PAGES_OVERLAY_LANGUAGE'] = $lUid;
-                    $origUid = $row['pid'];
-                    // Unset vital fields that are NOT allowed to be overlaid:
-                    unset($row['uid']);
-                    unset($row['pid']);
-                    $overlays[$origUid] = $row;
-                }
-            }
+            $overlays = $this->getPageOverlaysForLanguageUids($pageIds, $languageUids);
         }
+
         // Create output:
         $pagesOutput = [];
         foreach ($pagesInput as $key => $origPage) {
@@ -504,6 +616,121 @@ class PageRepository
     }
 
     /**
+     * Checks whether the passed (translated or default language) page is accessible with the given language settings.
+     *
+     * @param array $page the page translation record or the page in the default language
+     * @param LanguageAspect $languageAspect
+     * @return bool true if the given page translation record is suited for the given language ID
+     * @internal
+     */
+    public function isPageSuitableForLanguage(array $page, LanguageAspect $languageAspect): bool
+    {
+        $languageUid = $languageAspect->getId();
+        // Checks if the default language version can be shown
+        // Block page is set, if l18n_cfg allows plus: 1) Either default language or 2) another language but NO overlay record set for page!
+        if (GeneralUtility::hideIfDefaultLanguage($page['l18n_cfg']) && (!$languageUid || $languageUid && !$page['_PAGES_OVERLAY'])) {
+            return false;
+        }
+        if ($languageUid > 0 && GeneralUtility::hideIfNotTranslated($page['l18n_cfg'])) {
+            if (!$page['_PAGES_OVERLAY'] || (int)$page['_PAGES_OVERLAY_LANGUAGE'] !== $languageUid) {
+                return false;
+            }
+        } elseif ($languageUid > 0) {
+            $languageUids = array_merge([$languageUid], $this->getLanguageFallbackChain($languageAspect));
+            return in_array((int)$page['sys_language_uid'], $languageUids, true);
+        }
+        return true;
+    }
+
+    /**
+     * Returns the cleaned fallback chain from the current language aspect, if there is one.
+     *
+     * @param LanguageAspect|null $languageAspect
+     * @return int[]
+     */
+    protected function getLanguageFallbackChain(?LanguageAspect $languageAspect): array
+    {
+        $languageAspect = $languageAspect ?? $this->context->getAspect('language');
+        return array_filter($languageAspect->getFallbackChain(), function ($item) {
+            return MathUtility::canBeInterpretedAsInteger($item);
+        });
+    }
+
+    /**
+     * Returns the first match of overlays for pages in the passed languages.
+     *
+     * NOTE regarding the query restrictions:
+     * Currently the visibility aspect within the FrontendRestrictionContainer will allow
+     * page translation records to be selected as they are child-records of a page.
+     * However you may argue that the visibility flag should determine this.
+     * But that's not how it's done right now.
+     *
+     * @param array $pageUids
+     * @param array $languageUids uid of sys_language, please note that the order is important here.
+     * @return array
+     */
+    protected function getPageOverlaysForLanguageUids(array $pageUids, array $languageUids): array
+    {
+        // Remove default language ("0")
+        $languageUids = array_filter($languageUids);
+        $languageField = $GLOBALS['TCA']['pages']['ctrl']['languageField'];
+        $overlays = [];
+
+        foreach ($pageUids as $pageId) {
+            // Create a map based on the order of values in $languageUids. Those entries reflect the order of the language + fallback chain.
+            // We can't work with database ordering since there is no common SQL clause to order by e.g. [7, 1, 2].
+            $orderedListByLanguages = array_flip($languageUids);
+
+            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
+            $queryBuilder->setRestrictions(GeneralUtility::makeInstance(FrontendRestrictionContainer::class, $this->context));
+            if (empty($this->where_groupAccess)) {
+                $queryBuilder->getRestrictions()->removeByType(FrontendGroupRestriction::class);
+            }
+            $result = $queryBuilder->select('*')
+                ->from('pages')
+                ->where(
+                    $queryBuilder->expr()->eq(
+                        $GLOBALS['TCA']['pages']['ctrl']['transOrigPointerField'],
+                        $queryBuilder->createNamedParameter($pageId, \PDO::PARAM_INT)
+                    ),
+                    $queryBuilder->expr()->in(
+                        $GLOBALS['TCA']['pages']['ctrl']['languageField'],
+                        $queryBuilder->createNamedParameter($languageUids, Connection::PARAM_INT_ARRAY)
+                    )
+                )
+                ->execute();
+
+            // Create a list of rows ordered by values in $languageUids
+            while ($row = $result->fetch()) {
+                $orderedListByLanguages[$row[$languageField]] = $row;
+            }
+
+            foreach ($orderedListByLanguages as $languageUid => $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+
+                // Found a result for the current language id
+                $this->versionOL('pages', $row);
+                if (is_array($row)) {
+                    $row['_PAGES_OVERLAY'] = true;
+                    $row['_PAGES_OVERLAY_UID'] = $row['uid'];
+                    $row['_PAGES_OVERLAY_LANGUAGE'] = $languageUid;
+                    $row['_PAGES_OVERLAY_REQUESTEDLANGUAGE'] = $languageUids[0];
+                    // Unset vital fields that are NOT allowed to be overlaid:
+                    unset($row['uid'], $row['pid'], $row['alias']);
+                    $overlays[$pageId] = $row;
+
+                    // Language fallback found, stop querying further languages
+                    break;
+                }
+            }
+        }
+
+        return $overlays;
+    }
+
+    /**
      * Creates language-overlay for records in general (where translation is found
      * in records from the same table)
      *
@@ -516,98 +743,94 @@ class PageRepository
      */
     public function getRecordOverlay($table, $row, $sys_language_content, $OLmode = '')
     {
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_page.php']['getRecordOverlay'])) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_page.php']['getRecordOverlay'] as $classRef) {
-                $hookObject = GeneralUtility::getUserObj($classRef);
-                if (!$hookObject instanceof PageRepositoryGetRecordOverlayHookInterface) {
-                    throw new \UnexpectedValueException($classRef . ' must implement interface ' . PageRepositoryGetRecordOverlayHookInterface::class, 1269881658);
-                }
-                $hookObject->getRecordOverlay_preProcess($table, $row, $sys_language_content, $OLmode, $this);
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_page.php']['getRecordOverlay'] ?? [] as $className) {
+            $hookObject = GeneralUtility::makeInstance($className);
+            if (!$hookObject instanceof PageRepositoryGetRecordOverlayHookInterface) {
+                throw new \UnexpectedValueException($className . ' must implement interface ' . PageRepositoryGetRecordOverlayHookInterface::class, 1269881658);
             }
+            $hookObject->getRecordOverlay_preProcess($table, $row, $sys_language_content, $OLmode, $this);
         }
-        if ($row['uid'] > 0 && ($row['pid'] > 0 || in_array($table, $this->tableNamesAllowedOnRootLevel, true))) {
-            if ($GLOBALS['TCA'][$table] && $GLOBALS['TCA'][$table]['ctrl']['languageField'] && $GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField']) {
-                // Return record for ALL languages untouched
-                // TODO: Fix call stack to prevent this situation in the first place
-                if ($table !== 'pages_language_overlay' && (int)$row[$GLOBALS['TCA'][$table]['ctrl']['languageField']] !== -1) {
-                    // Will not be able to work with other tables (Just didn't implement it yet;
-                    // Requires a scan over all tables [ctrl] part for first FIND the table that
-                    // carries localization information for this table (which could even be more
-                    // than a single table) and then use that. Could be implemented, but obviously
-                    // takes a little more....) Will try to overlay a record only if the
-                    // sys_language_content value is larger than zero.
-                    if ($sys_language_content > 0) {
-                        // Must be default language, otherwise no overlaying
-                        if ((int)$row[$GLOBALS['TCA'][$table]['ctrl']['languageField']] === 0) {
-                            // Select overlay record:
-                            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
-                                ->getQueryBuilderForTable($table);
-                            $queryBuilder->setRestrictions(
-                                GeneralUtility::makeInstance(FrontendRestrictionContainer::class)
-                            );
-                            $olrow = $queryBuilder->select('*')
-                                ->from($table)
-                                ->where(
-                                    $queryBuilder->expr()->eq(
-                                        'pid',
-                                        $queryBuilder->createNamedParameter($row['pid'], \PDO::PARAM_INT)
-                                    ),
-                                    $queryBuilder->expr()->eq(
-                                        $GLOBALS['TCA'][$table]['ctrl']['languageField'],
-                                        $queryBuilder->createNamedParameter($sys_language_content, \PDO::PARAM_INT)
-                                    ),
-                                    $queryBuilder->expr()->eq(
-                                        $GLOBALS['TCA'][$table]['ctrl']['transOrigPointerField'],
-                                        $queryBuilder->createNamedParameter($row['uid'], \PDO::PARAM_INT)
-                                    )
-                                )
-                                ->setMaxResults(1)
-                                ->execute()
-                                ->fetch();
 
-                            $this->versionOL($table, $olrow);
-                            // Merge record content by traversing all fields:
-                            if (is_array($olrow)) {
-                                if (isset($olrow['_ORIG_uid'])) {
-                                    $row['_ORIG_uid'] = $olrow['_ORIG_uid'];
-                                }
-                                if (isset($olrow['_ORIG_pid'])) {
-                                    $row['_ORIG_pid'] = $olrow['_ORIG_pid'];
-                                }
-                                foreach ($row as $fN => $fV) {
-                                    if ($fN !== 'uid' && $fN !== 'pid' && isset($olrow[$fN])) {
-                                        $row[$fN] = $olrow[$fN];
-                                    } elseif ($fN === 'uid') {
-                                        $row['_LOCALIZED_UID'] = $olrow['uid'];
-                                    }
-                                }
-                            } elseif ($OLmode === 'hideNonTranslated' && (int)$row[$GLOBALS['TCA'][$table]['ctrl']['languageField']] === 0) {
-                                // Unset, if non-translated records should be hidden. ONLY done if the source
-                                // record really is default language and not [All] in which case it is allowed.
-                                unset($row);
+        $tableControl = $GLOBALS['TCA'][$table]['ctrl'] ?? [];
+
+        if (!empty($tableControl['languageField'])
+            // Return record for ALL languages untouched
+            // TODO: Fix call stack to prevent this situation in the first place
+            && (int)$row[$tableControl['languageField']] !== -1
+            && !empty($tableControl['transOrigPointerField'])
+            && $row['uid'] > 0
+            && ($row['pid'] > 0 || in_array($tableControl['rootLevel'] ?? false, [true, 1, -1], true))) {
+            // Will try to overlay a record only if the sys_language_content value is larger than zero.
+            if ($sys_language_content > 0) {
+                // Must be default language, otherwise no overlaying
+                if ((int)$row[$tableControl['languageField']] === 0) {
+                    // Select overlay record:
+                    $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
+                        ->getQueryBuilderForTable($table);
+                    $queryBuilder->setRestrictions(
+                        GeneralUtility::makeInstance(FrontendRestrictionContainer::class, $this->context)
+                    );
+                    $olrow = $queryBuilder->select('*')
+                        ->from($table)
+                        ->where(
+                            $queryBuilder->expr()->eq(
+                                'pid',
+                                $queryBuilder->createNamedParameter($row['pid'], \PDO::PARAM_INT)
+                            ),
+                            $queryBuilder->expr()->eq(
+                                $tableControl['languageField'],
+                                $queryBuilder->createNamedParameter($sys_language_content, \PDO::PARAM_INT)
+                            ),
+                            $queryBuilder->expr()->eq(
+                                $tableControl['transOrigPointerField'],
+                                $queryBuilder->createNamedParameter($row['uid'], \PDO::PARAM_INT)
+                            )
+                        )
+                        ->setMaxResults(1)
+                        ->execute()
+                        ->fetch();
+
+                    $this->versionOL($table, $olrow);
+                    // Merge record content by traversing all fields:
+                    if (is_array($olrow)) {
+                        if (isset($olrow['_ORIG_uid'])) {
+                            $row['_ORIG_uid'] = $olrow['_ORIG_uid'];
+                        }
+                        if (isset($olrow['_ORIG_pid'])) {
+                            $row['_ORIG_pid'] = $olrow['_ORIG_pid'];
+                        }
+                        foreach ($row as $fN => $fV) {
+                            if ($fN !== 'uid' && $fN !== 'pid' && isset($olrow[$fN])) {
+                                $row[$fN] = $olrow[$fN];
+                            } elseif ($fN === 'uid') {
+                                $row['_LOCALIZED_UID'] = $olrow['uid'];
                             }
-                        } elseif ($sys_language_content != $row[$GLOBALS['TCA'][$table]['ctrl']['languageField']]) {
-                            unset($row);
                         }
-                    } else {
-                        // When default language is displayed, we never want to return a record carrying
-                        // another language!
-                        if ($row[$GLOBALS['TCA'][$table]['ctrl']['languageField']] > 0) {
-                            unset($row);
-                        }
+                    } elseif ($OLmode === 'hideNonTranslated' && (int)$row[$tableControl['languageField']] === 0) {
+                        // Unset, if non-translated records should be hidden. ONLY done if the source
+                        // record really is default language and not [All] in which case it is allowed.
+                        unset($row);
                     }
+                } elseif ($sys_language_content != $row[$tableControl['languageField']]) {
+                    unset($row);
+                }
+            } else {
+                // When default language is displayed, we never want to return a record carrying
+                // another language!
+                if ($row[$tableControl['languageField']] > 0) {
+                    unset($row);
                 }
             }
         }
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_page.php']['getRecordOverlay'])) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_page.php']['getRecordOverlay'] as $classRef) {
-                $hookObject = GeneralUtility::getUserObj($classRef);
-                if (!$hookObject instanceof PageRepositoryGetRecordOverlayHookInterface) {
-                    throw new \UnexpectedValueException($classRef . ' must implement interface ' . PageRepositoryGetRecordOverlayHookInterface::class, 1269881659);
-                }
-                $hookObject->getRecordOverlay_postProcess($table, $row, $sys_language_content, $OLmode, $this);
+
+        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_page.php']['getRecordOverlay'] ?? [] as $className) {
+            $hookObject = GeneralUtility::makeInstance($className);
+            if (!$hookObject instanceof PageRepositoryGetRecordOverlayHookInterface) {
+                throw new \UnexpectedValueException($className . ' must implement interface ' . PageRepositoryGetRecordOverlayHookInterface::class, 1269881659);
             }
+            $hookObject->getRecordOverlay_postProcess($table, $row, $sys_language_content, $OLmode, $this);
         }
+
         return $row;
     }
 
@@ -627,11 +850,10 @@ class PageRepository
      * @param int|int[] $pageId The page id (or array of page ids) for which to fetch subpages (PID)
      * @param string $fields List of fields to select. Default is "*" = all
      * @param string $sortField The field to sort by. Default is "sorting
-     * @param string $additionalWhereClause Optional additional where clauses. Like "AND title like '%blabla%'" for instance.
+     * @param string $additionalWhereClause Optional additional where clauses. Like "AND title like '%some text%'" for instance.
      * @param bool $checkShortcuts Check if shortcuts exist, checks by default
      * @return array Array with key/value pairs; keys are page-uid numbers. values are the corresponding page records (with overlaid localized fields, if any)
-     * @see \TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController::getPageShortcut(), \TYPO3\CMS\Frontend\ContentObject\Menu\AbstractMenuContentObject::makeMenu()
-     * @see \TYPO3\CMS\WizardCrpages\Controller\CreatePagesWizardModuleFunctionController, \TYPO3\CMS\WizardSortpages\View\SortPagesWizardModuleFunction
+     * @see self::getPageShortcut(), \TYPO3\CMS\Frontend\ContentObject\Menu\AbstractMenuContentObject::makeMenu()
      */
     public function getMenu($pageId, $fields = '*', $sortField = 'sorting', $additionalWhereClause = '', $checkShortcuts = true)
     {
@@ -647,7 +869,7 @@ class PageRepository
      * @param int[] $pageIds Array of page ids to fetch
      * @param string $fields List of fields to select. Default is "*" = all
      * @param string $sortField The field to sort by. Default is "sorting"
-     * @param string $additionalWhereClause Optional additional where clauses. Like "AND title like '%blabla%'" for instance.
+     * @param string $additionalWhereClause Optional additional where clauses. Like "AND title like '%some text%'" for instance.
      * @param bool $checkShortcuts Check if shortcuts exist, checks by default
      * @return array Array with key/value pairs; keys are page-uid numbers. values are the corresponding page records (with overlaid localized fields, if any)
      */
@@ -657,27 +879,48 @@ class PageRepository
     }
 
     /**
-     * Internal method used by getMenu() and getMenuForPages()
-     * Returns an array with page rows for subpages with pid is in $pageIds or uid is in $pageIds, depending on $parentPages
-     * This is used for menus. If there are mount points in overlay mode
-     * the _MP_PARAM field is set to the correct MPvar.
+     * Loads page records either by PIDs or by UIDs.
      *
-     * If the $pageIds being input does in itself require MPvars to define a correct
-     * rootline these must be handled externally to this function.
+     * By default the subpages of the given page IDs are loaded (as the method name suggests). If $parentPages is set
+     * to FALSE, the page records for the given page IDs are loaded directly.
      *
-     * @param int[] $pageIds The page id (or array of page ids) for which to fetch subpages (PID)
-     * @param string $fields List of fields to select. Default is "*" = all
-     * @param string $sortField The field to sort by. Default is "sorting
-     * @param string $additionalWhereClause Optional additional where clauses. Like "AND title like '%blabla%'" for instance.
-     * @param bool $checkShortcuts Check if shortcuts exist, checks by default
-     * @param bool $parentPages Whether the uid list is meant as list of parent pages or the page itself TRUE means id list is checked against pid field
-     * @return array Array with key/value pairs; keys are page-uid numbers. values are the corresponding page records (with overlaid localized fields, if any)
-     * @see \TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController::getPageShortcut(), \TYPO3\CMS\Frontend\ContentObject\Menu\AbstractMenuContentObject::makeMenu()
-     * @see \TYPO3\CMS\WizardCrpages\Controller\CreatePagesWizardModuleFunctionController, \TYPO3\CMS\WizardSortpages\View\SortPagesWizardModuleFunction
+     * Concerning the rationale, please see these two other methods:
+     *
+     * @see PageRepository::getMenu()
+     * @see PageRepository::getMenuForPages()
+     *
+     * Version and language overlay are applied to the loaded records.
+     *
+     * If a record is a mount point in overlay mode, the the overlaying page record is returned in place of the
+     * record. The record is enriched by the field _MP_PARAM containing the mount point mapping for the mount
+     * point.
+     *
+     * The query can be customized by setting fields, sorting and additional WHERE clauses. If additional WHERE
+     * clauses are given, the clause must start with an operator, i.e: "AND title like '%some text%'".
+     *
+     * The keys of the returned page records are the page UIDs.
+     *
+     * CAUTION: In case of an overlaid mount point, it is the original UID.
+     *
+     * @param int[] $pageIds PIDs or UIDs to load records for
+     * @param string $fields fields to select
+     * @param string $sortField the field to sort by
+     * @param string $additionalWhereClause optional additional WHERE clause
+     * @param bool $checkShortcuts whether to check if shortcuts exist
+     * @param bool $parentPages Switch to load pages (false) or child pages (true).
+     * @return array page records
+     *
+     * @see self::getPageShortcut()
+     * @see \TYPO3\CMS\Frontend\ContentObject\Menu\AbstractMenuContentObject::makeMenu()
      */
-    protected function getSubpagesForPages(array $pageIds, $fields = '*', $sortField = 'sorting', $additionalWhereClause = '', $checkShortcuts = true, $parentPages = true)
-    {
-        $pages = [];
+    protected function getSubpagesForPages(
+        array $pageIds,
+        string $fields = '*',
+        string $sortField = 'sorting',
+        string $additionalWhereClause = '',
+        bool $checkShortcuts = true,
+        bool $parentPages = true
+    ): array {
         $relationField = $parentPages ? 'pid' : 'uid';
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
         $queryBuilder->getRestrictions()->removeAll();
@@ -689,6 +932,10 @@ class PageRepository
                     $relationField,
                     $queryBuilder->createNamedParameter($pageIds, Connection::PARAM_INT_ARRAY)
                 ),
+                $queryBuilder->expr()->eq(
+                    $GLOBALS['TCA']['pages']['ctrl']['languageField'],
+                    $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT)
+                ),
                 QueryHelper::stripLogicalOperatorPrefix($this->where_hid_del),
                 QueryHelper::stripLogicalOperatorPrefix($this->where_groupAccess),
                 QueryHelper::stripLogicalOperatorPrefix($additionalWhereClause)
@@ -697,11 +944,12 @@ class PageRepository
         if (!empty($sortField)) {
             $orderBy = QueryHelper::parseOrderBy($sortField);
             foreach ($orderBy as $order) {
-                $res->orderBy(...$order);
+                $res->addOrderBy($order[0], $order[1] ?? 'ASC');
             }
         }
         $result = $res->execute();
 
+        $pages = [];
         while ($page = $result->fetch()) {
             $originalUid = $page['uid'];
 
@@ -776,7 +1024,7 @@ class PageRepository
      * If shortcut, look up if the target exists and is currently visible
      *
      * @param array $page The page to check
-     * @param string $additionalWhereClause Optional additional where clauses. Like "AND title like '%blabla%'" for instance.
+     * @param string $additionalWhereClause Optional additional where clauses. Like "AND title like '%some text%'" for instance.
      * @return array
      */
     protected function checkValidShortcutOfPage(array $page, $additionalWhereClause)
@@ -833,19 +1081,93 @@ class PageRepository
         }
         return $page;
     }
+
+    /**
+     * Get page shortcut; Finds the records pointed to by input value $SC (the shortcut value)
+     *
+     * @param int $shortcutFieldValue The value of the "shortcut" field from the pages record
+     * @param int $shortcutMode The shortcut mode: 1 will select first subpage, 2 a random subpage, 3 the parent page; default is the page pointed to by $SC
+     * @param int $thisUid The current page UID of the page which is a shortcut
+     * @param int $iteration Safety feature which makes sure that the function is calling itself recursively max 20 times (since this function can find shortcuts to other shortcuts to other shortcuts...)
+     * @param array $pageLog An array filled with previous page uids tested by the function - new page uids are evaluated against this to avoid going in circles.
+     * @param bool $disableGroupCheck If true, the group check is disabled when fetching the target page (needed e.g. for menu generation)
+     *
+     * @throws \RuntimeException
+     * @throws ShortcutTargetPageNotFoundException
+     * @return mixed Returns the page record of the page that the shortcut pointed to.
+     * @internal
+     * @see getPageAndRootline()
+     */
+    public function getPageShortcut($shortcutFieldValue, $shortcutMode, $thisUid, $iteration = 20, $pageLog = [], $disableGroupCheck = false)
+    {
+        $idArray = GeneralUtility::intExplode(',', $shortcutFieldValue);
+        // Find $page record depending on shortcut mode:
+        switch ($shortcutMode) {
+            case self::SHORTCUT_MODE_FIRST_SUBPAGE:
+            case self::SHORTCUT_MODE_RANDOM_SUBPAGE:
+                $pageArray = $this->getMenu($idArray[0] ?: $thisUid, '*', 'sorting', 'AND pages.doktype<199 AND pages.doktype!=' . self::DOKTYPE_BE_USER_SECTION);
+                $pO = 0;
+                if ($shortcutMode == self::SHORTCUT_MODE_RANDOM_SUBPAGE && !empty($pageArray)) {
+                    $pO = (int)rand(0, count($pageArray) - 1);
+                }
+                $c = 0;
+                $page = [];
+                foreach ($pageArray as $pV) {
+                    if ($c === $pO) {
+                        $page = $pV;
+                        break;
+                    }
+                    $c++;
+                }
+                if (empty($page)) {
+                    $message = 'This page (ID ' . $thisUid . ') is of type "Shortcut" and configured to redirect to a subpage. However, this page has no accessible subpages.';
+                    throw new ShortcutTargetPageNotFoundException($message, 1301648328);
+                }
+                break;
+            case self::SHORTCUT_MODE_PARENT_PAGE:
+                $parent = $this->getPage($idArray[0] ?: $thisUid, $disableGroupCheck);
+                $page = $this->getPage($parent['pid'], $disableGroupCheck);
+                if (empty($page)) {
+                    $message = 'This page (ID ' . $thisUid . ') is of type "Shortcut" and configured to redirect to its parent page. However, the parent page is not accessible.';
+                    throw new ShortcutTargetPageNotFoundException($message, 1301648358);
+                }
+                break;
+            default:
+                $page = $this->getPage($idArray[0], $disableGroupCheck);
+                if (empty($page)) {
+                    $message = 'This page (ID ' . $thisUid . ') is of type "Shortcut" and configured to redirect to a page, which is not accessible (ID ' . $idArray[0] . ').';
+                    throw new ShortcutTargetPageNotFoundException($message, 1301648404);
+                }
+        }
+        // Check if short cut page was a shortcut itself, if so look up recursively:
+        if ($page['doktype'] == self::DOKTYPE_SHORTCUT) {
+            if (!in_array($page['uid'], $pageLog) && $iteration > 0) {
+                $pageLog[] = $page['uid'];
+                $page = $this->getPageShortcut($page['shortcut'], $page['shortcut_mode'], $page['uid'], $iteration - 1, $pageLog, $disableGroupCheck);
+            } else {
+                $pageLog[] = $page['uid'];
+                $message = 'Page shortcuts were looping in uids ' . implode(',', $pageLog) . '...!';
+                $this->logger->error($message);
+                throw new \RuntimeException($message, 1294587212);
+            }
+        }
+        // Return resulting page:
+        return $page;
+    }
+
     /**
      * Will find the page carrying the domain record matching the input domain.
-     * Might exit after sending a redirect-header IF a found domain record
-     * instructs to do so.
      *
      * @param string $domain Domain name to search for. Eg. "www.typo3.com". Typical the HTTP_HOST value.
      * @param string $path Path for the current script in domain. Eg. "/somedir/subdir". Typ. supplied by \TYPO3\CMS\Core\Utility\GeneralUtility::getIndpEnv('SCRIPT_NAME')
      * @param string $request_uri Request URI: Used to get parameters from if they should be appended. Typ. supplied by \TYPO3\CMS\Core\Utility\GeneralUtility::getIndpEnv('REQUEST_URI')
      * @return mixed If found, returns integer with page UID where found. Otherwise blank. Might exit if location-header is sent, see description.
      * @see \TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController::findDomainRecord()
+     * @deprecated will be removed in TYPO3 v10.0.
      */
     public function getDomainStartPage($domain, $path = '', $request_uri = '')
     {
+        trigger_error('This method will be removed in TYPO3 v10.0. As the SiteResolver middleware resolves the domain start page.', E_USER_DEPRECATED);
         $domain = explode(':', $domain);
         $domain = strtolower(preg_replace('/\\.$/', '', $domain[0]));
         // Removing extra trailing slashes
@@ -857,10 +1179,7 @@ class PageRepository
         $queryBuilder->getRestrictions()->removeAll();
         $row = $queryBuilder
             ->select(
-                'pages.uid',
-                'sys_domain.redirectTo',
-                'sys_domain.redirectHttpStatusCode',
-                'sys_domain.prepend_params'
+                'pages.uid'
             )
             ->from('pages')
             ->from('sys_domain')
@@ -890,24 +1209,7 @@ class PageRepository
         if (!$row) {
             return '';
         }
-
-        if ($row['redirectTo']) {
-            $redirectUrl = $row['redirectTo'];
-            if ($row['prepend_params']) {
-                $redirectUrl = rtrim($redirectUrl, '/');
-                $prependStr = ltrim(substr($request_uri, strlen($path)), '/');
-                $redirectUrl .= '/' . $prependStr;
-            }
-            $statusCode = (int)$row['redirectHttpStatusCode'];
-            if ($statusCode && defined(HttpUtility::class . '::HTTP_STATUS_' . $statusCode)) {
-                HttpUtility::redirect($redirectUrl, constant(HttpUtility::class . '::HTTP_STATUS_' . $statusCode));
-            } else {
-                HttpUtility::redirect($redirectUrl, HttpUtility::HTTP_STATUS_301);
-            }
-            die;
-        } else {
-            return $row['uid'];
-        }
+        return $row['uid'];
     }
 
     /**
@@ -929,10 +1231,12 @@ class PageRepository
      * @throws \RuntimeException
      * @return array Array with page records from the root line as values. The array is ordered with the outer records first and root record in the bottom. The keys are numeric but in reverse order. So if you traverse/sort the array by the numeric keys order you will get the order from root and out. If an error is found (like eternal looping or invalid mountpoint) it will return an empty array.
      * @see \TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController::getPageAndRootline()
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0.
      */
-    public function getRootLine($uid, $MP = '', $ignoreMPerrors = false)
+    public function getRootLine($uid, $MP = '', $ignoreMPerrors = null)
     {
-        $rootline = GeneralUtility::makeInstance(RootlineUtility::class, $uid, $MP, $this);
+        trigger_error('Calling PageRepository->getRootLine() will be removed in TYPO3 v10.0. Use RootlineUtility directly.', E_USER_DEPRECATED);
+        $rootline = GeneralUtility::makeInstance(RootlineUtility::class, $uid, $MP, $this->context);
         try {
             return $rootline->get();
         } catch (\RuntimeException $ex) {
@@ -942,8 +1246,9 @@ class PageRepository
                     $this->error_getRootLine_failPid = -1;
                 }
                 return [];
-            /** @see \TYPO3\CMS\Core\Utility\RootlineUtility::getRecordArray */
-            } elseif ($ex->getCode() === 1343589451) {
+            }
+            if ($ex->getCode() === 1343589451) {
+                /** @see \TYPO3\CMS\Core\Utility\RootlineUtility::getRecordArray */
                 return [];
             }
             throw $ex;
@@ -951,46 +1256,25 @@ class PageRepository
     }
 
     /**
-     * Creates a "path" string for the input root line array titles.
-     * Used for writing statistics.
-     *
-     * @param array $rl A rootline array!
-     * @param int $len The max length of each title from the rootline.
-     * @return string The path in the form "/page title/This is another pageti.../Another page
-     * @see \TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController::getConfigArray()
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    public function getPathFromRootline($rl, $len = 20)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $path = '';
-        if (is_array($rl)) {
-            $c = count($rl);
-            for ($a = 0; $a < $c; $a++) {
-                if ($rl[$a]['uid']) {
-                    $path .= '/' . GeneralUtility::fixed_lgd_cs(strip_tags($rl[$a]['title']), $len);
-                }
-            }
-        }
-        return $path;
-    }
-
-    /**
-     * Returns the URL type for the input page row IF the doktype is set to 3.
+     * Returns the redirect URL for the input page row IF the doktype is set to 3.
      *
      * @param array $pagerow The page row to return URL type for
-     * @return string|bool The URL from based on the data from "urltype" and "url". False if not found.
+     * @return string|bool The URL from based on the data from "pages:url". False if not found.
      * @see \TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController::initializeRedirectUrlHandlers()
      */
     public function getExtURL($pagerow)
     {
         if ((int)$pagerow['doktype'] === self::DOKTYPE_LINK) {
-            $redirectTo = $this->urltypes[$pagerow['urltype']] . $pagerow['url'];
-            // If relative path, prefix Site URL:
+            $redirectTo = $pagerow['url'];
             $uI = parse_url($redirectTo);
-            // Relative path assumed now.
-            if (!$uI['scheme'] && $redirectTo[0] !== '/') {
-                $redirectTo = GeneralUtility::getIndpEnv('TYPO3_SITE_URL') . $redirectTo;
+            // If relative path, prefix Site URL
+            // If it's a valid email without protocol, add "mailto:"
+            if (!($uI['scheme'] ?? false)) {
+                if (GeneralUtility::validEmail($redirectTo)) {
+                    $redirectTo = 'mailto:' . $redirectTo;
+                } elseif ($redirectTo[0] !== '/') {
+                    $redirectTo = GeneralUtility::getIndpEnv('TYPO3_SITE_URL') . $redirectTo;
+                }
             }
             return $redirectTo;
         }
@@ -1031,85 +1315,88 @@ class PageRepository
      */
     public function getMountPointInfo($pageId, $pageRec = false, $prevMountPids = [], $firstPageUid = 0)
     {
+        if (!$GLOBALS['TYPO3_CONF_VARS']['FE']['enable_mount_pids']) {
+            return false;
+        }
+        $cacheIdentifier = 'PageRepository_getMountPointInfo_' . $pageId;
+        $cache = $this->getRuntimeCache();
+        if ($cache->has($cacheIdentifier)) {
+            return $cache->get($cacheIdentifier);
+        }
         $result = false;
-        if ($GLOBALS['TYPO3_CONF_VARS']['FE']['enable_mount_pids']) {
-            if (isset($this->cache_getMountPointInfo[$pageId])) {
-                return $this->cache_getMountPointInfo[$pageId];
-            }
-            // Get pageRec if not supplied:
-            if (!is_array($pageRec)) {
-                $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
-                $queryBuilder->getRestrictions()
-                    ->removeAll()
-                    ->add(GeneralUtility::makeInstance(DeletedRestriction::class));
+        // Get pageRec if not supplied:
+        if (!is_array($pageRec)) {
+            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
+            $queryBuilder->getRestrictions()
+                ->removeAll()
+                ->add(GeneralUtility::makeInstance(DeletedRestriction::class));
 
-                $pageRec = $queryBuilder->select('uid', 'pid', 'doktype', 'mount_pid', 'mount_pid_ol', 't3ver_state')
-                    ->from('pages')
-                    ->where(
-                        $queryBuilder->expr()->eq(
-                            'uid',
-                            $queryBuilder->createNamedParameter($pageId, \PDO::PARAM_INT)
-                        ),
-                        $queryBuilder->expr()->neq(
-                            'doktype',
-                            $queryBuilder->createNamedParameter(255, \PDO::PARAM_INT)
-                        )
+            $pageRec = $queryBuilder->select('uid', 'pid', 'doktype', 'mount_pid', 'mount_pid_ol', 't3ver_state')
+                ->from('pages')
+                ->where(
+                    $queryBuilder->expr()->eq(
+                        'uid',
+                        $queryBuilder->createNamedParameter($pageId, \PDO::PARAM_INT)
+                    ),
+                    $queryBuilder->expr()->neq(
+                        'doktype',
+                        $queryBuilder->createNamedParameter(255, \PDO::PARAM_INT)
                     )
-                    ->execute()
-                    ->fetch();
+                )
+                ->execute()
+                ->fetch();
 
-                // Only look for version overlay if page record is not supplied; This assumes
-                // that the input record is overlaid with preview version, if any!
-                $this->versionOL('pages', $pageRec);
-            }
-            // Set first Page uid:
-            if (!$firstPageUid) {
-                $firstPageUid = $pageRec['uid'];
-            }
-            // Look for mount pid value plus other required circumstances:
-            $mount_pid = (int)$pageRec['mount_pid'];
-            if (is_array($pageRec) && (int)$pageRec['doktype'] === self::DOKTYPE_MOUNTPOINT && $mount_pid > 0 && !in_array($mount_pid, $prevMountPids, true)) {
-                // Get the mount point record (to verify its general existence):
-                $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
-                $queryBuilder->getRestrictions()
-                    ->removeAll()
-                    ->add(GeneralUtility::makeInstance(DeletedRestriction::class));
+            // Only look for version overlay if page record is not supplied; This assumes
+            // that the input record is overlaid with preview version, if any!
+            $this->versionOL('pages', $pageRec);
+        }
+        // Set first Page uid:
+        if (!$firstPageUid) {
+            $firstPageUid = $pageRec['uid'];
+        }
+        // Look for mount pid value plus other required circumstances:
+        $mount_pid = (int)$pageRec['mount_pid'];
+        if (is_array($pageRec) && (int)$pageRec['doktype'] === self::DOKTYPE_MOUNTPOINT && $mount_pid > 0 && !in_array($mount_pid, $prevMountPids, true)) {
+            // Get the mount point record (to verify its general existence):
+            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
+            $queryBuilder->getRestrictions()
+                ->removeAll()
+                ->add(GeneralUtility::makeInstance(DeletedRestriction::class));
 
-                $mountRec = $queryBuilder->select('uid', 'pid', 'doktype', 'mount_pid', 'mount_pid_ol', 't3ver_state')
-                    ->from('pages')
-                    ->where(
-                        $queryBuilder->expr()->eq(
-                            'uid',
-                            $queryBuilder->createNamedParameter($mount_pid, \PDO::PARAM_INT)
-                        ),
-                        $queryBuilder->expr()->neq(
-                            'doktype',
-                            $queryBuilder->createNamedParameter(255, \PDO::PARAM_INT)
-                        )
+            $mountRec = $queryBuilder->select('uid', 'pid', 'doktype', 'mount_pid', 'mount_pid_ol', 't3ver_state')
+                ->from('pages')
+                ->where(
+                    $queryBuilder->expr()->eq(
+                        'uid',
+                        $queryBuilder->createNamedParameter($mount_pid, \PDO::PARAM_INT)
+                    ),
+                    $queryBuilder->expr()->neq(
+                        'doktype',
+                        $queryBuilder->createNamedParameter(255, \PDO::PARAM_INT)
                     )
-                    ->execute()
-                    ->fetch();
+                )
+                ->execute()
+                ->fetch();
 
-                $this->versionOL('pages', $mountRec);
-                if (is_array($mountRec)) {
-                    // Look for recursive mount point:
-                    $prevMountPids[] = $mount_pid;
-                    $recursiveMountPid = $this->getMountPointInfo($mount_pid, $mountRec, $prevMountPids, $firstPageUid);
-                    // Return mount point information:
-                    $result = $recursiveMountPid ?: [
-                        'mount_pid' => $mount_pid,
-                        'overlay' => $pageRec['mount_pid_ol'],
-                        'MPvar' => $mount_pid . '-' . $firstPageUid,
-                        'mount_point_rec' => $pageRec,
-                        'mount_pid_rec' => $mountRec
-                    ];
-                } else {
-                    // Means, there SHOULD have been a mount point, but there was none!
-                    $result = -1;
-                }
+            $this->versionOL('pages', $mountRec);
+            if (is_array($mountRec)) {
+                // Look for recursive mount point:
+                $prevMountPids[] = $mount_pid;
+                $recursiveMountPid = $this->getMountPointInfo($mount_pid, $mountRec, $prevMountPids, $firstPageUid);
+                // Return mount point information:
+                $result = $recursiveMountPid ?: [
+                    'mount_pid' => $mount_pid,
+                    'overlay' => $pageRec['mount_pid_ol'],
+                    'MPvar' => $mount_pid . '-' . $firstPageUid,
+                    'mount_point_rec' => $pageRec,
+                    'mount_pid_rec' => $mountRec
+                ];
+            } else {
+                // Means, there SHOULD have been a mount point, but there was none!
+                $result = -1;
             }
         }
-        $this->cache_getMountPointInfo[$pageId] = $result;
+        $cache->set($cacheIdentifier, $result);
         return $result;
     }
 
@@ -1133,7 +1420,7 @@ class PageRepository
         $uid = (int)$uid;
         if (is_array($GLOBALS['TCA'][$table]) && $uid > 0) {
             $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
-            $queryBuilder->setRestrictions(GeneralUtility::makeInstance(FrontendRestrictionContainer::class));
+            $queryBuilder->setRestrictions(GeneralUtility::makeInstance(FrontendRestrictionContainer::class, $this->context));
             $row = $queryBuilder->select('*')
                 ->from($table)
                 ->where($queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($uid, \PDO::PARAM_INT)))
@@ -1146,7 +1433,7 @@ class PageRepository
                     if ($checkPage) {
                         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
                             ->getQueryBuilderForTable('pages');
-                        $queryBuilder->setRestrictions(GeneralUtility::makeInstance(FrontendRestrictionContainer::class));
+                        $queryBuilder->setRestrictions(GeneralUtility::makeInstance(FrontendRestrictionContainer::class, $this->context));
                         $numRows = (int)$queryBuilder->count('*')
                             ->from('pages')
                             ->where(
@@ -1159,12 +1446,10 @@ class PageRepository
                             ->fetchColumn();
                         if ($numRows > 0) {
                             return $row;
-                        } else {
-                            return 0;
                         }
-                    } else {
-                        return $row;
+                        return 0;
                     }
+                    return $row;
                 }
             }
         }
@@ -1181,7 +1466,7 @@ class PageRepository
      * @return mixed Returns array (the record) if found, otherwise blank/0 (zero)
      * @see getPage_noCheck()
      */
-    public function getRawRecord($table, $uid, $fields = '*', $noWSOL = false)
+    public function getRawRecord($table, $uid, $fields = '*', $noWSOL = null)
     {
         $uid = (int)$uid;
         if (isset($GLOBALS['TCA'][$table]) && is_array($GLOBALS['TCA'][$table]) && $uid > 0) {
@@ -1196,6 +1481,10 @@ class PageRepository
                 ->fetch();
 
             if ($row) {
+                if ($noWSOL !== null) {
+                    trigger_error('The fourth parameter of PageRepository->getRawRecord() will be removed in TYPO3 v10.0. Use a SQL statement directly.', E_USER_DEPRECATED);
+                }
+                // @deprecated - remove this if-clause in TYPO3 v10.0
                 if (!$noWSOL) {
                     $this->versionOL($table, $row);
                 }
@@ -1218,9 +1507,11 @@ class PageRepository
      * @param string $orderBy Optional ORDER BY field(s). If none, supply blank string.
      * @param string $limit Optional LIMIT value ([begin,]max). If none, supply blank string.
      * @return mixed Returns array (the record) if found, otherwise nothing (void)
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0
      */
     public function getRecordsByField($theTable, $theField, $theValue, $whereClause = '', $groupBy = '', $orderBy = '', $limit = '')
     {
+        trigger_error('PageRepository->getRecordsByField() should not be used any longer, this method will be removed in TYPO3 v10.0.', E_USER_DEPRECATED);
         if (is_array($GLOBALS['TCA'][$theTable])) {
             $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($theTable);
             $queryBuilder->getRestrictions()
@@ -1241,7 +1532,7 @@ class PageRepository
 
             if ($orderBy !== '') {
                 foreach (QueryHelper::parseOrderBy($orderBy) as $orderPair) {
-                    list($fieldName, $order) = $orderPair;
+                    [$fieldName, $order] = $orderPair;
                     $queryBuilder->addOrderBy($fieldName, $order);
                 }
             }
@@ -1267,54 +1558,9 @@ class PageRepository
 
     /********************************
      *
-     * Caching and standard clauses
+     * Standard clauses
      *
      ********************************/
-
-    /**
-     * Returns data stored for the hash string in the cache "cache_hash"
-     * Can be used to retrieved a cached value, array or object
-     * Can be used from your frontend plugins if you like. It is also used to
-     * store the parsed TypoScript template structures. You can call it directly
-     * like PageRepository::getHash()
-     *
-     * @param string $hash The hash-string which was used to store the data value
-     * @return mixed The "data" from the cache
-     * @see tslib_TStemplate::start(), storeHash()
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9, please use the Cache Manager directly to fetch cache entries
-     */
-    public static function getHash($hash)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        $hashContent = null;
-        /** @var \TYPO3\CMS\Core\Cache\Frontend\FrontendInterface $contentHashCache */
-        $contentHashCache = GeneralUtility::makeInstance(CacheManager::class)->getCache('cache_hash');
-        $cacheEntry = $contentHashCache->get($hash);
-        if ($cacheEntry) {
-            $hashContent = $cacheEntry;
-        }
-        return $hashContent;
-    }
-
-    /**
-     * Stores $data in the 'cache_hash' cache with the hash key, $hash
-     * and visual/symbolic identification, $ident
-     *
-     * Can be used from your frontend plugins if you like. You can call it
-     * directly like PageRepository::storeHash()
-     *
-     * @param string $hash 32 bit hash string (eg. a md5 hash of a serialized array identifying the data being stored)
-     * @param mixed $data The data to store
-     * @param string $ident Is just a textual identification in order to inform about the content!
-     * @param int $lifetime The lifetime for the cache entry in seconds
-     * @see tslib_TStemplate::start(), getHash()
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9, please use the Cache Manager directly to store cache entries
-     */
-    public static function storeHash($hash, $data, $ident, $lifetime = 0)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        GeneralUtility::makeInstance(CacheManager::class)->getCache('cache_hash')->set($hash, $data, ['ident_' . $ident], (int)$lifetime);
-    }
 
     /**
      * Returns the "AND NOT deleted" clause for the tablename given IF
@@ -1323,9 +1569,11 @@ class PageRepository
      * @param string $table Tablename
      * @return string
      * @see enableFields()
+     * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, use QueryBuilders' Restrictions directly instead.
      */
     public function deleteClause($table)
     {
+        trigger_error('PageRepository->deleteClause() will be removed in TYPO3 v10.0. The delete clause can be applied via the DeletedRestrictions via QueryBuilder.', E_USER_DEPRECATED);
         return $GLOBALS['TCA'][$table]['ctrl']['delete'] ? ' AND ' . $table . '.' . $GLOBALS['TCA'][$table]['ctrl']['delete'] . '=0' : '';
     }
 
@@ -1344,22 +1592,16 @@ class PageRepository
      * @param bool $noVersionPreview If set, enableFields will be applied regardless of any versioning preview settings which might otherwise disable enableFields
      * @throws \InvalidArgumentException
      * @return string The clause starting like " AND ...=... AND ...=...
-     * @see \TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer::enableFields(), deleteClause()
+     * @see \TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer::enableFields()
      */
     public function enableFields($table, $show_hidden = -1, $ignore_array = [], $noVersionPreview = false)
     {
-        if ($show_hidden === -1 && is_object($this->getTypoScriptFrontendController())) {
-            // If show_hidden was not set from outside and if TSFE is an object, set it
-            // based on showHiddenPage and showHiddenRecords from TSFE
-            $show_hidden = $table === 'pages' || $table === 'pages_language_overlay'
-                ? $this->getTypoScriptFrontendController()->showHiddenPage
-                : $this->getTypoScriptFrontendController()->showHiddenRecords;
-        }
         if ($show_hidden === -1) {
-            $show_hidden = 0;
+            // If show_hidden was not set from outside, use the current context
+            $show_hidden = (int)$this->context->getPropertyFromAspect('visibility', $table === 'pages' ? 'includeHiddenPages' : 'includeHiddenContent', false);
         }
         // If show_hidden was not changed during the previous evaluation, do it here.
-        $ctrl = $GLOBALS['TCA'][$table]['ctrl'];
+        $ctrl = $GLOBALS['TCA'][$table]['ctrl'] ?? null;
         $expressionBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
             ->getQueryBuilderForTable($table)
             ->expr();
@@ -1369,8 +1611,8 @@ class PageRepository
             if ($ctrl['delete']) {
                 $constraints[] = $expressionBuilder->eq($table . '.' . $ctrl['delete'], 0);
             }
-            if ($ctrl['versioningWS']) {
-                if (!$this->versioningPreview) {
+            if ($ctrl['versioningWS'] ?? false) {
+                if (!$this->versioningWorkspaceId > 0) {
                     // Filter out placeholder records (new/moved/deleted items)
                     // in case we are NOT in a versioning preview (that means we are online!)
                     $constraints[] = $expressionBuilder->lte(
@@ -1396,23 +1638,29 @@ class PageRepository
             if (is_array($ctrl['enablecolumns'])) {
                 // In case of versioning-preview, enableFields are ignored (checked in
                 // versionOL())
-                if (!$this->versioningPreview || !$ctrl['versioningWS'] || $noVersionPreview) {
-                    if ($ctrl['enablecolumns']['disabled'] && !$show_hidden && !$ignore_array['disabled']) {
+                if ($this->versioningWorkspaceId <= 0 || !$ctrl['versioningWS'] || $noVersionPreview) {
+                    if (($ctrl['enablecolumns']['disabled'] ?? false) && !$show_hidden && !($ignore_array['disabled'] ?? false)) {
                         $field = $table . '.' . $ctrl['enablecolumns']['disabled'];
                         $constraints[] = $expressionBuilder->eq($field, 0);
                     }
-                    if ($ctrl['enablecolumns']['starttime'] && !$ignore_array['starttime']) {
+                    if (($ctrl['enablecolumns']['starttime'] ?? false) && !($ignore_array['starttime'] ?? false)) {
                         $field = $table . '.' . $ctrl['enablecolumns']['starttime'];
-                        $constraints[] = $expressionBuilder->lte($field, (int)$GLOBALS['SIM_ACCESS_TIME']);
+                        $constraints[] = $expressionBuilder->lte(
+                            $field,
+                            $this->context->getPropertyFromAspect('date', 'accessTime', 0)
+                        );
                     }
-                    if ($ctrl['enablecolumns']['endtime'] && !$ignore_array['endtime']) {
+                    if (($ctrl['enablecolumns']['endtime'] ?? false) && !($ignore_array['endtime'] ?? false)) {
                         $field = $table . '.' . $ctrl['enablecolumns']['endtime'];
                         $constraints[] = $expressionBuilder->orX(
                             $expressionBuilder->eq($field, 0),
-                            $expressionBuilder->gt($field, (int)$GLOBALS['SIM_ACCESS_TIME'])
+                            $expressionBuilder->gt(
+                                $field,
+                                $this->context->getPropertyFromAspect('date', 'accessTime', 0)
+                            )
                         );
                     }
-                    if ($ctrl['enablecolumns']['fe_group'] && !$ignore_array['fe_group']) {
+                    if (($ctrl['enablecolumns']['fe_group'] ?? false) && !($ignore_array['fe_group'] ?? false)) {
                         $field = $table . '.' . $ctrl['enablecolumns']['fe_group'];
                         $constraints[] = QueryHelper::stripLogicalOperatorPrefix(
                             $this->getMultipleGroupsWhereClause($field, $table)
@@ -1421,18 +1669,16 @@ class PageRepository
                     // Call hook functions for additional enableColumns
                     // It is used by the extension ingmar_accessctrl which enables assigning more
                     // than one usergroup to content and page records
-                    if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_page.php']['addEnableColumns'])) {
-                        $_params = [
-                            'table' => $table,
-                            'show_hidden' => $show_hidden,
-                            'ignore_array' => $ignore_array,
-                            'ctrl' => $ctrl
-                        ];
-                        foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_page.php']['addEnableColumns'] as $_funcRef) {
-                            $constraints[] = QueryHelper::stripLogicalOperatorPrefix(
-                                GeneralUtility::callUserFunction($_funcRef, $_params, $this)
-                            );
-                        }
+                    $_params = [
+                        'table' => $table,
+                        'show_hidden' => $show_hidden,
+                        'ignore_array' => $ignore_array,
+                        'ctrl' => $ctrl
+                    ];
+                    foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_page.php']['addEnableColumns'] ?? [] as $_funcRef) {
+                        $constraints[] = QueryHelper::stripLogicalOperatorPrefix(
+                            GeneralUtility::callUserFunction($_funcRef, $_params, $this)
+                        );
                     }
                 }
             }
@@ -1454,10 +1700,21 @@ class PageRepository
      */
     public function getMultipleGroupsWhereClause($field, $table)
     {
+        if (!$this->context->hasAspect('frontend.user')) {
+            return '';
+        }
+        /** @var UserAspect $userAspect */
+        $userAspect = $this->context->getAspect('frontend.user');
+        $memberGroups = $userAspect->getGroupIds();
+        $cache = $this->getRuntimeCache();
+        $cacheIdentifier = 'PageRepository_groupAccessWhere_' . md5($field . '_' . $table . '_' . implode('_', $memberGroups));
+        $cacheEntry = $cache->get($cacheIdentifier);
+        if ($cacheEntry) {
+            return $cacheEntry;
+        }
         $expressionBuilder = GeneralUtility::makeInstance(ConnectionPool::class)
             ->getQueryBuilderForTable($table)
             ->expr();
-        $memberGroups = GeneralUtility::intExplode(',', $this->getTypoScriptFrontendController()->gr_list);
         $orChecks = [];
         // If the field is empty, then OK
         $orChecks[] = $expressionBuilder->eq($field, $expressionBuilder->literal(''));
@@ -1469,7 +1726,9 @@ class PageRepository
             $orChecks[] = $expressionBuilder->inSet($field, $expressionBuilder->literal($value));
         }
 
-        return' AND (' . $expressionBuilder->orX(...$orChecks) . ')';
+        $accessGroupWhere = ' AND (' . $expressionBuilder->orX(...$orChecks) . ')';
+        $cache->set($cacheIdentifier, $accessGroupWhere);
+        return $accessGroupWhere;
     }
 
     /**********************
@@ -1498,7 +1757,7 @@ class PageRepository
      */
     public function fixVersioningPid($table, &$rr)
     {
-        if ($this->versioningPreview && is_array($rr) && (int)$rr['pid'] === -1 && $GLOBALS['TCA'][$table]['ctrl']['versioningWS']) {
+        if ($this->versioningWorkspaceId > 0 && is_array($rr) && (int)$rr['pid'] === -1 && $GLOBALS['TCA'][$table]['ctrl']['versioningWS']) {
             $oid = 0;
             $wsid = 0;
             // Check values for t3ver_oid and t3ver_wsid:
@@ -1509,16 +1768,37 @@ class PageRepository
             } else {
                 // Otherwise we have to expect "uid" to be in the record and look up based
                 // on this:
-                $newPidRec = $this->getRawRecord($table, $rr['uid'], 't3ver_oid,t3ver_wsid', true);
-                if (is_array($newPidRec)) {
-                    $oid = $newPidRec['t3ver_oid'];
-                    $wsid = $newPidRec['t3ver_wsid'];
+                $uid = (int)$rr['uid'];
+                if ($uid > 0) {
+                    $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
+                    $queryBuilder->getRestrictions()
+                        ->removeAll()
+                        ->add(GeneralUtility::makeInstance(DeletedRestriction::class));
+                    $newPidRec = $queryBuilder->select('t3ver_oid', 't3ver_wsid')
+                        ->from($table)
+                        ->where($queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($uid, \PDO::PARAM_INT)))
+                        ->execute()
+                        ->fetch();
+
+                    if (is_array($newPidRec)) {
+                        $oid = $newPidRec['t3ver_oid'];
+                        $wsid = $newPidRec['t3ver_wsid'];
+                    }
                 }
             }
             // If workspace ids matches and ID of current online version is found, look up
             // the PID value of that:
-            if ($oid && ((int)$this->versioningWorkspaceId === 0 && $this->checkWorkspaceAccess($wsid) || (int)$wsid === (int)$this->versioningWorkspaceId)) {
-                $oidRec = $this->getRawRecord($table, $oid, 'pid', true);
+            if ($oid && (int)$wsid === (int)$this->versioningWorkspaceId) {
+                $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
+                $queryBuilder->getRestrictions()
+                    ->removeAll()
+                    ->add(GeneralUtility::makeInstance(DeletedRestriction::class));
+                $oidRec = $queryBuilder->select('pid')
+                    ->from($table)
+                    ->where($queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($oid, \PDO::PARAM_INT)))
+                    ->execute()
+                    ->fetch();
+
                 if (is_array($oidRec)) {
                     // SWAP uid as well? Well no, because when fixing a versioning PID happens it is
                     // assumed that this is a "branch" type page and therefore the uid should be
@@ -1557,7 +1837,7 @@ class PageRepository
      */
     public function versionOL($table, &$row, $unsetMovePointers = false, $bypassEnableFieldsCheck = false)
     {
-        if ($this->versioningPreview && is_array($row)) {
+        if ($this->versioningWorkspaceId > 0 && is_array($row)) {
             // will overlay any movePlhOL found with the real record, which in turn
             // will be overlaid with its workspace version if any.
             $movePldSwap = $this->movePlhOL($table, $row);
@@ -1585,7 +1865,7 @@ class PageRepository
                     // Changing input record to the workspace version alternative:
                     $row = $wsAlt;
                     // Check if it is deleted/new
-                    $rowVersionState = VersionState::cast($row['t3ver_state']);
+                    $rowVersionState = VersionState::cast($row['t3ver_state'] ?? null);
                     if (
                         $rowVersionState->equals(VersionState::NEW_PLACEHOLDER)
                         || $rowVersionState->equals(VersionState::DELETE_PLACEHOLDER)
@@ -1598,7 +1878,8 @@ class PageRepository
                     // You have to specifically set $unsetMovePointers in order to clear these
                     // because it is normally a display issue if it should be shown or not.
                     if (
-                        ($rowVersionState->equals(VersionState::MOVE_POINTER)
+                        (
+                            $rowVersionState->equals(VersionState::MOVE_POINTER)
                             && !$movePldSwap
                         ) && $unsetMovePointers
                     ) {
@@ -1632,22 +1913,37 @@ class PageRepository
      * @return bool TRUE if overlay is made.
      * @see BackendUtility::movePlhOl()
      */
-    public function movePlhOL($table, &$row)
+    protected function movePlhOL($table, &$row)
     {
         if (!empty($GLOBALS['TCA'][$table]['ctrl']['versioningWS'])
             && (int)VersionState::cast($row['t3ver_state'])->equals(VersionState::MOVE_PLACEHOLDER)
         ) {
+            $moveID = 0;
             // If t3ver_move_id is not found, then find it (but we like best if it is here)
             if (!isset($row['t3ver_move_id'])) {
-                $moveIDRec = $this->getRawRecord($table, $row['uid'], 't3ver_move_id', true);
-                $moveID = $moveIDRec['t3ver_move_id'];
+                if ((int)$row['uid'] > 0) {
+                    $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
+                    $queryBuilder->getRestrictions()
+                        ->removeAll()
+                        ->add(GeneralUtility::makeInstance(DeletedRestriction::class));
+                    $moveIDRec = $queryBuilder->select('t3ver_move_id')
+                        ->from($table)
+                        ->where($queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($row['uid'], \PDO::PARAM_INT)))
+                        ->execute()
+                        ->fetch();
+
+                    if (is_array($moveIDRec)) {
+                        $moveID = $moveIDRec['t3ver_move_id'];
+                    }
+                }
             } else {
                 $moveID = $row['t3ver_move_id'];
             }
             // Find pointed-to record.
             if ($moveID) {
                 $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
-                $queryBuilder->setRestrictions(GeneralUtility::makeInstance(FrontendRestrictionContainer::class));
+                $queryBuilder->setRestrictions(GeneralUtility::makeInstance(FrontendRestrictionContainer::class, $this->context));
+                $queryBuilder->getRestrictions()->removeByType(HiddenRestriction::class);
                 $origRow = $queryBuilder->select(...array_keys($this->purgeComputedProperties($row)))
                     ->from($table)
                     ->where(
@@ -1678,44 +1974,42 @@ class PageRepository
      * @return array If found, the record, otherwise nothing.
      * @see BackendUtility::getMovePlaceholder()
      */
-    public function getMovePlaceholder($table, $uid, $fields = '*')
+    protected function getMovePlaceholder($table, $uid, $fields = '*')
     {
-        if ($this->versioningPreview) {
-            $workspace = (int)$this->versioningWorkspaceId;
-            if (!empty($GLOBALS['TCA'][$table]['ctrl']['versioningWS']) && $workspace !== 0) {
-                // Select workspace version of record:
-                $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
-                $queryBuilder->getRestrictions()
-                    ->removeAll()
-                    ->add(GeneralUtility::makeInstance(DeletedRestriction::class));
+        $workspace = (int)$this->versioningWorkspaceId;
+        if (!empty($GLOBALS['TCA'][$table]['ctrl']['versioningWS']) && $workspace > 0) {
+            // Select workspace version of record:
+            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
+            $queryBuilder->getRestrictions()
+                ->removeAll()
+                ->add(GeneralUtility::makeInstance(DeletedRestriction::class));
 
-                $row = $queryBuilder->select(...GeneralUtility::trimExplode(',', $fields, true))
-                    ->from($table)
-                    ->where(
-                        $queryBuilder->expr()->neq('pid', $queryBuilder->createNamedParameter(-1, \PDO::PARAM_INT)),
-                        $queryBuilder->expr()->eq(
-                            't3ver_state',
-                            $queryBuilder->createNamedParameter(
-                                (string)VersionState::cast(VersionState::MOVE_PLACEHOLDER),
-                                \PDO::PARAM_INT
-                            )
-                        ),
-                        $queryBuilder->expr()->eq(
-                            't3ver_move_id',
-                            $queryBuilder->createNamedParameter($uid, \PDO::PARAM_INT)
-                        ),
-                        $queryBuilder->expr()->eq(
-                            't3ver_wsid',
-                            $queryBuilder->createNamedParameter($workspace, \PDO::PARAM_INT)
+            $row = $queryBuilder->select(...GeneralUtility::trimExplode(',', $fields, true))
+                ->from($table)
+                ->where(
+                    $queryBuilder->expr()->neq('pid', $queryBuilder->createNamedParameter(-1, \PDO::PARAM_INT)),
+                    $queryBuilder->expr()->eq(
+                        't3ver_state',
+                        $queryBuilder->createNamedParameter(
+                            (string)VersionState::cast(VersionState::MOVE_PLACEHOLDER),
+                            \PDO::PARAM_INT
                         )
+                    ),
+                    $queryBuilder->expr()->eq(
+                        't3ver_move_id',
+                        $queryBuilder->createNamedParameter($uid, \PDO::PARAM_INT)
+                    ),
+                    $queryBuilder->expr()->eq(
+                        't3ver_wsid',
+                        $queryBuilder->createNamedParameter($workspace, \PDO::PARAM_INT)
                     )
-                    ->setMaxResults(1)
-                    ->execute()
-                    ->fetch();
+                )
+                ->setMaxResults(1)
+                ->execute()
+                ->fetch();
 
-                if (is_array($row)) {
-                    return $row;
-                }
+            if (is_array($row)) {
+                return $row;
             }
         }
         return false;
@@ -1763,7 +2057,7 @@ class PageRepository
             // If version found, check if it could have been selected with enableFields on
             // as well:
             $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
-            $queryBuilder->setRestrictions(GeneralUtility::makeInstance(FrontendRestrictionContainer::class));
+            $queryBuilder->setRestrictions(GeneralUtility::makeInstance(FrontendRestrictionContainer::class, $this->context));
             // Remove the frontend workspace restriction because we are testing a version record
             $queryBuilder->getRestrictions()->removeByType(FrontendWorkspaceRestriction::class);
             $queryBuilder->select('uid')
@@ -1785,24 +2079,21 @@ class PageRepository
                 if ($bypassEnableFieldsCheck || $queryBuilder->execute()->fetchColumn()) {
                     // Return offline version, tested for its enableFields.
                     return $newrow;
-                } else {
-                    // Return -1 because offline version was de-selected due to its enableFields.
-                    return -1;
                 }
-            } else {
-                // OK, so no workspace version was found. Then check if online version can be
-                // selected with full enable fields and if so, return 1:
-                $queryBuilder->where(
-                    $queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($uid, \PDO::PARAM_INT))
-                );
-                if ($bypassEnableFieldsCheck || $queryBuilder->execute()->fetchColumn()) {
-                    // Means search was done, but no version found.
-                    return 1;
-                } else {
-                    // Return -2 because the online record was de-selected due to its enableFields.
-                    return -2;
-                }
+                // Return -1 because offline version was de-selected due to its enableFields.
+                return -1;
             }
+            // OK, so no workspace version was found. Then check if online version can be
+            // selected with full enable fields and if so, return 1:
+            $queryBuilder->where(
+                $queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($uid, \PDO::PARAM_INT))
+            );
+            if ($bypassEnableFieldsCheck || $queryBuilder->execute()->fetchColumn()) {
+                // Means search was done, but no version found.
+                return 1;
+            }
+            // Return -2 because the online record was de-selected due to its enableFields.
+            return -2;
         }
         // No look up in database because versioning not enabled / or workspace not
         // offline
@@ -1814,9 +2105,11 @@ class PageRepository
      *
      * @param int $wsid Workspace ID
      * @return bool true if the backend user has access to a certain workspace
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0. Use $BE_USER->checkWorkspace() directly if necessary.
      */
     public function checkWorkspaceAccess($wsid)
     {
+        trigger_error('PageRepository->checkWorkspaceAccess() will be removed in TYPO3 v10.0.', E_USER_DEPRECATED);
         if (!$this->getBackendUser() || !ExtensionManagementUtility::isLoaded('workspaces')) {
             return false;
         }
@@ -1833,10 +2126,12 @@ class PageRepository
      * @param string $fieldName Name of the field
      * @param array $element The parent element referencing to files
      * @return array
+     * @deprecated since TYPO3 v9.4, will be removed in TYPO3 v10.0
      */
     public function getFileReferences($tableName, $fieldName, array $element)
     {
-        /** @var $fileRepository FileRepository */
+        trigger_error('PageRepository->getFileReferences() should not be used any longer, this method will be removed in TYPO3 v10.0.', E_USER_DEPRECATED);
+        /** @var FileRepository $fileRepository */
         $fileRepository = GeneralUtility::makeInstance(FileRepository::class);
         $currentId = !empty($element['uid']) ? $element['uid'] : 0;
 
@@ -1855,7 +2150,7 @@ class PageRepository
              * Log the exception message for admins as they maybe can restore the storage
              */
             $logMessage = $e->getMessage() . ' (table: "' . $tableName . '", fieldName: "' . $fieldName . '", currentId: ' . $currentId . ')';
-            GeneralUtility::sysLog($logMessage, 'core', GeneralUtility::SYSLOG_SEVERITY_ERROR);
+            $this->logger->error($logMessage, ['exception' => $e]);
             return [];
         }
 
@@ -1864,10 +2159,6 @@ class PageRepository
             $localizedId = $element['_LOCALIZED_UID'];
         } elseif (isset($element['_PAGES_OVERLAY_UID'])) {
             $localizedId = $element['_PAGES_OVERLAY_UID'];
-        }
-
-        if ($tableName === 'pages') {
-            $tableName = 'pages_language_overlay';
         }
 
         $isTableLocalizable = (
@@ -1900,35 +2191,21 @@ class PageRepository
     }
 
     /**
-     * Determine if a field needs an overlay
-     *
-     * @param string $table TCA tablename
-     * @param string $field TCA fieldname
-     * @param mixed $value Current value of the field
-     * @return bool Returns TRUE if a given record field needs to be overlaid
-     * @deprecated since TYPO3 v8, will be removed in TYPO3 v9
-     */
-    protected function shouldFieldBeOverlaid($table, $field, $value)
-    {
-        GeneralUtility::logDeprecatedFunction();
-        return true;
-    }
-
-    /**
-     * @return \TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController
-     */
-    protected function getTypoScriptFrontendController()
-    {
-        return $GLOBALS['TSFE'];
-    }
-
-    /**
      * Returns the current BE user.
      *
      * @return \TYPO3\CMS\Core\Authentication\BackendUserAuthentication
+     * @deprecated will be removed in TYPO3 v10.0 as will not be used anymore then because checkWorkspaceAccess() will be removed.
      */
     protected function getBackendUser()
     {
         return $GLOBALS['BE_USER'];
+    }
+
+    /**
+     * @return VariableFrontend
+     */
+    protected function getRuntimeCache(): VariableFrontend
+    {
+        return GeneralUtility::makeInstance(CacheManager::class)->getCache('cache_runtime');
     }
 }

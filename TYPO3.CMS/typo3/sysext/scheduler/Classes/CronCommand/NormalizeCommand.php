@@ -32,7 +32,6 @@ class NormalizeCommand
      * and consists of five whitespace separated fields, which are either
      * the letter '*' or a sorted, unique comma separated list of integers.
      *
-     * @api
      * @throws \InvalidArgumentException cron command is invalid or out of bounds
      * @param string $cronCommand The cron command to normalize
      * @return string Normalized cron command
@@ -183,6 +182,8 @@ class NormalizeCommand
                     $fieldArray[] = self::convertRangeToListOfValues($listElement);
                 } elseif (MathUtility::canBeInterpretedAsInteger($listElement)) {
                     $fieldArray[] = $listElement;
+                } elseif (strlen($listElement) === 2 && $listElement[0] === '0') {
+                    $fieldArray[] = (int)$listElement;
                 } else {
                     throw new \InvalidArgumentException('Unable to normalize integer field.', 1291429389);
                 }
@@ -268,12 +269,12 @@ class NormalizeCommand
         if ($stepValuesAndStepArrayCount < 1 || $stepValuesAndStepArrayCount > 2) {
             throw new \InvalidArgumentException('Unable to convert step values: Multiple slashes found.', 1291242168);
         }
-        $left = $stepValuesAndStepArray[0];
-        $right = $stepValuesAndStepArray[1];
-        if ((string)$stepValuesAndStepArray[0] === '') {
+        $left = $stepValuesAndStepArray[0] ?? '';
+        $right = $stepValuesAndStepArray[1] ?? '';
+        if ($left === '') {
             throw new \InvalidArgumentException('Unable to convert step values: Left part of / is empty.', 1291414955);
         }
-        if ((string)$stepValuesAndStepArray[1] === '') {
+        if ($right === '') {
             throw new \InvalidArgumentException('Unable to convert step values: Right part of / is empty.', 1291414956);
         }
         if (!MathUtility::canBeInterpretedAsInteger($right)) {

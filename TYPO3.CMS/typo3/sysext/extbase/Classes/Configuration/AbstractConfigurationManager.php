@@ -16,6 +16,7 @@ namespace TYPO3\CMS\Extbase\Configuration;
 
 /**
  * Abstract base class for a general purpose configuration manager
+ * @internal only to be used within Extbase, not part of TYPO3 Core API.
  */
 abstract class AbstractConfigurationManager implements \TYPO3\CMS\Core\SingletonInterface
 {
@@ -105,7 +106,7 @@ abstract class AbstractConfigurationManager implements \TYPO3\CMS\Core\Singleton
     }
 
     /**
-     * @return \TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer|NULL
+     * @return \TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer|null
      */
     public function getContentObject()
     {
@@ -125,8 +126,8 @@ abstract class AbstractConfigurationManager implements \TYPO3\CMS\Core\Singleton
     {
         // reset 1st level cache
         $this->configurationCache = [];
-        $this->extensionName = isset($configuration['extensionName']) ? $configuration['extensionName'] : null;
-        $this->pluginName = isset($configuration['pluginName']) ? $configuration['pluginName'] : null;
+        $this->extensionName = $configuration['extensionName'] ?? null;
+        $this->pluginName = $configuration['pluginName'] ?? null;
         $this->configuration = $this->typoScriptService->convertTypoScriptArrayToPlainArray($configuration);
     }
 
@@ -171,11 +172,9 @@ abstract class AbstractConfigurationManager implements \TYPO3\CMS\Core\Singleton
 
         if (!empty($frameworkConfiguration['persistence']['storagePid'])) {
             if (is_array($frameworkConfiguration['persistence']['storagePid'])) {
-                /**
-                    * We simulate the frontend to enable the use of cObjects in
-                    * stdWrap. Than we convert the configuration to normal TypoScript
-                    * and apply the stdWrap to the storagePid
-                    */
+                // We simulate the frontend to enable the use of cObjects in
+                // stdWrap. Than we convert the configuration to normal TypoScript
+                // and apply the stdWrap to the storagePid
                 if (!$this->environmentService->isEnvironmentInFrontendMode()) {
                     \TYPO3\CMS\Extbase\Utility\FrontendSimulatorUtility::simulateFrontendEnvironment($this->getContentObject());
                 }
@@ -243,7 +242,7 @@ abstract class AbstractConfigurationManager implements \TYPO3\CMS\Core\Singleton
                 continue;
             }
             $overriddenSwitchableControllerActions[$controllerName] = ['actions' => $actions];
-            $nonCacheableActions = $frameworkConfiguration['controllerConfiguration'][$controllerName]['nonCacheableActions'];
+            $nonCacheableActions = $frameworkConfiguration['controllerConfiguration'][$controllerName]['nonCacheableActions'] ?? null;
             if (!is_array($nonCacheableActions)) {
                 // There are no non-cacheable actions, thus we can directly continue
                 // with the next controller name.

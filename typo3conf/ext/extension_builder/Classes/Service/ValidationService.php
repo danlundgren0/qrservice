@@ -1,4 +1,5 @@
 <?php
+
 namespace EBT\ExtensionBuilder\Service;
 
 /*
@@ -356,11 +357,7 @@ class ValidationService implements SingletonInterface
      */
     public static function isReservedTYPO3Word($word)
     {
-        if (in_array(GeneralUtility::camelCaseToLowerCaseUnderscored($word), self::$reservedTYPO3ColumnNames)) {
-            return true;
-        } else {
-            return false;
-        }
+        return in_array(GeneralUtility::camelCaseToLowerCaseUnderscored($word), self::$reservedTYPO3ColumnNames);
     }
 
     /**
@@ -370,11 +367,7 @@ class ValidationService implements SingletonInterface
      */
     public static function isReservedExtbaseWord($word)
     {
-        if (in_array($word, self::$reservedExtbaseNames)) {
-            return true;
-        } else {
-            return false;
-        }
+        return in_array($word, self::$reservedExtbaseNames);
     }
 
     /**
@@ -384,11 +377,7 @@ class ValidationService implements SingletonInterface
      */
     public static function isReservedMYSQLWord($word)
     {
-        if (in_array(strtoupper($word), self::$reservedMYSQLWords)) {
-            return true;
-        } else {
-            return false;
-        }
+        return in_array(strtoupper($word), self::$reservedMYSQLWords);
     }
 
     /**
@@ -398,10 +387,6 @@ class ValidationService implements SingletonInterface
      */
     public static function isReservedWord($word)
     {
-        if (self::isReservedMYSQLWord($word) || self::isReservedTYPO3Word($word)) {
-            return true;
-        } else {
-            return false;
-        }
+        return self::isReservedMYSQLWord($word) || self::isReservedTYPO3Word($word);
     }
 }

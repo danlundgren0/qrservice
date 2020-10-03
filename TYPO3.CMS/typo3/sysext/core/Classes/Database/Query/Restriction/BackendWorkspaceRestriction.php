@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Database\Query\Restriction;
 
 /*
@@ -15,8 +15,10 @@ namespace TYPO3\CMS\Core\Database\Query\Restriction;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Context\Context;
 use TYPO3\CMS\Core\Database\Query\Expression\CompositeExpression;
 use TYPO3\CMS\Core\Database\Query\Expression\ExpressionBuilder;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Versioning\VersionState;
 
 /**
@@ -40,7 +42,11 @@ class BackendWorkspaceRestriction implements QueryRestrictionInterface
      */
     public function __construct(int $workspaceId = null, $includeRowsForWorkspaceOverlay = true)
     {
-        $this->workspaceId = $workspaceId === null ? $GLOBALS['BE_USER']->workspace : $workspaceId;
+        if ($workspaceId === null) {
+            $this->workspaceId = GeneralUtility::makeInstance(Context::class)->getPropertyFromAspect('workspace', 'id');
+        } else {
+            $this->workspaceId = $workspaceId;
+        }
         $this->includeRowsForWorkspaceOverlay = $includeRowsForWorkspaceOverlay;
     }
 

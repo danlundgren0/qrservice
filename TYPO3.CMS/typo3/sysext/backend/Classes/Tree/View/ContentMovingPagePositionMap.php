@@ -15,8 +15,9 @@ namespace TYPO3\CMS\Backend\Tree\View;
  */
 
 /**
- * Position map class for moving content elements,
- * previously resided in typo3/move_el.php
+ * Position map class for moving content elements.
+ *
+ * @internal This class is a TYPO3 Backend implementation and is not considered part of the Public TYPO3 API.
  */
 class ContentMovingPagePositionMap extends PagePositionMap
 {
@@ -41,7 +42,7 @@ class ContentMovingPagePositionMap extends PagePositionMap
      */
     public function linkPageTitle($str, $rec)
     {
-        $url = \TYPO3\CMS\Core\Utility\GeneralUtility::linkThisScript(['uid' => (int)$rec['uid'], 'moveUid' => $GLOBALS['SOBE']->moveUid]);
+        $url = \TYPO3\CMS\Core\Utility\GeneralUtility::linkThisScript(['uid' => (int)$rec['uid'], 'moveUid' => $this->moveUid]);
         return '<a href="' . htmlspecialchars($url) . '">' . $str . '</a>';
     }
 
@@ -54,7 +55,7 @@ class ContentMovingPagePositionMap extends PagePositionMap
      */
     public function wrapRecordTitle($str, $row)
     {
-        if ($GLOBALS['SOBE']->moveUid == $row['uid']) {
+        if ($this->moveUid == $row['uid']) {
             $str = '<strong>' . $str . '</strong>';
         }
         return parent::wrapRecordTitle($str, $row);

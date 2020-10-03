@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Backend\ContextMenu\ItemProviders;
 
 /*
@@ -19,8 +19,8 @@ use TYPO3\CMS\Backend\Clipboard\Clipboard;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
+use TYPO3\CMS\Core\Localization\LanguageService;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Lang\LanguageService;
 
 /**
  * Abstract provider is a base class for context menu item providers
@@ -86,7 +86,7 @@ class AbstractProvider implements ProviderInterface
      * @param string $identifier
      * @param string $context
      */
-    public function __construct(string $table, string $identifier, string $context='')
+    public function __construct(string $table, string $identifier, string $context = '')
     {
         $this->table = $table;
         $this->identifier = $identifier;
@@ -143,8 +143,12 @@ class AbstractProvider implements ProviderInterface
      */
     protected function initDisabledItems()
     {
-        $TSkey = $this->table . ($this->context ?  '.' . $this->context : '');
-        $this->disabledItems = GeneralUtility::trimExplode(',', $this->backendUser->getTSConfigVal('options.contextMenu.table.' . $TSkey . '.disableItems'), true);
+        if ($this->context) {
+            $tsConfigValue = $this->backendUser->getTSConfig()['options.']['contextMenu.']['table.'][$this->table . '.'][$this->context . '.']['disableItems'] ?? '';
+        } else {
+            $tsConfigValue = $this->backendUser->getTSConfig()['options.']['contextMenu.']['table.'][$this->table . '.']['disableItems'] ?? '';
+        }
+        $this->disabledItems = GeneralUtility::trimExplode(',', $tsConfigValue, true);
     }
 
     /**

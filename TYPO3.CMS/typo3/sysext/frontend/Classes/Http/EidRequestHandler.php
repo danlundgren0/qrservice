@@ -1,4 +1,5 @@
 <?php
+declare(strict_types = 1);
 namespace TYPO3\CMS\Frontend\Http;
 
 /*
@@ -14,65 +15,43 @@ namespace TYPO3\CMS\Frontend\Http;
  * The TYPO3 project - inspiring people to share!
  */
 
+use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use TYPO3\CMS\Core\Core\Bootstrap;
+use Psr\Http\Server\RequestHandlerInterface as PsrRequestHandlerInterface;
 use TYPO3\CMS\Core\Exception;
 use TYPO3\CMS\Core\Http\Dispatcher;
+use TYPO3\CMS\Core\Http\NullResponse;
 use TYPO3\CMS\Core\Http\RequestHandlerInterface;
 use TYPO3\CMS\Core\Http\Response;
-use TYPO3\CMS\Core\TimeTracker\TimeTracker;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Frontend\Middleware\EidHandler as EidMiddleware;
 
 /**
  * Lightweight alternative to the regular RequestHandler used when $_GET[eID] is set.
  * In the future, logic from the EidUtility will be moved to this class.
+ *
+ * @deprecated since TYPO3 v9.2, will be removed in TYPO3 v10.0
  */
-class EidRequestHandler implements RequestHandlerInterface
+class EidRequestHandler implements RequestHandlerInterface, PsrRequestHandlerInterface
 {
     /**
-     * Instance of the current TYPO3 bootstrap
-     * @var Bootstrap
-     */
-    protected $bootstrap;
-
-    /**
      * Constructor handing over the bootstrap and the original request
-     *
-     * @param Bootstrap $bootstrap
      */
-    public function __construct(Bootstrap $bootstrap)
+    public function __construct()
     {
-        $this->bootstrap = $bootstrap;
+        trigger_error(self::class . ' will be removed in TYPO3 v10.0. Use ' . EidMiddleware::class . ' instead.', E_USER_DEPRECATED);
     }
 
     /**
      * Handles a frontend request based on the _GP "eID" variable.
      *
      * @param ServerRequestInterface $request
-     * @return NULL|\Psr\Http\Message\ResponseInterface
+     * @return ResponseInterface
      */
-    public function handleRequest(ServerRequestInterface $request)
+    public function handleRequest(ServerRequestInterface $request): ResponseInterface
     {
-        // Starting time tracking
-        $configuredCookieName = trim($GLOBALS['TYPO3_CONF_VARS']['BE']['cookieName']) ?: 'be_typo_user';
-
-        /** @var TimeTracker $timeTracker */
-        $timeTracker = GeneralUtility::makeInstance(TimeTracker::class, ($request->getCookieParams()[$configuredCookieName] ? true : false));
-        $timeTracker->start();
-
-        // Hook to preprocess the current request
-        if (is_array($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/index_ts.php']['preprocessRequest'])) {
-            foreach ($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['tslib/index_ts.php']['preprocessRequest'] as $hookFunction) {
-                $hookParameters = [];
-                GeneralUtility::callUserFunction($hookFunction, $hookParameters, $hookParameters);
-            }
-            unset($hookFunction);
-            unset($hookParameters);
-        }
-
-        // Remove any output produced until now
-        $this->bootstrap->endOutputBufferingAndCleanPreviousOutput();
-        return $this->dispatch($request);
+        trigger_error(self::class . ' will be removed in TYPO3 v10.0. Use ' . EidMiddleware::class . ' instead.', E_USER_DEPRECATED);
+        return $this->handle($request);
     }
 
     /**
@@ -81,8 +60,9 @@ class EidRequestHandler implements RequestHandlerInterface
      * @param ServerRequestInterface $request The request to process
      * @return bool If the request is not an eID request, TRUE otherwise FALSE
      */
-    public function canHandleRequest(ServerRequestInterface $request)
+    public function canHandleRequest(ServerRequestInterface $request): bool
     {
+        trigger_error(self::class . ' will be removed in TYPO3 v10.0. Use ' . EidMiddleware::class . ' instead.', E_USER_DEPRECATED);
         return !empty($request->getQueryParams()['eID']) || !empty($request->getParsedBody()['eID']);
     }
 
@@ -92,8 +72,9 @@ class EidRequestHandler implements RequestHandlerInterface
      *
      * @return int The priority of the request handler.
      */
-    public function getPriority()
+    public function getPriority(): int
     {
+        trigger_error(self::class . ' will be removed in TYPO3 v10.0. Use ' . EidMiddleware::class . ' instead.', E_USER_DEPRECATED);
         return 80;
     }
 
@@ -101,17 +82,19 @@ class EidRequestHandler implements RequestHandlerInterface
      * Dispatches the request to the corresponding eID class or eID script
      *
      * @param ServerRequestInterface $request
-     * @return NULL|\Psr\Http\Message\ResponseInterface
+     * @return ResponseInterface
      * @throws Exception
      */
-    protected function dispatch($request)
+    public function handle(ServerRequestInterface $request): ResponseInterface
     {
+        trigger_error(self::class . ' will be removed in TYPO3 v10.0. Use ' . EidMiddleware::class . ' instead.', E_USER_DEPRECATED);
+        // Remove any output produced until now
+        ob_clean();
+
         /** @var Response $response */
         $response = GeneralUtility::makeInstance(Response::class);
 
-        $eID = isset($request->getParsedBody()['eID'])
-            ? $request->getParsedBody()['eID']
-            : (isset($request->getQueryParams()['eID']) ? $request->getQueryParams()['eID'] : '');
+        $eID = $request->getParsedBody()['eID'] ?? $request->getQueryParams()['eID'] ?? '';
 
         if (empty($eID) || !isset($GLOBALS['TYPO3_CONF_VARS']['FE']['eID_include'][$eID])) {
             return $response->withStatus(404, 'eID not registered');
@@ -132,6 +115,6 @@ class EidRequestHandler implements RequestHandlerInterface
             throw new Exception('Registered eID has invalid script path.', 1416391467);
         }
         include $scriptPath;
-        return null;
+        return new NullResponse();
     }
 }

@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Session;
 
 /*
@@ -15,6 +15,7 @@ namespace TYPO3\CMS\Core\Session;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Authentication\AbstractUserAuthentication;
 use TYPO3\CMS\Core\Session\Backend\SessionBackendInterface;
 use TYPO3\CMS\Core\SingletonInterface;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -45,13 +46,13 @@ class SessionManager implements SingletonInterface
      * @return SessionBackendInterface
      * @throws \InvalidArgumentException
      */
-    public function getSessionBackend(string $identifier) : SessionBackendInterface
+    public function getSessionBackend(string $identifier): SessionBackendInterface
     {
         if (!isset($this->sessionBackends[$identifier])) {
-            if (!isset($GLOBALS['TYPO3_CONF_VARS']['SYS']['session'][$identifier]) || !is_array($GLOBALS['TYPO3_CONF_VARS']['SYS']['session'][$identifier])) {
+            $configuration = $GLOBALS['TYPO3_CONF_VARS']['SYS']['session'][$identifier] ?? false;
+            if (!$configuration) {
                 throw new \InvalidArgumentException('Session configuration for identifier ' . $identifier . ' was not found', 1482234750);
             }
-            $configuration = $GLOBALS['TYPO3_CONF_VARS']['SYS']['session'][$identifier];
 
             $sessionBackend = $this->createSessionBackendFromConfiguration($identifier, $configuration);
 
@@ -63,6 +64,32 @@ class SessionManager implements SingletonInterface
     }
 
     /**
+     * Removes all sessions for a specific user ID
+     *
+     * @param SessionBackendInterface $backend see constants
+     * @param int $userId
+     * @param AbstractUserAuthentication $userAuthentication
+     */
+    public function invalidateAllSessionsByUserId(SessionBackendInterface $backend, int $userId, AbstractUserAuthentication $userAuthentication = null)
+    {
+        $sessionToRenew = '';
+        // Prevent destroying the session of the current user session, but renew session id
+        if ($userAuthentication !== null && (int)$userAuthentication->user['uid'] === $userId) {
+            $sessionToRenew = $userAuthentication->getSessionId();
+        }
+
+        foreach ($backend->getAll() as $session) {
+            if ($userAuthentication !== null && $session['ses_id'] === $sessionToRenew) {
+                $userAuthentication->enforceNewSessionId();
+                continue;
+            }
+            if ((int)$session['ses_userid'] === $userId) {
+                $backend->remove($session['ses_id']);
+            }
+        }
+    }
+
+    /**
      * Creates a session backend from configuration
      *
      * @param string $identifier the identifier
@@ -70,7 +97,7 @@ class SessionManager implements SingletonInterface
      * @return SessionBackendInterface
      * @throws \InvalidArgumentException
      */
-    protected function createSessionBackendFromConfiguration(string $identifier, array $configuration) : SessionBackendInterface
+    protected function createSessionBackendFromConfiguration(string $identifier, array $configuration): SessionBackendInterface
     {
         $className = $configuration['backend'];
 

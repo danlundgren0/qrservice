@@ -24,13 +24,15 @@ use GridElementsTeam\Gridelements\Backend\LayoutSetup;
 use GridElementsTeam\Gridelements\Helper\Helper;
 use TYPO3\CMS\Backend\Clipboard\Clipboard;
 use TYPO3\CMS\Backend\Controller\PageLayoutController;
+use TYPO3\CMS\Backend\Routing\UriBuilder;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
 use TYPO3\CMS\Backend\View\BackendLayoutView;
+use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
 use TYPO3\CMS\Core\Imaging\Icon;
 use TYPO3\CMS\Core\Imaging\IconFactory;
 use TYPO3\CMS\Core\SingletonInterface;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Recordlist\RecordList;
+use TYPO3\CMS\Recordlist\Controller\RecordListController;
 
 /**
  * Class/Function which adds the necessary ExtJS and pure JS stuff for the grid elements.
@@ -51,7 +53,7 @@ class PageRenderer implements SingletonInterface
 
     public function __construct()
     {
-        $this->extensionConfiguration = unserialize($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['gridelements']);
+        $this->extensionConfiguration =  GeneralUtility::makeInstance(ExtensionConfiguration::class)->get('gridelements');
         $this->helper = Helper::getInstance();
     }
 
@@ -63,9 +65,9 @@ class PageRenderer implements SingletonInterface
      */
     public function addJSCSS(array $parameters, \TYPO3\CMS\Core\Page\PageRenderer $pageRenderer)
     {
-        if (!empty($GLOBALS['SOBE']) && (get_class($GLOBALS['SOBE']) === RecordList::class || is_subclass_of(
+        if (!empty($GLOBALS['SOBE']) && (get_class($GLOBALS['SOBE']) === RecordListController::class || is_subclass_of(
             $GLOBALS['SOBE'],
-                    RecordList::class
+                    RecordListController::class
         ))) {
             $pageRenderer->loadRequireJsModule('TYPO3/CMS/Gridelements/GridElementsOnReady');
             return;
@@ -88,7 +90,7 @@ class PageRenderer implements SingletonInterface
             $clipObj->lockToNormal();
             $clipBoard = $clipObj->clipData['normal'];
             if (!$pageRenderer->getCharSet()) {
-                $pageRenderer->setCharSet($GLOBALS['LANG']->charSet ? $GLOBALS['LANG']->charSet : 'utf-8');
+                $pageRenderer->setCharSet('utf-8');
             }
 
             // pull locallang_db.xml to JS side - only the tx_gridelements_js-prefixed keys
@@ -126,6 +128,7 @@ class PageRenderer implements SingletonInterface
             }
 
             // add Ext.onReady() code from file
+            $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
             $pAddExtOnReadyCode .= '
             top.pageColumnsAllowed = ' . json_encode($layout['allowed']) . ';
             top.pageColumnsDisallowed = ' . json_encode($layout['disallowed']) . ';
@@ -136,18 +139,17 @@ class PageRenderer implements SingletonInterface
                 'shortcut',
                     $GLOBALS['TYPO3_CONF_VARS']['BE']['explicitADmode']
             ) ? 'true' : 'false') . ';
-            top.skipDraggableDetails = ' . ($this->getBackendUser()->uc['dragAndDropHideNewElementWizardInfoOverlay'] ? 'true' : 'false') . ";
-            top.backPath = '" . $GLOBALS['BACK_PATH'] . "';
-            top.browserUrl = '" . BackendUtility::getModuleUrl('wizard_element_browser') . "';";
+            top.skipDraggableDetails = ' . ($this->getBackendUser()->uc['dragAndDropHideNewElementWizardInfoOverlay'] ? 'true' : 'false') . ';
+            top.browserUrl = ' . json_encode((string)$uriBuilder->buildUriFromRoute('wizard_element_browser')) . ';';
 
             if (!empty($clipBoard) && !empty($clipBoard['el'])) {
                 $clipBoardElement = GeneralUtility::trimExplode('|', key($clipBoard['el']));
                 if ($clipBoardElement[0] === 'tt_content') {
                     $clipBoardElementData = BackendUtility::getRecord('tt_content', (int)$clipBoardElement[1]);
-                    $pAddExtOnReadyCode .= "
-            top.clipBoardElementCType = '" . $clipBoardElementData['CType'] . "';
-            top.clipBoardElementTxGridelementsBackendLayout = '" . (($clipBoardElementData['CType'] == 'gridelements_pi1') ? $clipBoardElementData['tx_gridelements_backend_layout'] : '') . "';
-            top.clipBoardElementListType = '" . $clipBoardElementData['list_type'] . "';";
+                    $pAddExtOnReadyCode .= '
+            top.clipBoardElementCType = ' . json_encode($clipBoardElementData['CType']) . ';
+            top.clipBoardElementTxGridelementsBackendLayout = ' . json_encode(($clipBoardElementData['CType'] === 'gridelements_pi1') ? $clipBoardElementData['tx_gridelements_backend_layout'] : '') . ';
+            top.clipBoardElementListType = ' . json_encode($clipBoardElementData['list_type']) . ';';
                 } else {
                     $pAddExtOnReadyCode .= "
             top.clipBoardElementCType = '';

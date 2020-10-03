@@ -1,5 +1,5 @@
 <?php
-declare(strict_types=1);
+declare(strict_types = 1);
 namespace TYPO3\CMS\Form;
 
 /*
@@ -15,11 +15,11 @@ namespace TYPO3\CMS\Form;
  * The TYPO3 project - inspiring people to share!
  */
 
+use TYPO3\CMS\Core\Error\Exception as CoreException;
+
 /**
  * A generic Form Exception
- *
- * @api
  */
-class Exception extends \Exception
+class Exception extends CoreException
 {
 }

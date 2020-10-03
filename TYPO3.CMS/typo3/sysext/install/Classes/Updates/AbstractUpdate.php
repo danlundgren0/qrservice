@@ -14,18 +14,23 @@ namespace TYPO3\CMS\Install\Updates;
  * The TYPO3 project - inspiring people to share!
  */
 
-use TYPO3\CMS\Core\Configuration\ConfigurationManager;
+use Symfony\Component\Console\Output\OutputInterface;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Registry;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Install\Controller\Action\Tool\UpgradeWizard;
 
 /**
  * Generic class that every update wizard class inherits from.
  * Used by the update wizard in the install tool.
+ *
+ * @deprecated since TYPO3 v9, will be removed in TYPO3 v10.0
  */
-abstract class AbstractUpdate
+abstract class AbstractUpdate implements UpgradeWizardInterface, ChattyInterface
 {
+    public function __construct()
+    {
+        trigger_error('Deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, use UpgradeWizardInterface directly. affected class: ' . get_class($this), E_USER_DEPRECATED);
+    }
     /**
      * The human-readable title of the upgrade wizard
      *
@@ -41,13 +46,6 @@ abstract class AbstractUpdate
     protected $identifier;
 
     /**
-     * Parent object
-     *
-     * @var UpgradeWizard
-     */
-    public $pObj;
-
-    /**
      * User input, set from outside
      *
      * @var string
@@ -55,25 +53,26 @@ abstract class AbstractUpdate
     public $userInput;
 
     /**
-     * Current TYPO3 version number, set from outside
-     * Version number coming from \TYPO3\CMS\Core\Utility\VersionNumberUtility::convertVersionNumberToInteger()
-     *
-     * @var int
+     * @var OutputInterface
      */
-    public $versionNumber;
+    protected $output;
 
     /**
      * Returns the title attribute
      *
+     * @deprecated Deprecated since TYPO3 v9
      * @return string The title of this update wizard
      */
-    public function getTitle()
+    public function getTitle(): string
     {
+        trigger_error(
+            'Deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, use UpgradeWizardInterface directly. affected class: ' . get_class($this),
+            E_USER_DEPRECATED
+        );
         if ($this->title) {
             return $this->title;
-        } else {
-            return $this->identifier;
         }
+        return $this->identifier;
     }
 
     /**
@@ -83,6 +82,10 @@ abstract class AbstractUpdate
      */
     public function setTitle($title)
     {
+        trigger_error(
+            'Deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, use UpgradeWizardInterface directly. affected class: ' . get_class($this),
+            E_USER_DEPRECATED
+        );
         $this->title = $title;
     }
 
@@ -91,9 +94,13 @@ abstract class AbstractUpdate
      *
      * @return string The identifier of this update wizard
      */
-    public function getIdentifier()
+    public function getIdentifier(): string
     {
-        return $this->identifier;
+        trigger_error(
+            'Deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, use UpgradeWizardInterface directly. affected class: ' . get_class($this),
+            E_USER_DEPRECATED
+        );
+        return $this->identifier ?? static::class;
     }
 
     /**
@@ -103,6 +110,10 @@ abstract class AbstractUpdate
      */
     public function setIdentifier($identifier)
     {
+        trigger_error(
+            'Deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, use UpgradeWizardInterface directly. affected class: ' . get_class($this),
+            E_USER_DEPRECATED
+        );
         $this->identifier = $identifier;
     }
 
@@ -116,26 +127,13 @@ abstract class AbstractUpdate
      */
     public function shouldRenderWizard()
     {
-        $showUpdate = 0;
+        trigger_error(
+            'Deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, use UpgradeWizardInterface directly. affected class: ' . get_class($this),
+            E_USER_DEPRECATED
+        );
         $explanation = '';
-        $result = $this->checkForUpdate($explanation, $showUpdate);
-        return $showUpdate > 0 || $result == true;
-    }
-
-    /**
-     * Simple wrapper function that helps to check whether (if)
-     * this feature is cool if you want to tell the user that the update wizard
-     * is working fine, just as output (useful for the character set / utf8 wizard)
-     *
-     * @return bool If the wizard should render the Next() button on the overview page
-     * @see checkForUpdate()
-     */
-    public function shouldRenderNextButton()
-    {
-        $showUpdate = 0;
-        $explanation = '';
-        $result = $this->checkForUpdate($explanation, $showUpdate);
-        return $showUpdate != 2 || $result;
+        $result = $this->checkForUpdate($explanation);
+        return (bool)$result === true;
     }
 
     /**
@@ -144,8 +142,12 @@ abstract class AbstractUpdate
      * @param string $table
      * @return bool
      */
-    public function checkIfTableExists($table)
+    protected function checkIfTableExists($table)
     {
+        trigger_error(
+            'Deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, use UpgradeWizardInterface directly. affected class: ' . get_class($this),
+            E_USER_DEPRECATED
+        );
         $tableExists = GeneralUtility::makeInstance(ConnectionPool::class)
             ->getConnectionForTable($table)
             ->getSchemaManager()
@@ -179,13 +181,15 @@ abstract class AbstractUpdate
      */
     protected function installExtensions(array $extensionKeys)
     {
-        /** @var $installUtility \TYPO3\CMS\Extensionmanager\Utility\InstallUtility */
+        trigger_error(
+            'Deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, use UpgradeWizardInterface directly. affected class: ' . get_class($this),
+            E_USER_DEPRECATED
+        );
+        /** @var \TYPO3\CMS\Extensionmanager\Utility\InstallUtility $installUtility */
         $installUtility = GeneralUtility::makeInstance(
             \TYPO3\CMS\Extensionmanager\Utility\InstallUtility::class
         );
-        foreach ($extensionKeys as $extension) {
-            $installUtility->install($extension);
-        }
+        $installUtility->install($extensionKeys);
     }
 
     /**
@@ -197,7 +201,11 @@ abstract class AbstractUpdate
      */
     protected function markWizardAsDone($confValue = 1)
     {
-        GeneralUtility::makeInstance(Registry::class)->set('installUpdate', get_class($this), $confValue);
+        trigger_error(
+            'Deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, use UpgradeWizardInterface directly. affected class: ' . get_class($this),
+            E_USER_DEPRECATED
+        );
+        GeneralUtility::makeInstance(Registry::class)->set('installUpdate', static::class, $confValue);
     }
 
     /**
@@ -207,19 +215,95 @@ abstract class AbstractUpdate
      */
     protected function isWizardDone()
     {
-        $wizardClassName = get_class($this);
-        $done = GeneralUtility::makeInstance(Registry::class)->get('installUpdate', $wizardClassName, false);
+        trigger_error(
+            'Deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, use UpgradeWizardInterface directly. affected class: ' . get_class($this),
+            E_USER_DEPRECATED
+        );
+        $wizardClassName = static::class;
+        return GeneralUtility::makeInstance(Registry::class)->get('installUpdate', $wizardClassName, false);
+    }
 
-        // Fall back in case the wizard for migration of "wizard done" flags to system registry was not run yet
-        if (!$done) {
-            try {
-                GeneralUtility::makeInstance(ConfigurationManager::class)
-                    ->getLocalConfigurationValueByPath('INSTALL/wizardDone/' . $wizardClassName);
-                $done = true;
-            } catch (\RuntimeException $e) {
-            }
-        }
+    /**
+     * Return the description for this wizard
+     *
+     * @return string
+     */
+    public function getDescription(): string
+    {
+        trigger_error(
+            'Deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, use UpgradeWizardInterface directly. affected class: ' . get_class($this),
+            E_USER_DEPRECATED
+        );
+        return '';
+    }
 
-        return $done;
+    /**
+     * Execute the update
+     * Called when a wizard reports that an update is necessary
+     *
+     * @return bool
+     */
+    public function executeUpdate(): bool
+    {
+        trigger_error(
+            'Deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, use UpgradeWizardInterface directly. affected class: ' . get_class($this),
+            E_USER_DEPRECATED
+        );
+        $queries = [];
+        $message = '';
+        $result = $this->performUpdate($queries, $message);
+        $this->output->write($message);
+        return $result;
+    }
+
+    /**
+     * Is an update necessary?
+     * Is used to determine whether a wizard needs to be run.
+     * Check if data for migration exists.
+     *
+     * @return bool
+     */
+    public function updateNecessary(): bool
+    {
+        trigger_error(
+            'Deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, use UpgradeWizardInterface directly. affected class: ' . get_class($this),
+            E_USER_DEPRECATED
+        );
+        $description = '';
+        $result = $this->checkForUpdate($description);
+        $this->output->write($description);
+        return $result;
+    }
+
+    /**
+     * Returns an array of class names of Prerequisite classes
+     * This way a wizard can define dependencies like "database up-to-date" or
+     * "reference index updated"
+     *
+     * @return string[]
+     */
+    public function getPrerequisites(): array
+    {
+        trigger_error(
+            'Deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, use UpgradeWizardInterface directly. affected class: ' . get_class($this),
+            E_USER_DEPRECATED
+        );
+        return [
+            DatabaseUpdatedPrerequisite::class
+        ];
+    }
+
+    /**
+     * Setter injection for output into upgrade wizards
+     *
+     * @param OutputInterface $output
+     */
+    public function setOutput(OutputInterface $output): void
+    {
+        trigger_error(
+            'Deprecated since TYPO3 v9, will be removed in TYPO3 v10.0, use UpgradeWizardInterface directly. affected class: ' . get_class($this),
+            E_USER_DEPRECATED
+        );
+        $this->output = $output;
     }
 }

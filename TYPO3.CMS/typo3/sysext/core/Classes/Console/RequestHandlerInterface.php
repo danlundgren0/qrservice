@@ -1,4 +1,5 @@
 <?php
+declare(strict_types = 1);
 namespace TYPO3\CMS\Core\Console;
 
 /*
@@ -18,8 +19,6 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * The interface for a request handler for a console-based application
- *
- * @api
  */
 interface RequestHandlerInterface
 {
@@ -27,8 +26,7 @@ interface RequestHandlerInterface
      * Handles a CLI request
      *
      * @param InputInterface $input
-     * @return NULL|OutputInterface
-     * @api
+     * @return OutputInterface|null
      */
     public function handleRequest(InputInterface $input);
 
@@ -37,7 +35,6 @@ interface RequestHandlerInterface
      *
      * @param InputInterface $input
      * @return bool TRUE if it can handle the request, otherwise FALSE
-     * @api
      */
     public function canHandleRequest(InputInterface $input);
 
@@ -47,7 +44,7 @@ interface RequestHandlerInterface
      * "100" is default. "0" means "I am a fallback solution".
      *
      * @return int The priority of the request handler
-     * @api
+     * @internal will get removed from the interface soon as this is not needed in TYPO3 v10.0 anymore.
      */
     public function getPriority();
 }

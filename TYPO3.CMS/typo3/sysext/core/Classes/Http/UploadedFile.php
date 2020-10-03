@@ -17,6 +17,7 @@ namespace TYPO3\CMS\Core\Http;
 use Psr\Http\Message\StreamInterface;
 use Psr\Http\Message\UploadedFileInterface;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\PathUtility;
 
 /**
  * Class UploadedFile which represents one uploaded file, usually coming
@@ -29,12 +30,12 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 class UploadedFile implements UploadedFileInterface
 {
     /**
-     * @var NULL|string
+     * @var string|null
      */
     protected $file;
 
     /**
-     * @var NULL|StreamInterface
+     * @var StreamInterface|null
      */
     protected $stream;
 
@@ -137,7 +138,7 @@ class UploadedFile implements UploadedFileInterface
         return $this->stream;
     }
 
-     /**
+    /**
      * Move the uploaded file to a new location.
      *
      * Use this method as an alternative to move_uploaded_file(). This method is
@@ -185,7 +186,7 @@ class UploadedFile implements UploadedFileInterface
         }
 
         if (!empty($this->file) && is_uploaded_file($this->file)) {
-            if (GeneralUtility::upload_copy_move($this->file, $targetPath . basename($this->file)) === false) {
+            if (GeneralUtility::upload_copy_move($this->file, $targetPath . PathUtility::basename($this->file)) === false) {
                 throw new \RuntimeException('An error occurred while moving uploaded file', 1436717310);
             }
         } elseif ($this->stream) {
@@ -211,7 +212,7 @@ class UploadedFile implements UploadedFileInterface
      * the file in the $_FILES array if available, as PHP calculates this based
      * on the actual size transmitted.
      *
-     * @return int|NULL The file size in bytes or null if unknown.
+     * @return int|null The file size in bytes or null if unknown.
      */
     public function getSize()
     {
@@ -245,7 +246,7 @@ class UploadedFile implements UploadedFileInterface
      * a malicious filename with the intention to corrupt or hack your
      * application.
      *
-     * @return string|NULL The filename sent by the client or null if none was provided.
+     * @return string|null The filename sent by the client or null if none was provided.
      */
     public function getClientFilename()
     {
@@ -261,7 +262,7 @@ class UploadedFile implements UploadedFileInterface
      * a malicious media type with the intention to corrupt or hack your
      * application.
      *
-     * @return string|NULL The media type sent by the client or null if none was provided.
+     * @return string|null The media type sent by the client or null if none was provided.
      */
     public function getClientMediaType()
     {
