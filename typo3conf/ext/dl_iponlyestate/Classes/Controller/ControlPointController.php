@@ -3,6 +3,9 @@ namespace DanLundgren\DlIponlyestate\Controller;
 
 use DanLundgren\DlIponlyestate\Utility\ReportUtility as ReportUtil;
 use DanLundgren\DlIponlyestate\Utility\ErrorUtility as ErrorUtil;
+use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Database\Query\QueryBuilder;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 /***************************************************************
  *
  *  Copyright notice
@@ -558,6 +561,7 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
      */
     public function setFileReference($sysFileUid, $noteUid, $tableNames = 'tx_dliponlyestate_domain_model_note', $tableLocal = 'sys_file', $fieldName = 'images')
     {
+        /*
         $GLOBALS['TYPO3_DB']->exec_INSERTquery('sys_file_reference', array(
             'uid_local' => $sysFileUid,
             'uid_foreign' => $noteUid,
@@ -566,6 +570,19 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
             'table_local' => $tableLocal,
             'l10n_diffsource' => "",
         ));
+        */
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_file_reference');
+        $affectedRows = $queryBuilder
+           ->insert('sys_file_reference')
+           ->values([
+              'uid_local' => $sysFileUid,
+              'uid_foreign' => $noteUid,
+              'tablenames' => $tableNames,
+              'fieldname' => $fieldName,
+              'table_local' => $tableLocal,
+              'l10n_diffsource' => '',
+           ])
+           ->execute();
     }
     
     /**

@@ -1,5 +1,8 @@
 <?php
 namespace DanLundgren\DlIponlyestate\Domain\Repository;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
 
 /***************************************************************
  *
@@ -44,10 +47,21 @@ class ControlPointRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
      */
     public function findSubPagesByParentPid($pid)
     {
-        $pagesRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid,title,doktype', 'pages', 'pid=' . $pid . ' AND hidden=0 AND deleted=0');
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tx_dliponlyestate_domain_model_controlpoint');
+        $queryBuilder
+           ->getRestrictions()
+           ->removeAll()
+           ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
+        ;
+        $queryBuilder->select('uid','title','doktype')
+        ->from('pages')
+        ->where(
+           $queryBuilder->expr()->eq('pid', $pid)
+        );        
         $subPages = array();
-        while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($pagesRes)) {
-            $subPages[] = $row;
+        $statement = $queryBuilder->execute();
+        while ($row = $statement->fetch()) {
+           $subPages[] = $row;
         }
         return $subPages;
     }
@@ -57,10 +71,22 @@ class ControlPointRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
      */
     public function findCpByPid($pid)
     {
-        $cpRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid,pi_flexform', 'tt_content', 'list_type="dliponlyestate_cp" AND pid=' . $pid . ' AND hidden=0 AND deleted=0');
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tt_content');
+        $queryBuilder
+           ->getRestrictions()
+           ->removeAll()
+           ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
+        ;
+        $queryBuilder->select('uid','pi_flexform')
+        ->from('tt_content')
+        ->where(
+            $queryBuilder->expr()->eq('list_type', '"dliponlyestate_cp"'),
+            $queryBuilder->expr()->eq('pid', $pid)
+        );
+        $statement = $queryBuilder->execute();
         $cp = NULL;
-        while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($cpRes)) {
-            $cp = $row;
+        while ($row = $statement->fetch()) {
+           $cp = $row;
         }
         return $cp;
     }

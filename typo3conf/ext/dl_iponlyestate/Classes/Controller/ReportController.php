@@ -1,5 +1,8 @@
 <?php
 namespace DanLundgren\DlIponlyestate\Controller;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
 
 use DanLundgren\DlIponlyestate\Utility\ReportUtility as ReportUtil;
 /***************************************************************
@@ -153,58 +156,13 @@ class ReportController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
         $arguments = \TYPO3\CMS\Core\Utility\GeneralUtility::_GP('tx_dliponlyestate_reportsearch');
         if ($arguments && count($arguments) > 1) {
             $searchCriterias = new \DanLundgren\DlIponlyestate\Domain\Model\SearchCriterias($arguments['fromDate'], $arguments['endDate'], $arguments['nodeTypes'], $arguments['estates'], $arguments['cities'], $arguments['notes'], $arguments['technicians'], $arguments['freeSearch'], $arguments['areas']);
-            /*
-            $searchResults = $this->reportRepository->searchReports($searchCriterias);
-            if (($arguments['fromDate'] || $arguments['endDate']) && $arguments['nodeTypes'] < 0 && $arguments['cities'] < 0 && $arguments['technicians'] < 0 && $arguments['notes'] <= 0 && $arguments['freeSearch'] == '') {
-                $allEstates = $this->estateRepository->findAll();
-                foreach ($allEstates as $estate) {
-                    if (!array_key_exists($estate->getUid(), $searchResults)) {
-                        $searchResults[$estate->getUid()] = $estate;
-                    }
-                }
-            }
-            */
-            
-            /*$allEstates = $this->estateRepository->findAll();
-              foreach($allEstates as $estate) {
-              if(!array_key_exists($estate->getUid(),$searchResults)) {
-              $searchResults[$estate->getUid()] = $estate;
-              }
-              }*/
-            
-            //$latestReports = ReportUtil::adaptPostedReportsForOutput($searchResults);
             $latestReports = $this->reportRepository->searchReports($searchCriterias);
         } else {
-            //if (!$arguments || count($arguments) == 1 && $arguments['xls'] == '1') {
             if (is_array($arguments) && count($arguments) == 1 && $arguments['xls'] == '1') {
                 $searchCriterias = new \DanLundgren\DlIponlyestate\Domain\Model\SearchCriterias();
-                /*
-                $searchResults = $this->reportRepository->searchReports($searchCriterias);
-                $allEstates = $this->estateRepository->findAll();
-                foreach ($allEstates as $estate) {
-                    if (!array_key_exists($estate->getUid(), $searchResults)) {
-                        $searchResults[$estate->getUid()] = $estate;
-                    }
-                }
-                $latestReports = ReportUtil::adaptPostedReportsForOutput($searchResults);
-                */
-                
                 $latestReports = $this->reportRepository->searchReports($searchCriterias);
             }
         }
-        //if($report['reportUid']==1062) {
-        /*
-         \TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
-         array(
-          'class' => __CLASS__,
-          'function' => __FUNCTION__,
-          'estate_492' => $latestReports['estate_492'],
-          'level2' => $latestReports['level1']['estate_492']['level2'],
-         ),'',20
-        );
-        */
-        
-        //}
         if ($arguments['xls'] == '1') {
             $this->excelAction($latestReports, $arguments);
         }
@@ -280,25 +238,6 @@ class ReportController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
                 }
             }
         }
-        /*
-                                $reports = $this->reportRepository->findAll();
-                                foreach ($reports as $report) {
-                                   if ($report->getEstate() === $estate || $estate === NULL) {
-                                   if ($report->getResponsibleTechnicians() > 0) {
-                                   $technician = $technicianRepository->findByUid((int) $report->getResponsibleTechnicians());
-                                   if (!in_array($technician->getName(), $technicians)) {
-                                   $technicians[$technician->getUid()] = $technician->getName();
-                                   }
-                                   }
-                                   if ($report->getExecutiveTechnician() > 0) {
-                                   $technician = $technicianRepository->findByUid((int) $report->getExecutiveTechnician());
-                                   if (!in_array($technician->getName(), $technicians)) {
-                                   $technicians[$technician->getUid()] = $technician->getName();
-                                   }
-                                   }
-                                   }
-                                }*/
-        
         return $technicians;
     }
     
@@ -306,6 +245,7 @@ class ReportController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
     {
         $areaArr = array('-1' => 'Alla');
         if (is_array($this->estateAreaPIDs) && count($this->estateAreaPIDs) > 0) {
+            /*
             $estateAreaPIDs = join(',', $this->estateAreaPIDs);
             $select = ' title,uid ';
             $from = ' pages ';
@@ -315,6 +255,25 @@ class ReportController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
             while ($areaRow = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($areaRes)) {
                 $areaArr[$areaRow['uid']] = $areaRow['title'];
             }
+            */
+
+            $estateAreaPIDs = join(',', $this->estateAreaPIDs);
+            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
+            $queryBuilder
+               ->getRestrictions()
+               ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
+            ;
+            $queryBuilder->select('title','uid')
+            ->from('pages')
+            ->where(
+               $queryBuilder->expr()->in('uid', $estateAreaPIDs)
+            );
+            $queryBuilder->orderBy('title','ASC');
+            $statement = $queryBuilder->execute();
+            while ($areaRow = $statement->fetch()) {
+               $areaArr[$areaRow['uid']] = $areaRow['title'];
+            }
+
         }
         return $areaArr;
     }

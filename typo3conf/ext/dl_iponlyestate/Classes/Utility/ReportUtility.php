@@ -987,14 +987,7 @@ class ReportUtility {
         $report->setNodeType($estate->getNodeType());
         $report->setControlPoint($estate->getControlPoints());
         $report->setExecutiveTechnician($GLOBALS['TSFE']->fe_user->user['uid']);
-\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
- array(
-  'class' => __CLASS__,
-  'function' => __FUNCTION__,
-  'getExecutiveTechnician' => $report->getExecutiveTechnician(),
-  'fe_user' => $GLOBALS['TSFE']->fe_user->user['uid'],
- ),'',20
-);
+        $report->setResponsibleTechnicians($estate->getResponsibleTechnician());
         if($startDate) {
             $report->setStartDate($startDate);    
         }

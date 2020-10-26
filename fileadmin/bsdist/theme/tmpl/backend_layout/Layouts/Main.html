@@ -4,9 +4,17 @@
             <div class="col-md-3 col-sm-6">
                 <f:cObject typoscriptObjectPath="lib.logo" />
             </div>
-            <div class="col-md-9 col-sm-6">
+            <div class="col-md-9 col-sm-6 tmpl-main">
+                <f:comment>
                 <f:cObject typoscriptObjectPath="lib.langnav" />
-                <f:cObject typoscriptObjectPath="lib.navbar" />
+                </f:comment>
+                <f:security.ifAuthenticated>
+                    <f:then>
+                        <f:cObject typoscriptObjectPath="lib.navbar" />    
+                    </f:then>
+                    <f:else>
+                    </f:else>                    
+                </f:security.ifAuthenticated>
             </div>
         </div>
     </div>

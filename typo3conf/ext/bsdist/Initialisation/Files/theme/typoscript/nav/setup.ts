@@ -1,7 +1,3 @@
-/* ---------------------------------------------------------------
- * Navbar dropdown
- */
-
 # mobile nav button
 lib.mobileNavBtn = TEXT
 lib.mobileNavBtn {
@@ -14,7 +10,7 @@ lib.mobileNavBtn {
 
 # navbar
 lib.navbar = COA
-lib.navbar.wrap = <nav class="navbar navbar-default" role="navigation">|</nav>
+lib.navbar.wrap = <nav class="navbar navbar-default SKA_BORT" role="navigation">|</nav>
 lib.navbar {
     # mobile trigger
     10 < lib.mobileNavBtn

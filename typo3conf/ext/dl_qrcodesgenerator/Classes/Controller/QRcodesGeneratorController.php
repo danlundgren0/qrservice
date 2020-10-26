@@ -1,5 +1,8 @@
 <?php
 namespace DanLundgren\DlQrcodesgenerator\Controller;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
 
 /***************************************************************
  *
@@ -55,106 +58,29 @@ class QRcodesGeneratorController extends \TYPO3\CMS\Extbase\Mvc\Controller\Actio
         $pageRenderer->addJsFooterFile('typo3conf/ext/dl_qrcodesgenerator/Resources/Public/Js/jquery-1.11.1.min.js');
         $pageRenderer->addJsFooterFile('typo3conf/ext/dl_qrcodesgenerator/Resources/Public/Js/shieldui-all.min.js');
         $pageRenderer->addJsFooterFile('typo3conf/ext/dl_qrcodesgenerator/Resources/Public/Js/dl_qrcodesgenerator.js');
-        /*
-        $GLOBALS['TSFE']->getPageRenderer()->addJsFooterFile('typo3conf/ext/dl_qrcodesgenerator/Resources/Public/Js/jquery-1.11.1.min.js');
-        $GLOBALS['TSFE']->getPageRenderer()->addJsFooterFile('typo3conf/ext/dl_qrcodesgenerator/Resources/Public/Js/shieldui-all.min.js');
-        $GLOBALS['TSFE']->getPageRenderer()->addJsFooterFile('typo3conf/ext/dl_qrcodesgenerator/Resources/Public/Js/dl_qrcodesgenerator.js');
-        */
 
-        //$GLOBALS['TSFE']->getPageRenderer()->addJsFooterInlineCode('YT', 'var tag = document.createElement(\'script\');tag.src = \'https://www.youtube.com/iframe_api\';var firstScriptTag = document.getElementsByTagName(\'script\')[0];firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);');
         $i = 0;
         $parentPid = \TYPO3\CMS\Core\Utility\GeneralUtility::_GP('pid');
         $librarytest = \TYPO3\CMS\Core\Utility\GeneralUtility::_GP('libtest');
-        $pageRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'pages', 'uid=' . $parentPid);
-        //.' AND hidden=0 AND deleted=0');
-        while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($pageRes)) {
-            $parentPage = $row;
-        }
-        $subPageRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('title,uid', 'pages', 'pid=' . $parentPid . ' AND hidden=0 AND deleted=0 AND doktype=1');
-        $subPages = [];
-        while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($subPageRes)) {
-            $subPages[] = $row;
-        }
-        /*
-        \TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
-         array(
-          'class' => __CLASS__,
-          'function' => __FUNCTION__,
-          'getFullUrl' => $this->getFullUrl($parentPid),
-
-         )
-        );
-        */
-
+        $parentPage = $this->getParentPage();
+        $subPages = $this->getSubPages();
         $rootlineUtility = new \TYPO3\CMS\Core\Utility\RootlineUtility($parentPid);
         $rootlineArr = $rootlineUtility->get();
-        //$parentPid = $GLOBALS['TSFE']->id;
         $tmpUrl = '';
-        foreach ($rootlineArr as $rootKey => $rootLine) {
-            if ($rootLine['tx_realurl_pathsegment'] != '') {
-                $tmpUrl = $tmpUrl == '' ? $rootLine['tx_realurl_pathsegment'] : $rootLine['tx_realurl_pathsegment'] . '/' . $tmpUrl;
-            } else {
-                if ($rootLine['uid'] != 1) {
-                    $tmpUrl = $tmpUrl == '' ? $rootLine['uid'] : $rootLine['uid'] . '/' . $tmpUrl;
-                }
-            }
+        $estateTypePageUid = null;
+        if((is_array($rootlineArr) && isset($rootlineArr[1]) && intval($rootlineArr[1])>0) && is_array($parentPage)) {
+            $estateTypePageUid = $rootlineArr[1]['uid'];
         }
+        
+        $tmpUrl = $this->getModifiedUrl($parentPage, $estateTypePageUid);
         $qrUrl = $this->request->getBaseUri() . '' . $tmpUrl;
         $qrPages = [];
-        //Old google.apis - different size based´on url-length
-        /*
-                $qrPages[] = '<div style="transform: rotate(-90deg);width: 180px;margin-left: 40px;"><img style="overflow: hidden;" width="200" height="200" src="https://chart.googleapis.com/chart?cht=qr&chs=180x180&chl='.$qrUrl.'" frameBorder="0" /><div style="margin-top: 20px;text-align: center;font-size: 22px;font-family: Arial;font-weight: bold;white-space: nowrap;">'.$parentPage['title'].'</div>
-                    </div>';
-        */
-
-        /*
-        $qrPages[] = '<div style="transform: rotate(-90deg);width: 180px;margin-left: 40px;">
-            <img src="https://api.qrserver.com/v1/create-qr-code/?data='.$qrUrl.'&amp;size=180x180" alt="" title="" />
-            <div style="margin-top: 20px;text-align: center;font-size: 22px;font-family: Arial;font-weight: bold;white-space: nowrap;">'.$parentPage['title'].'</div>
-        </div>';
-        */
-
         $qrPages[$i]['qrUrl'] = $qrUrl;
         $qrPages[$i]['parentPage'] = $parentPage['title'];
-        /*
-                $id = 0;
-                //https://davidshimjs.github.io/qrcodejs/
-                $qrPages[] = '<div id="qrcode_'.$id.'" style="transform: rotate(-90deg);width: 180px;margin-left: 40px;">
-                    <div style="margin-top: 20px;text-align: center;font-size: 22px;font-family: Arial;font-weight: bold;white-space: nowrap;">'.$parentPage['title'].'</div>
-                    </div>';
-        */
-
         $i += 1;
         foreach ($subPages as $subPage) {
-            $id += 1;
-            $rootlineUtility = new \TYPO3\CMS\Core\Utility\RootlineUtility($subPage['uid']);
-            $rootlineArr = $rootlineUtility->get();
-            $tmpUrl = '';
-            foreach ($rootlineArr as $rootKey => $rootLine) {
-                if ($rootLine['tx_realurl_pathsegment'] != '') {
-                    $tmpUrl = $tmpUrl == '' ? $rootLine['tx_realurl_pathsegment'] : $rootLine['tx_realurl_pathsegment'] . '/' . $tmpUrl;
-                } else {
-                    if ($rootLine['uid'] != 1) {
-                        $tmpUrl = $tmpUrl == '' ? $rootLine['uid'] : $rootLine['uid'] . '/' . $tmpUrl;
-                    }
-                }
-            }
+            $tmpUrl = $this->getModifiedUrl($subPage, $estateTypePageUid);
             $qrUrl = $this->request->getBaseUri() . '' . $tmpUrl;
-            //Old google.apis - different size based´on url-length
-            /*
-            $qrPages[] = '<div style="transform: rotate(-90deg);width: 180px;margin-left: 48px;"><img style="overflow: hidden;" width="200" height="200" src="https://chart.googleapis.com/chart?cht=qr&chs=180x180&chl='.$qrUrl.'" frameBorder="0" /><div style="margin-top: 20px;text-align: center;font-size: 22px;font-family: Arial;font-weight: bold;white-space: nowrap;">'.$parentPage['title'].'</div>
-                <div style="font-weight: bold;text-align: center;font-size: 13px;font-family: Arial;white-space: nowrap;">'.$subPage['title'].'</div>
-                </div>';
-            */
-
-            /*
-                        $qrPages[] = '<div style="transform: rotate(-90deg);width: 180px;margin-left: 48px;">
-                            <img src="https://api.qrserver.com/v1/create-qr-code/?data='.$qrUrl.'&amp;size=180x180" alt="" title="" />
-                            <div style="margin-top: 20px;text-align: center;font-size: 22px;font-family: Arial;font-weight: bold;white-space: nowrap;">'.$parentPage['title'].'</div>
-                            <div style="font-weight: bold;text-align: center;font-size: 13px;font-family: Arial;white-space: nowrap;">'.$subPage['title'].'</div>
-                        </div>';
-            */
-
             $qrPages[$i]['qrUrl'] = $qrUrl;
             $qrPages[$i]['parentPage'] = $parentPage['title'];
             $qrPages[$i]['subPage'] = $subPage['title'];
@@ -162,6 +88,72 @@ class QRcodesGeneratorController extends \TYPO3\CMS\Extbase\Mvc\Controller\Actio
         }
         $this->view->assign('qrPages', $qrPages);
         $this->view->assign('librarytest', $librarytest);
+    }
+
+    private function getModifiedUrl($pageArr = [], $estateTypePageUid = null) {
+        if($estateTypePageUid && count($pageArr)>0) {
+            $urlArr = explode('/', $pageArr['slug']);
+            $urlArr[1] = (strlen($urlArr[1])<30) ? $estateTypePageUid:$urlArr[1];
+            //if($urlArr[1])
+            //$replaceTitleWUidArr = str_replace($urlArr[1], $estateTypePageUid, $urlArr);
+            $newUrl = substr(implode('/', $urlArr),1);
+            return $newUrl;
+        }
+        return null;
+    }
+    private function getParentPage() {
+        $parentPid = \TYPO3\CMS\Core\Utility\GeneralUtility::_GP('pid');
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
+        $queryBuilder->select('uid','title','slug')
+        ->from('pages')
+        ->where(
+           $queryBuilder->expr()->eq('uid', $parentPid)
+        )
+        ->andWhere(
+            $queryBuilder->expr()->eq('doktype', 1)
+        );
+        $statement = $queryBuilder->execute();
+        while ($row = $statement->fetch()) {
+           $parentPage = $row;
+        }
+        return $parentPage;        
+    }
+
+    private function getSubPages() {
+        $parentPid = \TYPO3\CMS\Core\Utility\GeneralUtility::_GP('pid');
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
+        $queryBuilder->select('uid','title','slug')
+        ->from('pages')
+        ->where(
+           $queryBuilder->expr()->eq('pid', $parentPid)
+        )
+        ->andWhere(
+            $queryBuilder->expr()->eq('doktype', 1)
+        );        
+        $statement = $queryBuilder->execute();
+        while ($row = $statement->fetch()) {
+           $subPages[] = $row;
+        }
+        return $subPages;
+
+    }
+
+    private function getEstateSlugOrUid() {
+        $parentPid = \TYPO3\CMS\Core\Utility\GeneralUtility::_GP('pid');
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('pages');
+        $queryBuilder->select('uid','title','slug')
+        ->from('pages')
+        ->where(
+           $queryBuilder->expr()->eq('uid', $parentPid)
+        )
+        ->andWhere(
+            $queryBuilder->expr()->eq('doktype', 1)
+        );
+        $statement = $queryBuilder->execute();
+        while ($row = $statement->fetch()) {
+           $parentPage = $row;
+        }
+        return $parentPage;         
     }
 
     /**

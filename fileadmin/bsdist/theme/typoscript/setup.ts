@@ -156,7 +156,7 @@ temp.backlink {
   noTrimWrap = |<p>Back to |</p>|
 }
 
-#[treeLevel = 2]
+#[tree.level = 2]
 #lib {
 #  logo = COA
 #  logo.wrap = <div class="logo">|</div>

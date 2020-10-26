@@ -1,0 +1,28 @@
+{
+    "name": "danlundgren/dl-iponlyestate",
+    "type": "typo3-cms-extension",
+    "description": "IPO-QRService",
+    "authors": [
+        {
+            "name": "Dan Lundgren",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "typo3/cms-core": "^9.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "DanLundgren\\DlIponlyestate\\": "Classes"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "DanLundgren\\DlIponlyestate\\Tests\\": "Tests"
+        }
+    },
+    "replace": {
+        "danlundgren/dl-iponlyestate": "self.version",
+        "typo3-ter/dl-iponlyestate": "self.version"
+    }
+}
