@@ -7,7 +7,7 @@ namespace Bithost\Pdfviewhelpers\ViewHelpers;
  * This file is part of the "PDF ViewHelpers" Extension for TYPO3 CMS.
  *
  *  (c) 2016 Markus Mächler <markus.maechler@bithost.ch>, Bithost GmbH
- *           Esteban Marin <esteban.marin@bithost.ch>, Bithost GmbH
+ *           Esteban Gehring <esteban.gehring@bithost.ch>, Bithost GmbH
  *
  *  All rights reserved
  *
@@ -28,158 +28,90 @@ namespace Bithost\Pdfviewhelpers\ViewHelpers;
  *  This copyright notice MUST APPEAR in all copies of the script!
  * * */
 
-use Bithost\Pdfviewhelpers\Exception\ValidationException;
+use Bithost\Pdfviewhelpers\Exception\Exception;
 
 /**
  * AbstractContentElementViewHelper
  *
- * @author Markus Mächler <markus.maechler@bithost.ch>, Esteban Marin <esteban.marin@bithost.ch>
+ * @author Markus Mächler <markus.maechler@bithost.ch>, Esteban Gehring <esteban.gehring@bithost.ch>
  */
-abstract class AbstractContentElementViewHelper extends AbstractPDFViewHelper {
+abstract class AbstractContentElementViewHelper extends AbstractPDFViewHelper
+{
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        parent::initializeArguments();
 
-	/**
-	 * @return void
-	 */
-	public function initializeArguments() {
-		$this->registerArgument('posX', 'integer', '', FALSE, NULL);
-		$this->registerArgument('posY', 'integer', '', FALSE, NULL);
-		$this->registerArgument('width', 'integer', '', FALSE, NULL);
-		$this->registerArgument('height', 'integer', '', FALSE, NULL);
-	}
+        $this->registerArgument('posX', 'float', 'Absolute posX of the element on the current page.', false, null);
+        $this->registerArgument('posY', 'float', 'Absolute posY of the element on the current page.', false, null);
+        $this->registerArgument('width', 'string', 'Width of the current element in the set unit.', false, null);
+        $this->registerArgument('height', 'float', 'Height of the current element in the set unit.', false, null);
+    }
 
-	/**
-	 * @return void
-	 */
-	public function initialize() {
-		if (!is_null($this->arguments['width'])) {
-			$this->isValidWidth($this->arguments['width']);
-		}
+    /**
+     * @return void
+     *
+     * @throws Exception
+     */
+    public function initialize()
+    {
+        parent::initialize();
 
-		if (!is_null($this->arguments['height'])) {
-			$this->isValidHeight($this->arguments['height']);
-		}
+        if (!is_null($this->arguments['width'])) {
+            $this->validationService->validateWidth($this->arguments['width']);
+        }
 
-		$this->arguments['posX'] = $this->getPDF()->GetX();
-		$this->arguments['posY'] = $this->getPDF()->GetY();
-	}
+        if (!is_null($this->arguments['height'])) {
+            $this->validationService->validateHeight($this->arguments['height']);
+        }
 
-	/**
-	 * @param string $colorHex
-	 *
-	 * @return array
-	 */
-	protected function convertHexToRGB($colorHex) {
-		$colorHex = str_replace("#", "", $colorHex);
+        if (is_null($this->arguments['posX'])) {
+            $this->arguments['posX'] = $this->getPDF()->GetX();
+        }
 
-		if (strlen($colorHex) == 3) {
-			$r = hexdec(substr($colorHex, 0, 1) . substr($colorHex, 0, 1));
-			$g = hexdec(substr($colorHex, 1, 1) . substr($colorHex, 1, 1));
-			$b = hexdec(substr($colorHex, 2, 1) . substr($colorHex, 2, 1));
-		} else {
-			$r = hexdec(substr($colorHex, 0, 2));
-			$g = hexdec(substr($colorHex, 2, 2));
-			$b = hexdec(substr($colorHex, 4, 2));
-		}
+        if (is_null($this->arguments['posY'])) {
+            $this->arguments['posY'] = $this->getPDF()->GetY();
+        }
 
-		return ['R' => $r, 'G' => $g, 'B' => $b];
-	}
+        $this->initializeHeaderAndFooter();
+    }
 
-	/**
-	 * @param string $imageTypes
-	 *
-	 * @return array 
-	 */
-	protected function convertImageTypeStringToImageTypeArray($imageTypes) {
-		return explode(',', str_replace(' ', '', $imageTypes));
-	}
+    /**
+     * @return void
+     *
+     * @throws Exception
+     */
+    protected function initializeHeaderAndFooter()
+    {
+        if ($this->viewHelperVariableContainer->get('DocumentViewHelper', 'pageNeedsHeader')) {
+            $this->viewHelperVariableContainer->addOrUpdate('DocumentViewHelper', 'pageNeedsHeader', false);
 
-	/**
-	 * @return void
-	 */
-	protected function initializeMultiColumnSupport() {
-		$multiColumnContext = $this->getMultiColumnContext();
+            $this->getPDF()->renderHeader();
+        }
+    }
 
-		if ($multiColumnContext['isInAColumn']) {
-			$this->arguments['width'] = $multiColumnContext['columnWidth'];
-			$this->arguments['posX'] = $multiColumnContext['currentPosX'];
-		}
-	}
+    /**
+     * @return void
+     *
+     * @throws Exception
+     */
+    protected function initializeMultiColumnSupport()
+    {
+        $multiColumnContext = $this->getCurrentMultiColumnContext();
 
-	/**
-	 * @param string $src
-	 *
-	 * @return string
-	 *
-	 * @throws ValidationException
-	 */
-	protected function getImageRenderMode($src) {
-		$fileExtension = pathinfo($src, PATHINFO_EXTENSION);
+        if ($multiColumnContext !== null && $multiColumnContext['isInAColumn']) {
+            if ($this->arguments['width'] === null) {
+                $this->arguments['width'] =  $multiColumnContext['columnWidth'];
+            } else {
+                $convertedWidth = $this->conversionService->convertSpeakingWidthToTcpdfWidth($this->arguments['width'], $multiColumnContext['columnWidth']);
+                $this->arguments['width'] = min($convertedWidth, $multiColumnContext['columnWidth']);
+            }
 
-		if (in_array($fileExtension, $this->convertImageTypeStringToImageTypeArray($this->settings['config']['allowedImageTypes']['image']))) {
-			return 'image';
-		} elseif (in_array($fileExtension, $this->convertImageTypeStringToImageTypeArray($this->settings['config']['allowedImageTypes']['imageEPS']))) {
-			return 'imageEPS';
-		} elseif (in_array($fileExtension, $this->convertImageTypeStringToImageTypeArray($this->settings['config']['allowedImageTypes']['imageSVG']))) {
-			return 'imageSVG';
-		} else {
-			throw new ValidationException('Imagetype is not supported. ERROR: 1363778014', 1363778014);
-		}
-	}
-
-	/**
-	 * @return array|bool $multiColumnContext
-	 */
-	protected function getMultiColumnContext() {
-		if ($this->viewHelperVariableContainer->exists('MultiColumnViewHelper', 'multiColumnContext')) {
-			return $this->viewHelperVariableContainer->get('MultiColumnViewHelper', 'multiColumnContext');
-		} else {
-			return FALSE;
-		}
-	}
-
-	/**
-	 * @param string $colorHex
-	 *
-	 * @return boolean
-	 *
-	 * @throws ValidationException
-	 */
-	protected function isValidColor($colorHex) {
-		if (preg_match('/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/', $colorHex)) {
-			return TRUE;
-		} else {
-			throw new ValidationException('Your Color is invalid. Use #000 or #000000.', 1363765272);
-		}
-	}
-
-	/**
-	 * @param string $width
-	 *
-	 * @return boolean
-	 *
-	 * @throws ValidationException
-	 */
-	protected function isValidWidth($width) {
-		if (is_numeric($width)) {
-			return TRUE;
-		} else {
-			throw new ValidationException('Width must be an integer. ERROR: 1363765672', 1363765372);
-		}
-	}
-
-	/**
-	 * @param string $height
-	 *
-	 * @return boolean
-	 *
-	 * @throws ValidationException
-	 */
-	protected function isValidHeight($height) {
-		if (is_numeric($height)) {
-			return TRUE;
-		} else {
-			throw new ValidationException('Height must be an integer. ERROR: 1363766372', 1363765372);
-		}
-	}
-
+            $this->arguments['posX'] = $multiColumnContext['currentPosX'];
+        } elseif ($this->arguments['width'] !== null) {
+            $this->arguments['width'] = $this->conversionService->convertSpeakingWidthToTcpdfWidth($this->arguments['width'], $this->getPDF()->getInnerPageWidth());
+        }
+    }
 }

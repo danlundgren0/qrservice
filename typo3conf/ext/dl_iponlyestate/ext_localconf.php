@@ -88,23 +88,24 @@ if (!defined('TYPO3_MODE')) {
 );
 ## EXTENSION BUILDER DEFAULTS END TOKEN - Everything BEFORE this line is overwritten with the defaults of the extension builder
 
-$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_tcemain.php']['processDatamapClass'][] = \DanLundgren\DlIponlyestate\Hooks\InjectCopyAndPastee::class . '->processDatamap_postProcessFieldArray';
+//EXAMPLE FROM NEWS
+//$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_tcemain.php']['clearCachePostProc'][] = \GeorgRinger\News\Utility\ClassCacheManager::class . '->reBuild';
 
+
+//$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_tcemain.php']['processDatamapClass'][] = \GeorgRinger\News\Utility\ClassCacheManager::class . '->reBuild';
+
+$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_tcemain.php']['processDatamapClass'][] = \DanLundgren\DlIponlyestate\Hooks\InjectCopyAndPaste::class;
+
+
+//$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_tcemain.php']['processCmdmapClass'][] = 'EXT:dl_iponlyestate/Classes/Hooks/copyPageTree.php:DanLundgren\DlIponlyestate\Hooks\injectCopyAndPaste';
+
+$GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['felogin']['login_confirmed'][] = \DanLundgren\DlIponlyestate\Hooks\SetLoginCookie::class . '->setLoginCookie';
+$GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['felogin']['logout_confirmed'][] = \DanLundgren\DlIponlyestate\Hooks\SetLoginCookie::class . '->delLoginCookie';
+//$GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['felogin']['beforeRedirect'][] = \DanLundgren\DlIponlyestate\Hooks\SetLoginCookie::class . '->delLoginCookie';
+
+//THIS IS FROM OLD SITE
 /*
-$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_tcemain.php']['processDatamapClass'][] = 'EXT:dl_iponlyestate/Classes/Hooks/copyPageTree.php:DanLundgren\DlIponlyestate\Hooks\injectCopyAndPaste';
-*/
-/*
-$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_tcemain.php']['processDatamapClass'][] = 'EXT:dl_iponlyestate/Classes/Hooks/copyPageTree.php:DanLundgren\DlIponlyestate\Hooks\injectCopyAndPaste';
-$GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['t3lib/class.t3lib_tcemain.php']['processCmdmapClass'][] = 'EXT:dl_iponlyestate/Classes/Hooks/copyPageTree.php:DanLundgren\DlIponlyestate\Hooks\injectCopyAndPaste';
 $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['felogin']['login_confirmed'][] = 'EXT:dl_iponlyestate/Classes/Hooks/SetLoginCookie.php:DanLundgren\DlIponlyestate\Hooks\SetLoginCookie->setLoginCookie';
 $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['felogin']['logout_confirmed'][] = 'EXT:dl_iponlyestate/Classes/Hooks/SetLoginCookie.php:DanLundgren\DlIponlyestate\Hooks\SetLoginCookie->delLoginCookie';
 $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['felogin']['beforeRedirect'][] = 'EXT:dl_iponlyestate/Classes/Hooks/SetLoginCookie.php:DanLundgren\DlIponlyestate\Hooks\SetLoginCookie->delLoginCookie';
-\TYPO3\CMS\Extbase\Utility\ExtensionUtility::registerTypeConverter('DanLundgren\\DlIponlyestate\\Property\\TypeConverter\\UploadedFileReferenceConverter');
-\TYPO3\CMS\Extbase\Utility\ExtensionUtility::registerTypeConverter('DanLundgren\\DlIponlyestate\\Property\\TypeConverter\\ObjectStorageConverter');
-
-
-
-\TYPO3\CMS\Extbase\Utility\ExtensionUtility::registerTypeConverter('DanLundgren\\DlIponlyestate\\Property\\TypeConverter\\UploadedFileReferenceConverter');
-\TYPO3\CMS\Extbase\Utility\ExtensionUtility::registerTypeConverter('DanLundgren\\DlIponlyestate\\Property\\TypeConverter\\ObjectStorageConverter');
-
 */

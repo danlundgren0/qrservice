@@ -7,7 +7,7 @@ namespace Bithost\Pdfviewhelpers\ViewHelpers;
  * This file is part of the "PDF ViewHelpers" Extension for TYPO3 CMS.
  *
  *  (c) 2016 Markus Mächler <markus.maechler@bithost.ch>, Bithost GmbH
- *           Esteban Marin <esteban.marin@bithost.ch>, Bithost GmbH
+ *           Esteban Gehring <esteban.gehring@bithost.ch>, Bithost GmbH
  *
  *  All rights reserved
  *
@@ -28,18 +28,22 @@ namespace Bithost\Pdfviewhelpers\ViewHelpers;
  *  This copyright notice MUST APPEAR in all copies of the script!
  * * */
 
+use Bithost\Pdfviewhelpers\Exception\Exception;
+
 /**
  * PageBreakViewHelper
  *
- * @author Markus Mächler <markus.maechler@bithost.ch>, Esteban Marin <esteban.marin@bithost.ch>
+ * @author Markus Mächler <markus.maechler@bithost.ch>, Esteban Gehring <esteban.gehring@bithost.ch>
  */
-class PageBreakViewHelper extends AbstractPDFViewHelper {
-
-	/**
-	 * @return void
-	 */
-	public function render() {
-		$this->getPDF()->AddPage();
-	}
-
+class PageBreakViewHelper extends AbstractPDFViewHelper
+{
+    /**
+     * @return void
+     *
+     * @throws Exception
+     */
+    public function render()
+    {
+        $this->getPDF()->AddPage();
+    }
 }

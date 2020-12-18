@@ -44,31 +44,67 @@
 	<div class="resptech_old col-md-1">{report.respTechnicianName}</div>
 	<div class="critical_old col-md-1">
 		<a data-report="{report.reportUid}" data-estate="{estate.estateUid}" data-method="getCriticalReport" class="show-more estate-link" data-toggle="modal" data-target="#criticalModalReport">
-    		<div class="square {v:variable.get(name: 'criticalColor')}">
-    			{report.noOfCriticalRemarks}
-    		</div>
+			<f:if condition="{report.noOfCriticalRemarks}>0">
+				<f:then>
+		    		<div class="square {v:variable.get(name: 'criticalColor')}">
+		    			{report.noOfCriticalRemarks}
+		    		</div>					
+				</f:then>
+				<f:else>
+		    		<div class="square">
+		    			{report.noOfCriticalRemarks}
+		    		</div>
+				</f:else>
+			</f:if>
 		</a>
 	</div>
 	<div class="remark_old col-md-1">
 		<a data-report="{report.reportUid}" data-estate="{estate.estateUid}" data-method="getRemarkReport" class="show-more estate-link" data-toggle="modal" data-target="#remarkModalReport">
-    		<div class="square  {v:variable.get(name: 'remarkColor')}">
-    			{report.noOfRemarks}
-    		</div>
+			<f:if condition="{report.noOfRemarks}>0">
+				<f:then>
+		    		<div class="square {v:variable.get(name: 'remarkColor')}">
+		    			{report.noOfRemarks}
+		    		</div>					
+				</f:then>
+				<f:else>
+		    		<div class="square">
+		    			{report.noOfRemarks}
+		    		</div>
+				</f:else>
+			</f:if>
 		</a>
 	</div>
 	<div class="preremark_old col-md-1">
 		<a data-report="{report.reportUid}" data-estate="{estate.estateUid}" data-method="getAllCompletedRemarksReport" class="show-more estate-link" data-toggle="modal" data-target="#getAllCompletedRemarksReport">
-			<div class="square {v:variable.get(name: 'completedNotesColor')}">
-				{report.noOfCompletedNotes}
-			</div>
+			<f:if condition="{report.noOfCompletedNotes}>0">
+				<f:then>
+		    		<div class="square {v:variable.get(name: 'completedNotesColor')}">
+		    			{report.noOfCompletedNotes}
+		    		</div>					
+				</f:then>
+				<f:else>
+		    		<div class="square">
+		    			{report.noOfCompletedNotes}
+		    		</div>
+				</f:else>
+			</f:if>
 		</a>
 	</div>
 	<div class="exetech_old col-md-1">{report.execTechnicianName}</div>
 	<div class="purchase_old col-md-1">
 		<a data-report="{report.reportUid}" data-estate="{estate.estateUid}" data-method="getPurchaseReport" class="show-more estate-link" data-toggle="modal" data-target="#purchaseModalReport">
-    		<div class="square {v:variable.get(name: 'purchaseColor')}">
-    			{report.noOfPurchases}
-    		</div>
+			<f:if condition="{report.noOfPurchases}>0">
+				<f:then>
+		    		<div class="square {v:variable.get(name: 'purchaseColor')}">
+		    			{report.noOfPurchases}
+		    		</div>					
+				</f:then>
+				<f:else>
+		    		<div class="square">
+		    			{report.noOfPurchases}
+		    		</div>
+				</f:else>
+			</f:if>
 		</a>
 	</div>
 	<div class="admin-note col-md-1">

@@ -7,7 +7,7 @@ namespace Bithost\Pdfviewhelpers\ViewHelpers;
  * This file is part of the "PDF ViewHelpers" Extension for TYPO3 CMS.
  *
  *  (c) 2016 Markus Mächler <markus.maechler@bithost.ch>, Bithost GmbH
- *           Esteban Marin <esteban.marin@bithost.ch>, Bithost GmbH
+ *           Esteban Gehring <esteban.gehring@bithost.ch>, Bithost GmbH
  *
  *  All rights reserved
  *
@@ -28,18 +28,64 @@ namespace Bithost\Pdfviewhelpers\ViewHelpers;
  *  This copyright notice MUST APPEAR in all copies of the script!
  * * */
 
+use Bithost\Pdfviewhelpers\Exception\Exception;
+
 /**
  * ColumnViewHelper
  *
- * @author Markus Mächler <markus.maechler@bithost.ch>, Esteban Marin <esteban.marin@bithost.ch>
+ * @author Markus Mächler <markus.maechler@bithost.ch>, Esteban Gehring <esteban.gehring@bithost.ch>
  */
-class ColumnViewHelper extends AbstractPDFViewHelper {
+class ColumnViewHelper extends AbstractPDFViewHelper
+{
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        parent::initializeArguments();
 
-	/**
-	 * @return void
-	 */
-	public function render() {
-		$this->renderChildren();
-	}
+        $this->registerArgument('width', 'string', 'The width of this column in the current unit or percentage.', false, null);
+        $this->registerArgument('padding', 'array', 'The padding of this column given as array.', false, []);
+    }
 
+    /**
+     * @return void
+     *
+     * @throws Exception
+     */
+    public function initialize()
+    {
+        parent::initialize();
+
+        $multiColumnContext = $this->getCurrentMultiColumnContext();
+        $this->arguments['padding'] = array_merge(['top' => 0, 'right' => 0, 'bottom' => 0, 'left' => 0], $this->arguments['padding']);
+
+        $this->validationService->validatePadding($this->arguments['padding']);
+
+        if (strlen($this->arguments['width'])) {
+            if ($this->validationService->validateWidth($this->arguments['width'])) {
+                $multiColumnContext['columnWidth'] = $this->conversionService->convertSpeakingWidthToTcpdfWidth($this->arguments['width'], $multiColumnContext['pageWidthWithoutMargins']);
+            }
+        } else {
+            $multiColumnContext['columnWidth'] = $multiColumnContext['defaultColumnWidth'];
+        }
+
+        $multiColumnContext['columnWidth'] = $multiColumnContext['columnWidth'] - $this->arguments['padding']['left'] - $this->arguments['padding']['right'];
+        $multiColumnContext['currentPosX'] = $multiColumnContext['currentPosX'] + $this->arguments['padding']['left'];
+        $multiColumnContext['columnPadding'] = $this->arguments['padding'];
+
+        $this->setCurrentMultiColumnContext($multiColumnContext);
+    }
+
+    /**
+     * @return void
+     *
+     * @throws Exception
+     */
+    public function render()
+    {
+        $this->getPDF()->SetY($this->getPDF()->GetY() + $this->arguments['padding']['top']);
+        $this->renderChildren();
+        $this->getPDF()->SetY($this->getPDF()->GetY() + $this->arguments['padding']['bottom']);
+    }
 }

@@ -129,7 +129,8 @@ class QRcodesGeneratorController extends \TYPO3\CMS\Extbase\Mvc\Controller\Actio
         )
         ->andWhere(
             $queryBuilder->expr()->eq('doktype', 1)
-        );        
+        )
+        ->orderBy('sorting');;        
         $statement = $queryBuilder->execute();
         while ($row = $statement->fetch()) {
            $subPages[] = $row;

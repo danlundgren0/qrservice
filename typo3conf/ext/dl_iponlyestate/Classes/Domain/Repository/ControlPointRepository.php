@@ -39,7 +39,7 @@ class ControlPointRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
      * @var array
      */
     protected $defaultOrderings = array(
-        'sorting' => \TYPO3\CMS\Extbase\Persistence\QueryInterface::ORDER_ASCENDING
+        'name' => \TYPO3\CMS\Extbase\Persistence\QueryInterface::ORDER_ASCENDING
     );
     
     /**
@@ -50,14 +50,15 @@ class ControlPointRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tx_dliponlyestate_domain_model_controlpoint');
         $queryBuilder
            ->getRestrictions()
-           ->removeAll()
+           //->removeAll()
            ->add(GeneralUtility::makeInstance(DeletedRestriction::class))
         ;
         $queryBuilder->select('uid','title','doktype')
         ->from('pages')
         ->where(
            $queryBuilder->expr()->eq('pid', $pid)
-        );        
+        )
+        ->orderBy('sorting');        
         $subPages = array();
         $statement = $queryBuilder->execute();
         while ($row = $statement->fetch()) {

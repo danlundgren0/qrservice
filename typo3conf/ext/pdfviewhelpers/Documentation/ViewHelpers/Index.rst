@@ -17,9 +17,17 @@ For detailed information about the ViewHelper attributes please refer to the Con
 	DocumentViewHelper/Index
 	PageViewHelper/Index
 	PageBreakViewHelper/Index
+	HeaderAndFooterViewHelper/Index
+	AvoidPageBreakInsideViewHelper/Index
 	MultiColumnViewHelper/Index
 	TextViewHelper/Index
 	HeadlineViewHelper/Index
 	ListViewHelper/Index
-	ImageViewHelper/Index
 	HtmlViewHelper/Index
+	ImageViewHelper/Index
+	LineBreakViewHelper/Index
+	GraphicsLineViewHelper/Index
+	GetPageNumberViewHelper/Index
+	GetPosViewHelper/Index
+	TableOfContentViewHelper/Index
+	BookmarkViewHelper/Index

@@ -7,7 +7,7 @@ namespace Bithost\Pdfviewhelpers\ViewHelpers;
  * This file is part of the "PDF ViewHelpers" Extension for TYPO3 CMS.
  *
  *  (c) 2016 Markus Mächler <markus.maechler@bithost.ch>, Bithost GmbH
- *           Esteban Marin <esteban.marin@bithost.ch>, Bithost GmbH
+ *           Esteban Gehring <esteban.gehring@bithost.ch>, Bithost GmbH
  *
  *  All rights reserved
  *
@@ -28,132 +28,137 @@ namespace Bithost\Pdfviewhelpers\ViewHelpers;
  *  This copyright notice MUST APPEAR in all copies of the script!
  * * */
 
+use Bithost\Pdfviewhelpers\Exception\Exception;
 use Bithost\Pdfviewhelpers\Exception\ValidationException;
 
 /**
  * ListViewHelper
  *
- * @author Markus Mächler <markus.maechler@bithost.ch>, Esteban Marin <esteban.marin@bithost.ch>
+ * @author Markus Mächler <markus.maechler@bithost.ch>, Esteban Gehring <esteban.gehring@bithost.ch>
  */
-class ListViewHelper extends AbstractTextViewHelper {
+class ListViewHelper extends AbstractTextViewHelper
+{
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        parent::initializeArguments();
 
-	/**
-	 * @return void
-	 */
-	public function initializeArguments() {
-		parent::initializeArguments();
+        $this->registerArgument('listElements', 'array', 'A one dimensional array of list elements.', true, null);
+        $this->registerArgument('bulletColor', 'string', 'The color of the bullet.', false, $this->settings['list']['bulletColor']);
+        $this->registerArgument('bulletImageSrc', 'string', 'An image to be used alternatively to the square bullet.', false, $this->settings['list']['bulletImageSrc']);
+        $this->registerArgument('bulletSize', 'integer', 'The size of the bullet.', false, $this->settings['list']['bulletSize']);
+    }
 
-		if (strlen($this->settings['list']['trim'])) {
-			$this->overrideArgument('trim', 'boolean', '', FALSE, (boolean) $this->settings['list']['trim']);
-		}
-		if (strlen($this->settings['list']['removeDoubleWhitespace'])) {
-			$this->overrideArgument('removeDoubleWhitespace', 'boolean', '', FALSE, (boolean) $this->settings['list']['removeDoubleWhitespace']);
-		}
-		if (!empty($this->settings['list']['color'])) {
-			$this->overrideArgument('color', 'string', '', FALSE, $this->settings['list']['color']);
-		}
-		if (!empty($this->settings['list']['fontFamily'])) {
-			$this->overrideArgument('fontFamily', 'string', '', FALSE, $this->settings['list']['fontFamily']);
-		}
-		if (!empty($this->settings['list']['fontSize'])) {
-			$this->overrideArgument('fontSize', 'integer', '', FALSE, $this->settings['list']['fontSize']);
-		}
-		if (!empty($this->settings['list']['fontStyle'])) {
-			$this->overrideArgument('fontStyle', 'string', '', FALSE, $this->settings['list']['fontStyle']);
-		}
-		if (!empty($this->settings['list']['alignment'])) {
-			$this->overrideArgument('alignment', 'string', '', FALSE, $this->settings['list']['alignment']);
-		}
+    /**
+     * @return void
+     *
+     * @throws Exception
+     */
+    public function initialize()
+    {
+        parent::initialize();
 
-		$this->registerArgument('listElements', 'array', '', TRUE, NULL);
-		$this->registerArgument('bulletColor', 'string', '', FALSE, $this->settings['list']['bulletColor']);
-		$this->registerArgument('bulletImageSrc', 'string', '', FALSE, $this->settings['list']['bulletImage']);
-		$this->registerArgument('bulletSize', 'integer', '', FALSE, $this->settings['list']['bulletSize']);
-	}
+        $this->validationService->validateListElements($this->arguments['listElements']);
 
-	/**
-	 * @return void
-	 *
-	 * @throws ValidationException
-	 */
-	public function initialize() {
-		parent::initialize();
+        if (!empty($this->arguments['bulletImageSrc'])) {
+            $bulletImageFile = $this->conversionService->convertFileSrcToFileObject($this->arguments['bulletImageSrc']);
 
-		if (!is_array($this->arguments['padding'])) {
-			if (!empty($this->settings['list']['padding'])) {
-				$this->arguments['padding'] = $this->settings['list']['padding'];
-			} else {
-				$this->arguments['padding'] = $this->settings['generalText']['padding'];
-			}
-		}
-		if ($this->isValidPadding($this->arguments['padding'])) {
-			$this->getPDF()->setCellPaddings(0, 0, $this->arguments['padding']['right'], 0);
-		}
+            if (!($this->conversionService->convertImageExtensionToRenderMode($bulletImageFile->getExtension()) === 'image')) {
+                throw new ValidationException('Image type not supported for list. ERROR: 1363771014', 1363771014);
+            }
+        }
 
-		$this->areValidListElements($this->arguments['listElements']);
+        if (empty($this->arguments['bulletColor'])) {
+            $this->arguments['bulletColor'] = $this->settings['generalText']['color'];
+        }
 
-		if (!empty($this->arguments['bulletImageSrc'])) {
-			if (!($this->getImageRenderMode($this->arguments['bulletImageSrc']) === 'image')) {
-				throw new ValidationException('Imagetype not supported for List. ERROR: 1363771014', 1363771014);
-			}
-		}
+        if ($this->validationService->validateColor($this->arguments['bulletColor'])) {
+            $this->arguments['bulletColor'] = $this->conversionService->convertHexToRGB($this->arguments['bulletColor']);
+        }
 
-		if (empty($this->arguments['bulletColor'])) {
-			$this->arguments['bulletColor'] = $this->settings['generalText']['color'];
-		}
-		if ($this->isValidColor($this->arguments['bulletColor'])) {
-			$this->arguments['bulletColor'] = $this->convertHexToRGB($this->arguments['bulletColor']);
-		}
-	}
+        $this->getPDF()->setCellPaddings(0, 0, 0, 0);
+    }
 
-	/**
-	 * @return void
-	 */
-	public function render() {
-		$this->initializeMultiColumnSupport();
+    /**
+     * @return void
+     *
+     * @throws Exception
+     */
+    public function render()
+    {
+        $this->initializeMultiColumnSupport();
 
-		//indent of the bullet from the left page border
-		$bulletPosX = $this->arguments['posX'] + $this->arguments['padding']['left'];
-		//helps to center the bullet vertically
-		$relativBulletPosY = $this->getPDF()->getFontSize() / 1.6 - $this->arguments['bulletSize'] / 2;
-		$pageMargins = $this->getPDF()->getMargins();
-		//indent of the Text from the left page border
-		$textPosX = $this->arguments['padding']['left'] + 2 * $this->arguments['bulletSize'] + $this->arguments['posX'];
-		//width of the entire element minus the indent for the bullet
-		$textWidth = $this->arguments['width'] - $this->arguments['padding']['left'] - 2 * $this->arguments['bulletSize'];
-		//posY of the line that's being printed
-		$currentPosY = $this->arguments['posY'] + $this->arguments['padding']['top'];
+        //indent of the bullet from the left page border
+        $bulletPosX = $this->arguments['posX'] + $this->arguments['padding']['left'];
+        //helps to center the bullet vertically
+        $relativBulletPosY = ($this->getPDF()->getCellHeight($this->arguments['fontSize']) / $this->getPDF()->getScaleFactor() - $this->arguments['bulletSize']) / 2;
+        //indent of the Text from the left page border
+        $textPosX = $this->arguments['padding']['left'] * 2 + $this->arguments['bulletSize'] + $this->arguments['posX'];
+        //width of the entire element minus the indent for the bullet
+        $textWidth = $this->arguments['width'] - $this->arguments['padding']['left'] - 2 * $this->arguments['bulletSize'];
 
-		foreach ($this->arguments['listElements'] as $listElement) {
-			if (empty($this->arguments['bulletImageSrc'])) {
-				$this->getPDF()->Rect(
-						$bulletPosX, $currentPosY + $relativBulletPosY, $this->arguments['bulletSize'], $this->arguments['bulletSize'], 'F', NULL, [$this->arguments['bulletColor']['R'], $this->arguments['bulletColor']['G'], $this->arguments['bulletColor']['B']]
-				);
-			} else {
-				$this->getPDF()->Image($this->arguments['bulletImageSrc'], $bulletPosX, $currentPosY + $relativBulletPosY, $this->arguments['bulletSize'], NULL, '', '', '', FALSE, 300, '', FALSE, FALSE, 0, FALSE, FALSE, TRUE, FALSE);
-			}
+        //Update y respecting padding
+        $this->getPDF()->SetY($this->arguments['posY'] + $this->arguments['padding']['top']);
 
-			$this->getPDF()->MultiCell($textWidth, $this->arguments['height'], $listElement, 0, $this->getAlignmentString($this->arguments['alignment']), FALSE, 1, $textPosX, $currentPosY, TRUE, 0, FALSE, TRUE, 0, 'T', FALSE);
+        if (!empty($this->arguments['bulletImageSrc'])) {
+            $bulletImageFile = $this->conversionService->convertFileSrcToFileObject($this->arguments['bulletImageSrc']);
+            $bulletImageFileContent = '@' . $bulletImageFile->getContents();
+        }
 
-			$currentPosY += $this->getPDF()->getStringHeight($textWidth, $listElement);
-		}
+        //The height of a single text line
+        $oneLineTextHeight = $this->getPDF()->getStringHeight($textWidth, '.');
 
-		$this->getPDF()->SetY($currentPosY + $this->arguments['padding']['bottom']);
-	}
+        foreach ($this->arguments['listElements'] as $listElement) {
+            if ($this->arguments['autoHyphenation']) {
+                $listElement = $this->hyphenationService->hyphenateText(
+                    $listElement,
+                    $this->hyphenationService->getHyphenFilePath($this->getHyphenFileName())
+                );
+            }
 
-	/**
-	 * @param array $listElements
-	 *
-	 * @return boolean
-	 *
-	 * @throws ValidationException
-	 */
-	protected function areValidListElements(array $listElements) {
-		if (count($listElements) == count($listElements, COUNT_RECURSIVE)) {
-			return TRUE;
-		} else {
-			throw new ValidationException('Only one dimensional Arrays allowed. ERROR: 1363779014', 1363779014);
-		}
-	}
+            $elementStartPage = $this->getPDF()->getPage();
+            $elementStartY = $this->getPDF()->getY();
 
+            if ($this->arguments['paragraphLineFeed']) {
+                $listElement .= "\n";
+            }
+
+            $this->getPDF()->MultiCell($textWidth, $this->arguments['height'], $listElement, 0, $this->conversionService->convertSpeakingAlignmentToTcpdfAlignment($this->arguments['alignment']), false, 1, $textPosX, null, true, 0, false, true, 0, 'T', false);
+
+            $elementEndPage = $this->getPDF()->getPage();
+            $elementEndY = $this->getPDF()->getY();
+
+            $scaledPageHeight = $this->getPDF()->getScaledPageHeight();
+            $breakMargin = $this->getPDF()->getBreakMargin($elementStartPage);
+
+            if ($elementStartY + $oneLineTextHeight >= $scaledPageHeight  - $breakMargin) {
+                //A page break occurred on the first line
+                $elementStartY = $this->getPDF()->getMargins()['top'];
+            } else {
+                //No page break on first line, reset to start page
+                $this->getPDF()->setPage($elementStartPage);
+            }
+
+            if (empty($this->arguments['bulletImageSrc'])) {
+                $this->getPDF()->Rect($bulletPosX, $elementStartY + $relativBulletPosY, $this->arguments['bulletSize'], $this->arguments['bulletSize'], 'F', null, [$this->arguments['bulletColor']['R'], $this->arguments['bulletColor']['G'], $this->arguments['bulletColor']['B']]);
+            } else {
+                $this->getPDF()->Image($bulletImageFileContent, $bulletPosX, $elementStartY + $relativBulletPosY, $this->arguments['bulletSize'], null, '', '', '', false, 300, '', false, false, 0, false, false, true, false);
+            }
+
+            $this->getPDF()->setPage($elementEndPage);
+            $this->getPDF()->setY($elementEndY);
+        }
+
+        $this->getPDF()->SetY($elementEndY + $this->arguments['padding']['bottom']);
+    }
+
+    /**
+     * @return string
+     */
+    protected function getSettingsKey()
+    {
+        return 'list';
+    }
 }

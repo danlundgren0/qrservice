@@ -7,7 +7,7 @@ namespace Bithost\Pdfviewhelpers\ViewHelpers;
  * This file is part of the "PDF ViewHelpers" Extension for TYPO3 CMS.
  *
  *  (c) 2016 Markus Mächler <markus.maechler@bithost.ch>, Bithost GmbH
- *           Esteban Marin <esteban.marin@bithost.ch>, Bithost GmbH
+ *           Esteban Gehring <esteban.gehring@bithost.ch>, Bithost GmbH
  *
  *  All rights reserved
  *
@@ -28,58 +28,180 @@ namespace Bithost\Pdfviewhelpers\ViewHelpers;
  *  This copyright notice MUST APPEAR in all copies of the script!
  * * */
 
-use Bithost\Pdfviewhelpers\Exception\ValidationException;
+use Bithost\Pdfviewhelpers\Exception\Exception;
+use TYPO3\CMS\Core\Imaging\ImageManipulation\CropVariantCollection;
+use TYPO3\CMS\Core\Resource\FileInterface;
+use TYPO3\CMS\Extbase\Service\ImageService;
 
 /**
  * ImageViewHelper
  *
- * @author Markus Mächler <markus.maechler@bithost.ch>, Esteban Marin <esteban.marin@bithost.ch>
+ * @author Markus Mächler <markus.maechler@bithost.ch>, Esteban Gehring <esteban.gehring@bithost.ch>
  */
-class ImageViewHelper extends AbstractContentElementViewHelper {
+class ImageViewHelper extends AbstractContentElementViewHelper
+{
+    /**
+     * @var ImageService
+     */
+    protected $imageService;
 
-	/**
-	 * @return void
-	 */
-	public function initializeArguments() {
-		parent::initializeArguments();
+    /**
+     * @param ImageService $imageService
+     */
+    public function injectImageService(ImageService $imageService)
+    {
+        $this->imageService = $imageService;
+    }
 
-		$this->registerArgument('src', 'string', '', TRUE, NULL);
-	}
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        parent::initializeArguments();
 
-	/**
-	 * @return void
-	 */
-	public function initialize() {
-		parent::initialize();
-	}
+        $this->registerArgument('src', 'mixed', 'The source of the image, can be a TYPO3 path, a File or FileReference object.', true, null);
+        $this->registerArgument('link', 'string', 'The link added to the image.', false, null);
+        $this->registerArgument('alignment', 'string', 'The alignment of the image if it does not fill up the full width.', false, $this->settings['image']['alignment']);
+        $this->registerArgument('fitOnPage', 'boolean', 'If true the image will automatically be rescaled to fit on page.', false, $this->settings['image']['fitOnPage']);
+        $this->registerArgument('padding', 'array', 'The image padding given as array.', false, []);
+        $this->registerArgument('processingInstructions', 'array', 'The processing instructions applied to the image.', false, $this->settings['image']['processingInstructions']);
+    }
 
-	/**
-	 * @return void
-	 *
-	 * @throws ValidationException
-	 */
-	public function render() {
-		$this->initializeMultiColumnSupport();
+    /**
+     * @return void
+     *
+     * @throws Exception
+     */
+    public function initialize()
+    {
+        parent::initialize();
 
-		$src = PATH_site . $this->arguments['src'];
+        $this->arguments['alignment'] = $this->conversionService->convertSpeakingAlignmentToTcpdfAlignment($this->arguments['alignment']);
+        $this->arguments['padding'] = array_merge($this->settings['image']['padding'], $this->arguments['padding']);
+    }
 
-		if (!file_exists($src)) {
-			throw new ValidationException('Image path "' . $this->arguments['src'] . '" does not exist. ERROR: 1471036581', 1471036581);
-		}
+    /**
+     * @return void
+     *
+     * @throws Exception
+     */
+    public function render()
+    {
+        $this->initializeMultiColumnSupport();
 
-		switch ($this->getImageRenderMode($src)) {
-			case 'image':
-				$this->getPDF()->Image($src, $this->arguments['posX'], $this->arguments['posY'], $this->arguments['width'], $this->arguments['height'], '', '', '', FALSE, 300, '', FALSE, FALSE, 0, FALSE, FALSE, TRUE, FALSE);
-				break;
-			case 'imageEPS':
-				$this->getPDF()->ImageEps($src, $this->arguments['posX'], $this->arguments['posY'], $this->arguments['width'], $this->arguments['height'], '', TRUE, '', '', 0, TRUE, FALSE);
-				break;
-			case 'imageSVG':
-				$this->getPDF()->ImageSVG($src, $this->arguments['posX'], $this->arguments['posY'], $this->arguments['width'], $this->arguments['height'], '', '', '', 0, TRUE);
-				break;
-		}
+        $imageFile = $this->conversionService->convertFileSrcToFileObject($this->arguments['src']);
+        $processedImage = $this->processImage($imageFile, $this->arguments['processingInstructions']);
 
-		$this->getPDF()->SetY($this->getPDF()->getImageRBY());
-	}
+        $src = '@' . $processedImage->getContents();
+        $extension = $processedImage->getExtension();
 
+        $multiColumnContext = $this->getCurrentMultiColumnContext();
+        $isInAColumn = is_array($multiColumnContext) && $multiColumnContext['isInAColumn'];
+        $initialMargins = $this->getPDF()->getMargins();
+        $this->arguments['posY'] += $this->arguments['padding']['top'];
+
+        if ($isInAColumn) {
+            $marginLeft = $this->arguments['posX'] + $this->arguments['padding']['left'];
+            $marginRight =  $this->getPDF()->getPageWidth() - $marginLeft - $multiColumnContext['columnWidth'] + $this->arguments['padding']['right'];
+        } else {
+            $marginLeft = $this->arguments['posX'] + $this->arguments['padding']['left'];
+            $marginRight = $initialMargins['right'] + $this->arguments['padding']['right'];
+        }
+
+        $this->getPDF()->SetMargins($marginLeft, $initialMargins['top'], $marginRight);
+
+        switch ($this->conversionService->convertImageExtensionToRenderMode($extension)) {
+            case 'image':
+                $this->getPDF()->Image(
+                    $src,
+                    $this->arguments['posX'],
+                    $this->arguments['posY'],
+                    $this->arguments['width'],
+                    $this->arguments['height'],
+                    $extension,
+                    $this->arguments['link'],
+                    '',
+                    false,
+                    300,
+                    $this->arguments['alignment'],
+                    false,
+                    false,
+                    0,
+                    true,
+                    false,
+                    $this->arguments['fitOnPage'],
+                    false
+                );
+                break;
+            case 'imageEPS':
+                $this->getPDF()->ImageEps(
+                    $src,
+                    $this->arguments['posX'],
+                    $this->arguments['posY'],
+                    $this->arguments['width'],
+                    $this->arguments['height'],
+                    $this->arguments['link'],
+                    true,
+                    '',
+                    $this->arguments['alignment'],
+                    0,
+                    $this->arguments['fitOnPage'],
+                    false
+                );
+                break;
+            case 'imageSVG':
+                $this->getPDF()->ImageSVG(
+                    $src,
+                    $this->arguments['posX'],
+                    $this->arguments['posY'],
+                    $this->arguments['width'],
+                    $this->arguments['height'],
+                    $this->arguments['link'],
+                    '',
+                    $this->arguments['alignment'],
+                    0,
+                    $this->arguments['fitOnPage']
+                );
+                break;
+        }
+
+        $this->getPDF()->SetMargins($initialMargins['left'], $initialMargins['top'], $initialMargins['right']);
+        $this->getPDF()->SetY($this->getPDF()->getImageRBY() + $this->arguments['padding']['bottom']);
+    }
+
+    /**
+     * @param FileInterface $imageFile
+     * @param array $processingInstructions
+     *
+     * @return FileInterface
+     */
+    protected function processImage(FileInterface $imageFile, array $processingInstructions)
+    {
+        $imageFileCrop = $imageFile->hasProperty('crop') && $imageFile->getProperty('crop') ? json_decode($imageFile->getProperty('crop'), true) : [];
+
+        if (!empty($processingInstructions) || !empty($imageFileCrop)) {
+            $argumentsCrop = is_array($processingInstructions['crop']) ? $processingInstructions['crop'] : json_decode($processingInstructions['crop'], true);
+            $argumentsCrop = is_array($argumentsCrop) ? $argumentsCrop : [];
+            $crop = array_merge($imageFileCrop, $argumentsCrop);
+
+            $cropVariantCollection = CropVariantCollection::create((string) json_encode($crop));
+            $cropVariant = $processingInstructions['cropVariant'] ?? 'default';
+            $cropArea = $cropVariantCollection->getCropArea($cropVariant);
+
+            unset($processingInstructions['cropVariant']);
+
+            if ($cropArea->isEmpty()) {
+                unset($processingInstructions['crop']);
+            } else {
+                $processingInstructions['crop'] = $cropArea->makeAbsoluteBasedOnFile($imageFile);
+            }
+
+            if (!empty($processingInstructions)) {
+                return $this->imageService->applyProcessingInstructions($imageFile, $processingInstructions);
+            }
+        }
+
+        return $imageFile;
+    }
 }

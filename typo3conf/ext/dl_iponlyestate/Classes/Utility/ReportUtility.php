@@ -1,6 +1,9 @@
 <?php
 namespace DanLundgren\DlIponlyestate\Utility;
-
+use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Database\Query\QueryBuilder;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
 
 /***************************************************************
  *
@@ -93,7 +96,7 @@ class ReportUtility {
                 	if($clickedReport->getDate()->format('Y-m-d')>=$report->getDate()->format('Y-m-d')) {                                                
 	                    foreach($report->getNotes() as $note) {
 	                        $noteIdentifier = 'note_'.$note->getUid();
-                            if(!$note->getQuestion() || !$q) {
+                            if(!$note || !$note->getQuestion() || !$q) {
                                 continue;
                             }
 	                        if($note->getQuestion()->getUid() == $q->getUid()) {
@@ -121,14 +124,24 @@ class ReportUtility {
                                 $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['notes'][$noteIdentifier]['date'] = $note->getDate()->format('Y-m-d');
                                 $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['notes'][$noteIdentifier]['exeTech'] = $note->getExecutiveTechnician();
 	                            //$reportsArr[$cpIdentifier]['image'] = $note->getImages();
+                                $queryBuilderImage = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_file_reference');
+                                $queryBuilderSysFile = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_file');
 	                            if($note->getImages() && $note->getImages()->getUid()>0) {
-	                                $fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages()->getUid());
-	                                while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($fileRefUidRes)) {
+	                                //$fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages()->getUid());
+                                    $queryBuilderImage->select('uid_local')
+                                        ->from('sys_file_reference')
+                                        ->where($queryBuilderImage->expr()->eq('uid', $note->getImages()->getUid()));
+                                    $fileRefUidRes = $queryBuilderImage->execute();
+                                    while ($row = $fileRefUidRes->fetch()) {
 	                                    $uidLocal = $row['uid_local'];
 	                                    break;
 	                                }
-	                                $sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
-	                                while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($sysFileRes)) {
+	                                //$sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
+                                    $queryBuilderSysFile->select('*')
+                                        ->from('sys_file')
+                                        ->where($queryBuilderSysFile->expr()->eq('uid', $uidLocal));
+                                    $sysFileRes = $queryBuilderSysFile->execute();
+	                                while ($row = $sysFileRes->fetch()) {
 	                                    $sysFile = $row;
 	                                    break;
 	                                }
@@ -137,13 +150,21 @@ class ReportUtility {
 	                                }
 	                            }
                                 if($note->getImages2() && $note->getImages2()->getUid()>0) {
-                                    $fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages2()->getUid());
-                                    while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($fileRefUidRes)) {
+                                    //$fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages2()->getUid());
+                                    $queryBuilderImage->select('uid_local')
+                                        ->from('sys_file_reference')
+                                        ->where($queryBuilderImage->expr()->eq('uid', $note->getImages2()->getUid()));
+                                    $fileRefUidRes = $queryBuilderImage->execute();
+                                    while ($row = $fileRefUidRes->fetch()) {
                                         $uidLocal = $row['uid_local'];
                                         break;
                                     }
-                                    $sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
-                                    while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($sysFileRes)) {
+                                    //$sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
+                                    $queryBuilderSysFile->select('*')
+                                        ->from('sys_file')
+                                        ->where($queryBuilderSysFile->expr()->eq('uid', $uidLocal));
+                                    $sysFileRes = $queryBuilderSysFile->execute();
+                                    while ($row = $sysFileRes->fetch()) {
                                         $sysFile = $row;
                                         break;
                                     }
@@ -152,13 +173,20 @@ class ReportUtility {
                                     }
                                 }
                                 if($note->getImages3() && $note->getImages3()->getUid()>0) {
-                                    $fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages3()->getUid());
-                                    while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($fileRefUidRes)) {
+                                    //$fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages3()->getUid());
+                                    $queryBuilderImage->select('uid_local')
+                                        ->from('sys_file_reference')
+                                        ->where($queryBuilderImage->expr()->eq('uid', $note->getImages3()->getUid()));
+                                    $fileRefUidRes = $queryBuilderImage->execute();
+                                    while ($row = $fileRefUidRes->fetch()) {
                                         $uidLocal = $row['uid_local'];
                                         break;
                                     }
-                                    $sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
-                                    while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($sysFileRes)) {
+                                    $queryBuilderSysFile->select('*')
+                                        ->from('sys_file')
+                                        ->where($queryBuilderSysFile->expr()->eq('uid', $uidLocal));
+                                    $sysFileRes = $queryBuilderSysFile->execute();
+                                    while ($row = $sysFileRes->fetch()) {
                                         $sysFile = $row;
                                         break;
                                     }
@@ -167,13 +195,20 @@ class ReportUtility {
                                     }
                                 }
                                 if($note->getImages4() && $note->getImages4()->getUid()>0) {
-                                    $fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages4()->getUid());
-                                    while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($fileRefUidRes)) {
+                                    //$fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages4()->getUid());
+                                    $queryBuilderImage->select('uid_local')
+                                        ->from('sys_file_reference')
+                                        ->where($queryBuilderImage->expr()->eq('uid', $note->getImages4()->getUid()));
+                                    $fileRefUidRes = $queryBuilderImage->execute();
+                                    while ($row = $fileRefUidRes->fetch()) {
                                         $uidLocal = $row['uid_local'];
                                         break;
                                     }
-                                    $sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
-                                    while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($sysFileRes)) {
+                                    $queryBuilderSysFile->select('*')
+                                        ->from('sys_file')
+                                        ->where($queryBuilderSysFile->expr()->eq('uid', $uidLocal));
+                                    $sysFileRes = $queryBuilderSysFile->execute();
+                                    while ($row = $sysFileRes->fetch()) {
                                         $sysFile = $row;
                                         break;
                                     }
@@ -182,13 +217,20 @@ class ReportUtility {
                                     }
                                 }
                                 if($note->getImages5() && $note->getImages5()->getUid()>0) {
-                                    $fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages5()->getUid());
-                                    while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($fileRefUidRes)) {
+                                    //$fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages5()->getUid());
+                                    $queryBuilderImage->select('uid_local')
+                                        ->from('sys_file_reference')
+                                        ->where($queryBuilderImage->expr()->eq('uid', $note->getImages5()->getUid()));
+                                    $fileRefUidRes = $queryBuilderImage->execute();
+                                    while ($row = $fileRefUidRes->fetch()) {
                                         $uidLocal = $row['uid_local'];
                                         break;
                                     }
-                                    $sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
-                                    while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($sysFileRes)) {
+                                    $queryBuilderSysFile->select('*')
+                                        ->from('sys_file')
+                                        ->where($queryBuilderSysFile->expr()->eq('uid', $uidLocal));
+                                    $sysFileRes = $queryBuilderSysFile->execute();
+                                    while ($row = $sysFileRes->fetch()) {
                                         $sysFile = $row;
                                         break;
                                     }
@@ -341,14 +383,24 @@ class ReportUtility {
                         $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['notes'][$noteIdentifier]['date'] = $note->getDate()->format('Y-m-d');
                         $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['notes'][$noteIdentifier]['exeTech'] = $note->getExecutiveTechnician();
                         //$reportsArr[$cpIdentifier]['image'] = $note->getImages();
+                        $queryBuilderImage = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_file_reference');
+                        $queryBuilderSysFile = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_file');
                         if($note->getImages() && $note->getImages()->getUid()>0) {
-                            $fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages()->getUid());
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($fileRefUidRes)) {
+                            //$fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages()->getUid());
+                            $queryBuilderImage->select('uid_local')
+                                ->from('sys_file_reference')
+                                ->where($queryBuilderImage->expr()->eq('uid', $note->getImages()->getUid()));
+                            $fileRefUidRes = $queryBuilderImage->execute();
+                            while ($row = $fileRefUidRes->fetch()) {
                                 $uidLocal = $row['uid_local'];
                                 break;
                             }
-                            $sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($sysFileRes)) {
+                            //$sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
+                            $queryBuilderSysFile->select('*')
+                                ->from('sys_file')
+                                ->where($queryBuilderSysFile->expr()->eq('uid', $uidLocal));
+                            $sysFileRes = $queryBuilderImage->execute();
+                            while ($row = $sysFileRes->fetch()) {
                                 $sysFile = $row;
                                 break;
                             }
@@ -357,13 +409,21 @@ class ReportUtility {
                             }
                         }
                         if($note->getImages2() && $note->getImages2()->getUid()>0) {
-                            $fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages2()->getUid());
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($fileRefUidRes)) {
+                            //$fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages2()->getUid());
+                            $queryBuilderImage->select('uid_local')
+                                ->from('sys_file_reference')
+                                ->where($queryBuilderImage->expr()->eq('uid', $note->getImages2()->getUid()));
+                            $fileRefUidRes = $queryBuilderImage->execute();
+                            while ($row = $fileRefUidRes->fetch()) {
                                 $uidLocal = $row['uid_local'];
                                 break;
                             }
-                            $sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($sysFileRes)) {
+                            //$sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
+                            $queryBuilderSysFile->select('*')
+                                ->from('sys_file')
+                                ->where($queryBuilderSysFile->expr()->eq('uid', $uidLocal));
+                            $sysFileRes = $queryBuilderImage->execute();
+                            while ($row = $sysFileRes->fetch()) {
                                 $sysFile = $row;
                                 break;
                             }
@@ -372,13 +432,21 @@ class ReportUtility {
                             }
                         }
                         if($note->getImages3() && $note->getImages3()->getUid()>0) {
-                            $fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages3()->getUid());
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($fileRefUidRes)) {
+                            //$fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages3()->getUid());
+                            $queryBuilderImage->select('uid_local')
+                                ->from('sys_file_reference')
+                                ->where($queryBuilderImage->expr()->eq('uid', $note->getImages3()->getUid()));
+                            $fileRefUidRes = $queryBuilderImage->execute();
+                            while ($row = $fileRefUidRes->fetch()) {
                                 $uidLocal = $row['uid_local'];
                                 break;
                             }
-                            $sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($sysFileRes)) {
+                            //$sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
+                            $queryBuilderSysFile->select('*')
+                                ->from('sys_file')
+                                ->where($queryBuilderSysFile->expr()->eq('uid', $uidLocal));
+                            $sysFileRes = $queryBuilderImage->execute();
+                            while ($row = $sysFileRes->fetch()) {
                                 $sysFile = $row;
                                 break;
                             }
@@ -387,13 +455,21 @@ class ReportUtility {
                             }
                         }
                         if($note->getImages4() && $note->getImages4()->getUid()>0) {
-                            $fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages4()->getUid());
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($fileRefUidRes)) {
+                            //$fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages4()->getUid());
+                            $queryBuilderImage->select('uid_local')
+                                ->from('sys_file_reference')
+                                ->where($queryBuilderImage->expr()->eq('uid', $note->getImages4()->getUid()));
+                            $fileRefUidRes = $queryBuilderImage->execute();
+                            while ($row = $fileRefUidRes->fetch()) {
                                 $uidLocal = $row['uid_local'];
                                 break;
                             }
-                            $sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($sysFileRes)) {
+                            //$sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
+                            $queryBuilderSysFile->select('*')
+                                ->from('sys_file')
+                                ->where($queryBuilderSysFile->expr()->eq('uid', $uidLocal));
+                            $sysFileRes = $queryBuilderImage->execute();
+                            while ($row = $sysFileRes->fetch()) {
                                 $sysFile = $row;
                                 break;
                             }
@@ -402,13 +478,21 @@ class ReportUtility {
                             }
                         }
                         if($note->getImages5() && $note->getImages5()->getUid()>0) {
-                            $fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages5()->getUid());
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($fileRefUidRes)) {
+                            //$fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages5()->getUid());
+                            $queryBuilderImage->select('uid_local')
+                                ->from('sys_file_reference')
+                                ->where($queryBuilderImage->expr()->eq('uid', $note->getImages5()->getUid()));
+                            $fileRefUidRes = $queryBuilderImage->execute();
+                            while ($row = $fileRefUidRes->fetch()) {
                                 $uidLocal = $row['uid_local'];
                                 break;
                             }
-                            $sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($sysFileRes)) {
+                            //$sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
+                            $queryBuilderSysFile->select('*')
+                                ->from('sys_file')
+                                ->where($queryBuilderSysFile->expr()->eq('uid', $uidLocal));
+                            $sysFileRes = $queryBuilderImage->execute();
+                            while ($row = $sysFileRes->fetch()) {
                                 $sysFile = $row;
                                 break;
                             }
@@ -531,7 +615,7 @@ class ReportUtility {
                 $qIsReported = false;
                 foreach($clickedReport->getNotes() as $note) {
                     $noteIdentifier = 'note_'.$note->getUid();
-                    if(is_array($note) && $note->getQuestion()->getUid() == $q->getUid()) {
+                    if($note && $note->getQuestion() && $note->getQuestion()->getUid() == $q->getUid()) {
                         $qIsReported = true;
                         $noOfQuestionsReported += 1;
                         if($note->getIsComplete()) {
@@ -557,14 +641,24 @@ class ReportUtility {
                         $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['notes'][$noteIdentifier]['remarkType'] = $note->getRemarkType();
                         $reportsArr['controlPoints'][$cpIdentifier]['questions'][$questIdentifier]['notes'][$noteIdentifier]['status'] = 'checked-'.$note->getRemarkType();                        
                         //$reportsArr[$cpIdentifier]['image'] = $note->getImages();
+                        $queryBuilderImage = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_file_reference');
+                        $queryBuilderSysFile = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_file');
                         if($note->getImages() && $note->getImages()->getUid()>0) {
-                            $fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages()->getUid());
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($fileRefUidRes)) {
+                            //$fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages()->getUid());
+                            $queryBuilderImage->select('uid_local')
+                                ->from('sys_file_reference')
+                                ->where($queryBuilderImage->expr()->eq('uid', $note->getImages()->getUid()));
+                            $fileRefUidRes = $queryBuilderImage->execute();
+                            while ($row = $fileRefUidRes->fetch()) {
                                 $uidLocal = $row['uid_local'];
                                 break;
                             }
-                            $sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($sysFileRes)) {
+                            //$sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
+                            $queryBuilderSysFile->select('*')
+                                ->from('sys_file')
+                                ->where($queryBuilderSysFile->expr()->eq('uid', $uidLocal));
+                            $sysFileRes = $queryBuilderImage->execute();
+                            while ($row = $sysFileRes->fetch()) {
                                 $sysFile = $row;
                                 break;
                             }
@@ -573,13 +667,21 @@ class ReportUtility {
                             }
                         }
                         if($note->getImages2() && $note->getImages2()->getUid()>0) {
-                            $fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages2()->getUid());
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($fileRefUidRes)) {
+                            //$fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages2()->getUid());
+                            $queryBuilderImage->select('uid_local')
+                                ->from('sys_file_reference')
+                                ->where($queryBuilderImage->expr()->eq('uid', $note->getImages2()->getUid()));
+                            $fileRefUidRes = $queryBuilderImage->execute();
+                            while ($row = $fileRefUidRes->fetch()) {
                                 $uidLocal = $row['uid_local'];
                                 break;
                             }
-                            $sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($sysFileRes)) {
+                            //$sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
+                            $queryBuilderSysFile->select('*')
+                                ->from('sys_file')
+                                ->where($queryBuilderSysFile->expr()->eq('uid', $uidLocal));
+                            $sysFileRes = $queryBuilderImage->execute();
+                            while ($row = $sysFileRes->fetch()) {
                                 $sysFile = $row;
                                 break;
                             }
@@ -588,13 +690,21 @@ class ReportUtility {
                             }
                         }
                         if($note->getImages3() && $note->getImages3()->getUid()>0) {
-                            $fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages3()->getUid());
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($fileRefUidRes)) {
+                            //$fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages3()->getUid());
+                            $queryBuilderImage->select('uid_local')
+                                ->from('sys_file_reference')
+                                ->where($queryBuilderImage->expr()->eq('uid', $note->getImages3()->getUid()));
+                            $fileRefUidRes = $queryBuilderImage->execute();
+                            while ($row = $fileRefUidRes->fetch()) {
                                 $uidLocal = $row['uid_local'];
                                 break;
                             }
-                            $sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($sysFileRes)) {
+                            //$sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
+                            $queryBuilderSysFile->select('*')
+                                ->from('sys_file')
+                                ->where($queryBuilderSysFile->expr()->eq('uid', $uidLocal));
+                            $sysFileRes = $queryBuilderImage->execute();
+                            while ($row = $sysFileRes->fetch()) {
                                 $sysFile = $row;
                                 break;
                             }
@@ -603,13 +713,21 @@ class ReportUtility {
                             }
                         }
                         if($note->getImages4() && $note->getImages4()->getUid()>0) {
-                            $fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages4()->getUid());
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($fileRefUidRes)) {
+                            //$fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages4()->getUid());
+                            $queryBuilderImage->select('uid_local')
+                                ->from('sys_file_reference')
+                                ->where($queryBuilderImage->expr()->eq('uid', $note->getImages4()->getUid()));
+                            $fileRefUidRes = $queryBuilderImage->execute();
+                            while ($row = $fileRefUidRes->fetch()) {
                                 $uidLocal = $row['uid_local'];
                                 break;
                             }
-                            $sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($sysFileRes)) {
+                            //$sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
+                            $queryBuilderSysFile->select('*')
+                                ->from('sys_file')
+                                ->where($queryBuilderSysFile->expr()->eq('uid', $uidLocal));
+                            $sysFileRes = $queryBuilderImage->execute();
+                            while ($row = $sysFileRes->fetch()) {
                                 $sysFile = $row;
                                 break;
                             }
@@ -618,13 +736,21 @@ class ReportUtility {
                             }
                         }
                         if($note->getImages5() && $note->getImages5()->getUid()>0) {
-                            $fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages5()->getUid());
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($fileRefUidRes)) {
+                            //$fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages5()->getUid());
+                            $queryBuilderImage->select('uid_local')
+                                ->from('sys_file_reference')
+                                ->where($queryBuilderImage->expr()->eq('uid', $note->getImages5()->getUid()));
+                            $fileRefUidRes = $queryBuilderImage->execute();
+                            while ($row = $fileRefUidRes->fetch()) {
                                 $uidLocal = $row['uid_local'];
                                 break;
                             }
-                            $sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
-                            while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($sysFileRes)) {
+                            //$sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
+                            $queryBuilderSysFile->select('*')
+                                ->from('sys_file')
+                                ->where($queryBuilderSysFile->expr()->eq('uid', $uidLocal));
+                            $sysFileRes = $queryBuilderImage->execute();
+                            while ($row = $sysFileRes->fetch()) {
                                 $sysFile = $row;
                                 break;
                             }
@@ -692,7 +818,9 @@ class ReportUtility {
         }
         return $reportsArr;
     }
-    public static function adaptPostedReportsForOutput($reportsByEstates) {    
+    public static function adaptPostedReportsForOutput($reportsByEstates) {
+        $queryBuilderImage = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_file_reference');
+        $queryBuilderSysFile = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('sys_file');
         if(count($reportsByEstates)<=0) {
             return NULL;
         }
@@ -793,13 +921,21 @@ class ReportUtility {
                     $reportsArr['level1'][$levelOneIdentifier]['level2'][$levelTwoIdentifier]['level3'][$levelThreeIdentifier]['level4'][$levelFourIdentifier]['remarkType'] = $note->getRemarkType();
                     //$reportsArr['level1'][$levelOneIdentifier]['level2'][$levelTwoIdentifier]['level3'][$levelThreeIdentifier]['image'] = $note->getImages();
                     if($note->getImages() && $note->getImages()->getUid()>0) {
-                        $fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages()->getUid());
-                        while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($fileRefUidRes)) {
+                        //$fileRefUidRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('uid_local', 'sys_file_reference', 'uid='.$note->getImages()->getUid());
+                        $queryBuilderImage->select('uid_local')
+                            ->from('sys_file_reference')
+                            ->where($queryBuilderImage->expr()->eq('uid', $note->getImages()->getUid()));
+                        $fileRefUidRes = $queryBuilderImage->execute();
+                        while ($row = $fileRefUidRes->fetch()) {
                             $uidLocal = $row['uid_local'];
                             break;
                         }
-                        $sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
-                        while ($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($sysFileRes)) {
+                        //$sysFileRes = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_file', 'uid='.$uidLocal);
+                        $queryBuilderSysFile->select('*')
+                            ->from('sys_file')
+                            ->where($queryBuilderSysFile->expr()->eq('uid', $uidLocal));
+                        $sysFileRes = $queryBuilderImage->execute();
+                        while ($row = $sysFileRes->fetch()) {
                             $sysFile = $row;
                             break;
                         }
@@ -926,6 +1062,60 @@ class ReportUtility {
     }
 
     /**
+     * action getReportsForEstate
+     *
+     * @param \DanLundgren\DlIponlyestate\Domain\Model\Report $reports
+     * @param \DanLundgren\DlIponlyestate\Domain\Model\Report $estate
+     * @return \DanLundgren\DlIponlyestate\Domain\Model\Report $reports
+     */ 
+    public static function getReportsForEstate($reportPid, $estate, $persistIt=false) {
+        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $reportRepository = $objectManager->get('DanLundgren\DlIponlyestate\Domain\Repository\ReportRepository');
+        $queryBuilderReport = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tx_dliponlyestate_domain_model_report');
+        $queryBuilderReport->select('*')
+            ->from('tx_dliponlyestate_domain_model_report')
+            ->where($queryBuilderReport->expr()->eq('estate', $estate->getUid()))
+            //->setMaxResults(1)
+            //->andWhere($queryBuilderReport->expr()->eq('is_complete', 1))
+            //->addSelectLiteral($queryBuilderReport->expr()->max('version', 'version'))
+            ->orderBy('version', 'DESC')
+        ;
+
+        //$queryBuilderReportRes = $queryBuilderReport->execute();
+        $reports = $queryBuilderReport->execute()->fetchAll();
+        foreach($reports as &$report) {
+	        $queryBuilderNote = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tx_dliponlyestate_domain_model_note');
+	        $queryBuilderNote->select('*')
+	            ->from('tx_dliponlyestate_domain_model_note')
+	            ->where($queryBuilderNote->expr()->eq('report', $report['uid']))
+	        ;
+	        $notes = $queryBuilderNote->execute()->fetchAll();
+	        $report['notes'] = $notes;
+
+	        $queryBuilderMeas = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tx_dliponlyestate_domain_model_reportedmeasurement');
+	        $queryBuilderMeas->select('*')
+	            ->from('tx_dliponlyestate_domain_model_reportedmeasurement')
+	            ->where($queryBuilderMeas->expr()->eq('report', $report['uid']))
+	        ;
+	        $meas = $queryBuilderMeas->execute()->fetchAll();
+	        $report['reportedMeasurement'] = $meas;
+
+        }
+        //$reports = $queryBuilderReport->getResult();
+        //$reports = $queryBuilderReportRes->fetch_all(MYSQLI_ASSOC);
+\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
+ array(
+  'class' => __CLASS__,
+  'function' => __FUNCTION__,
+  'reports' => $reports,
+ ),'',20
+);
+
+        return $reports;
+//print($queryBuilderReport->getSql());
+    }
+
+    /**
      * action getLatestOrNewReport
      *
      * @param \DanLundgren\DlIponlyestate\Domain\Model\Report $reports
@@ -933,6 +1123,34 @@ class ReportUtility {
      * @return \DanLundgren\DlIponlyestate\Domain\Model\Report $reports
      */ 
     public static function getLatestOrNewReport($reportPid, $estate, $persistIt=false) {
+        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $reportRepository = $objectManager->get('DanLundgren\DlIponlyestate\Domain\Repository\ReportRepository');
+        $queryBuilderReport = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tx_dliponlyestate_domain_model_report');
+        $queryBuilderReport->select('uid')
+            ->from('tx_dliponlyestate_domain_model_report')
+            ->where($queryBuilderReport->expr()->eq('estate', $estate->getUid()))
+            ->setMaxResults(1)
+            //->andWhere($queryBuilderReport->expr()->eq('is_complete', 1))
+            //->addSelectLiteral($queryBuilderReport->expr()->max('version', 'version'))
+            ->orderBy('version', 'DESC')
+        ;
+        $latestReportRes = $queryBuilderReport->execute();
+        while ($row = $latestReportRes->fetch()) {
+            $latestReport = $reportRepository->findByUid($row['uid']);
+            break;
+        }
+        if($latestReport && (int)$latestReport->getVersion()>0) {
+            $highestVersion = (int)$latestReport->getVersion();    
+        }
+        if($latestReport && !$latestReport->getIsComplete() && !$latestReport->getReportIsPosted()) {
+            return $latestReport;
+        }
+        return NULL;
+        //$newReport = self::createNewReport($highestVersion, $estate, $reportPid, $startDate, true);
+        //return $newReport;
+    }
+
+    public static function getLatestOrNewReport_Org($reportPid, $estate, $persistIt=false) {
         $reportPid = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_dliponlyestate.']['persistence.']['reportPid'];
         if(!(int)$reportPid>0) {
             return NULL;
@@ -964,6 +1182,7 @@ class ReportUtility {
         //$newReport = self::createNewReport($highestVersion, $estate, $reportPid, $startDate, true);
         //return $newReport;
     }
+
     //public static function createNewReport($highestVersion, $estate, $reportPid, $startDate=null, $persistIt=false) {
     public static function createNewReport($highestVersion, $estateUid, $startDate=null, $persistIt=false) {
         $reportPid = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_dliponlyestate.']['persistence.']['reportPid'];
@@ -1319,6 +1538,27 @@ class ReportUtility {
      * @return array
      */    
     public static function getPostedReports($reportPid, $estate, $startDate) {
+        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $reportRepository = $objectManager->get('DanLundgren\DlIponlyestate\Domain\Repository\ReportRepository');
+        //$allReports = $reportRepository->findByPid($reportPid); 
+        $allReports = $reportRepository->findByEstate($estate);
+        //$allReports = $reportRepository->findAll();
+        $postedReports = array();
+        foreach($allReports as $report) {
+            /*
+            if($report->getStartDate() == $startDate && $report->getEstate()==$estate && $report->getReportIsPosted()) {
+                $postedReports[] = $report;
+            }
+            */
+            if($report->getEstate()==$estate && $report->getReportIsPosted()) {
+                $postedReports[] = $report;
+            }
+        }
+        return $postedReports;
+    }
+
+
+    public static function getPostedReports_Org($reportPid, $estate, $startDate) {
         $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $reportRepository = $objectManager->get('DanLundgren\DlIponlyestate\Domain\Repository\ReportRepository');
         //$allReports = $reportRepository->findByPid($reportPid); 

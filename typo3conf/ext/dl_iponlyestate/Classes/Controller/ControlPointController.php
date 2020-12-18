@@ -76,13 +76,179 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
      * @inject
      */
     protected $reportRepository = NULL;
-    
+
     /**
      * action list
      *
      * @return void
      */
     public function listAction()
+    {
+        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $reportRepository = $objectManager->get('DanLundgren\DlIponlyestate\Domain\Repository\ReportRepository');
+        $scannedCPs = json_decode($_COOKIE['scanned_cps'], true);
+        $cpId = (int) $this->settings['ControlPoint'];
+        $estateId = (int) $this->settings['Estate'];
+        $hasImages = 0;
+        //$reportPid = (int) $this->settings['ReportPidListView'];
+        $reportPid = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_dliponlyestate.']['persistence.']['reportPid'];
+        $errorCode = '';
+        if ($estateId <= 0) {
+            $errorCode = 'noEstate';
+            $this->view->assign('errorCode', $errorCode);
+            return;
+        }
+        if ($cpId <= 0) {
+            $errorCode = 'noControlPoint';
+            $this->view->assign('errorCode', $errorCode);
+            return;
+        }
+        if ($reportPid <= 0) {
+            $errorCode = 'noReportPid';
+            $this->view->assign('errorCode', $errorCode);
+            return;
+        }
+        $isValid = 1;
+        $subPages = $this->controlPointRepository->findSubPagesByParentPid($GLOBALS['TSFE']->id);
+        $estate = $this->estateRepository->findByUid((int) $estateId);
+        if (!$estate) {
+            $this->view->assign('ErrMess', 'Fastigheten hittades ej');
+            $isValid = 0;
+        }
+        if (!$estate || !$estate->getControlPoints()) {
+            $this->view->assign('ErrMess', 'Inga kontrollpunkter hittades');
+            $isValid = 0;
+        }
+        if ($isValid) {
+            $controlPoints = $estate->getControlPoints();
+            $this->view->assign('estate', $estate);
+            $this->view->assign('reportPid', $reportPid);
+            if ($this && $this->estateRepository) {
+                
+            }
+
+            $reports = ReportUtil::getReportsForEstate($reportPid, $estate);
+            $curReportWithVersion = NULL;
+            if(is_array($reports) && count($reports)>0) {
+                //$curReportWithVersion = $reports[0];
+                $curReportWithVersion = $reportRepository->findByUid($reports[0]['uid']);
+            }
+            
+            $hasOngoingReport = 0;
+            if($reports[0] && $reports[0]['is_complete']==0 && $reports[0]['report_is_posted']==0) {            
+                $hasOngoingReport = 1;
+            }
+
+            foreach($reports as $k => $report) {
+                if($report['report_is_posted']) {
+                    $postedReports[] = $report;
+                }
+            }
+            //$nextReportVersion = ReportUtil::getNextReportVersionNumber($estate);
+            $nextReportVersion = (int)$reports[0]['version']+1;
+/*
+\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
+ array(
+  'class' => __CLASS__,
+  'function' => __FUNCTION__,
+  'hasOngoingReport' => $hasOngoingReport,
+  'nextReportVersion' => $nextReportVersion,
+  'postedReports' => $postedReports,
+  'curReportWithVersion' => $curReportWithVersion,
+ ),'',20
+);
+*/
+            if (!$GLOBALS['TSFE']->fe_user->user['first_name'] || $GLOBALS['TSFE']->fe_user->user['last_name']) {
+                $this->view->assign('technician', $GLOBALS['TSFE']->fe_user->user['name']);
+            } else {
+                $this->view->assign('technician', $GLOBALS['TSFE']->fe_user->user['first_name'] . ' ' . $GLOBALS['TSFE']->fe_user->user['last_name']);
+            }
+            foreach ($subPages as &$sub) {
+                $sub['scannedQuestions'] = 0;
+                $piUid = $this->controlPointRepository->findCpByPid($sub['uid']);
+                if (is_array($piUid) && (int) $piUid['uid'] > 0) {
+                    $flexArray = \TYPO3\CMS\Core\Utility\GeneralUtility::xml2array($piUid['pi_flexform']);
+                    if ($flexArray) {
+                        $cpUid = ReportUtil::getFlexformSettingByField($flexArray, 'settings.ControlPoint');
+                        if ((int) $cpUid > 0) {
+                            $cp = $this->controlPointRepository->findByUid($cpUid);
+                            if ($cp) {
+                                $totalNoOfQuestions = count($cp->getQuestions());
+                                if ((int) $totalNoOfQuestions > 0) {
+                                    $sub['totalNoOfQuestions'] = $totalNoOfQuestions;
+                                }
+                                if ($curReportWithVersion) {
+                                    foreach ($curReportWithVersion->getNotes() as $note) {
+                                        if ($note->getControlPoint()->getUid() == $cp->getUid()) {
+                                            $sub['scannedQuestions'] += 1;
+                                        }
+                                    }
+                                    foreach ($curReportWithVersion->getReportedMeasurement() as $meas) {
+                                        if ($meas->getControlPoint()->getUid() == $cp->getUid()) {
+                                            $sub['scannedQuestions'] += 1;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            $totalNoOfQuestions = 0;
+            //$controlPointsStart = microtime(true);
+            /*
+            if($controlPoints) {
+                foreach($controlPoints as $cp) {
+                    $totalNoOfQuestions += count($cp->getQuestions());
+                }
+            }
+            $totalNoOfScanned = 0;
+            if($controlPoints) {
+                foreach($controlPoints as $cp) {
+                    $totalNoOfQuestions += count($cp->getQuestions());
+                }
+            }
+            */
+            
+            //$ellapsed = microtime(true) - $controlPointsStart;
+            //echo 'controlPointsStart: ' . $ellapsed;
+            //echo '<br>';
+\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
+ array(
+  'class' => __CLASS__,
+  'function' => __FUNCTION__,
+  'estateAdminNote' => $estate->getAdminNote(),
+  'enableAdminNote' => $estate->getEnableAdminNote(),
+  'nextReportVersion' => $nextReportVersion,
+  'hasOngoingReport' => $hasOngoingReport,
+  'hasImages' => $hasImages,
+  'curReportWithVersion' => $curReportWithVersion,
+  'postedReports' => $postedReports,
+  'reportPid' => $reportPid,
+  'subPages' => $subPages,
+  'isValid' => $isValid,
+ ),'',20
+);
+            $this->view->assign('estateAdminNote', $estate->getAdminNote());
+            $this->view->assign('enableAdminNote', $estate->getEnableAdminNote());
+            $this->view->assign('estateUid', $estate->getUid());
+            $this->view->assign('nextReportVersion', $nextReportVersion);
+            $this->view->assign('hasOngoingReport', $hasOngoingReport);
+            $this->view->assign('hasImages', $hasImages);
+            $this->view->assign('reportWithVersion', $curReportWithVersion);
+            $this->view->assign('postedReports', $postedReports);
+            $this->view->assign('reportPid', $reportPid);
+            $this->view->assign('subPages', $subPages);
+            $this->view->assign('isValid', $isValid);
+        }
+    }
+
+    /**
+     * action list
+     *
+     * @return void
+     */
+    public function listAction_OLD()
     {
         $scannedCPs = json_decode($_COOKIE['scanned_cps'], true);
         $cpId = (int) $this->settings['ControlPoint'];
@@ -137,7 +303,8 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
             echo '<br>';
             */
             
-            $curReportWithVersion = ReportUtil::getLatestOrNewReport($reportPid, $estate);
+            $curReportWithVersion = ReportUtil::getLatestOrNewReport($reportPid, $estate);            
+            
             $hasOngoingReport = 0;
             if ($curReportWithVersion) {
                 $hasOngoingReport = 1;
@@ -306,11 +473,8 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
                 $questionUidsWithMeasurements = array();
                 foreach ($controlPoint->getQuestions() as $question) {
                     foreach ($curReportWithVersion->getNotes() as $note) {
-                        if (!in_array($note->getQuestion()->getUid(), $questionUidsWithNotes)) {
+                        if ($note && $note->getQuestion() && !in_array($note->getQuestion()->getUid(), $questionUidsWithNotes)) {
                             $questionUidsWithNotes[] = $note->getQuestion()->getUid();
-                        }
-                        if ($note->getControlPoint()->getUid() == $controlPoint->getUid() && $note->getQuestion()->getUid() == $question->getUid()) {
-                            
                         }
                     }
                     foreach ($curReportWithVersion->getReportedMeasurement() as $reportedMeasurement) {
@@ -325,8 +489,8 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
                     if (!in_array($question->getUid(), $questionUidsWithNotes) && !in_array($question->getUid(), $questionUidsWithMeasurements)) {
                         $reportArr[$question->getUid()] = '';
                     } elseif (in_array($question->getUid(), $questionUidsWithNotes)) {
-                        foreach ($curReportWithVersion->getNotes() as $note) {
-                            if ($note->getControlPoint()->getUid() == $controlPoint->getUid() && $note->getQuestion()->getUid() == $question->getUid()) {
+                        foreach ($curReportWithVersion->getNotes() as $note) {                            
+                            if ($note && $note->getQuestion() && $question && $note->getControlPoint()->getUid() == $controlPoint->getUid() && $note->getQuestion()->getUid() == $question->getUid()) {
                                 $reportArr[$question->getUid()] = $note;
                             }
                         }
@@ -381,7 +545,7 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
             if ($question->getMeasurementValues() == NULL) {
                 $noteIsSaved = 0;
                 foreach ($report->getNotes() as $note) {
-                    if ($note->getQuestion()->getUid() == $question->getUid()) {
+                    if ($note && $note->getQuestion() && $question && $note->getQuestion()->getUid() == $question->getUid()) {
                         $reportArr[$question->getUid()]['type'] = 2;
                         $reportArr[$question->getUid()]['obj'] = $note;
                         $noteIsSaved = 1;

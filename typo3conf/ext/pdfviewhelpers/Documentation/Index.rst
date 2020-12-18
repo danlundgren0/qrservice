@@ -29,13 +29,13 @@ PDF ViewHelpers
 		pdf, generation, generator, fluid, viewhelper, fpdi, tcpdf
 
 	:Copyright:
-		2016
+		2016 - 2020
 
 	:Author:
-		Markus Mächler, Esteban Marin
+		Markus Mächler, Esteban Gehring
 
 	:Email:
-		markus.maechler@bithost.ch, esteban.marin@bithost.ch
+		markus.maechler@bithost.ch, esteban.gehring@bithost.ch
 
 	:License:
 		This document is published under the Open Content License
@@ -57,4 +57,7 @@ PDF ViewHelpers
 	ConfigurationReference/Index
 	ViewHelpers/Index
 	Examples/Index
+	Troubleshooting/Index
+	UpgradeGuides/Index
+	Donate
 	Links

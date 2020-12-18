@@ -489,9 +489,9 @@ class Report extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     {
         $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $nodeTypeRepository = $objectManager->get('DanLundgren\\DlIponlyestate\\Domain\\Repository\\NodeTypeRepository');
-        $nodeType = $nodeTypeRepository->findByUid($this->nodeType);
-        if ($nodeType) {
-            return $nodeType->getName();
+        //$nodeType = $nodeTypeRepository->findByUid($this->nodeType()->getUid());
+        if ($this->nodeType) {
+            return $this->nodeType->getName();
         }
         return 'Ingen nodtyp satt';
     }

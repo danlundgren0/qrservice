@@ -7,7 +7,7 @@ namespace Bithost\Pdfviewhelpers\ViewHelpers;
  * This file is part of the "PDF ViewHelpers" Extension for TYPO3 CMS.
  *
  *  (c) 2016 Markus Mächler <markus.maechler@bithost.ch>, Bithost GmbH
- *           Esteban Marin <esteban.marin@bithost.ch>, Bithost GmbH
+ *           Esteban Gehring <esteban.gehring@bithost.ch>, Bithost GmbH
  *
  *  All rights reserved
  *
@@ -28,62 +28,53 @@ namespace Bithost\Pdfviewhelpers\ViewHelpers;
  *  This copyright notice MUST APPEAR in all copies of the script!
  * * */
 
+use Bithost\Pdfviewhelpers\Exception\Exception;
+
 /**
  * HeadlineViewHelper
  *
- * @author Markus Mächler <markus.maechler@bithost.ch>, Esteban Marin <esteban.marin@bithost.ch>
+ * @author Markus Mächler <markus.maechler@bithost.ch>, Esteban Gehring <esteban.gehring@bithost.ch>
  */
-class HeadlineViewHelper extends AbstractTextViewHelper {
+class HeadlineViewHelper extends AbstractTextViewHelper
+{
+    /**
+     * @return string
+     */
+    protected function getSettingsKey()
+    {
+        return 'headline';
+    }
 
-	/**
-	 * @return void
-	 */
-	public function initializeArguments() {
-		parent::initializeArguments();
 
-		if (strlen($this->settings['headline']['trim'])) {
-			$this->overrideArgument('trim', 'boolean', '', FALSE, (boolean) $this->settings['headline']['trim']);
-		}
-		if (strlen($this->settings['headline']['removeDoubleWhitespace'])) {
-			$this->overrideArgument('removeDoubleWhitespace', 'boolean', '', FALSE, (boolean) $this->settings['headline']['removeDoubleWhitespace']);
-		}
-		if (!empty($this->settings['headline']['color'])) {
-			$this->overrideArgument('color', 'string', '', FALSE, $this->settings['headline']['color']);
-		}
-		if (!empty($this->settings['headline']['fontFamily'])) {
-			$this->overrideArgument('fontFamily', 'string', '', FALSE, $this->settings['headline']['fontFamily']);
-		}
-		if (!empty($this->settings['headline']['fontSize'])) {
-			$this->overrideArgument('fontSize', 'integer', '', FALSE, $this->settings['headline']['fontSize']);
-		}
-		if (!empty($this->settings['headline']['fontStyle'])) {
-			$this->overrideArgument('fontStyle', 'string', '', FALSE, $this->settings['headline']['fontStyle']);
-		}
-		if (!empty($this->settings['headline']['alignment'])) {
-			$this->overrideArgument('alignment', 'string', '', FALSE, $this->settings['headline']['alignment']);
-		}
-		if (!empty($this->settings['headline']['paragraphSpacing'])) {
-			$this->overrideArgument('paragraphSpacing', 'float', '', FALSE, $this->settings['headline']['paragraphSpacing']);
-		}
-	}
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        parent::initializeArguments();
 
-	/**
-	 * @return void
-	 */
-	public function initialize() {
-		parent::initialize();
+        $this->registerArgument('addToTableOfContent', 'boolean', 'If true this headline is added to the table of content.', false, $this->settings['headline']['addToTableOfContent']);
+        $this->registerArgument('tableOfContentLevel', 'integer', 'The level this headline is added to in the table of content.', false, $this->settings['headline']['tableOfContentLevel']);
+    }
 
-		if (empty($this->arguments['padding'])) {
-			if (!empty($this->settings['headline']['padding'])) {
-				$this->arguments['padding'] = $this->settings['headline']['padding'];
-			} else {
-				$this->arguments['padding'] = $this->settings['generalText']['padding'];
-			}
-		}
+    /**
+     * @return void
+     *
+     * @throws Exception
+     */
+    public function initialize()
+    {
+        parent::initialize();
 
-		if ($this->isValidPadding($this->arguments['padding'])) {
-			$this->getPDF()->setCellPaddings($this->arguments['padding']['left'], $this->arguments['padding']['top'], $this->arguments['padding']['right'], $this->arguments['padding']['bottom']);
-		}
-	}
-
+        if ($this->arguments['addToTableOfContent']) {
+            $this->getPDF()->Bookmark(
+                $this->arguments['text'],
+                $this->arguments['tableOfContentLevel'],
+                -1,
+                '',
+                '',
+                $this->arguments['color']
+            );
+        }
+    }
 }

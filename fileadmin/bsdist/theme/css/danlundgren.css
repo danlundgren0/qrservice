@@ -45,18 +45,22 @@ body .dropdown-menu>li>a {
     border-bottom:none;
 }
 header.top {
-    border-bottom:6px solid #F0525E;
+    /*border-bottom:6px solid #F0525E;*/
+    border-bottom:6px solid #000064;
 }
-body .container h2 {
-    color:#ED5661;
+body .container h2, body .container h1 {
+    /*color:#ED5661;*/
+    color:#000064;
 }
 body .container a {
-    color:#ED5661;
+    /*color:#ED5661;*/
+    color:#6080FF;
     font-weight: 500;
 }
 footer {    
     /*margin-top: 200px;*/
-    background-color:#C73B44;
+    /*background-color:#C73B44;*/
+    background-color:#00FFC4;
     /*height: 276px;*/
     text-align:center;
     color:#ffffff;

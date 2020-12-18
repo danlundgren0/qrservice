@@ -8,8 +8,21 @@
 ImageViewHelper
 ---------------
 
-Rendering the image given as src, the path is always relative to the webroot.
+This ViewHelper renders an image given as src. As src argument you may provide a valid TYPO3 path or an object implementing TYPO3 FAL FileInterface (e.g. File or FileReference).
 
 ::
 
-	<pdf:image src="typo3conf/ext/pdfviewhelpers/Resources/Public/Example/Bithost.jpg" width="200" />
+	<pdf:image src="EXT:pdfviewhelpers/Resources/Public/Example/Bithost.jpg" width="200" />
+	<pdf:image src="{file}" width="50%" alignment="center" link="https://www.bithost.ch" />
+	<pdf:image src="{fileReference}" width="100" alignment="right" padding="{right: 10}" fitOnPage="0" />
+
+The Image ViewHelper supports image processing using the ``processingInstructions`` attribute.
+The attribute value is directly passed to ``ImageService->applyProcessingInstructions``, thus it supports all configurations supported by this method.
+There is no need to set the ``crop`` or ``cropVariant`` in the processingInstructions in case you use the ``default`` crop of a file object.
+
+::
+
+	<pdf:image src="{file}" processingInstructions="{maxWidth: '600'}" />
+	<pdf:image src="{file}" processingInstructions="{width: '200c'}" width="200" />
+	<pdf:image src="{file}" processingInstructions="{cropVariant: 'pdf_crop'}" />
+	<pdf:image src="{file}" processingInstructions="{cropVariant: 'pdf_crop', crop: cropArrayOrString}" />

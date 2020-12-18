@@ -40,4 +40,12 @@ class ErrorUtility {
     public static function isEstateIdSet() {
         return ((int)$GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_dliponlyestate.']['persistence.']['estateId']>0)?1:0;
     }
+    public static function linkTYPO3Ver9BugFix($link) {
+    	//Bugfix - t3://page?uid=5163 is shown in frontend and therefore disables the link
+        if(strpos($link, '=')>0) {
+            $uidOnly = substr($link, strpos($link, '=')+1);
+			return $uidOnly;
+        }
+        return $link; 
+    }
 }

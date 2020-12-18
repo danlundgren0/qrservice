@@ -7,7 +7,7 @@ namespace Bithost\Pdfviewhelpers\ViewHelpers;
  * This file is part of the "PDF ViewHelpers" Extension for TYPO3 CMS.
  *
  *  (c) 2016 Markus Mächler <markus.maechler@bithost.ch>, Bithost GmbH
- *           Esteban Marin <esteban.marin@bithost.ch>, Bithost GmbH
+ *           Esteban Gehring <esteban.gehring@bithost.ch>, Bithost GmbH
  *
  *  All rights reserved
  *
@@ -28,243 +28,218 @@ namespace Bithost\Pdfviewhelpers\ViewHelpers;
  *  This copyright notice MUST APPEAR in all copies of the script!
  * * */
 
+use Bithost\Pdfviewhelpers\Exception\Exception;
 use Bithost\Pdfviewhelpers\Exception\ValidationException;
 
 /**
  * AbstractTextViewHelper
  *
- * @author Markus Mächler <markus.maechler@bithost.ch>, Esteban Marin <esteban.marin@bithost.ch>
+ * @author Markus Mächler <markus.maechler@bithost.ch>, Esteban Gehring <esteban.gehring@bithost.ch>
  */
-abstract class AbstractTextViewHelper extends AbstractContentElementViewHelper {
+abstract class AbstractTextViewHelper extends AbstractContentElementViewHelper
+{
+    /**
+     * @var array
+     */
+    protected $mergeProperties = [
+        'trim',
+        'removeDoubleWhitespace',
+        'color',
+        'fontFamily',
+        'fontSize',
+        'fontStyle',
+        'padding',
+        'text',
+        'alignment',
+        'paragraphSpacing',
+        'paragraphLineFeed',
+        'autoHyphenation',
+        'lineHeight',
+        'characterSpacing',
+    ];
 
-	/**
-	 * @return void
-	 */
-	public function initializeArguments() {
-		parent::initializeArguments();
+    /**
+     * @return string
+     */
+    abstract protected function getSettingsKey();
 
-		$this->registerArgument('trim', 'boolean', '', FALSE, $this->settings['generalText']['trim']);
-		$this->registerArgument('removeDoubleWhitespace', 'boolean', '', FALSE, $this->settings['generalText']['removeDoubleWhitespace']);
-		$this->registerArgument('color', 'string', '', FALSE, $this->settings['generalText']['color']);
-		$this->registerArgument('fontFamily', 'string', '', FALSE, $this->settings['generalText']['fontFamily']);
-		$this->registerArgument('fontSize', 'integer', '', FALSE, $this->settings['generalText']['fontSize']);
-		$this->registerArgument('fontStyle', 'string', '', FALSE, $this->settings['generalText']['fontStyle']);
-		$this->registerArgument('padding', 'array', '', FALSE, NULL);
-		$this->registerArgument('text', 'string', '', FALSE, NULL);
-		$this->registerArgument('alignment', 'string', 'Text Alignment. Possible values: "left", "center", "right", "justify". Defaults to "left"', false, $this->settings['generalText']['alignment']);
-		$this->registerArgument('paragraphSpacing', 'float', 'Spacing after each paragraph. Defaults to 0', FALSE, $this->settings['generalText']['paragraphSpacing']);
-	}
+    /**
+     * @return void
+     */
+    public function initializeArguments()
+    {
+        parent::initializeArguments();
 
-	/**
-	 * @return void
-	 */
-	public function initialize() {
-		parent::initialize();
+        $this->registerArgument('trim', 'boolean', 'If true leading and trailing whitespace is removed.', false, null);
+        $this->registerArgument('removeDoubleWhitespace', 'boolean', 'If true double whitespaces are removed.', false, null);
+        $this->registerArgument('color', 'string', 'The color in HEX format: #000 or #000000.', false, null);
+        $this->registerArgument('fontFamily', 'string', 'The font family name.', false, null);
+        $this->registerArgument('fontSize', 'integer', 'The font size.', false, null);
+        $this->registerArgument('fontStyle', 'string', 'The font style: regular, bold, italic or underline', false, null);
+        $this->registerArgument('lineHeight', 'float', 'The relative line height.', false, null);
+        $this->registerArgument('characterSpacing', 'float', 'The spacing between individual characters.', false, null);
+        $this->registerArgument('padding', 'array', 'The cell padding given as array.', false, []);
+        $this->registerArgument('text', 'string', 'The text to be rendered.', false, null);
+        $this->registerArgument('alignment', 'string', 'The text alignment: left, center, right or justify', false, null);
+        $this->registerArgument('paragraphSpacing', 'float', 'The spacing between text paragraphs.', false, null);
+        $this->registerArgument('autoHyphenation', 'boolean', 'If true the text will be hyphenated automatically.', false, null);
+        $this->registerArgument('paragraphLineFeed', 'boolean', 'If true a line feed is inserted after each paragraph.', false, null);
+        $this->registerArgument('type', 'string', 'The text type configuration to be used.', false, null);
+    }
 
-		if (empty($this->arguments['text'])) {
-			$this->arguments['text'] = $this->renderChildren();
-		}
+    /**
+     * @return void
+     *
+     * @throws Exception
+     */
+    public function initialize()
+    {
+        parent::initialize();
 
-		if ($this->arguments['trim']) {
-			$this->arguments['text'] = trim($this->arguments['text']);
-		}
+        $this->mergeSettingsAndArguments();
 
-		if ($this->arguments['removeDoubleWhitespace']) {
-			$this->arguments['text'] = preg_replace('/[ \t]+/', ' ', $this->arguments['text']);
-		}
+        if (empty($this->arguments['text'])) {
+            $this->arguments['text'] = $this->renderChildren();
+        }
 
-		if ($this->isValidColor($this->arguments['color'])) {
-			$this->arguments['color'] = $this->convertHexToRGB($this->arguments['color']);
-			$this->getPDF()->SetTextColor($this->arguments['color']['R'], $this->arguments['color']['G'], $this->arguments['color']['B']);
-		}
+        if ($this->arguments['trim']) {
+            $this->arguments['text'] = trim($this->arguments['text']);
+        }
 
-		if ($this->isValidFontSize($this->arguments['fontSize'])) {
-			$this->getPDF()->SetFontSize($this->arguments['fontSize']);
-		}
+        if ($this->arguments['removeDoubleWhitespace']) {
+            $this->arguments['text'] = preg_replace('/[ \t]+/', ' ', $this->arguments['text']);
+        }
 
-		if ($this->isValidFontFamily($this->arguments['fontFamily']) && $this->isValidFontStyle($this->arguments['fontStyle'])) {
-			$this->getPDF()->SetFont($this->arguments['fontFamily'], self::convertToTcpdfFontStyle($this->arguments['fontStyle']));
-		}
-	}
+        if ($this->arguments['autoHyphenation']) {
+            $this->arguments['text'] = $this->hyphenationService->hyphenateText(
+                $this->arguments['text'],
+                $this->hyphenationService->getHyphenFilePath($this->getHyphenFileName())
+            );
+        }
 
-	/**
-	 * @return void
-	 */
-	public function render() {
-		$this->initializeMultiColumnSupport();
+        if ($this->validationService->validateColor($this->arguments['color'])) {
+            $this->arguments['color'] = $this->conversionService->convertHexToRGB($this->arguments['color']);
+            $this->getPDF()->SetTextColor($this->arguments['color']['R'], $this->arguments['color']['G'], $this->arguments['color']['B']);
+        }
 
-		$paragraphs = explode(
-			"\n", str_replace("\r\n", "\n", $this->arguments['text'])
-		);
-		$posY = $this->arguments['posY'];
+        if ($this->validationService->validateFontSize($this->arguments['fontSize'])) {
+            $this->getPDF()->SetFontSize($this->arguments['fontSize']);
+        }
 
-		foreach ($paragraphs as $paragraph) {
-			if ($this->arguments['trim']) {
-				$paragraph = trim($paragraph);
-			}
+        if ($this->validationService->validateFontFamily($this->arguments['fontFamily'])) {
+            $this->getPDF()->SetFont($this->arguments['fontFamily'], $this->conversionService->convertSpeakingFontStyleToTcpdfFontStyle($this->arguments['fontStyle']));
+        }
 
-			$this->getPDF()->MultiCell(
-				$this->arguments['width'], $this->arguments['height'] / count($paragraphs), $paragraph, 0, $this->getAlignmentString($this->arguments['alignment']), FALSE, 1, $this->arguments['posX'], $posY, TRUE, 0, FALSE, TRUE, 0, 'T', FALSE
-			);
+        if ($this->validationService->validateLineHeight($this->arguments['lineHeight'])) {
+            $this->getPDF()->setCellHeightRatio($this->arguments['lineHeight']);
+        }
 
-			if ($this->isValidParagraphSpacing($this->arguments['paragraphSpacing']) && $this->arguments['paragraphSpacing'] > 0
-			) {
-				$this->getPDF()->Ln((float) $this->arguments['paragraphSpacing'], false);
-			}
+        if ($this->validationService->validateCharacterSpacing($this->arguments['characterSpacing'])) {
+            $this->getPDF()->setFontSpacing($this->arguments['characterSpacing']);
+        }
 
-			$posY = $this->getPDF()->GetY();
-		}
-	}
+        if ($this->validationService->validatePadding($this->arguments['padding'])) {
+            $this->getPDF()->setCellPaddings(
+                $this->arguments['padding']['left'],
+                0,
+                $this->arguments['padding']['right'],
+                0
+            );
+        }
+    }
 
-	/**
-	 * Converts pdfviewhelper fontStyle syntax to TCPDF syntax. This function is necessary because TCPDF uses an empty
-	 * string to represent "regular", but we can not do this because of the settings inheritance (empty means inherit).
-	 *
-	 * @param string $pdfviewhelperFontStyle
-	 *
-	 * @return string
-	 */
-	public static function convertToTcpdfFontStyle($pdfviewhelperFontStyle) {
-		if ($pdfviewhelperFontStyle === 'R') {
-			return '';
-		}
+    /**
+     * @return void
+     *
+     * @throws Exception
+     */
+    public function render()
+    {
+        $this->initializeMultiColumnSupport();
 
-		return $pdfviewhelperFontStyle;
-	}
+        $paragraphs = explode("\n", str_replace("\r\n", "\n", $this->arguments['text']));
+        $posY = $this->arguments['posY'] + $this->arguments['padding']['top'];
 
-	/**
-	 * @param string $fontSize
-	 *
-	 * @return boolean
-	 *
-	 * @throws ValidationException
-	 */
-	protected function isValidFontSize($fontSize) {
-		if (is_numeric($fontSize)) {
-			return TRUE;
-		} else {
-			throw new ValidationException('FontSize must be an integer. ERROR: 1363765372', 1363765372);
-		}
-	}
+        foreach ($paragraphs as $paragraph) {
+            if ($this->arguments['trim']) {
+                $paragraph = trim($paragraph);
+            }
 
-	/**
-	 * @param array $padding
-	 *
-	 * @return boolean
-	 *
-	 * @throws ValidationException
-	 */
-	protected function isValidPadding($padding) {
-		if (isset($padding['top'], $padding['right'], $padding['bottom'], $padding['left']) && is_numeric($padding['top']) && is_numeric($padding['right']) && is_numeric($padding['bottom']) && is_numeric($padding['left'])
-		) {
-			return TRUE;
-		} else {
-			throw new ValidationException('Padding must be an Array with Elements: top:[int],right:[int],bottom:[int],left:[int] ERROR: 1363769351', 1363769351);
-		}
-	}
+            if ($this->arguments['paragraphLineFeed']) {
+                $paragraph .= "\n";
+            }
 
-	/**
-	 * @param string $paragraphSpacing
-	 *
-	 * @return boolean
-	 *
-	 * @throws ValidationException
-	 */
-	protected function isValidParagraphSpacing($paragraphSpacing) {
-		if (is_numeric($paragraphSpacing)) {
-			return TRUE;
-		} else {
-			throw new ValidationException('ParagraphSpacing must be an integer. ERROR: 1363765379', 1363765379);
-		}
-	}
+            $this->getPDF()->MultiCell($this->arguments['width'], $this->arguments['height'] / count($paragraphs), $paragraph, 0, $this->conversionService->convertSpeakingAlignmentToTcpdfAlignment($this->arguments['alignment']), false, 1, $this->arguments['posX'], $posY, true, 0, false, true, 0, 'T', false);
 
-	/**
-	 * @param string $alignment
-	 *
-	 * @return boolean
-	 *
-	 * @throws ValidationException
-	 */
-	protected function isValidAlignment($alignment) {
-		if (in_array($alignment, ['left', 'center', 'right', 'justify'])) {
-			return TRUE;
-		} else {
-			throw new ValidationException('Alignment must be "left", "center", "right" or "justify". ERROR: 1363765672', 1363765672);
-		}
-	}
+            if ($this->validationService->validateParagraphSpacing($this->arguments['paragraphSpacing']) && $this->arguments['paragraphSpacing'] > 0) {
+                $this->getPDF()->Ln((float)$this->arguments['paragraphSpacing'], false);
+            }
 
-	/**
-	 * @param string $fontStyle
-	 *
-	 * @return boolean
-	 *
-	 * @throws ValidationException
-	 */
-	protected function isValidFontStyle($fontStyle) {
-		if (in_array($fontStyle, ['B', 'I', 'U', 'R'])) {
-			return TRUE;
-		} else {
-			throw new ValidationException('FontStyle must be "B" (bold), "I" (italic), "U" (underline) or "R" (regular). ERROR: 1492799612', 1492799612);
-		}
-	}
+            $posY = $this->getPDF()->GetY();
+        }
 
-	/**
-	 * Check fontFamily for compatibility with TCPDF naming conventions
-	 *
-	 * @param string $fontFamily
-	 *
-	 * @return boolean
-	 *
-	 * @throws ValidationException
-	 */
-	protected function isValidFontFamily($fontFamily) {
-		//TCPDF transformation START
-		$tcpdfFontFamilyName = strtolower($fontFamily);
-		$tcpdfFontFamilyName = preg_replace('/[^a-z0-9_]/', '', $tcpdfFontFamilyName);
-		$search  = ['bold', 'oblique', 'italic', 'regular'];
-		$replace = ['b', 'i', 'i', ''];
-		$tcpdfFontFamilyName = str_replace($search, $replace, $tcpdfFontFamilyName);
-		if (empty($tcpdfFontFamilyName)) {
-			// set generic name
-			$tcpdfFontFamilyName = 'tcpdffont';
-		}
-		//TCPDF transformation END
+        $this->getPDF()->SetY($this->getPDF()->GetY() + $this->arguments['padding']['bottom']);
+    }
 
-		if ($fontFamily === $tcpdfFontFamilyName) {
-			return TRUE;
-		} else {
-			throw new ValidationException('Invalid fontFamily name "' . $fontFamily . '". Name must only contain letters "a-z0-9_" and none of the words "bold", "oblique", "italic" and "regular". ERROR: 1492809393', 1492809393);
-		}
-	}
+    /**
+     * @param array $default
+     * @param array $overwrite
+     *
+     * @return array
+     */
+    protected function mergeSettingsArrays(array $default, array $overwrite)
+    {
+        $mergedArray = $default;
 
-	/**
-	 * @param string $alignment
-	 *
-	 * @return string
-	 */
-	protected function getAlignmentString($alignment) {
-		$alignmentString = 'L';
+        foreach ($this->mergeProperties as $mergeProperty) {
+            if (isset($overwrite[$mergeProperty])
+                && $overwrite[$mergeProperty] !== null
+                && (!is_string($overwrite[$mergeProperty]) || mb_strlen($overwrite[$mergeProperty]))
+            ) {
+                if (is_array($overwrite[$mergeProperty])) {
+                    $mergedArray[$mergeProperty] = array_merge($mergedArray[$mergeProperty], $overwrite[$mergeProperty]);
+                } else {
+                    $mergedArray[$mergeProperty] = $overwrite[$mergeProperty];
+                }
+            }
+        }
 
-		switch ($alignment) {
-			case 'left':
-			case 'L':
-				$alignmentString = 'L';
-				break;
-			case 'center':
-			case 'C':
-				$alignmentString = 'C';
-				break;
-			case 'right':
-			case 'R':
-				$alignmentString = 'R';
-				break;
-			case 'justify':
-			case 'J':
-				$alignmentString = 'J';
-				break;
-		}
+        return $mergedArray;
+    }
 
-		return $alignmentString;
-	}
+    /**
+     * Merges settings with the following priority (higher priority overwrites lower priority):
+     *
+     * 0. generalText
+     * 1. text|headline|list
+     * 2. types[generalText|text|headline|list]
+     * 3. arguments
+     *
+     * @return void
+     *
+     * @throws ValidationException
+     */
+    protected function mergeSettingsAndArguments()
+    {
+        $settingsKey = $this->getSettingsKey();
+        $mergedSettings = $this->mergeSettingsArrays($this->settings['generalText'], $this->settings[$settingsKey]);
 
+        if (isset($this->arguments['type'])) {
+            $type = $this->arguments['type'];
+
+            if (isset($this->settings[$settingsKey]['types'][$type])) {
+                $mergedSettings = $this->mergeSettingsArrays($mergedSettings, $this->settings[$settingsKey]['types'][$type]);
+            } else if (isset($this->settings['generalText']['types'][$type])) {
+                $mergedSettings = $this->mergeSettingsArrays($mergedSettings, $this->settings['generalText']['types'][$type]);
+            } else {
+                throw new ValidationException('Unknown text style type "' . $this->arguments['type'] . '" used. ERROR: 1536704610', 1536704610);
+            }
+        }
+
+        $mergedSettings = $this->mergeSettingsArrays($mergedSettings, $this->arguments);
+
+        foreach ($mergedSettings as $key => $setting) {
+            $this->arguments[$key] = $setting;
+        }
+    }
 }

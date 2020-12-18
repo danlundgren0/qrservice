@@ -161,14 +161,6 @@ class AjaxRequestController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCont
 		$this->data['version'] = $version;
 		$this->data['estateUid'] = $estateUid;
 		if((int)$version>0 && (int)$estateUid>0) {	
-		\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
-		 array(
-		  'class' => __CLASS__,
-		  'function' => __FUNCTION__,
-		  'version' => $version,
-		  'estateUid' => $estateUid,
-		 ),'','20'
-		);
 			$newReport = ReportUtility::createNewReport($version, $estateUid, null, true);
 			$this->data['response'] = $newReport->getUid();
 			$this->status = TRUE;

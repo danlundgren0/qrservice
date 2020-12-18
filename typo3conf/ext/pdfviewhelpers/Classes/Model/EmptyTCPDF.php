@@ -1,4 +1,5 @@
 <?php
+
 namespace Bithost\Pdfviewhelpers\Model;
 
 /***
@@ -6,7 +7,7 @@ namespace Bithost\Pdfviewhelpers\Model;
  * This file is part of the "PDF ViewHelpers" Extension for TYPO3 CMS.
  *
  *  (c) 2016 Markus Mächler <markus.maechler@bithost.ch>, Bithost GmbH
- *           Esteban Marin <esteban.marin@bithost.ch>, Bithost GmbH
+ *           Esteban Gehring <esteban.gehring@bithost.ch>, Bithost GmbH
  *
  *  All rights reserved
  *
@@ -28,22 +29,12 @@ namespace Bithost\Pdfviewhelpers\Model;
  ***/
 
 /**
- * EmptyTCPDF, Needed because TCPDF adds a line to the header by default
+ * EmptyTCPDF
  *
- * @author Markus Mächler <markus.maechler@bithost.ch>, Esteban Marin <esteban.marin@bithost.ch>
+ * @author Markus Mächler <markus.maechler@bithost.ch>, Esteban Gehring <esteban.gehring@bithost.ch>
+ *
+ * @deprecated Use BasePDF instead
  */
-class EmptyTCPDF extends \TCPDF {
-	/**
-	 * @return void
-	 */
-	public function Header() {
-
-	}
-
-	/**
-	 * @return void
-	 */
-	public function Footer() {
-
-	}
+class EmptyTCPDF extends BasePDF
+{
 }
