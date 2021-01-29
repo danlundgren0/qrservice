@@ -52,7 +52,7 @@ Otherwise your changes will be overwritten the next time you save the extension 
     		<div class="col-md-2 lbl">Noteringar</div>
     		<div class="col-md-10"><f:form.select value="{arguments.notes}" name="notes" options="{notes}" optionValueField="uid" optionLabelField="comment" class="form-control" /></div>
             <div class="col-md-2 lbl">Områden</div>
-            <div class="col-md-10"><f:form.select value="{arguments.areas}" name="areas" options="{areas}" optionValueField="uid" optionLabelField="title" class="form-control" /></div>
+            <div class="col-md-10"><f:form.select value="{arguments.area}" name="area" options="{area}" optionValueField="uid" optionLabelField="title" class="form-control" /></div>
     		<div class="col-md-2 lbl">Sök</div>
 			<div class="col-md-8"><f:form.textfield value="{arguments.freeSearch}" name="freeSearch" class="form-control" /></div>
     		<div class="col-md-2"><f:form.submit class="btn btn-secondary search-trigger" value="Sök" /></div>
@@ -69,7 +69,8 @@ Otherwise your changes will be overwritten the next time you save the extension 
                             nodeTypes: arguments.nodeTypes,
                             technicians: arguments.technicians,
                             notes: arguments.notes,
-                            freeSearch: arguments.freeSearch
+                            area: arguments.area,
+                            freeSearch: arguments.freeSearch                            
                         }'
                     }"
                     target="_blank"
@@ -85,6 +86,7 @@ Otherwise your changes will be overwritten the next time you save the extension 
                             nodeTypes: arguments.nodeTypes,
                             technicians: arguments.technicians,
                             notes: arguments.notes,
+                            area: arguments.area,
                             freeSearch: arguments.freeSearch
                         }'
                     }"

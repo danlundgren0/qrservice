@@ -84,9 +84,9 @@ Otherwise your changes will be overwritten the next time you save the extension 
 				</f:for>
 			</div>
 			<div class="cp-container">
-				<h2>Tidigare anmärkningar på denna fastighet</h2>			
+				<h2>Tidigare anmärkningar på denna fastighet</h2>				
 				<f:for each="{postedReports}" as="report">
-					<f:render partial="Report/PostedNote" arguments="{report:report, hasOngoingReport:hasOngoingReport}" />
+					<f:render partial="Report/PostedNoteNew" arguments="{report:report, hasOngoingReport:hasOngoingReport}" />
 				</f:for>
 				<div class="save-fixed-btn">
 					<button type="button" class="btn btn-success hidden">Spara</button>

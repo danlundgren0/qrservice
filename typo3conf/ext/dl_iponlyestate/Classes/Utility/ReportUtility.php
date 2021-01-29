@@ -1037,6 +1037,7 @@ class ReportUtility {
         return $reportsArr;
     }
     */
+
     /**
      * action getNextReportVersionNumber
      *
@@ -1044,6 +1045,44 @@ class ReportUtility {
      * @return int
      */
     public static function getNextReportVersionNumber($estate) {
+    	/*
+        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $reportRepository = $objectManager->get('DanLundgren\DlIponlyestate\Domain\Repository\ReportRepository');
+        $allReports = $reportRepository->findByEstate($estate);
+        $highestVersion = -1;
+        $latestReport = NULL;
+        
+        foreach($allReports as $report) {
+            if($report->getEstate()==$estate) {
+                if((int)$report->getVersion()>(int)$highestVersion) {
+                    $highestVersion = (int)$report->getVersion();
+                }
+            }
+        }
+        */
+
+        $qB_NextReportVersionNumber = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tx_dliponlyestate_domain_model_report');
+        $qB_NextReportVersionNumber->select('tx_dliponlyestate_domain_model_report.version')->from('tx_dliponlyestate_domain_model_report');
+        $qB_NextReportVersionNumber->where('tx_dliponlyestate_domain_model_report.estate = '.$estate->getUid());
+        $qB_NextReportVersionNumber->orderBy('tx_dliponlyestate_domain_model_report.version', 'DESC');
+		$qB_NextReportVersionNumber->setMaxResults(1);
+		$qB_NextReportVersionNumberRes = $qB_NextReportVersionNumber->execute();
+		$singleRow = $qB_NextReportVersionNumberRes->fetch();
+		$highestVersion2=$singleRow['version'];
+        //$qB_NextReportVersionNumber->addSelect('note.is_complete as nIsComplete');
+        $highestVersion=($highestVersion2==-1)?1:$highestVersion2+=1;
+        //$highestVersion=($highestVersion==-1)?1:$highestVersion+=1;
+        //debug($qB_NextReportVersionNumber->getSQL());
+        return $highestVersion;
+    }
+
+    /**
+     * action getNextReportVersionNumber
+     *
+     * @param \DanLundgren\DlIponlyestate\Domain\Model\Report $estate
+     * @return int
+     */
+    public static function getNextReportVersionNumber_Old($estate) {
         $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $reportRepository = $objectManager->get('DanLundgren\DlIponlyestate\Domain\Repository\ReportRepository');
         //$allReports = $reportRepository->findAll();
@@ -1103,6 +1142,7 @@ class ReportUtility {
         }
         //$reports = $queryBuilderReport->getResult();
         //$reports = $queryBuilderReportRes->fetch_all(MYSQLI_ASSOC);
+/*
 \TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
  array(
   'class' => __CLASS__,
@@ -1110,7 +1150,7 @@ class ReportUtility {
   'reports' => $reports,
  ),'',20
 );
-
+*/
         return $reports;
 //print($queryBuilderReport->getSql());
     }
@@ -1537,22 +1577,99 @@ class ReportUtility {
      * @param \DanLundgren\DlIponlyestate\Domain\Model\Report $reports
      * @return array
      */    
-    public static function getPostedReports($reportPid, $estate, $startDate) {
+    public static function getNotesFromPostedReports($reportPid, $estate, $startDate) {
         $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $reportRepository = $objectManager->get('DanLundgren\DlIponlyestate\Domain\Repository\ReportRepository');
-        //$allReports = $reportRepository->findByPid($reportPid); 
         $allReports = $reportRepository->findByEstate($estate);
-        //$allReports = $reportRepository->findAll();
+        $postedReports = [];
+        $queryBuilderReportIsPosted = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tx_dliponlyestate_domain_model_report');
+        $queryBuilderReportIsPosted->select('*')->from('tx_dliponlyestate_domain_model_report');
+        $queryBuilderReportIsPosted->where($queryBuilderReportIsPosted->expr()->eq('estate', $estate->getUid()));
+            /*
+            ->leftJoin(
+                'tx_dliponlyestate_domain_model_report',
+                'tx_dliponlyestate_domain_model_note',
+                'n',
+                $queryBuilderReportIsPosted->expr()->eq('n.report', 'tx_dliponlyestate_domain_model_report.uid')
+            )
+            */
+        $queryBuilderReportIsPosted->leftJoin(
+                    'tx_dliponlyestate_domain_model_report',
+                    'tx_dliponlyestate_domain_model_note',
+                    'note', 
+                    'tx_dliponlyestate_domain_model_report.uid = note.report AND note.is_complete=0 AND tx_dliponlyestate_domain_model_report.no_of_remarks > 0 AND tx_dliponlyestate_domain_model_report.report_is_posted = 1')
+            /*
+            ->where(
+                $queryBuilderReportIsPosted->expr()->eq('n.report', 'tx_dliponlyestate_domain_model_report.uid')
+            )
+            */
+            //->andWhere($queryBuilderReportIsPosted->expr()->eq('n.is_complete', 0))            
+//        $queryBuilderReportIsPosted->andWhere($queryBuilderReportIsPosted->expr()->eq('estate', $estate->getUid()))
+            //->andWhere($queryBuilderReportIsPosted->expr()->eq('report_is_posted', 1))
+            //->setMaxResults(1)
+            //->andWhere($queryBuilderReport->expr()->eq('is_complete', 1))
+            //->addSelectLiteral($queryBuilderReport->expr()->max('version', 'version'))
+            //->orderBy('version', 'DESC')
+        ;
+        $reportIsPostedRes = $queryBuilderReportIsPosted->execute();
+//debug($queryBuilderReportIsPosted->getSQL());
+        while ($row = $reportIsPostedRes->fetch()) {
+            $postedReports[] = $row;
+            //$postedReports[] = $reportRepository->findByUid($row['uid']);
+            //break;
+        }
+        /*
         $postedReports = array();
         foreach($allReports as $report) {
-            /*
-            if($report->getStartDate() == $startDate && $report->getEstate()==$estate && $report->getReportIsPosted()) {
-                $postedReports[] = $report;
-            }
-            */
             if($report->getEstate()==$estate && $report->getReportIsPosted()) {
                 $postedReports[] = $report;
             }
+        }
+        */
+        return $postedReports;
+    }
+
+    /**
+     * action getPostedReports
+     *
+     * @param \DanLundgren\DlIponlyestate\Domain\Model\Report $reports
+     * @return array
+     */    
+    public static function getPostedReports($reportPid, $estate, $startDate) {
+        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $reportRepository = $objectManager->get('DanLundgren\DlIponlyestate\Domain\Repository\ReportRepository');
+        $allReports = $reportRepository->findByEstate($estate);
+        $postedReports = [];
+        $queryBuilderReportIsPosted = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tx_dliponlyestate_domain_model_report');
+        $queryBuilderReportIsPosted->select('tx_dliponlyestate_domain_model_report.*')->from('tx_dliponlyestate_domain_model_report');
+        $queryBuilderReportIsPosted->addSelect('note.is_complete as nIsComplete');
+        $queryBuilderReportIsPosted->addSelect('note.remark_type as nRemarkType');
+        $queryBuilderReportIsPosted->addSelect('note.comment as nComment');
+        $queryBuilderReportIsPosted->addSelect('note.executive_technician as nExecutiveTechnician');
+        $queryBuilderReportIsPosted->addSelect('note.uid as nUid');
+        $queryBuilderReportIsPosted->addSelect('note.date as nDate');
+        $queryBuilderReportIsPosted->addSelect('question.uid as qUid');
+        $queryBuilderReportIsPosted->addSelect('question.header as qHeader');
+
+        $queryBuilderReportIsPosted->leftJoin(
+                    'tx_dliponlyestate_domain_model_report',
+                    'tx_dliponlyestate_domain_model_note',
+                    'note', 
+                    'tx_dliponlyestate_domain_model_report.uid = note.report AND note.is_complete=0 AND tx_dliponlyestate_domain_model_report.no_of_remarks > 0 AND tx_dliponlyestate_domain_model_report.report_is_posted = 1 AND NOT note.state = 1');
+
+        $queryBuilderReportIsPosted->leftJoin(
+                    'note',
+                    'tx_dliponlyestate_domain_model_question',
+                    'question', 
+                    'question.uid = note.question');
+        ;
+		$queryBuilderReportIsPosted->where($queryBuilderReportIsPosted->expr()->eq('estate', $estate->getUid()));
+
+//debug($queryBuilderReportIsPosted->getSQL());
+        $reportIsPostedRes = $queryBuilderReportIsPosted->execute();
+
+        while ($row = $reportIsPostedRes->fetch()) {
+            $postedReports[] = $row;
         }
         return $postedReports;
     }

@@ -1,0 +1,75 @@
+<f:if condition="{report.nRemarkType}==2">                
+    <div class="posted-note-container">
+        <div class="alert alert-danger input-disabled-note" role="alert">
+            <div class="label-bold">
+                {report.qHeader}
+                <span class="label-critical"> - Kritisk
+                    <f:if condition="{report.nComment}!=''">
+                        <div class="comment">{report.nComment}</div>
+                    </f:if>
+                </span>
+            </div>
+            <div class="prio">Prio: Kritisk</div>
+            <div class="date"><f:format.date format="Y-m-d - H:i:s">{report.nDate}</f:format.date></div>
+            <div>Kontroll utförd av  {report.nExecutiveTechnician}</div>
+            <div>ID: {report.nUid}</div>
+        </div>
+        <div class="checkbox">
+            <label>
+                <input type="checkbox" class="note-fixed" data-noteuid="{report.nUid}" value="">
+                Bocka i om åtgärdat
+            </label>
+        </div>
+    </div>
+    <div class="clear-both"></div>
+</f:if>
+<f:if condition="{report.nRemarkType}==3">
+    <div class="posted-note-container">
+        <div class="alert alert-warning input-disabled-note" role="alert">
+            <div class="label-bold">
+                {report.qHeader}
+                <span class="label-remark"> - Anmärkning
+                    <f:if condition="{report.nComment}!=''">
+                        <div class="comment">{report.nComment}</div>
+                    </f:if>
+                </span>
+            </div>
+            <div class="prio">Prio: Normal</div>
+            <div class="date"><f:format.date format="Y-m-d - H:i:s">{report.nDate}</f:format.date></div>
+            <div>Kontroll utförd av  {report.nExecutiveTechnician}</div>
+            <div>ID: {report.nUid}</div>
+        </div>
+        <div class="checkbox">
+        <label>
+            <input type="checkbox" class="note-fixed" data-noteuid="{report.nUid}" value="">
+            Bocka i om åtgärdat
+        </label>
+        </div>
+    </div>
+    <div class="clear-both"></div>
+</f:if>
+<f:if condition="{report.nRemarkType}==4">
+    <div class="posted-note-container">
+        <div class="alert alert-info input-disabled-note" role="alert">
+            <div class="label-bold">
+                {report.qHeader}
+                <span class="label-ok"> - Inköp
+                    <f:if condition="{report.nComment}!=''">
+                        <div class="comment">{report.nComment}</div>
+                    </f:if>
+                </span>
+            </div>
+            <div class="prio">Prio: Inköp</div>
+            <div class="date"><f:format.date format="Y-m-d - H:i:s">{report.nDate}</f:format.date></div>
+            <div>Kontroll utförd av  {report.nExecutiveTechnician}</div>
+            <div>ID: {report.nUid}</div>
+        </div>
+        <div class="checkbox">
+            <label>
+                <input type="checkbox" class="note-fixed" data-noteuid="{report.nUid}" value="">
+                Bocka i om åtgärdat
+            </label>
+        </div>
+        <div class="clear-both"></div>
+    </div>
+</f:if>

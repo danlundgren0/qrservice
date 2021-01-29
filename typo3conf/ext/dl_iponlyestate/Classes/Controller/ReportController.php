@@ -154,15 +154,15 @@ class ReportController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
         //header_remove('Content-Disposition');
         $reportsByEstate = array();
         $arguments = \TYPO3\CMS\Core\Utility\GeneralUtility::_GP('tx_dliponlyestate_reportsearch');
-        if ($arguments && count($arguments) > 1) {
-            $searchCriterias = new \DanLundgren\DlIponlyestate\Domain\Model\SearchCriterias($arguments['fromDate'], $arguments['endDate'], $arguments['nodeTypes'], $arguments['estates'], $arguments['cities'], $arguments['notes'], $arguments['technicians'], $arguments['freeSearch'], $arguments['areas']);
+        //if ($arguments && count($arguments) > 1) {
+            $searchCriterias = new \DanLundgren\DlIponlyestate\Domain\Model\SearchCriterias($arguments['fromDate'], $arguments['endDate'], $arguments['nodeTypes'], $arguments['estates'], $arguments['cities'], $arguments['notes'], $arguments['technicians'], $arguments['freeSearch'], $arguments['area']);
             $latestReports = $this->reportRepository->searchReports($searchCriterias);
-        } else {
-            if (is_array($arguments) && count($arguments) == 1 && $arguments['xls'] == '1') {
+        //} else {
+            /*if (is_array($arguments) && count($arguments) == 1 && $arguments['xls'] == '1') {
                 $searchCriterias = new \DanLundgren\DlIponlyestate\Domain\Model\SearchCriterias();
                 $latestReports = $this->reportRepository->searchReports($searchCriterias);
-            }
-        }
+            }*/
+        //}
         if ($arguments['xls'] == '1') {
             $this->excelAction($latestReports, $arguments);
         }
@@ -179,7 +179,7 @@ class ReportController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
         $arguments = \TYPO3\CMS\Core\Utility\GeneralUtility::_GP('tx_dliponlyestate_reportsearch');
         $this->view->assign('arguments', $arguments);
         $this->view->assign('estates', $this->getEstates());
-        $this->view->assign('areas', $this->getAreas());
+        $this->view->assign('area', $this->getArea());
         $this->view->assign('cities', $this->getEstateCities());
         //$estate = $this->estateRepository->findByUid(13);
         //$this->view->assign('technicians', $this->getTechnicians($estate));
@@ -241,7 +241,7 @@ class ReportController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
         return $technicians;
     }
     
-    public function getAreas()
+    public function getArea()
     {
         $areaArr = array('-1' => 'Alla');
         if (is_array($this->estateAreaPIDs) && count($this->estateAreaPIDs) > 0) {
@@ -392,7 +392,10 @@ class ReportController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
                                     break;
                                 default:    $tmpexcelArr[$i]['Status'] = 'Ej kontrollerad';
                             }
-                            $tmpexcelArr[$i]['Notering'] = $question['comment'];
+                            $newlines = array('\r\n', '\n', '\r');
+                            //$updated = str_replace($newlines, ' ', strip_tags(stripslashes($question['comment'])));
+                            $commentNoLineBreaks = preg_replace('/\r\n|\n\r|\n|\r/', ' ', $question['comment']);
+                            $tmpexcelArr[$i]['Notering'] = $commentNoLineBreaks;
                             $i += 1;
                         }
                     }
@@ -408,7 +411,6 @@ class ReportController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
          ),'',20
         );
         */
-        
         $filename = 'website_data_' . date('Ymd') . '.xls';
         header("Content-Disposition: attachment; filename=\"{$filename}\"");
         ////header("Content-Type: application/vnd.ms-excel");

@@ -82,7 +82,7 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
      *
      * @return void
      */
-    public function listAction()
+    public function listAction_NEW()
     {
         $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $reportRepository = $objectManager->get('DanLundgren\DlIponlyestate\Domain\Repository\ReportRepository');
@@ -133,12 +133,45 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
                 //$curReportWithVersion = $reports[0];
                 $curReportWithVersion = $reportRepository->findByUid($reports[0]['uid']);
             }
+
+\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
+ array(
+  'class' => __CLASS__,
+  'function' => __FUNCTION__,
+  'count getNotes' => count($curReportWithVersion->getNotes()),
+  'curReportWithVersion' => $curReportWithVersion,
+ ),'',20
+);
             
             $hasOngoingReport = 0;
             if($reports[0] && $reports[0]['is_complete']==0 && $reports[0]['report_is_posted']==0) {            
                 $hasOngoingReport = 1;
+                foreach ($curReportWithVersion->getNotes() as $note) {
+                    if ($note && $note->getImages() != NULL) {
+                        $hasImages += 1;
+                        break;
+                    }
+                }
+                if ($curReportWithVersion->getStartDate() !== null) {
+                    $postedReports = ReportUtil::getPostedReports($reportPid, $estate, $curReportWithVersion->getStartDate());
+\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
+ array(
+  'class' => __CLASS__,
+  'function' => __FUNCTION__,
+  'if postedReports' => $postedReports,
+ ),'',20
+);
+                }
+            } else {
+                $postedReports = ReportUtil::getPostedReports($reportPid, $estate, NULL);
+\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
+ array(
+  'class' => __CLASS__,
+  'function' => __FUNCTION__,
+  'else postedReports' => $postedReports,
+ ),'',20
+);
             }
-
             foreach($reports as $k => $report) {
                 if($report['report_is_posted']) {
                     $postedReports[] = $report;
@@ -213,6 +246,7 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
             //$ellapsed = microtime(true) - $controlPointsStart;
             //echo 'controlPointsStart: ' . $ellapsed;
             //echo '<br>';
+/*
 \TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
  array(
   'class' => __CLASS__,
@@ -229,6 +263,7 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
   'isValid' => $isValid,
  ),'',20
 );
+*/
             $this->view->assign('estateAdminNote', $estate->getAdminNote());
             $this->view->assign('enableAdminNote', $estate->getEnableAdminNote());
             $this->view->assign('estateUid', $estate->getUid());
@@ -248,7 +283,7 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
      *
      * @return void
      */
-    public function listAction_OLD()
+    public function listAction()
     {
         $scannedCPs = json_decode($_COOKIE['scanned_cps'], true);
         $cpId = (int) $this->settings['ControlPoint'];
@@ -513,7 +548,7 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
                 $this->view->assign('parentPid', $parentPid);
                 $this->view->assign('reportWithVersion', $curReportWithVersion);
                 $this->view->assign('unPostedReport', $unPostedReport);
-                $this->view->assign('postedReports', $postedReports);
+                //$this->view->assign('postedReports', $postedReports);
                 $this->view->assign('errorMess', $errorMess);
                 $this->view->assign('controlPoint', $controlPoint);
                 $this->view->assign('reportPid', $reportPid);
