@@ -1,10 +1,17 @@
 <?php
 namespace DanLundgren\DlIponlyestate\Controller;
+require '/var/www/vendor/autoload.php';
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\Restriction\DeletedRestriction;
-
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+//use ZipStream;
+//use SimpleExcel\SimpleExcel;
+//use SimpleExcel\SimpleExcel\Parser;
 use DanLundgren\DlIponlyestate\Utility\ReportUtility as ReportUtil;
+
+//require_once('typo3conf/ext/simple_excel/src/SimpleExcel/SimpleExcel.php');
 /***************************************************************
  *
  *  Copyright notice
@@ -154,9 +161,10 @@ class ReportController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
         //header_remove('Content-Disposition');
         $reportsByEstate = array();
         $arguments = \TYPO3\CMS\Core\Utility\GeneralUtility::_GP('tx_dliponlyestate_reportsearch');
-        //if ($arguments && count($arguments) > 1) {
+        if ($arguments && count($arguments) > 1) {
             $searchCriterias = new \DanLundgren\DlIponlyestate\Domain\Model\SearchCriterias($arguments['fromDate'], $arguments['endDate'], $arguments['nodeTypes'], $arguments['estates'], $arguments['cities'], $arguments['notes'], $arguments['technicians'], $arguments['freeSearch'], $arguments['area']);
             $latestReports = $this->reportRepository->searchReports($searchCriterias);
+        }
         //} else {
             /*if (is_array($arguments) && count($arguments) == 1 && $arguments['xls'] == '1') {
                 $searchCriterias = new \DanLundgren\DlIponlyestate\Domain\Model\SearchCriterias();
@@ -164,7 +172,8 @@ class ReportController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
             }*/
         //}
         if ($arguments['xls'] == '1') {
-            $this->excelAction($latestReports, $arguments);
+            //$this->excelAction($latestReports, $arguments);
+            $this->spreadSheetAction($latestReports, $arguments);
         }
         $this->view->assign('latestReports', $latestReports);
     }
@@ -334,11 +343,132 @@ class ReportController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
         
     }
     
-    public function getReportedMeasurements()
+    public function getReportedMeasurements($latestReports)
     {
         
     }
+
+    /**
+     * action spreadSheet
+     *
+     * @param $latestReports
+     * @param $arguments
+     * @return void
+     */
+    public function spreadSheetAction($latestReports, $arguments = NULL)
+    {
+        $fileName = 'qrservice';
+		ob_clean();
+        
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        //$sheet->setCellValue('A1', 'HEJ VÅÄÖRLD !');
+        $tmpexcelArr = $this->getSpreadSheetArray($latestReports);
+        $sheet->setCellValue('A1', $tmpexcelArr[0][0]);
+        $sheet->setCellValue('B1', $tmpexcelArr[0][1]);
+        $sheet->setCellValue('C1', $tmpexcelArr[0][2]);
+        $sheet->setCellValue('D1', $tmpexcelArr[0][3]);
+        $sheet->setCellValue('E1', $tmpexcelArr[0][4]);
+        $sheet->setCellValue('F1', $tmpexcelArr[0][5]);
+        $sheet->setCellValue('G1', $tmpexcelArr[0][6]);
+        $sheet->setCellValue('H1', $tmpexcelArr[0][7]);
+        $sheet->setCellValue('I1', $tmpexcelArr[0][8]);
+        for($i=2;$i<=count($tmpexcelArr);$i++) {
+	        $sheet->setCellValue('A'.$i, $tmpexcelArr[$i]['Typ']);
+	        $sheet->setCellValue('B'.$i, $tmpexcelArr[$i]['Benämning']);
+	        $sheet->setCellValue('C'.$i, $tmpexcelArr[$i]['Rapport']);
+	        $sheet->setCellValue('D'.$i, $tmpexcelArr[$i]['Ansvarig tekniker']);
+	        $sheet->setCellValue('E'.$i, $tmpexcelArr[$i]['Utförande tekniker']);
+	        $sheet->setCellValue('F'.$i, $tmpexcelArr[$i]['Kontrollpunkt']);
+	        $sheet->setCellValue('G'.$i, $tmpexcelArr[$i]['Delpunkt']);
+	        $sheet->setCellValue('H'.$i, $tmpexcelArr[$i]['Status']);
+	        $sheet->setCellValue('I'.$i, $tmpexcelArr[$i]['Notering']);
+        }
+/*
+\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
+ array(
+  'class' => __CLASS__,
+  'function' => __FUNCTION__,
+  'tmpexcelArr' => $tmpexcelArr,
+ ),'','20'
+);
+*/
+	
+        $writer = new Xlsx($spreadsheet);
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="'. urlencode($fileName).'.xlsx"');
+        $writer->save('php://output');
+        exit();
     
+    }
+    
+    public function getSpreadSheetArray($latestReports) {
+        $tmpexcelArr = array();
+        $i = 1;
+        $tmpexcelArr[0][] = 'Typ';
+        $tmpexcelArr[0][] = 'Benämning';
+        $tmpexcelArr[0][] = 'Rapport';
+        $tmpexcelArr[0][] = 'Ansvarig tekniker';
+        $tmpexcelArr[0][] = 'Utförande tekniker';
+        $tmpexcelArr[0][] = 'Kontrollpunkt';
+        $tmpexcelArr[0][] = 'Delpunkt';
+        $tmpexcelArr[0][] = 'Status';
+        $tmpexcelArr[0][] = 'Notering';
+        foreach ($latestReports['level1'] as $estate) {
+            if (!$estate['level2']) {
+                $tmpexcelArr[$i]['Typ'] = $estate['nodeTypeName'];
+                $tmpexcelArr[$i]['Benämning'] = $estate['estateName'];
+                $tmpexcelArr[$i]['Rapport'] = 'Ingen rapport';
+                $tmpexcelArr[$i]['Ansvarig tekniker'] = $report['respTechnicianName'];
+                $tmpexcelArr[$i]['Utförande tekniker'] = '';
+                $tmpexcelArr[$i]['Kontrollpunkt'] = '';
+                $tmpexcelArr[$i]['Delpunkt'] = '';
+                $tmpexcelArr[$i]['Status'] = '';
+                $tmpexcelArr[$i]['Notering'] = '';
+                $i += 1;
+            } else {
+                foreach ($estate['level2'] as $report) {
+                    if (!$report['level3']) {
+                        unset($tmpexcelArr[$i]);
+                        continue;
+                    }
+                    foreach ($report['level3'] as $controlPoint) {
+                        foreach ($controlPoint['level4'] as $question) {
+                            $tmpexcelArr[$i]['Typ'] = $estate['nodeTypeName'];
+                            $tmpexcelArr[$i]['Benämning'] = $estate['estateName'];
+                            $tmpexcelArr[$i]['Rapport'] = $report['reportName'];
+                            $tmpexcelArr[$i]['Ansvarig tekniker'] = $report['respTechnicianName'];
+                            $tmpexcelArr[$i]['Utförande tekniker'] = $report['execTechnicianName'];
+                            $tmpexcelArr[$i]['Kontrollpunkt'] = $controlPoint['cpName'];
+                            $tmpexcelArr[$i]['Delpunkt'] = $question['questionName'];
+                            switch ($question['remarkType']) {
+                                case '1':    $tmpexcelArr[$i]['Status'] = 'Ok';
+                                    break;
+                                case '2':    $tmpexcelArr[$i]['Status'] = 'Kritisk';
+                                    break;
+                                case '3':    $tmpexcelArr[$i]['Status'] = 'Anmärkning';
+                                    break;
+                                case '4':    $tmpexcelArr[$i]['Status'] = 'Meddelande';
+                                    break;
+                                case '88':    $tmpexcelArr[$i]['Status'] = 'Tidigare anmärkning';
+                                    break;
+                                case '99':    $tmpexcelArr[$i]['Status'] = 'Mätvärde';
+                                    break;
+                                default:    $tmpexcelArr[$i]['Status'] = 'Ej kontrollerad';
+                            }
+                            $newlines = array('\r\n', '\n', '\r');
+                            //$updated = str_replace($newlines, ' ', strip_tags(stripslashes($question['comment'])));
+                            $commentNoLineBreaks = preg_replace('/\r\n|\n\r|\n|\r/', ' ', $question['comment']);
+                            $tmpexcelArr[$i]['Notering'] = $commentNoLineBreaks;
+                            $i += 1;
+                        }
+                    }
+                }
+            }
+        }
+        return $tmpexcelArr;
+    }
+
     /**
      * action excel
      *
@@ -402,15 +532,6 @@ class ReportController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionControlle
                 }
             }
         }
-        /*
-        \TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
-         array(
-          'class' => __CLASS__,
-          'function' => __FUNCTION__,
-          'tmpexcelArr' => $tmpexcelArr,
-         ),'',20
-        );
-        */
         $filename = 'website_data_' . date('Ymd') . '.xls';
         header("Content-Disposition: attachment; filename=\"{$filename}\"");
         ////header("Content-Type: application/vnd.ms-excel");

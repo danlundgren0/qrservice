@@ -543,8 +543,9 @@ class ReportRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             		$queryBuilderNoteSelect->expr()->eq('note.report', $reportsArr['uid'])
         		)
 				->from('tx_dliponlyestate_domain_model_note', 'note');
+				
 				$noteRes = $queryBuilderNoteSelect->execute();
-                while ($row = $noteRes->fetch()) {
+                while ($note = $noteRes->fetch()) {
                     $isAtLeastPartlyChecked = TRUE;
                     $noOfScannedNotesAndMeas += 1;
                     if ($note['cpUid'] === null || (int) $note['cpUid'] == 0) {

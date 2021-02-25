@@ -10,5 +10,8 @@ return array(
     'DanLundgren\\DlQrcodesgenerator\\' => array($typo3InstallDir . 'typo3conf/ext/dl_qrcodesgenerator/Classes'),
     'EBT\\ExtensionBuilder\\' => array($typo3InstallDir . 'typo3conf/ext/extension_builder/Classes'),
     'FluidTYPO3\\Vhs\\' => array($typo3InstallDir . 'typo3conf/ext/vhs/Classes'),
+    'JambageCom\\BaseExcel\\' => array($typo3InstallDir . 'typo3conf/ext/base_excel/Classes'),
+    'PhpOffice\\PhpSpreadsheet\\' => array($typo3InstallDir . 'typo3conf/ext/base_excel/Vendor/PhpSpreadsheet/src/PhpSpreadsheet'),
+    'Psr\\SimpleCache\\' => array($typo3InstallDir . 'typo3conf/ext/base_cache/Vendor/simple-cache/src'),
     'TYPO3\\CMS\\Rtehtmlarea\\' => array($typo3InstallDir . 'typo3conf/ext/rtehtmlarea/Classes'),
 );

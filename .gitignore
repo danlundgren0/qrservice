@@ -3,3 +3,4 @@
 /typo3conf/realurl_autoconf.php
 /typo3temp/*
 /typo3conf/sites/*
+/fileadmin/reportimages/*

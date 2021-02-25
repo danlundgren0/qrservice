@@ -194,7 +194,7 @@ return array(
 				),
 				'size' => 1,
 				'maxitems' => 1,
-				'eval' => ''
+				'eval' => 'int'
 			),
 		),
 		'responsible_technicians' => array(
@@ -208,7 +208,7 @@ return array(
 				),
 				'size' => 1,
 				'maxitems' => 1,
-				'eval' => ''
+				'eval' => 'int'
 			),
 		),
 		'report_is_posted' => array(

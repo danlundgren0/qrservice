@@ -1,7 +1,7 @@
 <?php
 return [
     'BE' => [
-        'debug' => true,
+        'debug' => false,
         'explicitADmode' => 'explicitAllow',
         'installToolPassword' => '$P$CVw.zyPN.aHREOuuSpvl9pK6oJqDPO/',
         'lockSSL' => true,
@@ -83,7 +83,7 @@ return [
         ],
     ],
     'FE' => [
-        'debug' => true,
+        'debug' => false,
         'loginSecurityLevel' => 'rsa',
     ],
     'GFX' => [
@@ -91,7 +91,7 @@ return [
         'processor' => 'GraphicsMagick',
         'processor_allowTemporaryMasksAsPng' => '',
         'processor_colorspace' => 'RGB',
-        'processor_effects' => false,
+        'processor_effects' => '',
         'processor_enabled' => '1',
         'processor_path' => '/usr/bin/',
         'processor_path_lzw' => '/usr/bin/',
@@ -104,7 +104,7 @@ return [
                     'writerConfiguration' => [
                         5 => [
                             'TYPO3\CMS\Core\Log\Writer\FileWriter' => [
-                                'disabled' => false,
+                                'disabled' => true,
                             ],
                         ],
                     ],
@@ -135,11 +135,11 @@ return [
                 ],
             ],
         ],
-        'devIPmask' => '*',
-        'displayErrors' => 1,
+        'devIPmask' => '',
+        'displayErrors' => 0,
         'encryptionKey' => 'abbd72cf16ead6bc99ce5903d5c466adb3d704ee34f4acc8e950618f014e15c5eee86c78ddb63d03253a0198071e97e9',
-        'exceptionalErrors' => 12290,
+        'exceptionalErrors' => 4096,
         'sitename' => 'IP-Only',
-        'systemLogLevel' => 0,
+        'systemLogLevel' => 2,
     ],
 ];

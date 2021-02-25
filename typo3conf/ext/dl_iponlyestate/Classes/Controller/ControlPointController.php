@@ -6,6 +6,7 @@ use DanLundgren\DlIponlyestate\Utility\ErrorUtility as ErrorUtil;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Database\Query\QueryBuilder;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\PathUtility;
 /***************************************************************
  *
  *  Copyright notice
@@ -133,7 +134,7 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
                 //$curReportWithVersion = $reports[0];
                 $curReportWithVersion = $reportRepository->findByUid($reports[0]['uid']);
             }
-
+/*
 \TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
  array(
   'class' => __CLASS__,
@@ -142,7 +143,7 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
   'curReportWithVersion' => $curReportWithVersion,
  ),'',20
 );
-            
+*/            
             $hasOngoingReport = 0;
             if($reports[0] && $reports[0]['is_complete']==0 && $reports[0]['report_is_posted']==0) {            
                 $hasOngoingReport = 1;
@@ -154,6 +155,7 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
                 }
                 if ($curReportWithVersion->getStartDate() !== null) {
                     $postedReports = ReportUtil::getPostedReports($reportPid, $estate, $curReportWithVersion->getStartDate());
+/*
 \TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
  array(
   'class' => __CLASS__,
@@ -161,9 +163,11 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
   'if postedReports' => $postedReports,
  ),'',20
 );
+*/
                 }
             } else {
                 $postedReports = ReportUtil::getPostedReports($reportPid, $estate, NULL);
+/*                
 \TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
  array(
   'class' => __CLASS__,
@@ -171,6 +175,7 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
   'else postedReports' => $postedReports,
  ),'',20
 );
+*/
             }
             foreach($reports as $k => $report) {
                 if($report['report_is_posted']) {
@@ -684,7 +689,43 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
             $note->removeImage($imagesToRemove);
             $this->noteRepository->update($note);
         }
-        $targetFalDirectory = '1:/user_upload/';
+
+        $nodeTypeFolder = str_replace(' ', '', $note->getControlPoint()->getNodeType()->getName());
+        $estateFolder = str_replace(' ', '', $estate->getName());
+        $absolutePathToContainingFolder = PathUtility::dirname(PATH_site . 'fileadmin');
+
+        if(!file_exists($absolutePathToContainingFolder . '/fileadmin/reportimages/' . $nodeTypeFolder)) {
+            GeneralUtility::mkdir($absolutePathToContainingFolder . '/fileadmin/reportimages/' . $nodeTypeFolder);
+        }
+
+        if(file_exists(
+            $absolutePathToContainingFolder . '/fileadmin/reportimages/' . $nodeTypeFolder) && 
+            !file_exists($absolutePathToContainingFolder . '/fileadmin/reportimages/' . $nodeTypeFolder . '/' . $estateFolder)
+        ) {
+            GeneralUtility::mkdir($absolutePathToContainingFolder . '/fileadmin/reportimages/' . $nodeTypeFolder . '/' . $estateFolder);
+        }
+        
+/*
+\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump(
+ array(
+  'class' => __CLASS__,
+  'function' => __FUNCTION__,
+  'estate getName FIXED' => str_replace(' ', '', $estate->getName()),
+  'note getControlPoint getName FIXED' => str_replace(' ', '', $note->getControlPoint()->getName()) ,
+  'note getControlPoint getDate' => $note->getDate()->format('Y-m-d'),
+  'arguments' => $arguments,
+  'note' => $note,
+  'estate' => $estate,
+  '_FILES' => $_FILES,
+  'estateFolder' => $estateFolder,
+  'PATH_site' => PATH_site,
+  'absolutePathToContainingFolder' => $absolutePathToContainingFolder,
+  'absolutePathToContainingFolder with estate' => $absolutePathToContainingFolder . '/fileadmin/reportimages/' . $estateFolder,
+  'absolutePathToContainingFolder with nodetype estate' => $absolutePathToContainingFolder . '/fileadmin/reportimages/' . $nodeTypeFolder . '/' . $estateFolder,
+ ),'',20
+);
+*/
+        $targetFalDirectory = '1:/reportimages/' . $nodeTypeFolder . '/'. $estateFolder;
         //Changed to rename new file 2020-05-15
         //$overwriteExistingFiles = TRUE;
         $data = array();
@@ -793,7 +834,7 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
      * @param string $targetDirectory
      * @return void
      */
-    protected function registerUploadField(array &$data, $namespace, $fieldName, $targetDirectory = '1:/user_upload/')
+    protected function registerUploadField(array &$data, $namespace, $fieldName, $targetDirectory = '1:/reportimages/')
     {
         if (!isset($data['upload'])) {
             $data['upload'] = array();
@@ -815,10 +856,10 @@ class ControlPointController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionCon
      */
     public function createFolders($nodeTypeFolder, $estateFolder)
     {
-        //$fullpath =  PATH_site . 'fileadmin/user_upload/'.$this->parentCustomerFolder;
+        //$fullpath =  PATH_site . 'fileadmin/reportimages/'.$this->parentCustomerFolder;
         //PATH_site . 'fileadmin/';
         //$targetFalDirectory = '1:/'.$nodeTypePath.'/'.$estatePath.'/';
-        $nodeTypePath = PATH_site . 'fileadmin/user_upload/' . $nodeTypeFolder;
+        $nodeTypePath = PATH_site . 'fileadmin/reportimages/' . $nodeTypeFolder;
         if (!file_exists($nodeTypePath)) {
             \TYPO3\CMS\Core\Utility\GeneralUtility::mkdir($nodeTypePath);
         }

@@ -92,6 +92,12 @@ return [
         'viewpage' => [
             'packagePath' => 'typo3/sysext/viewpage/',
         ],
+        'base_cache' => [
+            'packagePath' => 'typo3conf/ext/base_cache/',
+        ],
+        'base_excel' => [
+            'packagePath' => 'typo3conf/ext/base_excel/',
+        ],
         'rtehtmlarea' => [
             'packagePath' => 'typo3conf/ext/rtehtmlarea/',
         ],
